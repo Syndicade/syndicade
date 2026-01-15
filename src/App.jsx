@@ -3,7 +3,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Signup from './pages/Signup'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-
+import Projects from './pages/Projects'
+import Builder from './pages/Builder'
 // Protected Route Component
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -80,14 +81,40 @@ function App() {
           />
           
           {/* Protected Routes */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
+<Route 
+  path="/dashboard" 
+  element={
+    <ProtectedRoute>
+      <Projects />
+    </ProtectedRoute>
+  } 
+/>
+
+<Route 
+  path="/projects" 
+  element={
+    <ProtectedRoute>
+      <Projects />
+    </ProtectedRoute>
+  } 
+/>
+<Route 
+  path="/builder" 
+  element={
+    <ProtectedRoute>
+      <Builder />
+    </ProtectedRoute>
+  } 
+/>
+
+<Route 
+  path="/builder/:id" 
+  element={
+    <ProtectedRoute>
+      <Builder />
+    </ProtectedRoute>
+  } 
+/>
           
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
