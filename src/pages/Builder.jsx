@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getProject, createProject, updateProject } from '../lib/database'
+import AIContentGenerator from '../components/AIContentGenerator'
 
 function Builder() {
   const { id } = useParams()
@@ -19,6 +20,7 @@ function Builder() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [showAIGenerator, setShowAIGenerator] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -97,6 +99,25 @@ function Builder() {
     }
   }
 
+  const handleAIContentInsert = (generatedContent) => {
+    // Insert AI-generated content into the form
+    if (generatedContent.headline) {
+      setBusinessName(generatedContent.headline)
+    }
+    
+    if (generatedContent.subheadline) {
+      setTagline(generatedContent.subheadline)
+    }
+    
+    if (generatedContent.bodyText) {
+      setDescription(generatedContent.bodyText)
+    }
+
+    // Show success message
+    setSuccessMessage('AI content inserted! Review and edit as needed.')
+    setTimeout(() => setSuccessMessage(''), 3000)
+  }
+
   const templates = [
     { id: 'modern', name: 'Modern', color: 'bg-blue-500' },
     { id: 'classic', name: 'Classic', color: 'bg-gray-700' },
@@ -136,6 +157,15 @@ function Builder() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              {/* AI Generator - Disabled until we have more users and API credits
+              <button
+                onClick={() => setShowAIGenerator(!showAIGenerator)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all"
+                aria-label={showAIGenerator ? 'Hide AI Generator' : 'Show AI Generator'}
+              >
+                ✨ AI Generator
+              </button>
+              */}
               <p className="text-gray-600">{user?.email}</p>
               <button
                 onClick={handleSignOut}
@@ -149,6 +179,13 @@ function Builder() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* AI Content Generator Panel - Ready to enable when needed */}
+        {showAIGenerator && (
+          <div className="mb-8">
+            <AIContentGenerator onContentInsert={handleAIContentInsert} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
