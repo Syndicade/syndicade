@@ -5,6 +5,8 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Builder from './pages/Builder'
+import MemberProfile from './components/MemberProfile'
+import MemberDirectory from './pages/MemberDirectory'
 // Protected Route Component
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -115,7 +117,22 @@ function App() {
     </ProtectedRoute>
   } 
 />
-          
+ <Route 
+  path="/members/:userId" 
+  element={
+    <ProtectedRoute>
+      <MemberProfile />
+    </ProtectedRoute>
+  } 
+/>
+<Route 
+  path="/organizations/:organizationId/members" 
+  element={
+    <ProtectedRoute>
+      <MemberDirectory />
+    </ProtectedRoute>
+  } 
+/>         
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           
