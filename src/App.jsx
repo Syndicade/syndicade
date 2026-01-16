@@ -7,6 +7,7 @@ import Projects from './pages/Projects'
 import Builder from './pages/Builder'
 import MemberProfile from './components/MemberProfile'
 import MemberDirectory from './pages/MemberDirectory'
+import OrganizationList from './pages/OrganizationList'
 // Protected Route Component
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -132,7 +133,8 @@ function App() {
       <MemberDirectory />
     </ProtectedRoute>
   } 
-/>         
+/>    
+<Route path="/organizations" element={<OrganizationList />} />     
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           
