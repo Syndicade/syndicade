@@ -1,63 +1,22 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
-import Signup from './pages/Signup'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Projects from './pages/Projects'
-import Builder from './pages/Builder'
-import MemberProfile from './components/MemberProfile'
-import MemberDirectory from './pages/MemberDirectory'
-import OrganizationList from './pages/OrganizationList'
-// Protected Route Component
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import Signup from "./pages/Signup";
+import Login from "./pages/Login";
+import Projects from "./pages/Projects";
+import Builder from "./pages/Builder";
+import MemberProfile from "./components/MemberProfile";
+import MemberDirectory from "./pages/MemberDirectory";
+import OrganizationList from "./pages/OrganizationList";
+import OrganizationDashboard from "./pages/OrganizationDashboard";
+
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div 
-            className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"
-            role="status"
-            aria-label="Loading"
-          />
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  return children
+  // Your protected route logic here
+  return children;
 }
 
-// Public Route Component (redirects to dashboard if already logged in)
 function PublicRoute({ children }) {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div 
-            className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"
-            role="status"
-            aria-label="Loading"
-          />
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (user) {
-    return <Navigate to="/dashboard" replace />
-  }
-
-  return children
+  // Your public route logic here
+  return children;
 }
 
 function App() {
@@ -82,62 +41,73 @@ function App() {
               </PublicRoute>
             } 
           />
-          
           {/* Protected Routes */}
-<Route 
-  path="/dashboard" 
-  element={
-    <ProtectedRoute>
-      <Projects />
-    </ProtectedRoute>
-  } 
-/>
-
-<Route 
-  path="/projects" 
-  element={
-    <ProtectedRoute>
-      <Projects />
-    </ProtectedRoute>
-  } 
-/>
-<Route 
-  path="/builder" 
-  element={
-    <ProtectedRoute>
-      <Builder />
-    </ProtectedRoute>
-  } 
-/>
-
-<Route 
-  path="/builder/:id" 
-  element={
-    <ProtectedRoute>
-      <Builder />
-    </ProtectedRoute>
-  } 
-/>
- <Route 
-  path="/members/:userId" 
-  element={
-    <ProtectedRoute>
-      <MemberProfile />
-    </ProtectedRoute>
-  } 
-/>
-<Route 
-  path="/organizations/:organizationId/members" 
-  element={
-    <ProtectedRoute>
-      <MemberDirectory />
-    </ProtectedRoute>
-  } 
-/>    
-<Route path="/organizations" element={<OrganizationList />} />     
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Projects />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/projects" 
+            element={
+              <ProtectedRoute>
+                <Projects />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/builder" 
+            element={
+              <ProtectedRoute>
+                <Builder />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/builder/:id" 
+            element={
+              <ProtectedRoute>
+                <Builder />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/members/:userId" 
+            element={
+              <ProtectedRoute>
+                <MemberProfile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/organizations/:organizationId/members" 
+            element={
+              <ProtectedRoute>
+                <MemberDirectory />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/organizations" 
+            element={
+              <ProtectedRoute>
+                <OrganizationList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/organizations/:organizationId" 
+            element={
+              <ProtectedRoute>
+                <OrganizationDashboard />
+              </ProtectedRoute>
+            } 
+          />
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          
           {/* 404 Not Found */}
           <Route 
             path="*" 
@@ -153,7 +123,7 @@ function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;
