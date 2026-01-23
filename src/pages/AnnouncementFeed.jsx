@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AnnouncementCard from '../components/AnnouncementCard';
+import CreateAnnouncement from '../components/CreateAnnouncement';
 
 /**
  * AnnouncementFeed Page
@@ -33,6 +34,7 @@ function AnnouncementFeed() {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Fetch organization and check admin status
   useEffect(() => {
@@ -180,6 +182,13 @@ function AnnouncementFeed() {
     setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
   };
 
+  // Handle new announcement created
+  const handleAnnouncementCreated = (newAnnouncement) => {
+    // Add to the beginning of the list
+    setAnnouncements(prev => [{ ...newAnnouncement, is_read: false }, ...prev]);
+    alert('✅ Announcement posted successfully!');
+  };
+
   // Mark all as read
   const handleMarkAllAsRead = async () => {
     try {
@@ -251,14 +260,26 @@ function AnnouncementFeed() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          📢 Announcements
-        </h1>
-        {organization && (
-          <p className="text-gray-600">
-            {organization.name}
-          </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            📢 Announcements
+          </h1>
+          {organization && (
+            <p className="text-gray-600">
+              {organization.name}
+            </p>
+          )}
+        </div>
+        
+        {/* Create Button (Admin Only) */}
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+          >
+            ➕ Create Announcement
+          </button>
         )}
       </div>
 
@@ -348,6 +369,15 @@ function AnnouncementFeed() {
           Showing {filteredAnnouncements.length} of {announcements.length} announcements
         </p>
       )}
+
+      {/* Create Announcement Modal */}
+      <CreateAnnouncement
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleAnnouncementCreated}
+        organizationId={organizationId}
+        organizationName={organization?.name || 'Organization'}
+      />
     </div>
   );
 }

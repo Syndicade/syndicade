@@ -3,24 +3,38 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import OrganizationSettings from '../components/OrganizationSettings';
 import InviteMember from '../components/InviteMember';
+import CreateEvent from '../components/CreateEvent';
+import CreateAnnouncement from '../components/CreateAnnouncement';
+import AnnouncementCard from '../components/AnnouncementCard';
 
 function OrganizationDashboard() {
   const { organizationId } = useParams();
   const navigate = useNavigate();
   const [organization, setOrganization] = useState(null);
   const [membership, setMembership] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [stats, setStats] = useState({
     totalMembers: 0,
     pendingInvites: 0,
-    activeEvents: 0
+    activeEvents: 0,
+    unreadAnnouncements: 0
   });
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
+  
+  // Announcements state
+  const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+  const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [announcementFilter, setAnnouncementFilter] = useState('all');
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'members', label: 'Members', icon: '👥' },
+    { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements },
     { id: 'invite', label: 'Invite', icon: '✉️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' }
   ];
@@ -28,6 +42,12 @@ function OrganizationDashboard() {
   useEffect(() => {
     fetchData();
   }, [organizationId]);
+
+  useEffect(() => {
+    if (activeTab === 'announcements' && currentUserId) {
+      fetchAnnouncements();
+    }
+  }, [activeTab, organizationId, currentUserId]);
 
   async function fetchData() {
     try {
@@ -37,6 +57,8 @@ function OrganizationDashboard() {
         navigate('/login');
         return;
       }
+
+      setCurrentUserId(user.id);
 
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
@@ -61,7 +83,7 @@ function OrganizationDashboard() {
       }
 
       setMembership(membershipData);
-      await fetchStats();
+      await fetchStats(user.id);
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -71,7 +93,7 @@ function OrganizationDashboard() {
     }
   }
 
-  async function fetchStats() {
+  async function fetchStats(userId) {
     try {
       const { count: memberCount } = await supabase
         .from('memberships')
@@ -85,15 +107,162 @@ function OrganizationDashboard() {
         .eq('organization_id', organizationId)
         .eq('status', 'pending');
 
+      const { count: eventCount } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .gte('start_time', new Date().toISOString());
+
+      // Count unread announcements
+      const { data: allAnnouncements } = await supabase
+        .from('announcements')
+        .select('id')
+        .eq('organization_id', organizationId);
+
+      const announcementIds = (allAnnouncements || []).map(a => a.id);
+      
+      let unreadCount = 0;
+      if (announcementIds.length > 0 && userId) {
+        const { data: reads } = await supabase
+          .from('announcement_reads')
+          .select('announcement_id')
+          .eq('member_id', userId)
+          .in('announcement_id', announcementIds);
+
+        const readIds = new Set((reads || []).map(r => r.announcement_id));
+        unreadCount = announcementIds.length - readIds.size;
+      }
+
       setStats({
         totalMembers: memberCount || 0,
         pendingInvites: inviteCount || 0,
-        activeEvents: 0
+        activeEvents: eventCount || 0,
+        unreadAnnouncements: unreadCount
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
   }
+
+  async function fetchAnnouncements() {
+    try {
+      setAnnouncementsLoading(true);
+
+      const { data, error } = await supabase
+        .from('announcements')
+        .select(`
+          *,
+          announcement_reads!left(id, member_id)
+        `)
+        .eq('organization_id', organizationId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Process announcements to add is_read flag
+      const processedAnnouncements = (data || []).map(announcement => ({
+        ...announcement,
+        is_read: announcement.announcement_reads?.some(
+          read => read.member_id === currentUserId
+        ) || false
+      }));
+
+      setAnnouncements(processedAnnouncements);
+    } catch (err) {
+      console.error('Error fetching announcements:', err);
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  }
+
+  async function handleEventCreated(newEvent) {
+    console.log('✅ Event created successfully!', newEvent);
+    alert(`Event "${newEvent.title}" created successfully!`);
+    
+    // Refresh stats to show new event count
+    await fetchStats(currentUserId);
+  }
+
+  async function handleAnnouncementCreated(newAnnouncement) {
+    console.log('✅ Announcement created successfully!', newAnnouncement);
+    
+    // Add new announcement to beginning of list
+    setAnnouncements(prev => [{ ...newAnnouncement, is_read: false }, ...prev]);
+    
+    // Refresh stats
+    await fetchStats(currentUserId);
+    
+    // Show success message
+    alert(`Announcement "${newAnnouncement.title}" created successfully!`);
+  }
+
+  async function handleAnnouncementRead(announcementId) {
+    // Update local state
+    setAnnouncements(prev => 
+      prev.map(a => a.id === announcementId ? { ...a, is_read: true } : a)
+    );
+    
+    // Decrement unread count
+    setStats(prev => ({
+      ...prev,
+      unreadAnnouncements: Math.max(0, prev.unreadAnnouncements - 1)
+    }));
+  }
+
+  async function handleAnnouncementDelete(announcementId) {
+    // Remove from local state
+    setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
+    
+    // Refresh stats
+    await fetchStats(currentUserId);
+  }
+
+  async function handleMarkAllAsRead() {
+    if (!currentUserId) return;
+
+    const unreadAnnouncements = announcements.filter(a => !a.is_read);
+    if (unreadAnnouncements.length === 0) return;
+
+    try {
+      const readsToInsert = unreadAnnouncements.map(a => ({
+        announcement_id: a.id,
+        member_id: currentUserId
+      }));
+
+      const { error } = await supabase
+        .from('announcement_reads')
+        .insert(readsToInsert);
+
+      if (error && error.code !== '23505') throw error;
+
+      // Update local state
+      setAnnouncements(prev => prev.map(a => ({ ...a, is_read: true })));
+      setStats(prev => ({ ...prev, unreadAnnouncements: 0 }));
+
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+      alert('Failed to mark all as read. Please try again.');
+    }
+  }
+
+  // Filter announcements
+  const filteredAnnouncements = announcements.filter(announcement => {
+    // Search filter
+    const matchesSearch = announcementSearch === '' || 
+      announcement.title.toLowerCase().includes(announcementSearch.toLowerCase()) ||
+      announcement.content.toLowerCase().includes(announcementSearch.toLowerCase());
+
+    // Priority filter
+    const matchesPriority = announcementFilter === 'all' || 
+      announcement.priority === announcementFilter;
+
+    // Expiration filter
+    const isExpired = announcement.expires_at && 
+      new Date(announcement.expires_at) < new Date();
+
+    return matchesSearch && matchesPriority && !isExpired;
+  });
 
   if (loading) {
     return (
@@ -156,7 +325,7 @@ function OrganizationDashboard() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    py-4 px-1 border-b-2 font-medium text-sm transition-all
+                    py-4 px-1 border-b-2 font-medium text-sm transition-all relative
                     ${activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -165,6 +334,11 @@ function OrganizationDashboard() {
                 >
                   <span className="mr-2">{tab.icon}</span>
                   {tab.label}
+                  {tab.badge > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full">
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -177,7 +351,32 @@ function OrganizationDashboard() {
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateEvent(true)}
+                    className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all flex items-center gap-2"
+                    aria-label="Create new event"
+                  >
+                    <span>📅</span>
+                    Create Event
+                  </button>
+                  
+                  {membership?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateAnnouncement(true)}
+                      className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all flex items-center gap-2"
+                      aria-label="Create new announcement"
+                    >
+                      <span>📢</span>
+                      Create Announcement
+                    </button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
                     <div className="flex items-center justify-between">
                       <div>
@@ -207,6 +406,16 @@ function OrganizationDashboard() {
                       <div className="text-4xl">📅</div>
                     </div>
                   </div>
+
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border border-orange-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-orange-600 text-sm font-semibold uppercase">Unread News</p>
+                        <p className="text-3xl font-bold text-orange-900 mt-2">{stats.unreadAnnouncements}</p>
+                      </div>
+                      <div className="text-4xl">📢</div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-6">
@@ -221,6 +430,27 @@ function OrganizationDashboard() {
                     </button>
                     
                     <button 
+                      onClick={() => setActiveTab('announcements')}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform">📢</span>
+                      <span className="font-semibold text-gray-900">View Announcements</span>
+                      {stats.unreadAnnouncements > 0 && (
+                        <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-orange-500 rounded-full">
+                          {stats.unreadAnnouncements}
+                        </span>
+                      )}
+                    </button>
+                    
+                    <button 
+                      onClick={() => navigate(`/organizations/${organizationId}/events`)}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform">📅</span>
+                      <span className="font-semibold text-gray-900">View Events</span>
+                    </button>
+                    
+                    <button 
                       onClick={() => setActiveTab('settings')}
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
                     >
@@ -228,12 +458,6 @@ function OrganizationDashboard() {
                       <span className="font-semibold text-gray-900">Organization Settings</span>
                     </button>
                   </div>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-blue-800 text-sm">
-                    <strong>🚀 Coming Soon:</strong> Member management, event calendar, announcements, and more!
-                  </p>
                 </div>
               </div>
             )}
@@ -249,6 +473,105 @@ function OrganizationDashboard() {
               </div>
             )}
 
+            {/* Announcements Tab */}
+            {activeTab === 'announcements' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">📢 Announcements</h2>
+                  {membership?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateAnnouncement(true)}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
+                      aria-label="Create new announcement"
+                    >
+                      ➕ Create Announcement
+                    </button>
+                  )}
+                </div>
+
+                {/* Search and Filter */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="🔍 Search announcements..."
+                      value={announcementSearch}
+                      onChange={(e) => setAnnouncementSearch(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="Search announcements"
+                    />
+                  </div>
+                  <select
+                    value={announcementFilter}
+                    onChange={(e) => setAnnouncementFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Filter by priority"
+                  >
+                    <option value="all">All ({announcements.length})</option>
+                    <option value="urgent">🚨 Urgent</option>
+                    <option value="normal">ℹ️ Normal</option>
+                    <option value="low">📋 Low</option>
+                  </select>
+                  {stats.unreadAnnouncements > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAsRead}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all whitespace-nowrap"
+                    >
+                      Mark All Read ({stats.unreadAnnouncements})
+                    </button>
+                  )}
+                </div>
+
+                {/* Results Count */}
+                <p className="text-sm text-gray-600 mb-4">
+                  Showing {filteredAnnouncements.length} of {announcements.length} announcements
+                </p>
+
+                {/* Announcements List */}
+                {announcementsLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : filteredAnnouncements.length === 0 ? (
+                  <div className="bg-gray-50 rounded-lg p-12 text-center border border-gray-200">
+                    <div className="text-4xl mb-3">
+                      {announcementSearch || announcementFilter !== 'all' ? '🔍' : '📭'}
+                    </div>
+                    <p className="text-gray-600 font-semibold">
+                      {announcementSearch || announcementFilter !== 'all' 
+                        ? 'No announcements match your filters'
+                        : 'No announcements yet'
+                      }
+                    </p>
+                    {!announcementSearch && announcementFilter === 'all' && membership?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateAnnouncement(true)}
+                        className="mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                      >
+                        Create First Announcement
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredAnnouncements.map((announcement) => (
+                      <AnnouncementCard
+                        key={announcement.id}
+                        announcement={announcement}
+                        onRead={handleAnnouncementRead}
+                        onDelete={handleAnnouncementDelete}
+                        isAdmin={membership?.role === 'admin'}
+                        showOrganization={false}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Invite Tab */}
             {activeTab === 'invite' && (
               <>
@@ -258,7 +581,7 @@ function OrganizationDashboard() {
                     organizationName={organization.name}
                     onInviteSent={(inviteData) => {
                       console.log('Invitation sent:', inviteData);
-                      fetchStats();
+                      fetchStats(currentUserId);
                     }}
                   />
                 ) : (
@@ -293,6 +616,24 @@ function OrganizationDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Create Event Modal */}
+      <CreateEvent
+        isOpen={showCreateEvent}
+        onClose={() => setShowCreateEvent(false)}
+        onSuccess={handleEventCreated}
+        organizationId={organizationId}
+        organizationName={organization?.name || 'Your Organization'}
+      />
+
+      {/* Create Announcement Modal */}
+      <CreateAnnouncement
+        isOpen={showCreateAnnouncement}
+        onClose={() => setShowCreateAnnouncement(false)}
+        onSuccess={handleAnnouncementCreated}
+        organizationId={organizationId}
+        organizationName={organization?.name || 'Your Organization'}
+      />
     </div>
   );
 }
