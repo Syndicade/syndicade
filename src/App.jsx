@@ -9,6 +9,9 @@ import Login from './pages/Login';
 import EventList from './pages/EventList';
 import EventDetails from './pages/EventDetails';
 import EventCalendar from './pages/EventCalendar';
+import AnnouncementFeed from './pages/AnnouncementFeed';
+import OrganizationList from './pages/OrganizationList';
+import OrganizationDashboard from './pages/OrganizationDashboard';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -124,7 +127,39 @@ function App() {
               )
             } 
           />
+{/* Organization Routes - PROTECTED */}
+<Route 
+  path="/organizations" 
+  element={
+    session ? (
+      <OrganizationList />
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  } 
+/>
 
+<Route 
+  path="/organizations/:organizationId" 
+  element={
+    session ? (
+      <OrganizationDashboard />
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  } 
+/>
+
+<Route 
+  path="/organizations/:organizationId/announcements" 
+  element={
+    session ? (
+      <AnnouncementFeed />
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  } 
+/>
           {/* 404 - Catch All Route */}
           <Route 
             path="*" 
