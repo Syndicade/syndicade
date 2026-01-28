@@ -50,8 +50,11 @@ function Login() {
       if (signInError) throw signInError;
 
       if (data.user) {
+        // Wait a bit for session to be set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Success! Navigate to dashboard
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
       }
     } catch (err) {
       console.error('Login error:', err);
