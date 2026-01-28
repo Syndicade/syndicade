@@ -5,32 +5,41 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    start_date: '',
-    start_time: '',
-    end_date: '',
-    end_time: '',
-    all_day: false,
-    location: '',
-    location_url: '',
-    event_type: '',
-    is_virtual: false,
-    virtual_link: '',
-    max_attendees: '',
-    is_public: false,
-    requires_rsvp: true
+    startDate: '',
+    startTime: '',
+    endDate: '',
+    endTime: '',
+    locationName: '',
+    fullAddress: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    isVirtual: false,
+    virtualLink: '',
+    locationLink: '',
+    maxAttendees: '',
+    visibility: 'members',
+    requireRSVP: false
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const eventTypes = [
-    { value: 'meeting', label: 'Meeting', icon: '👥' },
-    { value: 'workshop', label: 'Workshop', icon: '🛠️' },
-    { value: 'fundraiser', label: 'Fundraiser', icon: '💰' },
-    { value: 'social', label: 'Social Event', icon: '🎉' },
-    { value: 'volunteer', label: 'Volunteer Activity', icon: '🤝' },
-    { value: 'training', label: 'Training', icon: '📚' },
-    { value: 'other', label: 'Other', icon: '📌' }
+  const visibilityOptions = [
+    { value: 'public', label: '🌍 Public Event', description: 'Anyone can see (appears in event discovery)' },
+    { value: 'members', label: '👥 Members Only', description: 'Only organization members' },
+    { value: 'groups', label: '👔 Specific Groups', description: 'Select committees/groups' },
+    { value: 'draft', label: '📝 Draft', description: 'Only you and admins' }
+  ];
+
+  const usStates = [
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
   ];
 
   const handleChange = (e) => {
@@ -39,6 +48,129 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const searchAddresses = async (query) => {
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=us`,
+        {
+          headers: {
+            'User-Agent': 'Syndicade Community Platform'
+          }
+        }
+      );
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setAddressSuggestions(data);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error('Address search error:', err);
+    }
+  };
+
+  const handleAddressInput = (e) => {
+    const value = e.target.value;
+    setFormData(prev => ({ ...prev, fullAddress: value }));
+    searchAddresses(value);
+  };
+
+  const parseAddress = (displayName, addressComponents) => {
+    const parts = displayName.split(', ');
+    
+    let street = '';
+    let city = '';
+    let state = '';
+    let zip = '';
+    
+    if (addressComponents) {
+      street = addressComponents.road || addressComponents.house_number 
+        ? `${addressComponents.house_number || ''} ${addressComponents.road || ''}`.trim()
+        : '';
+      city = addressComponents.city || addressComponents.town || addressComponents.village || '';
+      state = addressComponents.state || '';
+      
+      const stateAbbr = usStates.find(s => 
+        addressComponents.state && addressComponents.state.toLowerCase().includes(s.toLowerCase())
+      ) || state;
+      state = stateAbbr;
+      
+      zip = addressComponents.postcode || '';
+    } else {
+      if (parts.length >= 3) {
+        street = parts[0];
+        city = parts[1];
+        
+        const stateZip = parts[2];
+        const stateMatch = stateZip.match(/([A-Z]{2})/);
+        const zipMatch = stateZip.match(/(\d{5})/);
+        
+        if (stateMatch) state = stateMatch[1];
+        if (zipMatch) zip = zipMatch[1];
+      }
+    }
+
+    return { street, city, state, zip };
+  };
+
+  const selectAddress = (suggestion) => {
+    const { street, city, state, zip } = parseAddress(
+      suggestion.display_name, 
+      suggestion.address
+    );
+    
+    setFormData(prev => ({
+      ...prev,
+      fullAddress: suggestion.display_name,
+      city: city,
+      state: state,
+      zipCode: zip
+    }));
+    
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+  };
+
+  const geocodeAddress = async (address) => {
+    try {
+      setGeocoding(true);
+      
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'Syndicade Community Platform'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Geocoding service unavailable');
+      }
+
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        return {
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon)
+        };
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Geocoding error:', err);
+      return null;
+    } finally {
+      setGeocoding(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -51,106 +183,106 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         throw new Error('Event title must be at least 3 characters');
       }
 
-      if (!formData.all_day) {
-        if (!formData.start_date || !formData.start_time) {
-          throw new Error('Start date and time are required');
-        }
-      } else {
-        if (!formData.start_date) {
-          throw new Error('Start date is required');
-        }
+      if (!formData.startDate || !formData.startTime) {
+        throw new Error('Please provide start date and time');
       }
 
-      let startDateTime;
-      if (formData.all_day) {
-        startDateTime = new Date(`${formData.start_date}T00:00:00`);
-      } else {
-        startDateTime = new Date(`${formData.start_date}T${formData.start_time}`);
+      if (formData.isVirtual && !formData.virtualLink.trim()) {
+        throw new Error('Virtual events require a meeting link');
       }
-      
+
+      if (!formData.isVirtual && !formData.locationName.trim()) {
+        throw new Error('Please provide a location name');
+      }
+
+      if (!formData.isVirtual && !formData.fullAddress.trim()) {
+        throw new Error('Please provide an address');
+      }
+
+      const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
       let endDateTime = null;
-      if (formData.all_day && formData.end_date) {
-        endDateTime = new Date(`${formData.end_date}T23:59:59`);
-      } else if (!formData.all_day && formData.end_date && formData.end_time) {
-        endDateTime = new Date(`${formData.end_date}T${formData.end_time}`);
-        
+      
+      if (formData.endDate && formData.endTime) {
+        endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
         if (endDateTime <= startDateTime) {
           throw new Error('End time must be after start time');
         }
       }
 
-      if (formData.is_virtual && formData.virtual_link) {
-        try {
-          new URL(formData.virtual_link);
-        } catch {
-          throw new Error('Please enter a valid URL for the virtual link');
-        }
-      }
-
-      if (formData.location_url && formData.location_url.trim()) {
-        try {
-          new URL(formData.location_url);
-        } catch {
-          throw new Error('Please enter a valid URL for the location link');
-        }
+      if (formData.maxAttendees && parseInt(formData.maxAttendees) < 1) {
+        throw new Error('Maximum attendees must be at least 1');
       }
 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error('You must be logged in to create events');
+
+      let latitude = null;
+      let longitude = null;
+
+      if (!formData.isVirtual && formData.fullAddress) {
+        const coords = await geocodeAddress(formData.fullAddress);
+        
+        if (coords) {
+          latitude = coords.latitude;
+          longitude = coords.longitude;
+        } else {
+          console.warn('Geocoding failed, event will not appear in location search');
+        }
+      }
 
       const eventData = {
         organization_id: organizationId,
         title: formData.title.trim(),
-        description: formData.description.trim() || null,
+        description: formData.description.trim(),
         start_time: startDateTime.toISOString(),
         end_time: endDateTime ? endDateTime.toISOString() : null,
-        all_day: formData.all_day,
-        location: formData.is_virtual ? 'Virtual' : formData.location.trim() || null,
-        location_url: formData.location_url.trim() || null,
-        event_type: formData.event_type || null,
-        is_virtual: formData.is_virtual,
-        virtual_link: formData.is_virtual ? formData.virtual_link.trim() : null,
-        max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : null,
-        is_public: formData.is_public,
-        requires_rsvp: formData.requires_rsvp,
-        created_by: user.id,
-        created_at: new Date().toISOString(),
-        is_cancelled: false,
-        cancelled_reason: null,
-        latitude: null,
-        longitude: null,
-        group_ids: null
+        location: formData.isVirtual ? 'Virtual Event' : formData.locationName.trim(),
+        full_address: formData.isVirtual ? null : formData.fullAddress.trim(),
+        city: formData.isVirtual ? null : formData.city.trim(),
+        state: formData.isVirtual ? null : formData.state,
+        zip_code: formData.isVirtual ? null : formData.zipCode.trim(),
+        latitude: latitude,
+        longitude: longitude,
+        is_virtual: formData.isVirtual,
+        virtual_link: formData.isVirtual ? formData.virtualLink.trim() : null,
+        location_link: formData.locationLink.trim() || null,
+        max_attendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
+        visibility: formData.visibility,
+        require_rsvp: formData.requireRSVP,
+        created_by: user.id
       };
 
-      const { data, error: createError } = await supabase
+      const { data: newEvent, error: eventError } = await supabase
         .from('events')
         .insert([eventData])
         .select()
         .single();
 
-      if (createError) throw createError;
+      if (eventError) throw eventError;
 
       if (onSuccess) {
-        onSuccess(data);
+        onSuccess(newEvent);
       }
 
       setFormData({
         title: '',
         description: '',
-        start_date: '',
-        start_time: '',
-        end_date: '',
-        end_time: '',
-        all_day: false,
-        location: '',
-        location_url: '',
-        event_type: '',
-        is_virtual: false,
-        virtual_link: '',
-        max_attendees: '',
-        is_public: false,
-        requires_rsvp: true
+        startDate: '',
+        startTime: '',
+        endDate: '',
+        endTime: '',
+        locationName: '',
+        fullAddress: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        isVirtual: false,
+        virtualLink: '',
+        locationLink: '',
+        maxAttendees: '',
+        visibility: 'members',
+        requireRSVP: false
       });
 
       onClose();
@@ -164,19 +296,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape' && !loading) {
+    if (e.key === 'Escape') {
       onClose();
     }
   };
-
-  const today = new Date().toISOString().split('T')[0];
 
   if (!isOpen) return null;
 
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onClick={!loading ? onClose : undefined}
+      onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
@@ -186,15 +316,15 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-gray-200 px-6 py-4 sticky top-0 bg-white z-10">
+        <div className="border-b border-gray-200 px-6 py-4">
           <h2 
             id="create-event-title"
             className="text-2xl font-bold text-gray-900"
           >
-            Create Event
+            📅 Create New Event
           </h2>
           <p className="text-gray-600 mt-1">
-            For {organizationName}
+            Create an event for {organizationName}
           </p>
         </div>
 
@@ -223,38 +353,14 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               required
               value={formData.title}
               onChange={handleChange}
-              placeholder="e.g., Monthly Board Meeting"
+              placeholder="e.g., Community Cleanup Day"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               aria-required="true"
-              aria-describedby="title-help"
               maxLength={200}
             />
-            <p id="title-help" className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               {formData.title.length}/200 characters
             </p>
-          </div>
-
-          <div>
-            <label 
-              htmlFor="event-type"
-              className="block text-sm font-semibold text-gray-900 mb-2"
-            >
-              Event Type (Optional)
-            </label>
-            <select
-              id="event-type"
-              name="event_type"
-              value={formData.event_type}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a type...</option>
-              {eventTypes.map(type => (
-                <option key={type.value} value={type.value}>
-                  {type.icon} {type.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>
@@ -269,36 +375,14 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="What's this event about? What should attendees know?"
+              placeholder="Describe what this event is about..."
               rows={4}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              aria-describedby="description-help"
-              maxLength={2000}
+              maxLength={1000}
             />
-            <p id="description-help" className="text-sm text-gray-500 mt-1">
-              {formData.description.length}/2000 characters
+            <p className="text-sm text-gray-500 mt-1">
+              {formData.description.length}/1000 characters
             </p>
-          </div>
-
-          <div className="flex items-start">
-            <div className="flex items-center h-5">
-              <input
-                id="all-day"
-                name="all_day"
-                type="checkbox"
-                checked={formData.all_day}
-                onChange={handleChange}
-                className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-              />
-            </div>
-            <div className="ml-3">
-              <label htmlFor="all-day" className="font-semibold text-gray-900">
-                All-Day Event
-              </label>
-              <p className="text-sm text-gray-600">
-                This event lasts the entire day (no specific start/end time)
-              </p>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -311,38 +395,37 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               </label>
               <input
                 id="start-date"
-                name="start_date"
+                name="startDate"
                 type="date"
                 required
-                min={today}
-                value={formData.start_date}
+                value={formData.startDate}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 aria-required="true"
               />
             </div>
 
-            {!formData.all_day && (
-              <div>
-                <label 
-                  htmlFor="start-time"
-                  className="block text-sm font-semibold text-gray-900 mb-2"
-                >
-                  Start Time *
-                </label>
-                <input
-                  id="start-time"
-                  name="start_time"
-                  type="time"
-                  required={!formData.all_day}
-                  value={formData.start_time}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-required={!formData.all_day}
-                />
-              </div>
-            )}
+            <div>
+              <label 
+                htmlFor="start-time"
+                className="block text-sm font-semibold text-gray-900 mb-2"
+              >
+                Start Time *
+              </label>
+              <input
+                id="start-time"
+                name="startTime"
+                type="time"
+                required
+                value={formData.startTime}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                aria-required="true"
+              />
+            </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label 
                 htmlFor="end-date"
@@ -352,42 +435,39 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               </label>
               <input
                 id="end-date"
-                name="end_date"
+                name="endDate"
                 type="date"
-                min={formData.start_date || today}
-                value={formData.end_date}
+                value={formData.endDate}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
-            {!formData.all_day && (
-              <div>
-                <label 
-                  htmlFor="end-time"
-                  className="block text-sm font-semibold text-gray-900 mb-2"
-                >
-                  End Time (Optional)
-                </label>
-                <input
-                  id="end-time"
-                  name="end_time"
-                  type="time"
-                  value={formData.end_time}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            )}
+            <div>
+              <label 
+                htmlFor="end-time"
+                className="block text-sm font-semibold text-gray-900 mb-2"
+              >
+                End Time (Optional)
+              </label>
+              <input
+                id="end-time"
+                name="endTime"
+                type="time"
+                value={formData.endTime}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           <div className="flex items-start">
             <div className="flex items-center h-5">
               <input
                 id="is-virtual"
-                name="is_virtual"
+                name="isVirtual"
                 type="checkbox"
-                checked={formData.is_virtual}
+                checked={formData.isVirtual}
                 onChange={handleChange}
                 className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
               />
@@ -402,70 +482,133 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </div>
           </div>
 
-          {formData.is_virtual ? (
+          {formData.isVirtual ? (
             <div>
               <label 
                 htmlFor="virtual-link"
                 className="block text-sm font-semibold text-gray-900 mb-2"
               >
-                Virtual Meeting Link
+                Meeting Link *
               </label>
               <input
                 id="virtual-link"
-                name="virtual_link"
+                name="virtualLink"
                 type="url"
-                value={formData.virtual_link}
+                required={formData.isVirtual}
+                value={formData.virtualLink}
                 onChange={handleChange}
-                placeholder="https://zoom.us/j/..."
+                placeholder="https://zoom.us/j/123456789"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-describedby="virtual-link-help"
+                aria-required={formData.isVirtual}
               />
-              <p id="virtual-link-help" className="text-sm text-gray-500 mt-1">
-                Zoom, Google Meet, or other video call link
-              </p>
             </div>
           ) : (
             <>
               <div>
                 <label 
-                  htmlFor="location"
+                  htmlFor="location-name"
                   className="block text-sm font-semibold text-gray-900 mb-2"
                 >
-                  Location
+                  Location Name *
                 </label>
                 <input
-                  id="location"
-                  name="location"
+                  id="location-name"
+                  name="locationName"
                   type="text"
-                  value={formData.location}
+                  required={!formData.isVirtual}
+                  value={formData.locationName}
                   onChange={handleChange}
-                  placeholder="123 Main St, Toledo, OH 43604"
+                  placeholder="e.g., Main Street Park, Community Center"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-describedby="location-help"
+                  aria-required={!formData.isVirtual}
                 />
-                <p id="location-help" className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 mt-1">
                   Street address or venue name
                 </p>
               </div>
 
+              <div className="relative">
+                <label 
+                  htmlFor="full-address"
+                  className="block text-sm font-semibold text-gray-900 mb-2"
+                >
+                  Address *
+                </label>
+                <input
+                  id="full-address"
+                  name="fullAddress"
+                  type="text"
+                  required={!formData.isVirtual}
+                  value={formData.fullAddress}
+                  onChange={handleAddressInput}
+                  onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="123 Main St, Toledo, OH 43604"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-required={!formData.isVirtual}
+                  autoComplete="off"
+                />
+                
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => selectAddress(suggestion)}
+                        className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                      >
+                        <p className="text-sm font-medium text-gray-900">
+                          {suggestion.display_name}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="text-sm text-gray-500 mt-1">
+                  Start typing to see address suggestions
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 text-lg">ℹ️</span>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Auto-detected:</p>
+                    {formData.city && (
+                      <p>City: <span className="font-medium">{formData.city}</span></p>
+                    )}
+                    {formData.state && (
+                      <p>State: <span className="font-medium">{formData.state}</span></p>
+                    )}
+                    {formData.zipCode && (
+                      <p>ZIP: <span className="font-medium">{formData.zipCode}</span></p>
+                    )}
+                    {!formData.city && !formData.state && (
+                      <p className="text-blue-600">Select an address suggestion to auto-fill</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label 
-                  htmlFor="location-url"
+                  htmlFor="location-link"
                   className="block text-sm font-semibold text-gray-900 mb-2"
                 >
                   Location Link (Optional)
                 </label>
                 <input
-                  id="location-url"
-                  name="location_url"
+                  id="location-link"
+                  name="locationLink"
                   type="url"
-                  value={formData.location_url}
+                  value={formData.locationLink}
                   onChange={handleChange}
                   placeholder="https://maps.google.com/..."
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-describedby="location-url-help"
                 />
-                <p id="location-url-help" className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 mt-1">
                   Google Maps link or directions URL
                 </p>
               </div>
@@ -481,96 +624,99 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </label>
             <input
               id="max-attendees"
-              name="max_attendees"
+              name="maxAttendees"
               type="number"
               min="1"
-              max="10000"
-              value={formData.max_attendees}
+              value={formData.maxAttendees}
               onChange={handleChange}
               placeholder="Leave empty for unlimited"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              aria-describedby="max-attendees-help"
             />
-            <p id="max-attendees-help" className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               Set a capacity limit for your event
             </p>
           </div>
 
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-lg font-semibold text-gray-900">Event Settings</h3>
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Event Settings</h3>
             
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="is-public"
-                  name="is_public"
-                  type="checkbox"
-                  checked={formData.is_public}
-                  onChange={handleChange}
-                  className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                />
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="public-event"
+                    name="visibility"
+                    type="checkbox"
+                    checked={formData.visibility === 'public'}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      visibility: e.target.checked ? 'public' : 'members' 
+                    }))}
+                    className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="ml-3">
+                  <label htmlFor="public-event" className="font-semibold text-gray-900 flex items-center gap-2">
+                    <span>🌍</span> Public Event
+                  </label>
+                  <p className="text-sm text-gray-600">
+                    Allow anyone to see this event (appears in event discovery)
+                  </p>
+                </div>
               </div>
-              <div className="ml-3">
-                <label htmlFor="is-public" className="font-semibold text-gray-900">
-                  🌍 Public Event
-                </label>
-                <p className="text-sm text-gray-600">
-                  Allow anyone to see this event (appears in event discovery)
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="requires-rsvp"
-                  name="requires_rsvp"
-                  type="checkbox"
-                  checked={formData.requires_rsvp}
-                  onChange={handleChange}
-                  className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                />
-              </div>
-              <div className="ml-3">
-                <label htmlFor="requires-rsvp" className="font-semibold text-gray-900">
-                  ✓ Require RSVP
-                </label>
-                <p className="text-sm text-gray-600">
-                  Members must RSVP to attend this event
-                </p>
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="require-rsvp"
+                    name="requireRSVP"
+                    type="checkbox"
+                    checked={formData.requireRSVP}
+                    onChange={handleChange}
+                    className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="ml-3">
+                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900 flex items-center gap-2">
+                    <span>✓</span> Require RSVP
+                  </label>
+                  <p className="text-sm text-gray-600">
+                    Members must RSVP to attend this event
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
+              disabled={loading || geocoding}
               className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading || !formData.title || !formData.start_date}
+              disabled={loading || geocoding}
               className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-label={loading ? 'Creating event...' : 'Create event'}
+              aria-label={loading ? 'Creating event...' : geocoding ? 'Geocoding address...' : 'Create event'}
             >
-              {loading ? (
+              {loading || geocoding ? (
                 <>
                   <div 
                     className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
                     role="status"
                     aria-label="Loading"
                   >
-                    <span className="sr-only">Creating...</span>
+                    <span className="sr-only">{geocoding ? 'Finding location...' : 'Creating...'}</span>
                   </div>
-                  Creating Event...
+                  {geocoding ? 'Finding Location...' : 'Creating Event...'}
                 </>
               ) : (
                 <>
-                  <span>📅</span>
+                  <span>✨</span>
                   Create Event
                 </>
               )}
