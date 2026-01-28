@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
@@ -26,6 +26,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [geocoding, setGeocoding] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
   const visibilityOptions = [
     { value: 'public', label: '🌍 Public Event', description: 'Anyone can see (appears in event discovery)' },
@@ -42,12 +43,52 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
   ];
 
+  useEffect(() => {
+    if (isOpen && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude
+          });
+        },
+        (err) => {
+          console.log('Geolocation not available:', err);
+        }
+      );
+    }
+  }, [isOpen]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const formatAddressDisplay = (address) => {
+    const houseNumber = address.house_number || '';
+    const road = address.road || '';
+    const city = address.city || address.town || address.village || '';
+    const state = address.state || '';
+    const postcode = address.postcode || '';
+
+    const streetAddress = `${houseNumber} ${road}`.trim();
+    
+    const parts = [];
+    if (streetAddress) parts.push(streetAddress);
+    if (city) parts.push(city);
+    if (state) {
+      const stateAbbr = usStates.find(s => 
+        state.toLowerCase().includes(s.toLowerCase()) || 
+        s.toLowerCase() === state.toLowerCase()
+      ) || state;
+      parts.push(stateAbbr);
+    }
+    if (postcode) parts.push(postcode);
+
+    return parts.join(', ');
   };
 
   const searchAddresses = async (query) => {
@@ -57,19 +98,33 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     }
 
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=us`,
-        {
-          headers: {
-            'User-Agent': 'Syndicade Community Platform'
-          }
+      let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=us&addressdetails=1`;
+      
+      if (userLocation) {
+        searchUrl += `&viewbox=${userLocation.lon - 1},${userLocation.lat - 1},${userLocation.lon + 1},${userLocation.lat + 1}&bounded=1`;
+      }
+
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Syndicade Community Platform'
         }
-      );
+      });
 
       if (!response.ok) return;
 
       const data = await response.json();
-      setAddressSuggestions(data);
+      
+      const formattedSuggestions = data
+        .filter(item => {
+          const addr = item.address || {};
+          return (addr.road || addr.house_number) && (addr.city || addr.town || addr.village);
+        })
+        .map(item => ({
+          ...item,
+          formatted: formatAddressDisplay(item.address)
+        }));
+
+      setAddressSuggestions(formattedSuggestions);
       setShowSuggestions(true);
     } catch (err) {
       console.error('Address search error:', err);
@@ -82,53 +137,30 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     searchAddresses(value);
   };
 
-  const parseAddress = (displayName, addressComponents) => {
-    const parts = displayName.split(', ');
+  const extractStateAbbreviation = (stateName) => {
+    if (!stateName) return '';
     
-    let street = '';
-    let city = '';
-    let state = '';
-    let zip = '';
+    const stateAbbr = usStates.find(s => 
+      stateName.toLowerCase().includes(s.toLowerCase()) || 
+      s.toLowerCase() === stateName.toLowerCase()
+    );
     
-    if (addressComponents) {
-      street = addressComponents.road || addressComponents.house_number 
-        ? `${addressComponents.house_number || ''} ${addressComponents.road || ''}`.trim()
-        : '';
-      city = addressComponents.city || addressComponents.town || addressComponents.village || '';
-      state = addressComponents.state || '';
-      
-      const stateAbbr = usStates.find(s => 
-        addressComponents.state && addressComponents.state.toLowerCase().includes(s.toLowerCase())
-      ) || state;
-      state = stateAbbr;
-      
-      zip = addressComponents.postcode || '';
-    } else {
-      if (parts.length >= 3) {
-        street = parts[0];
-        city = parts[1];
-        
-        const stateZip = parts[2];
-        const stateMatch = stateZip.match(/([A-Z]{2})/);
-        const zipMatch = stateZip.match(/(\d{5})/);
-        
-        if (stateMatch) state = stateMatch[1];
-        if (zipMatch) zip = zipMatch[1];
-      }
-    }
-
-    return { street, city, state, zip };
+    return stateAbbr || stateName.substring(0, 2).toUpperCase();
   };
 
   const selectAddress = (suggestion) => {
-    const { street, city, state, zip } = parseAddress(
-      suggestion.display_name, 
-      suggestion.address
-    );
+    const addr = suggestion.address;
+    
+    const houseNumber = addr.house_number || '';
+    const road = addr.road || '';
+    const streetAddress = `${houseNumber} ${road}`.trim();
+    const city = addr.city || addr.town || addr.village || '';
+    const state = extractStateAbbreviation(addr.state || '');
+    const zip = addr.postcode || '';
     
     setFormData(prev => ({
       ...prev,
-      fullAddress: suggestion.display_name,
+      fullAddress: suggestion.formatted,
       city: city,
       state: state,
       zipCode: zip
@@ -143,7 +175,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       setGeocoding(true);
       
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
         {
           headers: {
             'User-Agent': 'Syndicade Community Platform'
@@ -550,47 +582,54 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 />
                 
                 {showSuggestions && addressSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                     {addressSuggestions.map((suggestion, index) => (
                       <button
                         key={index}
                         type="button"
                         onClick={() => selectAddress(suggestion)}
-                        className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                        className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
                       >
-                        <p className="text-sm font-medium text-gray-900">
-                          {suggestion.display_name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-600">📍</span>
+                          <p className="text-sm font-medium text-gray-900">
+                            {suggestion.formatted}
+                          </p>
+                        </div>
                       </button>
                     ))}
                   </div>
                 )}
                 
                 <p className="text-sm text-gray-500 mt-1">
-                  Start typing to see address suggestions
+                  {userLocation 
+                    ? 'Showing nearby addresses first - start typing to search'
+                    : 'Start typing to see address suggestions'
+                  }
                 </p>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <span className="text-blue-600 text-lg">ℹ️</span>
-                  <div className="text-sm text-blue-800">
-                    <p className="font-semibold mb-1">Auto-detected:</p>
-                    {formData.city && (
-                      <p>City: <span className="font-medium">{formData.city}</span></p>
-                    )}
-                    {formData.state && (
-                      <p>State: <span className="font-medium">{formData.state}</span></p>
-                    )}
-                    {formData.zipCode && (
-                      <p>ZIP: <span className="font-medium">{formData.zipCode}</span></p>
-                    )}
-                    {!formData.city && !formData.state && (
-                      <p className="text-blue-600">Select an address suggestion to auto-fill</p>
-                    )}
+              {(formData.city || formData.state || formData.zipCode) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 text-lg">✓</span>
+                    <div className="text-sm text-blue-800">
+                      <p className="font-semibold mb-1">Auto-detected address details:</p>
+                      <div className="space-y-1">
+                        {formData.city && (
+                          <p>City: <span className="font-medium">{formData.city}</span></p>
+                        )}
+                        {formData.state && (
+                          <p>State: <span className="font-medium">{formData.state}</span></p>
+                        )}
+                        {formData.zipCode && (
+                          <p>ZIP: <span className="font-medium">{formData.zipCode}</span></p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label 
