@@ -5,10 +5,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    startDate: '',
+    date: '',
     startTime: '',
-    endDate: '',
     endTime: '',
+    isMultiDay: false,
+    endDate: '',
     locationName: '',
     fullAddress: '',
     city: '',
@@ -26,14 +27,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [geocoding, setGeocoding] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-
-  const visibilityOptions = [
-    { value: 'public', label: '🌍 Public Event', description: 'Anyone can see (appears in event discovery)' },
-    { value: 'members', label: '👥 Members Only', description: 'Only organization members' },
-    { value: 'groups', label: '👔 Specific Groups', description: 'Select committees/groups' },
-    { value: 'draft', label: '📝 Draft', description: 'Only you and admins' }
-  ];
+  const [searchingAddress, setSearchingAddress] = useState(false);
 
   const usStates = [
     'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -42,22 +36,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
     'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
   ];
-
-  useEffect(() => {
-    if (isOpen && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
-          });
-        },
-        (err) => {
-          console.log('Geolocation not available:', err);
-        }
-      );
-    }
-  }, [isOpen]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -81,9 +59,8 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (city) parts.push(city);
     if (state) {
       const stateAbbr = usStates.find(s => 
-        state.toLowerCase().includes(s.toLowerCase()) || 
-        s.toLowerCase() === state.toLowerCase()
-      ) || state;
+        state.toLowerCase().includes(s.toLowerCase())
+      ) || state.substring(0, 2).toUpperCase();
       parts.push(stateAbbr);
     }
     if (postcode) parts.push(postcode);
@@ -94,15 +71,21 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const searchAddresses = async (query) => {
     if (query.length < 3) {
       setAddressSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
     try {
-      let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=us&addressdetails=1`;
+      setSearchingAddress(true);
       
-      if (userLocation) {
-        searchUrl += `&viewbox=${userLocation.lon - 1},${userLocation.lat - 1},${userLocation.lon + 1},${userLocation.lat + 1}&bounded=1`;
-      }
+      const searchUrl = `https://nominatim.openstreetmap.org/search?` + 
+        `format=json&` +
+        `q=${encodeURIComponent(query)}&` +
+        `limit=8&` +
+        `countrycodes=us&` +
+        `addressdetails=1`;
+
+      console.log('Searching addresses for:', query);
 
       const response = await fetch(searchUrl, {
         headers: {
@@ -110,9 +93,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         }
       });
 
-      if (!response.ok) return;
+      if (!response.ok) {
+        console.error('Address search failed:', response.status);
+        return;
+      }
 
       const data = await response.json();
+      console.log('Address results:', data);
       
       const formattedSuggestions = data
         .filter(item => {
@@ -124,31 +111,42 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           formatted: formatAddressDisplay(item.address)
         }));
 
+      console.log('Formatted suggestions:', formattedSuggestions);
+      
       setAddressSuggestions(formattedSuggestions);
-      setShowSuggestions(true);
+      setShowSuggestions(formattedSuggestions.length > 0);
     } catch (err) {
       console.error('Address search error:', err);
+    } finally {
+      setSearchingAddress(false);
     }
   };
 
   const handleAddressInput = (e) => {
     const value = e.target.value;
     setFormData(prev => ({ ...prev, fullAddress: value }));
-    searchAddresses(value);
+    
+    if (value.length >= 3) {
+      searchAddresses(value);
+    } else {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+    }
   };
 
   const extractStateAbbreviation = (stateName) => {
     if (!stateName) return '';
     
     const stateAbbr = usStates.find(s => 
-      stateName.toLowerCase().includes(s.toLowerCase()) || 
-      s.toLowerCase() === stateName.toLowerCase()
+      stateName.toLowerCase().includes(s.toLowerCase())
     );
     
     return stateAbbr || stateName.substring(0, 2).toUpperCase();
   };
 
   const selectAddress = (suggestion) => {
+    console.log('Selected address:', suggestion);
+    
     const addr = suggestion.address;
     
     const houseNumber = addr.house_number || '';
@@ -215,8 +213,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         throw new Error('Event title must be at least 3 characters');
       }
 
-      if (!formData.startDate || !formData.startTime) {
-        throw new Error('Please provide start date and time');
+      if (!formData.date || !formData.startTime) {
+        throw new Error('Please provide date and start time');
+      }
+
+      if (formData.isMultiDay && !formData.endDate) {
+        throw new Error('Please provide end date for multi-day event');
       }
 
       if (formData.isVirtual && !formData.virtualLink.trim()) {
@@ -231,14 +233,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         throw new Error('Please provide an address');
       }
 
-      const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
+      const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
       let endDateTime = null;
       
-      if (formData.endDate && formData.endTime) {
+      if (formData.isMultiDay && formData.endDate && formData.endTime) {
         endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
-        if (endDateTime <= startDateTime) {
-          throw new Error('End time must be after start time');
-        }
+      } else if (formData.endTime) {
+        endDateTime = new Date(`${formData.date}T${formData.endTime}`);
+      }
+      
+      if (endDateTime && endDateTime <= startDateTime) {
+        throw new Error('End time must be after start time');
       }
 
       if (formData.maxAttendees && parseInt(formData.maxAttendees) < 1) {
@@ -300,10 +305,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       setFormData({
         title: '',
         description: '',
-        startDate: '',
+        date: '',
         startTime: '',
-        endDate: '',
         endTime: '',
+        isMultiDay: false,
+        endDate: '',
         locationName: '',
         fullAddress: '',
         city: '',
@@ -417,79 +423,104 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label 
-                htmlFor="start-date"
-                className="block text-sm font-semibold text-gray-900 mb-2"
-              >
-                Start Date *
-              </label>
-              <input
-                id="start-date"
-                name="startDate"
-                type="date"
-                required
-                value={formData.startDate}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-required="true"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">
+              Date & Time *
+            </label>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="event-date" className="block text-xs text-gray-600 mb-1">
+                    Date
+                  </label>
+                  <input
+                    id="event-date"
+                    name="date"
+                    type="date"
+                    required
+                    value={formData.date}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-required="true"
+                  />
+                </div>
 
-            <div>
-              <label 
-                htmlFor="start-time"
-                className="block text-sm font-semibold text-gray-900 mb-2"
-              >
-                Start Time *
-              </label>
-              <input
-                id="start-time"
-                name="startTime"
-                type="time"
-                required
-                value={formData.startTime}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-required="true"
-              />
-            </div>
-          </div>
+                <div>
+                  <label htmlFor="start-time" className="block text-xs text-gray-600 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    id="start-time"
+                    name="startTime"
+                    type="time"
+                    required
+                    value={formData.startTime}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-required="true"
+                  />
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label 
-                htmlFor="end-date"
-                className="block text-sm font-semibold text-gray-900 mb-2"
-              >
-                End Date (Optional)
-              </label>
-              <input
-                id="end-date"
-                name="endDate"
-                type="date"
-                value={formData.endDate}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+                <div>
+                  <label htmlFor="end-time" className="block text-xs text-gray-600 mb-1">
+                    End Time
+                  </label>
+                  <input
+                    id="end-time"
+                    name="endTime"
+                    type="time"
+                    value={formData.endTime}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label 
-                htmlFor="end-time"
-                className="block text-sm font-semibold text-gray-900 mb-2"
-              >
-                End Time (Optional)
-              </label>
-              <input
-                id="end-time"
-                name="endTime"
-                type="time"
-                value={formData.endTime}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="multi-day"
+                    name="isMultiDay"
+                    type="checkbox"
+                    checked={formData.isMultiDay}
+                    onChange={handleChange}
+                    className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="ml-3">
+                  <label htmlFor="multi-day" className="font-semibold text-gray-900">
+                    Multiple Day Event
+                  </label>
+                  <p className="text-sm text-gray-600">
+                    Event spans across multiple days
+                  </p>
+                </div>
+              </div>
+
+              {formData.isMultiDay && (
+                <div className="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded-lg">
+                  <div>
+                    <label htmlFor="end-date" className="block text-xs text-gray-600 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      id="end-date"
+                      name="endDate"
+                      type="date"
+                      required={formData.isMultiDay}
+                      value={formData.endDate}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="col-span-2 flex items-end">
+                    <p className="text-sm text-blue-800">
+                      Event runs from <strong>{formData.date || '(start date)'}</strong> to <strong>{formData.endDate || '(end date)'}</strong>
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -541,7 +572,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   htmlFor="location-name"
                   className="block text-sm font-semibold text-gray-900 mb-2"
                 >
-                  Location Name *
+                  Location *
                 </label>
                 <input
                   id="location-name"
@@ -550,7 +581,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   required={!formData.isVirtual}
                   value={formData.locationName}
                   onChange={handleChange}
-                  placeholder="e.g., Main Street Park, Community Center"
+                  placeholder="123 Main St, Toledo, OH 43604"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   aria-required={!formData.isVirtual}
                 />
@@ -564,22 +595,29 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   htmlFor="full-address"
                   className="block text-sm font-semibold text-gray-900 mb-2"
                 >
-                  Address *
+                  Address Search
                 </label>
                 <input
                   id="full-address"
                   name="fullAddress"
                   type="text"
-                  required={!formData.isVirtual}
                   value={formData.fullAddress}
                   onChange={handleAddressInput}
-                  onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  placeholder="123 Main St, Toledo, OH 43604"
+                  onFocus={() => {
+                    if (addressSuggestions.length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  placeholder="Type to search for address..."
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-required={!formData.isVirtual}
                   autoComplete="off"
                 />
+                
+                {searchingAddress && (
+                  <div className="absolute right-3 top-11">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
                 
                 {showSuggestions && addressSuggestions.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
@@ -587,7 +625,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                       <button
                         key={index}
                         type="button"
-                        onClick={() => selectAddress(suggestion)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectAddress(suggestion);
+                        }}
                         className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
                       >
                         <div className="flex items-center gap-2">
@@ -602,19 +643,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 )}
                 
                 <p className="text-sm text-gray-500 mt-1">
-                  {userLocation 
-                    ? 'Showing nearby addresses first - start typing to search'
-                    : 'Start typing to see address suggestions'
-                  }
+                  Type at least 3 characters to search
+                  {addressSuggestions.length > 0 && ` - ${addressSuggestions.length} results found`}
                 </p>
               </div>
 
               {(formData.city || formData.state || formData.zipCode) && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-start gap-2">
-                    <span className="text-blue-600 text-lg">✓</span>
-                    <div className="text-sm text-blue-800">
-                      <p className="font-semibold mb-1">Auto-detected address details:</p>
+                    <span className="text-green-600 text-lg">✓</span>
+                    <div className="text-sm text-green-800">
+                      <p className="font-semibold mb-1">Auto-detected:</p>
                       <div className="space-y-1">
                         {formData.city && (
                           <p>City: <span className="font-medium">{formData.city}</span></p>
