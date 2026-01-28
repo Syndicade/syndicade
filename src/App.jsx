@@ -12,6 +12,7 @@ import EventCalendar from './pages/EventCalendar';
 import AnnouncementFeed from './pages/AnnouncementFeed';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
+import EventDiscovery from './pages/EventDiscovery';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -115,6 +116,7 @@ function App() {
               )
             } 
           />
+<Route path="/discover" element={<EventDiscovery />} />
 
           {/* Calendar Route - PROTECTED */}
           <Route 
