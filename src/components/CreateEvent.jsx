@@ -5,17 +5,16 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    date: '',
-    startTime: '',
-    endTime: '',
+    eventType: 'in-person',
     isMultiDay: false,
-    endDate: '',
+    schedule: [
+      { date: '', startTime: '', endTime: '' }
+    ],
     locationName: '',
     fullAddress: '',
     city: '',
     state: '',
     zipCode: '',
-    isVirtual: false,
     virtualLink: '',
     locationLink: '',
     maxAttendees: '',
@@ -28,14 +27,62 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchingAddress, setSearchingAddress] = useState(false);
+  const [addressInput, setAddressInput] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
-  const usStates = [
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
-  ];
+  // Proper state name to abbreviation mapping
+  const stateMap = {
+    'alabama': 'AL',
+    'alaska': 'AK',
+    'arizona': 'AZ',
+    'arkansas': 'AR',
+    'california': 'CA',
+    'colorado': 'CO',
+    'connecticut': 'CT',
+    'delaware': 'DE',
+    'florida': 'FL',
+    'georgia': 'GA',
+    'hawaii': 'HI',
+    'idaho': 'ID',
+    'illinois': 'IL',
+    'indiana': 'IN',
+    'iowa': 'IA',
+    'kansas': 'KS',
+    'kentucky': 'KY',
+    'louisiana': 'LA',
+    'maine': 'ME',
+    'maryland': 'MD',
+    'massachusetts': 'MA',
+    'michigan': 'MI',
+    'minnesota': 'MN',
+    'mississippi': 'MS',
+    'missouri': 'MO',
+    'montana': 'MT',
+    'nebraska': 'NE',
+    'nevada': 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    'ohio': 'OH',
+    'oklahoma': 'OK',
+    'oregon': 'OR',
+    'pennsylvania': 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    'tennessee': 'TN',
+    'texas': 'TX',
+    'utah': 'UT',
+    'vermont': 'VT',
+    'virginia': 'VA',
+    'washington': 'WA',
+    'west virginia': 'WV',
+    'wisconsin': 'WI',
+    'wyoming': 'WY'
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -43,6 +90,48 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleScheduleChange = (index, field, value) => {
+    const newSchedule = [...formData.schedule];
+    newSchedule[index][field] = value;
+    setFormData(prev => ({ ...prev, schedule: newSchedule }));
+  };
+
+  const addDay = () => {
+    if (formData.schedule.length < 5) {
+      setFormData(prev => ({
+        ...prev,
+        schedule: [...prev.schedule, { date: '', startTime: '', endTime: '' }]
+      }));
+    }
+  };
+
+  const removeDay = (index) => {
+    if (formData.schedule.length > 1) {
+      const newSchedule = formData.schedule.filter((_, i) => i !== index);
+      setFormData(prev => ({ ...prev, schedule: newSchedule }));
+    }
+  };
+
+  const extractStateAbbreviation = (stateName) => {
+    if (!stateName) return '';
+    
+    // Convert to lowercase and lookup in map
+    const normalized = stateName.toLowerCase().trim();
+    
+    // Direct lookup
+    if (stateMap[normalized]) {
+      return stateMap[normalized];
+    }
+    
+    // Check if it's already an abbreviation (2 letters)
+    if (stateName.length === 2) {
+      return stateName.toUpperCase();
+    }
+    
+    // Fallback: return first 2 letters uppercase
+    return stateName.substring(0, 2).toUpperCase();
   };
 
   const formatAddressDisplay = (address) => {
@@ -58,9 +147,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (streetAddress) parts.push(streetAddress);
     if (city) parts.push(city);
     if (state) {
-      const stateAbbr = usStates.find(s => 
-        state.toLowerCase().includes(s.toLowerCase())
-      ) || state.substring(0, 2).toUpperCase();
+      const stateAbbr = extractStateAbbreviation(state);
       parts.push(stateAbbr);
     }
     if (postcode) parts.push(postcode);
@@ -69,101 +156,99 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   };
 
   const searchAddresses = async (query) => {
-    if (query.length < 3) {
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
     try {
       setSearchingAddress(true);
       
       const searchUrl = `https://nominatim.openstreetmap.org/search?` + 
         `format=json&` +
-        `q=${encodeURIComponent(query)}&` +
+        `q=${encodeURIComponent(query)},USA&` +
         `limit=8&` +
-        `countrycodes=us&` +
         `addressdetails=1`;
 
-      console.log('Searching addresses for:', query);
+      console.log('Searching:', searchUrl);
 
       const response = await fetch(searchUrl, {
+        method: 'GET',
         headers: {
-          'User-Agent': 'Syndicade Community Platform'
+          'Accept': 'application/json'
         }
       });
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        console.error('Address search failed:', response.status);
+        console.error('Search failed:', response.statusText);
         return;
       }
 
       const data = await response.json();
-      console.log('Address results:', data);
+      console.log('Raw results:', data);
       
       const formattedSuggestions = data
         .filter(item => {
           const addr = item.address || {};
-          return (addr.road || addr.house_number) && (addr.city || addr.town || addr.village);
+          const hasStreet = addr.road || addr.house_number;
+          const hasCity = addr.city || addr.town || addr.village;
+          return hasStreet && hasCity;
         })
         .map(item => ({
           ...item,
           formatted: formatAddressDisplay(item.address)
         }));
 
-      console.log('Formatted suggestions:', formattedSuggestions);
+      console.log('Filtered suggestions:', formattedSuggestions);
       
       setAddressSuggestions(formattedSuggestions);
       setShowSuggestions(formattedSuggestions.length > 0);
     } catch (err) {
-      console.error('Address search error:', err);
+      console.error('Search error:', err);
     } finally {
       setSearchingAddress(false);
     }
   };
 
-  const handleAddressInput = (e) => {
+  const handleAddressInputChange = (e) => {
     const value = e.target.value;
-    setFormData(prev => ({ ...prev, fullAddress: value }));
+    setAddressInput(value);
+    
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
     
     if (value.length >= 3) {
-      searchAddresses(value);
+      // Set new timeout - wait 500ms after user stops typing
+      const newTimeout = setTimeout(() => {
+        searchAddresses(value);
+      }, 500);
+      setSearchTimeout(newTimeout);
     } else {
       setAddressSuggestions([]);
       setShowSuggestions(false);
     }
   };
 
-  const extractStateAbbreviation = (stateName) => {
-    if (!stateName) return '';
-    
-    const stateAbbr = usStates.find(s => 
-      stateName.toLowerCase().includes(s.toLowerCase())
-    );
-    
-    return stateAbbr || stateName.substring(0, 2).toUpperCase();
-  };
-
   const selectAddress = (suggestion) => {
-    console.log('Selected address:', suggestion);
+    console.log('Selected:', suggestion);
     
     const addr = suggestion.address;
     
-    const houseNumber = addr.house_number || '';
-    const road = addr.road || '';
-    const streetAddress = `${houseNumber} ${road}`.trim();
     const city = addr.city || addr.town || addr.village || '';
     const state = extractStateAbbreviation(addr.state || '');
     const zip = addr.postcode || '';
     
+    console.log('Extracted - City:', city, 'State:', state, 'ZIP:', zip);
+    
     setFormData(prev => ({
       ...prev,
+      locationName: suggestion.formatted,
       fullAddress: suggestion.formatted,
       city: city,
       state: state,
       zipCode: zip
     }));
     
+    setAddressInput('');
     setShowSuggestions(false);
     setAddressSuggestions([]);
   };
@@ -173,10 +258,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       setGeocoding(true);
       
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)},USA&limit=1&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'Syndicade Community Platform'
+            'Accept': 'application/json'
           }
         }
       );
@@ -213,37 +298,33 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         throw new Error('Event title must be at least 3 characters');
       }
 
-      if (!formData.date || !formData.startTime) {
+      if (formData.schedule[0].date === '' || formData.schedule[0].startTime === '') {
         throw new Error('Please provide date and start time');
       }
 
-      if (formData.isMultiDay && !formData.endDate) {
-        throw new Error('Please provide end date for multi-day event');
-      }
-
-      if (formData.isVirtual && !formData.virtualLink.trim()) {
+      if (formData.eventType === 'virtual' && !formData.virtualLink.trim()) {
         throw new Error('Virtual events require a meeting link');
       }
 
-      if (!formData.isVirtual && !formData.locationName.trim()) {
-        throw new Error('Please provide a location name');
+      if ((formData.eventType === 'in-person' || formData.eventType === 'hybrid') && !formData.locationName.trim()) {
+        throw new Error('Please provide a location');
       }
 
-      if (!formData.isVirtual && !formData.fullAddress.trim()) {
-        throw new Error('Please provide an address');
+      if (formData.eventType === 'hybrid' && !formData.virtualLink.trim()) {
+        throw new Error('Hybrid events require a virtual meeting link');
       }
 
-      const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
+      const firstDay = formData.schedule[0];
+      const startDateTime = new Date(`${firstDay.date}T${firstDay.startTime}`);
+      
       let endDateTime = null;
-      
-      if (formData.isMultiDay && formData.endDate && formData.endTime) {
-        endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
-      } else if (formData.endTime) {
-        endDateTime = new Date(`${formData.date}T${formData.endTime}`);
-      }
-      
-      if (endDateTime && endDateTime <= startDateTime) {
-        throw new Error('End time must be after start time');
+      if (formData.isMultiDay && formData.schedule.length > 1) {
+        const lastDay = formData.schedule[formData.schedule.length - 1];
+        if (lastDay.date && lastDay.endTime) {
+          endDateTime = new Date(`${lastDay.date}T${lastDay.endTime}`);
+        }
+      } else if (firstDay.endTime) {
+        endDateTime = new Date(`${firstDay.date}T${firstDay.endTime}`);
       }
 
       if (formData.maxAttendees && parseInt(formData.maxAttendees) < 1) {
@@ -257,14 +338,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       let latitude = null;
       let longitude = null;
 
-      if (!formData.isVirtual && formData.fullAddress) {
-        const coords = await geocodeAddress(formData.fullAddress);
+      if ((formData.eventType === 'in-person' || formData.eventType === 'hybrid') && formData.locationName) {
+        const coords = await geocodeAddress(formData.locationName);
         
         if (coords) {
           latitude = coords.latitude;
           longitude = coords.longitude;
-        } else {
-          console.warn('Geocoding failed, event will not appear in location search');
         }
       }
 
@@ -274,15 +353,15 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         description: formData.description.trim(),
         start_time: startDateTime.toISOString(),
         end_time: endDateTime ? endDateTime.toISOString() : null,
-        location: formData.isVirtual ? 'Virtual Event' : formData.locationName.trim(),
-        full_address: formData.isVirtual ? null : formData.fullAddress.trim(),
-        city: formData.isVirtual ? null : formData.city.trim(),
-        state: formData.isVirtual ? null : formData.state,
-        zip_code: formData.isVirtual ? null : formData.zipCode.trim(),
+        location: formData.eventType === 'virtual' ? 'Virtual Event' : formData.locationName.trim(),
+        full_address: (formData.eventType === 'in-person' || formData.eventType === 'hybrid') ? formData.locationName.trim() : null,
+        city: formData.city.trim() || null,
+        state: formData.state || null,
+        zip_code: formData.zipCode.trim() || null,
         latitude: latitude,
         longitude: longitude,
-        is_virtual: formData.isVirtual,
-        virtual_link: formData.isVirtual ? formData.virtualLink.trim() : null,
+        is_virtual: formData.eventType === 'virtual' || formData.eventType === 'hybrid',
+        virtual_link: (formData.eventType === 'virtual' || formData.eventType === 'hybrid') ? formData.virtualLink.trim() : null,
         location_link: formData.locationLink.trim() || null,
         max_attendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
         visibility: formData.visibility,
@@ -305,23 +384,23 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       setFormData({
         title: '',
         description: '',
-        date: '',
-        startTime: '',
-        endTime: '',
+        eventType: 'in-person',
         isMultiDay: false,
-        endDate: '',
+        schedule: [
+          { date: '', startTime: '', endTime: '' }
+        ],
         locationName: '',
         fullAddress: '',
         city: '',
         state: '',
         zipCode: '',
-        isVirtual: false,
         virtualLink: '',
         locationLink: '',
         maxAttendees: '',
         visibility: 'members',
         requireRSVP: false
       });
+      setAddressInput('');
 
       onClose();
 
@@ -344,7 +423,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onClick={onClose}
       onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
@@ -352,7 +430,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     >
       <div 
         className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-gray-200 px-6 py-4">
           <h2 
@@ -377,6 +454,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </div>
           )}
 
+          {/* Title */}
           <div>
             <label 
               htmlFor="event-title"
@@ -393,7 +471,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               onChange={handleChange}
               placeholder="e.g., Community Cleanup Day"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              aria-required="true"
               maxLength={200}
             />
             <p className="text-sm text-gray-500 mt-1">
@@ -401,6 +478,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </p>
           </div>
 
+          {/* Description */}
           <div>
             <label 
               htmlFor="event-description"
@@ -423,129 +501,168 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </p>
           </div>
 
+          {/* Event Type */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Date & Time *
+              Event Type *
+            </label>
+            <div className="space-y-3">
+              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                style={{ borderColor: formData.eventType === 'in-person' ? '#3b82f6' : '#d1d5db' }}>
+                <input
+                  type="radio"
+                  name="eventType"
+                  value="in-person"
+                  checked={formData.eventType === 'in-person'}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="ml-3">
+                  <p className="font-semibold text-gray-900">📍 In-Person Event</p>
+                  <p className="text-sm text-gray-600">Physical location only</p>
+                </div>
+              </label>
+
+              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                style={{ borderColor: formData.eventType === 'virtual' ? '#3b82f6' : '#d1d5db' }}>
+                <input
+                  type="radio"
+                  name="eventType"
+                  value="virtual"
+                  checked={formData.eventType === 'virtual'}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="ml-3">
+                  <p className="font-semibold text-gray-900">💻 Virtual Event</p>
+                  <p className="text-sm text-gray-600">Online only (Zoom, Google Meet, etc.)</p>
+                </div>
+              </label>
+
+              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                style={{ borderColor: formData.eventType === 'hybrid' ? '#3b82f6' : '#d1d5db' }}>
+                <input
+                  type="radio"
+                  name="eventType"
+                  value="hybrid"
+                  checked={formData.eventType === 'hybrid'}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className="ml-3">
+                  <p className="font-semibold text-gray-900">🌐 Hybrid Event</p>
+                  <p className="text-sm text-gray-600">Both in-person and virtual options</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Schedule */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">
+              Schedule *
             </label>
             
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label htmlFor="event-date" className="block text-xs text-gray-600 mb-1">
-                    Date
-                  </label>
-                  <input
-                    id="event-date"
-                    name="date"
-                    type="date"
-                    required
-                    value={formData.date}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    aria-required="true"
-                  />
-                </div>
+              {formData.schedule.map((day, index) => (
+                <div key={index} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-gray-900">
+                      {formData.isMultiDay ? `Day ${index + 1}` : 'Event Date & Time'}
+                    </p>
+                    {formData.isMultiDay && formData.schedule.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDay(index)}
+                        className="text-red-600 hover:text-red-700 text-sm font-semibold"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
 
-                <div>
-                  <label htmlFor="start-time" className="block text-xs text-gray-600 mb-1">
-                    Start Time
-                  </label>
-                  <input
-                    id="start-time"
-                    name="startTime"
-                    type="time"
-                    required
-                    value={formData.startTime}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    aria-required="true"
-                  />
-                </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label htmlFor={`date-${index}`} className="block text-xs text-gray-600 mb-1">
+                        Date
+                      </label>
+                      <input
+                        id={`date-${index}`}
+                        type="date"
+                        required
+                        value={day.date}
+                        onChange={(e) => handleScheduleChange(index, 'date', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
 
-                <div>
-                  <label htmlFor="end-time" className="block text-xs text-gray-600 mb-1">
-                    End Time
-                  </label>
-                  <input
-                    id="end-time"
-                    name="endTime"
-                    type="time"
-                    value={formData.endTime}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label htmlFor={`start-${index}`} className="block text-xs text-gray-600 mb-1">
+                        Start Time
+                      </label>
+                      <input
+                        id={`start-${index}`}
+                        type="time"
+                        required
+                        value={day.startTime}
+                        onChange={(e) => handleScheduleChange(index, 'startTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
 
-              <div className="flex items-start">
-                <div className="flex items-center h-5">
-                  <input
-                    id="multi-day"
-                    name="isMultiDay"
-                    type="checkbox"
-                    checked={formData.isMultiDay}
-                    onChange={handleChange}
-                    className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-                  />
+                    <div>
+                      <label htmlFor={`end-${index}`} className="block text-xs text-gray-600 mb-1">
+                        End Time
+                      </label>
+                      <input
+                        id={`end-${index}`}
+                        type="time"
+                        value={day.endTime}
+                        onChange={(e) => handleScheduleChange(index, 'endTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <label htmlFor="multi-day" className="font-semibold text-gray-900">
-                    Multiple Day Event
-                  </label>
-                  <p className="text-sm text-gray-600">
-                    Event spans across multiple days
-                  </p>
-                </div>
-              </div>
+              ))}
 
-              {formData.isMultiDay && (
-                <div className="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded-lg">
-                  <div>
-                    <label htmlFor="end-date" className="block text-xs text-gray-600 mb-1">
-                      End Date
-                    </label>
+              <div className="flex items-center justify-between">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
                     <input
-                      id="end-date"
-                      name="endDate"
-                      type="date"
-                      required={formData.isMultiDay}
-                      value={formData.endDate}
+                      id="multi-day"
+                      name="isMultiDay"
+                      type="checkbox"
+                      checked={formData.isMultiDay}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
                     />
                   </div>
-                  <div className="col-span-2 flex items-end">
-                    <p className="text-sm text-blue-800">
-                      Event runs from <strong>{formData.date || '(start date)'}</strong> to <strong>{formData.endDate || '(end date)'}</strong>
+                  <div className="ml-3">
+                    <label htmlFor="multi-day" className="font-semibold text-gray-900">
+                      Multiple Day Event
+                    </label>
+                    <p className="text-sm text-gray-600">
+                      Event spans across multiple days
                     </p>
                   </div>
                 </div>
-              )}
+
+                {formData.isMultiDay && formData.schedule.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={addDay}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    + Add Day
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-start">
-            <div className="flex items-center h-5">
-              <input
-                id="is-virtual"
-                name="isVirtual"
-                type="checkbox"
-                checked={formData.isVirtual}
-                onChange={handleChange}
-                className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
-              />
-            </div>
-            <div className="ml-3">
-              <label htmlFor="is-virtual" className="font-semibold text-gray-900">
-                Virtual Event
-              </label>
-              <p className="text-sm text-gray-600">
-                This event will be held online (Zoom, Google Meet, etc.)
-              </p>
-            </div>
-          </div>
-
-          {formData.isVirtual ? (
+          {/* Virtual Link */}
+          {(formData.eventType === 'virtual' || formData.eventType === 'hybrid') && (
             <div>
               <label 
                 htmlFor="virtual-link"
@@ -557,15 +674,20 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 id="virtual-link"
                 name="virtualLink"
                 type="url"
-                required={formData.isVirtual}
+                required
                 value={formData.virtualLink}
                 onChange={handleChange}
                 placeholder="https://zoom.us/j/123456789"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-required={formData.isVirtual}
               />
+              <p className="text-sm text-gray-500 mt-1">
+                Zoom, Google Meet, Microsoft Teams, etc.
+              </p>
             </div>
-          ) : (
+          )}
+
+          {/* Physical Location */}
+          {(formData.eventType === 'in-person' || formData.eventType === 'hybrid') && (
             <>
               <div>
                 <label 
@@ -578,46 +700,41 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   id="location-name"
                   name="locationName"
                   type="text"
-                  required={!formData.isVirtual}
+                  required
                   value={formData.locationName}
                   onChange={handleChange}
                   placeholder="123 Main St, Toledo, OH 43604"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-required={!formData.isVirtual}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Street address or venue name
+                  Full address including city, state, and ZIP
                 </p>
               </div>
 
               <div className="relative">
                 <label 
-                  htmlFor="full-address"
+                  htmlFor="address-search"
                   className="block text-sm font-semibold text-gray-900 mb-2"
                 >
-                  Address Search
+                  Address Search Helper
                 </label>
-                <input
-                  id="full-address"
-                  name="fullAddress"
-                  type="text"
-                  value={formData.fullAddress}
-                  onChange={handleAddressInput}
-                  onFocus={() => {
-                    if (addressSuggestions.length > 0) {
-                      setShowSuggestions(true);
-                    }
-                  }}
-                  placeholder="Type to search for address..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoComplete="off"
-                />
-                
-                {searchingAddress && (
-                  <div className="absolute right-3 top-11">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                  </div>
-                )}
+                <div className="relative">
+                  <input
+                    id="address-search"
+                    type="text"
+                    value={addressInput}
+                    onChange={handleAddressInputChange}
+                    placeholder="Type to search for address..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoComplete="off"
+                  />
+                  
+                  {searchingAddress && (
+                    <div className="absolute right-3 top-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
                 
                 {showSuggestions && addressSuggestions.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
@@ -643,8 +760,9 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 )}
                 
                 <p className="text-sm text-gray-500 mt-1">
-                  Type at least 3 characters to search
-                  {addressSuggestions.length > 0 && ` - ${addressSuggestions.length} results found`}
+                  {searchingAddress ? 'Searching...' : 
+                   addressSuggestions.length > 0 ? `${addressSuggestions.length} results found` :
+                   'Type at least 3 characters to search'}
                 </p>
               </div>
 
@@ -654,17 +772,9 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                     <span className="text-green-600 text-lg">✓</span>
                     <div className="text-sm text-green-800">
                       <p className="font-semibold mb-1">Auto-detected:</p>
-                      <div className="space-y-1">
-                        {formData.city && (
-                          <p>City: <span className="font-medium">{formData.city}</span></p>
-                        )}
-                        {formData.state && (
-                          <p>State: <span className="font-medium">{formData.state}</span></p>
-                        )}
-                        {formData.zipCode && (
-                          <p>ZIP: <span className="font-medium">{formData.zipCode}</span></p>
-                        )}
-                      </div>
+                      {formData.city && <p>City: {formData.city}</p>}
+                      {formData.state && <p>State: {formData.state}</p>}
+                      {formData.zipCode && <p>ZIP: {formData.zipCode}</p>}
                     </div>
                   </div>
                 </div>
@@ -687,12 +797,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Google Maps link or directions URL
+                  Google Maps or directions URL
                 </p>
               </div>
             </>
           )}
 
+          {/* Max Attendees */}
           <div>
             <label 
               htmlFor="max-attendees"
@@ -710,11 +821,9 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               placeholder="Leave empty for unlimited"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <p className="text-sm text-gray-500 mt-1">
-              Set a capacity limit for your event
-            </p>
           </div>
 
+          {/* Settings */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Event Settings</h3>
             
@@ -723,7 +832,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 <div className="flex items-center h-5">
                   <input
                     id="public-event"
-                    name="visibility"
                     type="checkbox"
                     checked={formData.visibility === 'public'}
                     onChange={(e) => setFormData(prev => ({ 
@@ -734,8 +842,8 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="public-event" className="font-semibold text-gray-900 flex items-center gap-2">
-                    <span>🌍</span> Public Event
+                  <label htmlFor="public-event" className="font-semibold text-gray-900">
+                    🌍 Public Event
                   </label>
                   <p className="text-sm text-gray-600">
                     Allow anyone to see this event (appears in event discovery)
@@ -755,8 +863,8 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900 flex items-center gap-2">
-                    <span>✓</span> Require RSVP
+                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900">
+                    ✓ Require RSVP
                   </label>
                   <p className="text-sm text-gray-600">
                     Members must RSVP to attend this event
@@ -766,6 +874,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </div>
           </div>
 
+          {/* Buttons */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
@@ -779,17 +888,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               type="submit"
               disabled={loading || geocoding}
               className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-label={loading ? 'Creating event...' : geocoding ? 'Geocoding address...' : 'Create event'}
             >
               {loading || geocoding ? (
                 <>
-                  <div 
-                    className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
-                    role="status"
-                    aria-label="Loading"
-                  >
-                    <span className="sr-only">{geocoding ? 'Finding location...' : 'Creating...'}</span>
-                  </div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   {geocoding ? 'Finding Location...' : 'Creating Event...'}
                 </>
               ) : (

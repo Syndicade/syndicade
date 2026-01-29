@@ -36,20 +36,28 @@ function EventDiscovery() {
 
   const geocodeLocation = async (location) => {
     try {
+      // Add USA to search query for better results
+      const searchQuery = location.includes('USA') || location.includes('US') 
+        ? location 
+        : `${location}, USA`;
+      
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'Syndicade Community Platform'
+            'Accept': 'application/json'
           }
         }
       );
+
+      console.log('Geocoding search for:', searchQuery);
 
       if (!response.ok) {
         throw new Error('Location search failed');
       }
 
       const data = await response.json();
+      console.log('Geocoding results:', data);
       
       if (data && data.length > 0) {
         return {
@@ -94,6 +102,8 @@ function EventDiscovery() {
       setLoading(true);
       setError(null);
 
+      console.log('Fetching events near:', { lat, lon, radius: searchRadius });
+
       const { data, error: fetchError } = await supabase
         .rpc('search_public_events', {
           search_lat: lat,
@@ -102,14 +112,24 @@ function EventDiscovery() {
           limit_results: 100
         });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Fetch error:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('Raw events from database:', data);
+      console.log('Number of events found:', data?.length || 0);
 
       let filteredEvents = data || [];
+
+      // Log before filtering
+      console.log('Events before filters:', filteredEvents.length);
 
       if (filters.organizationType !== 'all') {
         filteredEvents = filteredEvents.filter(
           event => event.organization_type === filters.organizationType
         );
+        console.log('After org type filter:', filteredEvents.length);
       }
 
       if (filters.dateRange === 'today') {
@@ -122,6 +142,7 @@ function EventDiscovery() {
           const eventDate = new Date(event.start_time);
           return eventDate >= today && eventDate < tomorrow;
         });
+        console.log('After today filter:', filteredEvents.length);
       } else if (filters.dateRange === 'week') {
         const today = new Date();
         const nextWeek = new Date();
@@ -131,6 +152,7 @@ function EventDiscovery() {
           const eventDate = new Date(event.start_time);
           return eventDate >= today && eventDate <= nextWeek;
         });
+        console.log('After week filter:', filteredEvents.length);
       } else if (filters.dateRange === 'month') {
         const today = new Date();
         const nextMonth = new Date();
@@ -140,8 +162,10 @@ function EventDiscovery() {
           const eventDate = new Date(event.start_time);
           return eventDate >= today && eventDate <= nextMonth;
         });
+        console.log('After month filter:', filteredEvents.length);
       }
 
+      console.log('Final filtered events:', filteredEvents.length);
       setEvents(filteredEvents);
     } catch (err) {
       console.error('Error fetching events:', err);
@@ -162,13 +186,15 @@ function EventDiscovery() {
     setLoading(true);
     setError(null);
 
+    console.log('Searching for location:', searchLocation);
     const coords = await geocodeLocation(searchLocation);
     
     if (coords) {
+      console.log('Found coordinates:', coords);
       setUserLocation(coords);
       fetchEvents(coords.latitude, coords.longitude, radius);
     } else {
-      setError('Location not found. Please try a different search term.');
+      setError(`Could not find location "${searchLocation}". Try: "Toledo, OH" or "43623, OH"`);
       setLoading(false);
     }
   };
