@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
  * EventCard Component
  * 
  * Displays a summary card for an event with key information.
- * Used in event lists, dashboards, and search results.
+ * Uses start_time and end_time as full timestamps (not separate date/time fields).
  * 
  * Props:
  * - event: object - Event data from database
@@ -20,6 +20,12 @@ import { Link } from 'react-router-dom';
  */
 function EventCard({ event, showOrganization = false, compact = false }) {
   
+  // Safety check: ensure event object exists
+  if (!event || !event.id) {
+    console.error('EventCard: Invalid event object', event);
+    return null;
+  }
+
   // Helper function to determine event type
   const getEventType = () => {
     // Check if it's a hybrid event (has both location and virtual_link)
@@ -41,20 +47,36 @@ function EventCard({ event, showOrganization = false, compact = false }) {
     const displays = {
       'hybrid': { icon: '🌐', label: 'Hybrid Event' },
       'virtual': { icon: '💻', label: 'Virtual Event' },
-      'in-person': { icon: '📍', label: event.location }
+      'in-person': { icon: '📍', label: event.location || 'In-Person Event' }
     };
     
     return displays[eventType];
   };
 
-  // Format time for display
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
+  // Parse start_time timestamp
+  const getStartDate = () => {
+    if (!event.start_time) {
+      console.warn('EventCard: No start_time for event', event.id);
+      return new Date();
+    }
+    return new Date(event.start_time);
+  };
+
+  // Format time from timestamp
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch (error) {
+      console.error('EventCard: Error formatting time', error, timestamp);
+      return '';
+    }
   };
 
   // Get visibility badge
@@ -70,6 +92,7 @@ function EventCard({ event, showOrganization = false, compact = false }) {
 
   const visibilityBadge = getVisibilityBadge();
   const eventTypeDisplay = getEventTypeDisplay();
+  const startDate = getStartDate();
 
   // Get organization name from event.organizations (already included in query)
   const organizationName = event.organizations?.name || null;
@@ -87,10 +110,10 @@ function EventCard({ event, showOrganization = false, compact = false }) {
           <div className="flex-shrink-0">
             <div className="bg-blue-600 text-white rounded-lg p-2 text-center w-14">
               <div className="text-xs font-semibold">
-                {new Date(event.start_time).toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
+                {startDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
               </div>
               <div className="text-xl font-bold">
-                {new Date(event.start_time).getDate()}
+                {startDate.getDate()}
               </div>
             </div>
             {event.is_recurring && (
@@ -105,9 +128,11 @@ function EventCard({ event, showOrganization = false, compact = false }) {
             <h4 className="font-semibold text-gray-900 text-sm truncate">
               {event.title}
             </h4>
-            <p className="text-xs text-gray-600 mt-1">
-              {formatTime(event.start_time)}
-            </p>
+            {event.start_time && (
+              <p className="text-xs text-gray-600 mt-1">
+                {formatTime(event.start_time)}
+              </p>
+            )}
             {showOrganization && organizationName && (
               <p className="text-xs text-gray-500 mt-1">
                 {organizationName}
@@ -132,13 +157,13 @@ function EventCard({ event, showOrganization = false, compact = false }) {
         <div className="flex-shrink-0">
           <div className="bg-blue-600 text-white rounded-lg p-3 text-center w-16">
             <div className="text-xs font-semibold">
-              {new Date(event.start_time).toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
+              {startDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
             </div>
             <div className="text-2xl font-bold">
-              {new Date(event.start_time).getDate()}
+              {startDate.getDate()}
             </div>
             <div className="text-xs">
-              {new Date(event.start_time).getFullYear()}
+              {startDate.getFullYear()}
             </div>
           </div>
           {/* Recurring Icon */}
@@ -164,13 +189,15 @@ function EventCard({ event, showOrganization = false, compact = false }) {
           )}
 
           {/* Time */}
-          <div className="flex items-center text-sm text-gray-600 mb-2">
-            <span className="mr-2">🕐</span>
-            <span>
-              {formatTime(event.start_time)}
-              {event.end_time && ` - ${formatTime(event.end_time)}`}
-            </span>
-          </div>
+          {event.start_time && (
+            <div className="flex items-center text-sm text-gray-600 mb-2">
+              <span className="mr-2">🕐</span>
+              <span>
+                {formatTime(event.start_time)}
+                {event.end_time && ` - ${formatTime(event.end_time)}`}
+              </span>
+            </div>
+          )}
 
           {/* Location with event type icon */}
           <div className="flex items-center text-sm text-gray-600 mb-2">
