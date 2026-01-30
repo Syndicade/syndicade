@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import enUS from 'date-fns/locale/en-US';
-import { useNavigate,Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const locales = {
@@ -86,6 +86,7 @@ function EventCalendar() {
         return;
       }
 
+      // Fetch events with recurring fields and event_type
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select(`
@@ -99,6 +100,9 @@ function EventCalendar() {
           virtual_link,
           visibility,
           organization_id,
+          is_recurring,
+          parent_event_id,
+          recurrence_rule,
           organizations (
             name
           )
@@ -118,6 +122,20 @@ function EventCalendar() {
     }
   };
 
+  // Helper function to determine event type
+  const getEventType = (event) => {
+    // Check if it's a hybrid event (has both location and virtual_link)
+    if (event.is_virtual && event.location && event.location !== 'Virtual Event') {
+      return 'hybrid';
+    }
+    // Virtual only
+    if (event.is_virtual || event.location === 'Virtual Event') {
+      return 'virtual';
+    }
+    // In-person
+    return 'in-person';
+  };
+
   // Transform events for calendar display
   const calendarEvents = useMemo(() => {
     let filteredEvents = events;
@@ -132,9 +150,30 @@ function EventCalendar() {
       const orgIndex = organizations.findIndex(org => org.id === event.organization_id);
       const color = orgColors[orgIndex % Object.keys(orgColors).length];
 
+      const eventType = getEventType(event);
+
+      // Build title with icons
+      let iconPrefix = '';
+      
+      // Add recurring icon
+      if (event.is_recurring && event.parent_event_id) {
+        iconPrefix += '🔄 '; // Recurring instance
+      } else if (event.is_recurring && !event.parent_event_id) {
+        iconPrefix += '🔄 '; // Recurring series (parent)
+      }
+
+      // Add event type icon
+      if (eventType === 'virtual') {
+        iconPrefix += '💻 ';
+      } else if (eventType === 'hybrid') {
+        iconPrefix += '🌐 ';
+      } else {
+        iconPrefix += '📍 ';
+      }
+
       return {
         id: event.id,
-        title: event.title,
+        title: `${iconPrefix}${event.title}`,
         start: new Date(event.start_time),
         end: event.end_time ? new Date(event.end_time) : new Date(event.start_time),
         resource: {
@@ -143,21 +182,25 @@ function EventCalendar() {
           location: event.location,
           isVirtual: event.is_virtual,
           visibility: event.visibility,
-          color: color
+          color: color,
+          isRecurring: event.is_recurring,
+          parentEventId: event.parent_event_id,
+          recurrenceRule: event.recurrence_rule,
+          eventType: eventType
         }
       };
     });
   }, [events, selectedOrg, organizations]);
 
-  // Event style getter for color coding
+  // Event style getter - simpler now, just organization colors
   const eventStyleGetter = (event) => {
     return {
       style: {
         backgroundColor: event.resource.color,
-        borderRadius: '4px',
+        borderRadius: '6px',
         opacity: 0.9,
         color: 'white',
-        border: 'none',
+        border: `2px solid ${event.resource.color}`,
         display: 'block',
         fontSize: '0.875rem',
         fontWeight: '500',
@@ -340,7 +383,8 @@ function EventCalendar() {
             View and manage events from all your organizations
           </p>
         </div>
-{/* View Toggle */}
+
+        {/* View Toggle */}
         <div className="flex items-center gap-3 mb-6">
           <Link 
             to="/events"
@@ -357,6 +401,7 @@ function EventCalendar() {
             Calendar View
           </Link>
         </div>
+
         {/* Calendar Container */}
         <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
           {events.length === 0 ? (
@@ -401,14 +446,41 @@ function EventCalendar() {
                   toolbar: CustomToolbar
                 }}
                 popup
-                tooltipAccessor={(event) => `${event.title} - ${event.resource.organizationName}`}
+                tooltipAccessor={(event) => {
+                  return `${event.title} - ${event.resource.organizationName}`;
+                }}
                 style={{ height: '100%' }}
               />
             </div>
           )}
         </div>
 
-        {/* Legend */}
+        {/* Icon Legend */}
+        {events.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Event Icons</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔄</span>
+                <span className="text-sm text-gray-700">Recurring Event</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📍</span>
+                <span className="text-sm text-gray-700">In-Person</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💻</span>
+                <span className="text-sm text-gray-700">Virtual</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🌐</span>
+                <span className="text-sm text-gray-700">Hybrid</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Organization Legend */}
         {organizations.length > 0 && events.length > 0 && (
           <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Organizations</h3>

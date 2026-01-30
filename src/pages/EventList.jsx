@@ -49,6 +49,7 @@ function EventList() {
           return;
         }
 
+        // FIXED: Just use * to get all columns including recurring fields
         const { data: eventsData, error: eventsError } = await supabase
           .from('events')
           .select('*, organizations(name)')
