@@ -30,6 +30,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [addressInput, setAddressInput] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
 
+  // Recurring event state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState('monthly');
+  const [dayOfWeek, setDayOfWeek] = useState(1); // 1 = Monday
+  const [weekOfMonth, setWeekOfMonth] = useState(1); // 1 = First week
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+
   // Proper state name to abbreviation mapping
   const stateMap = {
     'alabama': 'AL',
@@ -84,6 +91,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     'wyoming': 'WY'
   };
 
+  // Reset recurring state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsRecurring(false);
+      setRecurrenceType('monthly');
+      setDayOfWeek(1);
+      setWeekOfMonth(1);
+      setRecurrenceEndDate('');
+    }
+  }, [isOpen]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -117,20 +135,16 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const extractStateAbbreviation = (stateName) => {
     if (!stateName) return '';
     
-    // Convert to lowercase and lookup in map
     const normalized = stateName.toLowerCase().trim();
     
-    // Direct lookup
     if (stateMap[normalized]) {
       return stateMap[normalized];
     }
     
-    // Check if it's already an abbreviation (2 letters)
     if (stateName.length === 2) {
       return stateName.toUpperCase();
     }
     
-    // Fallback: return first 2 letters uppercase
     return stateName.substring(0, 2).toUpperCase();
   };
 
@@ -165,8 +179,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         `limit=8&` +
         `addressdetails=1`;
 
-      console.log('Searching:', searchUrl);
-
       const response = await fetch(searchUrl, {
         method: 'GET',
         headers: {
@@ -174,15 +186,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         }
       });
 
-      console.log('Response status:', response.status);
-
       if (!response.ok) {
         console.error('Search failed:', response.statusText);
         return;
       }
 
       const data = await response.json();
-      console.log('Raw results:', data);
       
       const formattedSuggestions = data
         .filter(item => {
@@ -195,8 +204,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           ...item,
           formatted: formatAddressDisplay(item.address)
         }));
-
-      console.log('Filtered suggestions:', formattedSuggestions);
       
       setAddressSuggestions(formattedSuggestions);
       setShowSuggestions(formattedSuggestions.length > 0);
@@ -211,13 +218,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     const value = e.target.value;
     setAddressInput(value);
     
-    // Clear existing timeout
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
     
     if (value.length >= 3) {
-      // Set new timeout - wait 500ms after user stops typing
       const newTimeout = setTimeout(() => {
         searchAddresses(value);
       }, 500);
@@ -229,15 +234,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   };
 
   const selectAddress = (suggestion) => {
-    console.log('Selected:', suggestion);
-    
     const addr = suggestion.address;
     
     const city = addr.city || addr.town || addr.village || '';
     const state = extractStateAbbreviation(addr.state || '');
     const zip = addr.postcode || '';
-    
-    console.log('Extracted - City:', city, 'State:', state, 'ZIP:', zip);
     
     setFormData(prev => ({
       ...prev,
@@ -366,7 +367,19 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         max_attendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
         visibility: formData.visibility,
         require_rsvp: formData.requireRSVP,
-        created_by: user.id
+        created_by: user.id,
+        // NEW: Recurring event fields
+        is_recurring: isRecurring,
+        recurrence_rule: isRecurring ? {
+          type: 'monthly',
+          dayOfWeek: dayOfWeek,
+          weekOfMonth: weekOfMonth,
+          time: formData.schedule[0].startTime
+        } : null,
+        recurrence_end_date: isRecurring && recurrenceEndDate 
+          ? new Date(recurrenceEndDate).toISOString() 
+          : null,
+        parent_event_id: null
       };
 
       const { data: newEvent, error: eventError } = await supabase
@@ -376,6 +389,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         .single();
 
       if (eventError) throw eventError;
+
+      // Success message with recurring info
+      const recurringMsg = isRecurring 
+        ? ' 🔄 Recurring instances have been generated for the next 6 months!' 
+        : '';
+      alert(`✅ Event "${newEvent.title}" created successfully!${recurringMsg}`);
 
       if (onSuccess) {
         onSuccess(newEvent);
@@ -822,6 +841,122 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          {/* ===== RECURRING EVENT SECTION ===== */}
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="checkbox"
+                id="isRecurring"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                aria-describedby="recurring-description"
+              />
+              <label 
+                htmlFor="isRecurring" 
+                className="text-base font-semibold text-gray-900 cursor-pointer"
+              >
+                🔄 Make this a recurring event
+              </label>
+            </div>
+            
+            <p id="recurring-description" className="text-sm text-gray-600 mb-4">
+              Automatically create this event on a regular schedule (e.g., monthly meetings)
+            </p>
+
+            {isRecurring && (
+              <div className="space-y-4 pl-2 border-l-4 border-blue-400">
+                {/* Recurrence Pattern */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Repeat Pattern
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Week of Month Dropdown */}
+                    <div>
+                      <label htmlFor="weekOfMonth" className="block text-xs text-gray-600 mb-1">
+                        Which week?
+                      </label>
+                      <select
+                        id="weekOfMonth"
+                        value={weekOfMonth}
+                        onChange={(e) => setWeekOfMonth(parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-label="Select which week of the month"
+                      >
+                        <option value="1">First week</option>
+                        <option value="2">Second week</option>
+                        <option value="3">Third week</option>
+                        <option value="4">Fourth week</option>
+                        <option value="-1">Last week</option>
+                      </select>
+                    </div>
+
+                    {/* Day of Week Dropdown */}
+                    <div>
+                      <label htmlFor="dayOfWeek" className="block text-xs text-gray-600 mb-1">
+                        Which day?
+                      </label>
+                      <select
+                        id="dayOfWeek"
+                        value={dayOfWeek}
+                        onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-label="Select day of the week"
+                      >
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Live Preview */}
+                  <div className="mt-3 text-sm text-blue-700 bg-blue-100 p-3 rounded-lg border border-blue-300">
+                    <strong>📅 Preview:</strong> This event will repeat on the{' '}
+                    <span className="font-bold">
+                      {weekOfMonth === -1 ? 'Last' : 
+                       weekOfMonth === 1 ? 'First' :
+                       weekOfMonth === 2 ? 'Second' :
+                       weekOfMonth === 3 ? 'Third' : 'Fourth'}
+                    </span>{' '}
+                    <span className="font-bold">
+                      {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]}
+                    </span>{' '}
+                    of every month at{' '}
+                    <span className="font-bold">
+                      {formData.schedule[0].startTime || '(time not set)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Optional End Date */}
+                <div>
+                  <label htmlFor="recurrenceEndDate" className="block text-sm font-medium text-gray-700 mb-2">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    id="recurrenceEndDate"
+                    value={recurrenceEndDate}
+                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                    min={formData.schedule[0].date}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-label="Select when this recurring event should stop"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    💡 Leave blank to continue indefinitely. We'll generate instances 6 months in advance.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* ===== END RECURRING EVENT SECTION ===== */}
 
           {/* Settings */}
           <div className="border-t border-gray-200 pt-6">
