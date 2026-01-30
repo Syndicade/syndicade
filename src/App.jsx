@@ -13,6 +13,7 @@ import AnnouncementFeed from './pages/AnnouncementFeed';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import EventDiscovery from './pages/EventDiscovery';
+import DocumentLibrary from './pages/DocumentLibrary';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -162,6 +163,10 @@ function App() {
     )
   } 
 />
+<Route 
+          path="/organizations/:organizationId/documents" 
+          element={session ? <DocumentLibrary /> : <Navigate to="/login" replace />} 
+        />
           {/* 404 - Catch All Route */}
           <Route 
             path="*" 

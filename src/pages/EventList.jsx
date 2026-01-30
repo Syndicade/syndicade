@@ -3,25 +3,6 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import EventCard from '../components/EventCard';
 
-/**
- * EventList Page
- * 
- * Displays all events user has access to with filtering and search.
- * Shows events from all user's organizations.
- * 
- * Features:
- * - Search by event name
- * - Filter by organization
- * - Filter by date range (upcoming, past, all)
- * - Sort by date
- * - Shows event cards in grid layout
- * 
- * ADA Compliance:
- * - Keyboard accessible filters and search
- * - ARIA labels on all controls
- * - Focus indicators visible
- * - Screen reader friendly
- */
 function EventList() {
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
@@ -29,20 +10,17 @@ function EventList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrg, setSelectedOrg] = useState('all');
-  const [dateFilter, setDateFilter] = useState('upcoming'); // upcoming, past, all
-  const [sortOrder, setSortOrder] = useState('asc'); // asc, desc
+  const [dateFilter, setDateFilter] = useState('upcoming');
+  const [sortOrder, setSortOrder] = useState('asc');
 
-  // Fetch user's organizations and events
   useEffect(() => {
     async function fetchEventsAndOrganizations() {
       try {
         setLoading(true);
         setError(null);
 
-        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
         if (!user) {
@@ -51,7 +29,6 @@ function EventList() {
           return;
         }
 
-        // Get user's organizations
         const { data: memberships, error: membershipError } = await supabase
           .from('memberships')
           .select('organization_id, organizations(id, name)')
@@ -63,7 +40,6 @@ function EventList() {
         const userOrgs = memberships.map(m => m.organizations);
         setOrganizations(userOrgs);
 
-        // Get organization IDs
         const orgIds = userOrgs.map(org => org.id);
 
         if (orgIds.length === 0) {
@@ -73,8 +49,6 @@ function EventList() {
           return;
         }
 
-        // Fetch events from user's organizations
-        // Include public events and events from user's organizations
         const { data: eventsData, error: eventsError } = await supabase
           .from('events')
           .select('*, organizations(name)')
@@ -97,11 +71,9 @@ function EventList() {
     fetchEventsAndOrganizations();
   }, []);
 
-  // Apply filters whenever filter states change
   useEffect(() => {
     let filtered = [...events];
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(event =>
         event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,12 +82,10 @@ function EventList() {
       );
     }
 
-    // Organization filter
     if (selectedOrg !== 'all') {
       filtered = filtered.filter(event => event.organization_id === selectedOrg);
     }
 
-    // Date filter
     const now = new Date();
     if (dateFilter === 'upcoming') {
       filtered = filtered.filter(event => new Date(event.start_time) >= now);
@@ -123,7 +93,6 @@ function EventList() {
       filtered = filtered.filter(event => new Date(event.start_time) < now);
     }
 
-    // Sort
     filtered.sort((a, b) => {
       const dateA = new Date(a.start_time);
       const dateB = new Date(b.start_time);
@@ -133,7 +102,6 @@ function EventList() {
     setFilteredEvents(filtered);
   }, [searchTerm, selectedOrg, dateFilter, sortOrder, events]);
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -151,7 +119,6 @@ function EventList() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -174,7 +141,6 @@ function EventList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -193,33 +159,42 @@ function EventList() {
           </div>
         </div>
       </div>
-{/* View Toggle */}
+
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Link 
+                to="/events"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+              >
+                <span>📋</span>
+                List View
+              </Link>
+              <Link 
+                to="/calendar"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+              >
+                <span>📅</span>
+                Calendar View
+              </Link>
+            </div>
+
             <Link 
-              to="/events"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+              to="/discover"
+              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold inline-flex items-center gap-2 shadow-md"
             >
-              <span>📋</span>
-              List View
-            </Link>
-            <Link 
-              to="/calendar"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
-            >
-              <span>📅</span>
-              Calendar View
+              <span>🌍</span>
+              Discover Public Events
             </Link>
           </div>
         </div>
       </div>
-      {/* Filters Section */}
+
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* Search */}
             <div>
               <label htmlFor="search" className="block text-sm font-semibold text-gray-700 mb-1">
                 Search Events
@@ -235,7 +210,6 @@ function EventList() {
               />
             </div>
 
-            {/* Organization Filter */}
             <div>
               <label htmlFor="organization" className="block text-sm font-semibold text-gray-700 mb-1">
                 Organization
@@ -256,7 +230,6 @@ function EventList() {
               </select>
             </div>
 
-            {/* Date Filter */}
             <div>
               <label htmlFor="date-filter" className="block text-sm font-semibold text-gray-700 mb-1">
                 Time Period
@@ -274,7 +247,6 @@ function EventList() {
               </select>
             </div>
 
-            {/* Sort Order */}
             <div>
               <label htmlFor="sort-order" className="block text-sm font-semibold text-gray-700 mb-1">
                 Sort By
@@ -293,7 +265,6 @@ function EventList() {
 
           </div>
 
-          {/* Active Filters Display */}
           {(searchTerm || selectedOrg !== 'all' || dateFilter !== 'upcoming') && (
             <div className="mt-4 flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-700">Active Filters:</span>
@@ -352,7 +323,6 @@ function EventList() {
         </div>
       </div>
 
-      {/* Events Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {filteredEvents.length === 0 ? (
           <div className="text-center py-16">

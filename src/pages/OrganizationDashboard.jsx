@@ -24,7 +24,6 @@ function OrganizationDashboard() {
   const [error, setError] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   
-  // Announcements state
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
@@ -86,7 +85,6 @@ function OrganizationDashboard() {
       await fetchStats(user.id);
 
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -113,7 +111,6 @@ function OrganizationDashboard() {
         .eq('organization_id', organizationId)
         .gte('start_time', new Date().toISOString());
 
-      // Count unread announcements
       const { data: allAnnouncements } = await supabase
         .from('announcements')
         .select('id')
@@ -160,7 +157,6 @@ function OrganizationDashboard() {
 
       if (error) throw error;
 
-      // Process announcements to add is_read flag
       const processedAnnouncements = (data || []).map(announcement => ({
         ...announcement,
         is_read: announcement.announcement_reads?.some(
@@ -177,33 +173,19 @@ function OrganizationDashboard() {
   }
 
   async function handleEventCreated(newEvent) {
-    console.log('✅ Event created successfully!', newEvent);
-    alert(`Event "${newEvent.title}" created successfully!`);
-    
-    // Refresh stats to show new event count
     await fetchStats(currentUserId);
   }
 
   async function handleAnnouncementCreated(newAnnouncement) {
-    console.log('✅ Announcement created successfully!', newAnnouncement);
-    
-    // Add new announcement to beginning of list
     setAnnouncements(prev => [{ ...newAnnouncement, is_read: false }, ...prev]);
-    
-    // Refresh stats
     await fetchStats(currentUserId);
-    
-    // Show success message
-    alert(`Announcement "${newAnnouncement.title}" created successfully!`);
   }
 
   async function handleAnnouncementRead(announcementId) {
-    // Update local state
     setAnnouncements(prev => 
       prev.map(a => a.id === announcementId ? { ...a, is_read: true } : a)
     );
     
-    // Decrement unread count
     setStats(prev => ({
       ...prev,
       unreadAnnouncements: Math.max(0, prev.unreadAnnouncements - 1)
@@ -211,10 +193,7 @@ function OrganizationDashboard() {
   }
 
   async function handleAnnouncementDelete(announcementId) {
-    // Remove from local state
     setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
-    
-    // Refresh stats
     await fetchStats(currentUserId);
   }
 
@@ -236,28 +215,22 @@ function OrganizationDashboard() {
 
       if (error && error.code !== '23505') throw error;
 
-      // Update local state
       setAnnouncements(prev => prev.map(a => ({ ...a, is_read: true })));
       setStats(prev => ({ ...prev, unreadAnnouncements: 0 }));
 
     } catch (err) {
       console.error('Error marking all as read:', err);
-      alert('Failed to mark all as read. Please try again.');
     }
   }
 
-  // Filter announcements
   const filteredAnnouncements = announcements.filter(announcement => {
-    // Search filter
     const matchesSearch = announcementSearch === '' || 
       announcement.title.toLowerCase().includes(announcementSearch.toLowerCase()) ||
       announcement.content.toLowerCase().includes(announcementSearch.toLowerCase());
 
-    // Priority filter
     const matchesPriority = announcementFilter === 'all' || 
       announcement.priority === announcementFilter;
 
-    // Expiration filter
     const isExpired = announcement.expires_at && 
       new Date(announcement.expires_at) < new Date();
 
@@ -292,7 +265,6 @@ function OrganizationDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -316,7 +288,6 @@ function OrganizationDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6" aria-label="Tabs">
@@ -344,14 +315,11 @@ function OrganizationDashboard() {
             </nav>
           </div>
 
-          {/* Tab Content */}
           <div className="p-6">
-            {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
                 
-                {/* Action Buttons */}
                 <div className="flex flex-wrap gap-3 mb-6">
                   <button
                     type="button"
@@ -462,7 +430,6 @@ function OrganizationDashboard() {
               </div>
             )}
 
-            {/* Members Tab */}
             {activeTab === 'members' && (
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Members</h2>
@@ -473,7 +440,6 @@ function OrganizationDashboard() {
               </div>
             )}
 
-            {/* Announcements Tab */}
             {activeTab === 'announcements' && (
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -490,7 +456,6 @@ function OrganizationDashboard() {
                   )}
                 </div>
 
-                {/* Search and Filter */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                   <div className="flex-1">
                     <input
@@ -524,12 +489,10 @@ function OrganizationDashboard() {
                   )}
                 </div>
 
-                {/* Results Count */}
                 <p className="text-sm text-gray-600 mb-4">
                   Showing {filteredAnnouncements.length} of {announcements.length} announcements
                 </p>
 
-                {/* Announcements List */}
                 {announcementsLoading ? (
                   <div className="flex justify-center items-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -572,17 +535,13 @@ function OrganizationDashboard() {
               </div>
             )}
 
-            {/* Invite Tab */}
             {activeTab === 'invite' && (
               <>
                 {membership.role === 'admin' || organization.settings?.allowMemberInvites ? (
                   <InviteMember
                     organizationId={organizationId}
                     organizationName={organization.name}
-                    onInviteSent={(inviteData) => {
-                      console.log('Invitation sent:', inviteData);
-                      fetchStats(currentUserId);
-                    }}
+                    onInviteSent={() => fetchStats(currentUserId)}
                   />
                 ) : (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -595,7 +554,6 @@ function OrganizationDashboard() {
               </>
             )}
 
-            {/* Settings Tab */}
             {activeTab === 'settings' && (
               <>
                 {membership.role === 'admin' ? (
@@ -617,7 +575,6 @@ function OrganizationDashboard() {
         </div>
       </div>
 
-      {/* Create Event Modal */}
       <CreateEvent
         isOpen={showCreateEvent}
         onClose={() => setShowCreateEvent(false)}
@@ -626,7 +583,6 @@ function OrganizationDashboard() {
         organizationName={organization?.name || 'Your Organization'}
       />
 
-      {/* Create Announcement Modal */}
       <CreateAnnouncement
         isOpen={showCreateAnnouncement}
         onClose={() => setShowCreateAnnouncement(false)}

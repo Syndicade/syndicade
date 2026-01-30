@@ -14,6 +14,7 @@ function UnifiedDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [selectedOrgForEvent, setSelectedOrgForEvent] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,6 +57,9 @@ function UnifiedDashboard() {
         setLoading(false);
         throw new Error('Auth session missing!');
       }
+
+      // Set current user for profile display
+      setCurrentUser(user);
 
       const { data: orgsData, error: orgsError } = await supabase
         .from('memberships')
@@ -218,8 +222,6 @@ function UnifiedDashboard() {
   };
 
   const handleEventCreated = (newEvent) => {
-    console.log('✅ Event created successfully!', newEvent);
-    alert(`Event "${newEvent.title}" created successfully!`);
     fetchDashboardData();
   };
 
@@ -329,15 +331,48 @@ function UnifiedDashboard() {
                 }
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all flex items-center gap-2"
-              aria-label="Create new organization"
-            >
-              <span className="text-xl">+</span>
-              Create Organization
-            </button>
+            <div className="flex items-center gap-4">
+              {/* User Profile Display */}
+              {currentUser && (
+                <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                    {currentUser.email?.charAt(0).toUpperCase() || '👤'}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User'}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {currentUser.email}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Logout Button */}
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/login');
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                aria-label="Sign out"
+              >
+                🚪 Logout
+              </button>
+              
+              {/* Create Organization Button */}
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all flex items-center gap-2"
+                aria-label="Create new organization"
+              >
+                <span className="text-xl">+</span>
+                Create Organization
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -434,41 +469,42 @@ function UnifiedDashboard() {
                 </div>
               </section>
 
-             {upcomingEvents.length > 0 && (
-  <section aria-labelledby="events-heading" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <h2 id="events-heading" className="text-xl font-bold text-gray-900 mb-4">
-      Upcoming Events
-    </h2>
-    
-    <div className="space-y-4 mb-4">
-      {upcomingEvents.slice(0, 3).map((event) => (
-        <EventCard 
-          key={event.id} 
-          event={event}
-          showOrganization={true}
-        />
-      ))}
-    </div>
+              {upcomingEvents.length > 0 && (
+                <section aria-labelledby="events-heading" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h2 id="events-heading" className="text-xl font-bold text-gray-900 mb-4">
+                    Upcoming Events
+                  </h2>
+                  
+                  <div className="space-y-4 mb-4">
+                    {upcomingEvents.slice(0, 3).map((event) => (
+                      <EventCard 
+                        key={event.id} 
+                        event={event}
+                        showOrganization={true}
+                      />
+                    ))}
+                  </div>
 
-    <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-4 border-t border-gray-200">
-      <Link
-        to="/events"
-        className="flex-1 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-semibold"
-      >
-        📋 View All Events
-      </Link>
-      <Link 
-        to="/calendar"
-        className="flex-1 text-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all font-semibold inline-flex items-center justify-center gap-2"
-      >
-        <span>📅</span>
-        View Calendar
-      </Link>
-    </div>
-  </section>
-)}
+                  <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-4 border-t border-gray-200">
+                    <Link
+                      to="/events"
+                      className="flex-1 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-semibold"
+                    >
+                      📋 View All Events
+                    </Link>
+                    <Link 
+                      to="/calendar"
+                      className="flex-1 text-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all font-semibold inline-flex items-center justify-center gap-2"
+                    >
+                      <span>📅</span>
+                      View Calendar
+                    </Link>
+                  </div>
+                </section>
+              )}
             </div>
 
+            {/* RIGHT SIDEBAR - Recent Activity Only */}
             <div className="space-y-6">
               <section aria-labelledby="activity-heading" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 id="activity-heading" className="text-xl font-bold text-gray-900 mb-4">
@@ -481,9 +517,10 @@ function UnifiedDashboard() {
                 ) : (
                   <div className="space-y-4">
                     {activities.map((activity) => (
-                      <div
+                      <Link
                         key={activity.id}
-                        className="pb-4 border-b border-gray-200 last:border-b-0 last:pb-0"
+                        to={`/organizations/${activity.organizationId}/announcements`}
+                        className="block pb-4 border-b border-gray-200 last:border-b-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
@@ -491,7 +528,7 @@ function UnifiedDashboard() {
                             {activity.type === 'event' && '📅'}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 text-sm">
+                            <p className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">
                               {activity.title}
                             </p>
                             <p className="text-xs text-gray-600 mt-1">
@@ -507,57 +544,10 @@ function UnifiedDashboard() {
                             </span>
                           )}
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
-              </section>
-
-              <section aria-labelledby="actions-heading" className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-200 p-6">
-                <h2 id="actions-heading" className="text-lg font-bold text-gray-900 mb-4">
-                  Quick Actions
-                </h2>
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={handleCreateEventClick}
-                    className="w-full px-4 py-3 bg-white text-left rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📅</span>
-                      <div>
-                        <p className="font-semibold text-gray-900">Create Event</p>
-                        <p className="text-xs text-gray-600">Schedule a new event</p>
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/announcements/create')}
-                    className="w-full px-4 py-3 bg-white text-left rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📢</span>
-                      <div>
-                        <p className="font-semibold text-gray-900">Post Announcement</p>
-                        <p className="text-xs text-gray-600">Share news with members</p>
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/documents')}
-                    className="w-full px-4 py-3 bg-white text-left rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📄</span>
-                      <div>
-                        <p className="font-semibold text-gray-900">Upload Document</p>
-                        <p className="text-xs text-gray-600">Share files with members</p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
               </section>
             </div>
           </div>
