@@ -57,3 +57,82 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* ========================================
+   PRINT STYLES FOR EVENT DETAILS
+   ======================================== */
+@media print {
+  /* Hide navigation and UI elements */
+  header,
+  nav,
+  .no-print,
+  button:not(.print-only),
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Reset page styling for print */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Show all divs but reset their backgrounds */
+  div {
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Keep important borders for sections */
+  .print-section {
+    border-bottom: 1px solid #ddd !important;
+    margin-bottom: 18pt;
+    padding-bottom: 12pt;
+    page-break-inside: avoid;
+  }
+
+  /* Event title */
+  h1 {
+    font-size: 24pt;
+    font-weight: bold;
+    margin-bottom: 12pt;
+    page-break-after: avoid;
+    color: black !important;
+  }
+
+  h2 {
+    font-size: 16pt;
+    font-weight: bold;
+    margin-top: 12pt;
+    margin-bottom: 6pt;
+    page-break-after: avoid;
+    color: black !important;
+  }
+
+  /* Text elements */
+  p, span, div {
+    color: black !important;
+  }
+
+  /* Links */
+  a {
+    color: black !important;
+    text-decoration: underline;
+  }
+
+  /* Lists */
+  ul, ol {
+    margin-left: 20pt;
+  }
+
+  /* Page breaks */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+}
