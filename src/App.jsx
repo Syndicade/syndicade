@@ -15,6 +15,8 @@ import OrganizationDashboard from './pages/OrganizationDashboard';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
 import MemberDirectory from './pages/MemberDirectory';
+import CheckInPage from './pages/CheckInPage';
+import GuestCheckInPage from './pages/GuestCheckInPage';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -175,6 +177,23 @@ function App() {
     )
   } 
 />
+
+<Route 
+            path="/organizations/:organizationId/members" 
+            element={session ? <MemberDirectory /> : <Navigate to="/login" replace />} 
+          />
+
+          {/* Check-In Page Route */}
+          <Route 
+            path="/check-in/:eventId" 
+            element={<CheckInPage />} 
+          />
+
+          {/* Guest Check-In Page Route */}
+          <Route 
+            path="/guest-check-in/:eventId" 
+            element={<GuestCheckInPage />} 
+          />
 
 <Route 
           path="/organizations/:organizationId/documents" 

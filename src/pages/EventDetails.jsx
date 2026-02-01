@@ -5,6 +5,7 @@ import { downloadICS } from '../lib/icalGenerator';
 import RecurringEventOptions from '../components/RecurringEventOptions';
 import EditEvent from '../components/EditEvent';
 import AttendanceReport from '../components/AttendanceReport';
+import EventCheckIn from '../components/EventCheckIn';
 
 function EventDetails() {
   const { eventId } = useParams();
@@ -27,6 +28,7 @@ function EventDetails() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editScope, setEditScope] = useState(null); // 'this', 'future', 'all'
   const [showAttendanceReport, setShowAttendanceReport] = useState(false);
+  const [showCheckIn, setShowCheckIn] = useState(false);
 
   // Fetch event details
   const fetchEvent = async () => {
@@ -394,6 +396,95 @@ const handleDeleteSeries = async () => {
   const counts = getRsvpCounts();
   const isPastEvent = new Date(event.start_time) < new Date();
 
+  // Check-In Button Component
+  const CheckInButton = ({ eventId }) => {
+    const [checking, setChecking] = useState(false);
+    const [checkedIn, setCheckedIn] = useState(false);
+    const [checkInMessage, setCheckInMessage] = useState('');
+
+    useEffect(() => {
+      checkIfAlreadyCheckedIn();
+    }, []);
+
+    const checkIfAlreadyCheckedIn = async () => {
+      if (!currentUser) return;
+
+      const { data } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('member_id', currentUser.id)
+        .single();
+
+      if (data) {
+        setCheckedIn(true);
+      }
+    };
+
+    const handleCheckIn = async () => {
+      if (!currentUser) return;
+
+      setChecking(true);
+      try {
+        const { error } = await supabase
+          .from('attendance_records')
+          .insert([{
+            event_id: eventId,
+            member_id: currentUser.id,
+            checked_in_by: currentUser.id
+          }]);
+
+        if (error) {
+          if (error.code === '23505') {
+            setCheckInMessage('Already checked in!');
+            setCheckedIn(true);
+          } else {
+            throw error;
+          }
+        } else {
+          setCheckInMessage('✅ Checked in successfully!');
+          setCheckedIn(true);
+          setTimeout(() => setCheckInMessage(''), 3000);
+        }
+      } catch (err) {
+        console.error('Check-in error:', err);
+        setCheckInMessage('❌ Failed to check in');
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    if (checkedIn) {
+      return (
+        <div className="bg-green-100 border border-green-300 rounded-lg p-4 text-center">
+          <p className="text-green-800 font-bold text-lg">✓ You're Checked In!</p>
+          {checkInMessage && <p className="text-green-700 text-sm mt-1">{checkInMessage}</p>}
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <button
+          onClick={handleCheckIn}
+          disabled={checking}
+          className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-blue-600 text-white text-lg font-bold rounded-lg hover:from-green-700 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-green-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all"
+        >
+          {checking ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              Checking In...
+            </span>
+          ) : (
+            '✓ Check In Now'
+          )}
+        </button>
+        {checkInMessage && (
+          <p className="text-center mt-2 text-sm font-semibold text-gray-700">{checkInMessage}</p>
+        )}
+      </div>
+    );
+  };
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-200 shadow-sm">
@@ -424,6 +515,16 @@ const handleDeleteSeries = async () => {
               {/* Admin-only buttons */}
               {isAdmin && (
                 <>
+                
+                  {/* Check-In Button - Admin Only */}
+                  <button
+                    onClick={() => setShowCheckIn(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    title="Event Check-In"
+                  >
+                    🎫 Check-In
+                  </button>
+
                  {/* Attendance Report Button - Admin Only */}
                   <button
                     onClick={() => setShowAttendanceReport(true)}
@@ -559,6 +660,15 @@ const handleDeleteSeries = async () => {
 
           <div className="space-y-6">
             
+            {/* Member Check-In (Show on event day) */}
+            {!isPastEvent && currentUser && new Date(event.start_time).toDateString() === new Date().toDateString() && (
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow-sm border-2 border-green-200 p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-2">✓ Check In</h2>
+                <p className="text-sm text-gray-600 mb-4">Event is happening today! Check in to confirm your attendance.</p>
+                <CheckInButton eventId={event.id} />
+              </div>
+            )}
+
             {!isPastEvent && currentUser && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Your RSVP</h2>
@@ -662,6 +772,15 @@ const handleDeleteSeries = async () => {
         <AttendanceReport
           event={event}
           onClose={() => setShowAttendanceReport(false)}
+        />
+      )}
+      
+
+      {/* Event Check-In Modal */}
+      {showCheckIn && (
+        <EventCheckIn
+          event={event}
+          onClose={() => setShowCheckIn(false)}
         />
       )}
     </div>
