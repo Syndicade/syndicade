@@ -390,12 +390,12 @@ function OrganizationDashboard() {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button 
-                      onClick={() => setActiveTab('members')}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
-                    >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">👥</span>
-                      <span className="font-semibold text-gray-900">View Members</span>
-                    </button>
+  onClick={() => navigate(`/organizations/${organizationId}/members`)}
+  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+>
+  <span className="text-2xl group-hover:scale-110 transition-transform">👥</span>
+  <span className="font-semibold text-gray-900">View Member Directory</span>
+</button>
                     
                     <button 
                       onClick={() => setActiveTab('announcements')}

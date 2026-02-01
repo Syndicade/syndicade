@@ -14,6 +14,7 @@ import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
+import MemberDirectory from './pages/MemberDirectory';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -163,6 +164,18 @@ function App() {
     )
   } 
 />
+
+<Route 
+  path="/organizations/:organizationId/members" 
+  element={
+    session ? (
+      <MemberDirectory />
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  } 
+/>
+
 <Route 
           path="/organizations/:organizationId/documents" 
           element={session ? <DocumentLibrary /> : <Navigate to="/login" replace />} 
