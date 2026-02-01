@@ -417,6 +417,14 @@ function OrganizationDashboard() {
                       <span className="text-2xl group-hover:scale-110 transition-transform">📅</span>
                       <span className="font-semibold text-gray-900">View Events</span>
                     </button>
+
+                    <button 
+                      onClick={() => navigate(`/organizations/${organizationId}/polls`)}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform">📊</span>
+                      <span className="font-semibold text-gray-900">View Polls</span>
+                    </button>
                     
                     <button 
                       onClick={() => setActiveTab('settings')}
