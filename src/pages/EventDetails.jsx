@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { downloadICS } from '../lib/icalGenerator';
 import RecurringEventOptions from '../components/RecurringEventOptions';
 import EditEvent from '../components/EditEvent';
 
@@ -399,23 +400,35 @@ const handleDeleteSeries = async () => {
             <Link to="/events" className="text-blue-600 hover:text-blue-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
               ← Back to Events
             </Link>
-            {isAdmin && (
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleEditClick} 
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  ✏️ Edit
-                </button>
-                <button 
-                  onClick={handleDeleteClick} 
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                >
-                  🗑️ Delete
-                </button>
+<div className="flex items-center gap-2">
+              {/* iCal Export - Available to everyone */}
+              <button
+                onClick={() => downloadICS(event)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                title="Add to Calendar"
+              >
+                📅 Add to Calendar
+              </button>
+
+              {/* Admin-only buttons */}
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={handleEditClick}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={handleDeleteClick}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  >
+                    🗑️ Delete
+                  </button>
+                </>
+              )}
               </div>
-            )}
-          </div>
+            </div>
           
           {/* Title with recurring indicator */}
           <div className="flex items-start gap-3">
