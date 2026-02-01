@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { downloadICS } from '../lib/icalGenerator';
 import RecurringEventOptions from '../components/RecurringEventOptions';
 import EditEvent from '../components/EditEvent';
+import AttendanceReport from '../components/AttendanceReport';
 
 function EventDetails() {
   const { eventId } = useParams();
@@ -25,6 +26,7 @@ function EventDetails() {
   const [recurringAction, setRecurringAction] = useState(null); // 'edit' or 'delete'
   const [showEditModal, setShowEditModal] = useState(false);
   const [editScope, setEditScope] = useState(null); // 'this', 'future', 'all'
+  const [showAttendanceReport, setShowAttendanceReport] = useState(false);
 
   // Fetch event details
   const fetchEvent = async () => {
@@ -422,6 +424,15 @@ const handleDeleteSeries = async () => {
               {/* Admin-only buttons */}
               {isAdmin && (
                 <>
+                 {/* Attendance Report Button - Admin Only */}
+                  <button
+                    onClick={() => setShowAttendanceReport(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                    title="View Attendance Report"
+                  >
+                    📊 Attendance
+                  </button>
+
                   <button
                     onClick={handleEditClick}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -436,8 +447,8 @@ const handleDeleteSeries = async () => {
                   </button>
                 </>
               )}
-              </div>
             </div>
+          </div>
           
           {/* Title with recurring indicator */}
           <div className="flex items-start gap-3">
@@ -645,8 +656,16 @@ const handleDeleteSeries = async () => {
           isRecurring={event.is_recurring || !!event.parent_event_id}
         />
       )}
+      
+       {/* Attendance Report Modal */}
+      {showAttendanceReport && (
+        <AttendanceReport
+          event={event}
+          onClose={() => setShowAttendanceReport(false)}
+        />
+      )}
     </div>
   );
-}
+  }
 
 export default EventDetails;

@@ -30,17 +30,27 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [addressInput, setAddressInput] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
 
-// Recurring event state
-const [isRecurring, setIsRecurring] = useState(false);
-const [recurrenceType, setRecurrenceType] = useState('monthly');
-const [dayOfWeek, setDayOfWeek] = useState(1);
-const [weekOfMonth, setWeekOfMonth] = useState(1);
-const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  // Recurring event state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState('monthly');
+  
+  // Monthly state
+  const [dayOfWeek, setDayOfWeek] = useState(1);
+  const [weekOfMonth, setWeekOfMonth] = useState(1);
+  
+  // Weekly state
+  const [weeklyDays, setWeeklyDays] = useState([1]); // Array of days (0=Sun, 6=Sat)
+  
+  // Daily state
+  const [dailyInterval, setDailyInterval] = useState(1); // Every X days
+  const [weekdaysOnly, setWeekdaysOnly] = useState(false);
+  
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
 
-// Timezone selector state
-const [showTimezoneSelector, setShowTimezoneSelector] = useState(false);
-const [selectedTimezone, setSelectedTimezone] = useState(null);
-const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Timezone selector state
+  const [showTimezoneSelector, setShowTimezoneSelector] = useState(false);
+  const [selectedTimezone, setSelectedTimezone] = useState(null);
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Proper state name to abbreviation mapping
   const stateMap = {
@@ -116,12 +126,15 @@ const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   };
 
   // Reset recurring state when modal closes
-useEffect(() => {
+  useEffect(() => {
     if (!isOpen) {
       setIsRecurring(false);
       setRecurrenceType('monthly');
       setDayOfWeek(1);
       setWeekOfMonth(1);
+      setWeeklyDays([1]);
+      setDailyInterval(1);
+      setWeekdaysOnly(false);
       setRecurrenceEndDate('');
       setShowTimezoneSelector(false);
       setSelectedTimezone(null);
@@ -156,6 +169,18 @@ useEffect(() => {
       const newSchedule = formData.schedule.filter((_, i) => i !== index);
       setFormData(prev => ({ ...prev, schedule: newSchedule }));
     }
+  };
+
+  const toggleWeeklyDay = (day) => {
+    setWeeklyDays(prev => {
+      if (prev.includes(day)) {
+        // Don't allow removing all days
+        if (prev.length === 1) return prev;
+        return prev.filter(d => d !== day);
+      } else {
+        return [...prev, day].sort((a, b) => a - b);
+      }
+    });
   };
 
   const extractStateAbbreviation = (stateName) => {
@@ -341,6 +366,16 @@ useEffect(() => {
         throw new Error('Hybrid events require a virtual meeting link');
       }
 
+      // Validate recurring event settings
+      if (isRecurring) {
+        if (recurrenceType === 'weekly' && weeklyDays.length === 0) {
+          throw new Error('Please select at least one day for weekly recurring events');
+        }
+        if (recurrenceType === 'daily' && dailyInterval < 1) {
+          throw new Error('Daily interval must be at least 1');
+        }
+      }
+
       // FIXED: Create timestamps in local timezone (not UTC)
       const firstDay = formData.schedule[0];
       const [year, month, day] = firstDay.date.split('-');
@@ -380,30 +415,30 @@ useEffect(() => {
         }
       }
 
-// Helper function to format datetime for Postgres with timezone
-const formatForPostgres = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  
-  // Get timezone offset
-  const offset = -date.getTimezoneOffset();
-  const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-  const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
-  const offsetSign = offset >= 0 ? '+' : '-';
-  
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
-};
+      // Helper function to format datetime for Postgres with timezone
+      const formatForPostgres = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        
+        // Get timezone offset
+        const offset = -date.getTimezoneOffset();
+        const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+        const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+        const offsetSign = offset >= 0 ? '+' : '-';
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+      };
 
-const eventData = {
-  organization_id: organizationId,
-  title: formData.title.trim(),
-  description: formData.description.trim(),
-  start_time: formatForPostgres(startDateTime),
-  end_time: endDateTime ? formatForPostgres(endDateTime) : null,
+      const eventData = {
+        organization_id: organizationId,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        start_time: formatForPostgres(startDateTime),
+        end_time: endDateTime ? formatForPostgres(endDateTime) : null,
         location: formData.eventType === 'virtual' ? 'Virtual Event' : formData.locationName.trim(),
         full_address: (formData.eventType === 'in-person' || formData.eventType === 'hybrid') ? formData.locationName.trim() : null,
         city: formData.city.trim() || null,
@@ -419,12 +454,25 @@ const eventData = {
         require_rsvp: formData.requireRSVP,
         created_by: user.id,
         is_recurring: isRecurring,
-        recurrence_rule: isRecurring ? {
-          type: 'monthly',
-          dayOfWeek: dayOfWeek,
-          weekOfMonth: weekOfMonth,
-          time: formData.schedule[0].startTime + ':00'
-        } : null,
+        recurrence_rule: isRecurring ? (
+          recurrenceType === 'monthly' ? {
+            type: 'monthly',
+            dayOfWeek: dayOfWeek,
+            weekOfMonth: weekOfMonth,
+            time: formData.schedule[0].startTime + ':00'
+          } :
+          recurrenceType === 'weekly' ? {
+            type: 'weekly',
+            daysOfWeek: weeklyDays,
+            time: formData.schedule[0].startTime + ':00'
+          } :
+          recurrenceType === 'daily' ? {
+            type: 'daily',
+            interval: dailyInterval,
+            weekdaysOnly: weekdaysOnly,
+            time: formData.schedule[0].startTime + ':00'
+          } : null
+        ) : null,
         recurrence_end_date: isRecurring && recurrenceEndDate 
           ? new Date(recurrenceEndDate).toISOString() 
           : null,
@@ -488,6 +536,9 @@ const eventData = {
   };
 
   if (!isOpen) return null;
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const fullDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   return (
     <div 
@@ -912,78 +963,180 @@ const eventData = {
             </div>
             
             <p id="recurring-description" className="text-sm text-gray-600 mb-4">
-              Automatically create this event on a regular schedule (e.g., monthly meetings)
+              Automatically create this event on a regular schedule
             </p>
 
             {isRecurring && (
               <div className="space-y-4 pl-2 border-l-4 border-blue-400">
-                {/* Recurrence Pattern */}
+                {/* Recurrence Type Selector */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Repeat Pattern
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Recurrence Type
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Week of Month Dropdown */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceType('daily')}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        recurrenceType === 'daily'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      📆 Daily
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceType('weekly')}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        recurrenceType === 'weekly'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      📅 Weekly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceType('monthly')}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        recurrenceType === 'monthly'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      🗓️ Monthly
+                    </button>
+                  </div>
+                </div>
+
+                {/* DAILY PATTERN */}
+                {recurrenceType === 'daily' && (
+                  <div className="space-y-3">
                     <div>
-                      <label htmlFor="weekOfMonth" className="block text-xs text-gray-600 mb-1">
-                        Which week?
+                      <label htmlFor="dailyInterval" className="block text-sm font-medium text-gray-700 mb-2">
+                        Repeat every
                       </label>
-                      <select
-                        id="weekOfMonth"
-                        value={weekOfMonth}
-                        onChange={(e) => setWeekOfMonth(parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        aria-label="Select which week of the month"
-                      >
-                        <option value="1">First week</option>
-                        <option value="2">Second week</option>
-                        <option value="3">Third week</option>
-                        <option value="4">Fourth week</option>
-                        <option value="-1">Last week</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          id="dailyInterval"
+                          min="1"
+                          max="30"
+                          value={dailyInterval}
+                          onChange={(e) => setDailyInterval(parseInt(e.target.value) || 1)}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">day(s)</span>
+                      </div>
                     </div>
 
-                    {/* Day of Week Dropdown */}
-                    <div>
-                      <label htmlFor="dayOfWeek" className="block text-xs text-gray-600 mb-1">
-                        Which day?
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="weekdaysOnly"
+                        checked={weekdaysOnly}
+                        onChange={(e) => setWeekdaysOnly(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="weekdaysOnly" className="text-sm text-gray-700">
+                        Weekdays only (Monday - Friday)
                       </label>
-                      <select
-                        id="dayOfWeek"
-                        value={dayOfWeek}
-                        onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        aria-label="Select day of the week"
-                      >
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
-                      </select>
+                    </div>
+
+                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
+                      <strong>📅 Preview:</strong> Repeats every {dailyInterval} day{dailyInterval > 1 ? 's' : ''}
+                      {weekdaysOnly && ' (weekdays only)'} at{' '}
+                      <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
                     </div>
                   </div>
+                )}
 
-                  {/* Live Preview */}
-                  <div className="mt-3 text-sm text-blue-700 bg-blue-100 p-3 rounded-lg border border-blue-300">
-                    <strong>📅 Preview:</strong> This event will repeat on the{' '}
-                    <span className="font-bold">
+                {/* WEEKLY PATTERN */}
+                {recurrenceType === 'weekly' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Select days of the week
+                    </label>
+                    <div className="grid grid-cols-7 gap-2">
+                      {dayNames.map((day, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => toggleWeeklyDay(index)}
+                          className={`px-2 py-2 rounded-lg font-medium text-sm transition-all ${
+                            weeklyDays.includes(index)
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
+                      <strong>📅 Preview:</strong> Repeats every{' '}
+                      {weeklyDays.map(d => fullDayNames[d]).join(', ')} at{' '}
+                      <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {/* MONTHLY PATTERN */}
+                {recurrenceType === 'monthly' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="weekOfMonth" className="block text-xs text-gray-600 mb-1">
+                          Which week?
+                        </label>
+                        <select
+                          id="weekOfMonth"
+                          value={weekOfMonth}
+                          onChange={(e) => setWeekOfMonth(parseInt(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="1">First week</option>
+                          <option value="2">Second week</option>
+                          <option value="3">Third week</option>
+                          <option value="4">Fourth week</option>
+                          <option value="-1">Last week</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="dayOfWeek" className="block text-xs text-gray-600 mb-1">
+                          Which day?
+                        </label>
+                        <select
+                          id="dayOfWeek"
+                          value={dayOfWeek}
+                          onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="0">Sunday</option>
+                          <option value="1">Monday</option>
+                          <option value="2">Tuesday</option>
+                          <option value="3">Wednesday</option>
+                          <option value="4">Thursday</option>
+                          <option value="5">Friday</option>
+                          <option value="6">Saturday</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
+                      <strong>📅 Preview:</strong> Repeats on the{' '}
                       {weekOfMonth === -1 ? 'Last' : 
                        weekOfMonth === 1 ? 'First' :
                        weekOfMonth === 2 ? 'Second' :
-                       weekOfMonth === 3 ? 'Third' : 'Fourth'}
-                    </span>{' '}
-                    <span className="font-bold">
-                      {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]}
-                    </span>{' '}
-                    of every month at{' '}
-                    <span className="font-bold">
-                      {formData.schedule[0].startTime || '(time not set)'}
-                    </span>
+                       weekOfMonth === 3 ? 'Third' : 'Fourth'}{' '}
+                      {fullDayNames[dayOfWeek]} of every month at{' '}
+                      <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Optional End Date */}
                 <div>
@@ -996,8 +1149,7 @@ const eventData = {
                     value={recurrenceEndDate}
                     onChange={(e) => setRecurrenceEndDate(e.target.value)}
                     min={formData.schedule[0].date}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    aria-label="Select when this recurring event should stop"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     💡 Leave blank to continue indefinitely. We'll generate instances 6 months in advance.
@@ -1006,7 +1158,8 @@ const eventData = {
               </div>
             )}
           </div>
-        {/* ===== TIMEZONE SELECTOR SECTION ===== */}
+
+          {/* ===== TIMEZONE SELECTOR SECTION ===== */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1021,7 +1174,6 @@ const eventData = {
                 type="button"
                 onClick={() => setShowTimezoneSelector(!showTimezoneSelector)}
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                aria-label={showTimezoneSelector ? "Use automatic timezone" : "Specify timezone"}
               >
                 {showTimezoneSelector ? 'Use Auto-Detect' : 'Specify Different Timezone'}
               </button>
@@ -1045,8 +1197,7 @@ const eventData = {
                   id="eventTimezone"
                   value={selectedTimezone || userTimezone}
                   onChange={(e) => setSelectedTimezone(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-label="Select the timezone where this event takes place"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   <optgroup label="🇺🇸 United States">
                     <option value="America/New_York">Eastern Time (ET) - New York, Miami, Boston</option>
@@ -1095,7 +1246,6 @@ const eventData = {
               </div>
             )}
           </div>
-          {/* ===== END TIMEZONE SELECTOR SECTION ===== */}
 
           {/* Settings */}
           <div className="border-t border-gray-200 pt-6">
