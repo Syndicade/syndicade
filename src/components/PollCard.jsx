@@ -225,8 +225,7 @@ function PollCard({
   // Check if poll is expired
   const isExpired = poll.closing_date && new Date(poll.closing_date) < new Date();
   const canVote = poll.status === 'active' && !isExpired && (!hasVoted || poll.allow_vote_changes);
-  const showResults = poll.show_results_before_close || poll.status === 'closed' || hasVoted || isExpired;
-
+const showResults = (poll.show_results_before_close && hasVoted) || poll.status === 'closed' || isExpired;
   // Calculate total votes
   const totalVotes = results.reduce((sum, result) => sum + Number(result.vote_count), 0);
 
