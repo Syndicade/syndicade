@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import RecurringEventOptions from '../components/RecurringEventOptions';
+import EditEvent from '../components/EditEvent';
 
 function EventDetails() {
   const { eventId } = useParams();
@@ -17,80 +19,87 @@ function EventDetails() {
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [rsvpSuccess, setRsvpSuccess] = useState(false);
 
-  useEffect(() => {
-    async function fetchEventDetails() {
-      try {
-        setLoading(true);
-        setError(null);
+  // Recurring event modal state
+  const [showRecurringOptions, setShowRecurringOptions] = useState(false);
+  const [recurringAction, setRecurringAction] = useState(null); // 'edit' or 'delete'
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editScope, setEditScope] = useState(null); // 'this', 'future', 'all'
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError) throw userError;
-        setCurrentUser(user);
+  // Fetch event details
+  const fetchEvent = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const { data: eventData, error: eventError } = await supabase
-          .from('events')
-          .select('*')
-          .eq('id', eventId)
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      setCurrentUser(user);
+
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .single();
+
+      if (eventError) throw eventError;
+      if (!eventData) {
+        setError('Event not found');
+        setLoading(false);
+        return;
+      }
+      setEvent(eventData);
+
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', eventData.organization_id)
+        .single();
+
+      if (!orgError && orgData) {
+        setOrganization(orgData);
+      }
+
+      if (user) {
+        const { data: membership, error: membershipError } = await supabase
+          .from('memberships')
+          .select('role')
+          .eq('member_id', user.id)
+          .eq('organization_id', eventData.organization_id)
+          .eq('status', 'active')
           .single();
 
-        if (eventError) throw eventError;
-        if (!eventData) {
-          setError('Event not found');
-          setLoading(false);
-          return;
+        if (!membershipError && membership && membership.role === 'admin') {
+          setIsAdmin(true);
         }
-        setEvent(eventData);
+      }
 
-        const { data: orgData, error: orgError } = await supabase
-          .from('organizations')
-          .select('name')
-          .eq('id', eventData.organization_id)
-          .single();
+      const { data: rsvpData, error: rsvpError } = await supabase
+        .from('event_rsvps')
+        .select('*, members(first_name, last_name, profile_photo_url)')
+        .eq('event_id', eventId);
 
-        if (!orgError && orgData) {
-          setOrganization(orgData);
-        }
+      if (!rsvpError && rsvpData) {
+        setRsvps(rsvpData);
 
         if (user) {
-          const { data: membership, error: membershipError } = await supabase
-            .from('memberships')
-            .select('role')
-            .eq('member_id', user.id)
-            .eq('organization_id', eventData.organization_id)
-            .eq('status', 'active')
-            .single();
-
-          if (!membershipError && membership && membership.role === 'admin') {
-            setIsAdmin(true);
+          const userResponse = rsvpData.find(r => r.member_id === user.id);
+          if (userResponse) {
+            setUserRsvp(userResponse.status);
           }
         }
-
-        const { data: rsvpData, error: rsvpError } = await supabase
-          .from('event_rsvps')
-          .select('*, members(first_name, last_name, profile_photo_url)')
-          .eq('event_id', eventId);
-
-        if (!rsvpError && rsvpData) {
-          setRsvps(rsvpData);
-
-          if (user) {
-            const userResponse = rsvpData.find(r => r.member_id === user.id);
-            if (userResponse) {
-              setUserRsvp(userResponse.status);
-            }
-          }
-        }
-
-      } catch (err) {
-        console.error('Error fetching event details:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
       }
-    }
 
+    } catch (err) {
+      console.error('Error fetching event details:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (eventId) {
-      fetchEventDetails();
+      fetchEvent();
     }
   }, [eventId]);
 
@@ -148,7 +157,63 @@ function EventDetails() {
     }
   };
 
-  const handleDelete = async () => {
+  // Handle edit button click
+  const handleEditClick = () => {
+    console.log('🔍 Edit clicked. Event data:', {
+      is_recurring: event.is_recurring,
+      parent_event_id: event.parent_event_id,
+      id: event.id
+    });
+
+    // Check if this is a recurring event (either parent or instance)
+    if (event.is_recurring || event.parent_event_id) {
+      setRecurringAction('edit');
+      setShowRecurringOptions(true);
+    } else {
+      // Regular event - open edit modal directly
+      setEditScope(null);
+      setShowEditModal(true);
+    }
+  };
+
+  // Handle recurring edit option selection
+  const handleRecurringEditOptionSelect = (option) => {
+    console.log('🎯 Recurring edit option selected:', option);
+    setShowRecurringOptions(false);
+    setEditScope(option); // 'this', 'future', or 'all'
+    
+    // Small delay to ensure state is updated before opening modal
+    setTimeout(() => {
+      setShowEditModal(true);
+    }, 100);
+  };
+
+  // Handle event updated successfully
+  const handleEventUpdated = (updatedEvent) => {
+    console.log('✅ Event updated:', updatedEvent);
+    
+    // Close modal first
+    setShowEditModal(false);
+    setEditScope(null);
+    
+    // Refresh event data
+    fetchEvent();
+  };
+
+  // Handle delete button click
+  const handleDeleteClick = () => {
+    // Check if this is a recurring event
+    if (event.is_recurring || event.parent_event_id) {
+      setRecurringAction('delete');
+      setShowRecurringOptions(true);
+    } else {
+      // Regular event - show confirmation directly
+      handleDeleteRegular();
+    }
+  };
+
+  // Handle regular event delete
+  const handleDeleteRegular = async () => {
     if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
       return;
     }
@@ -168,6 +233,103 @@ function EventDetails() {
       alert('Failed to delete event. Please try again.');
     }
   };
+
+  // Handle recurring options selection
+  const handleRecurringOptionSelect = async (option) => {
+    console.log('🎯 Recurring option selected:', option, 'Action:', recurringAction);
+    setShowRecurringOptions(false);
+
+    if (recurringAction === 'edit') {
+      handleRecurringEditOptionSelect(option);
+    } else if (recurringAction === 'delete') {
+      if (option === 'this') {
+        await handleDeleteInstance();
+      } else if (option === 'future') {
+        await handleDeleteFutureInstances();
+      } else if (option === 'all') {
+        await handleDeleteSeries();
+      }
+    }
+  };
+
+  // Delete single instance
+  const handleDeleteInstance = async () => {
+    if (!confirm('Delete only this event instance?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      alert('Event instance deleted successfully');
+      navigate('/events');
+    } catch (err) {
+      console.error('Error deleting instance:', err);
+      alert('Failed to delete event. Please try again.');
+    }
+  };
+
+  // Delete future instances
+  const handleDeleteFutureInstances = async () => {
+    if (!confirm('Delete this and all future instances of this event?')) return;
+
+    try {
+      const parentId = event.parent_event_id || event.id;
+
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .or(`id.eq.${eventId},and(parent_event_id.eq.${parentId},start_time.gte.${event.start_time})`);
+
+      if (error) throw error;
+
+      alert('Future instances deleted successfully');
+      navigate('/events');
+    } catch (err) {
+      console.error('Error deleting future instances:', err);
+      alert('Failed to delete future instances. Please try again.');
+    }
+  };
+
+// Delete entire series (current and future only)
+const handleDeleteSeries = async () => {
+  if (!confirm('⚠️ Delete this recurring event series?\n\nThis will permanently delete:\n- All current and future occurrences\n- Past occurrences will be preserved\n\nThis action CANNOT be undone.')) {
+    return;
+  }
+
+  try {
+    const parentId = event.parent_event_id || event.id;
+    const now = new Date().toISOString();
+
+    console.log('🗑️ Deleting current and future instances for parent ID:', parentId);
+
+    // Delete parent event
+    const { error: parentDeleteError } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', parentId);
+
+    if (parentDeleteError) throw parentDeleteError;
+
+    // Delete all future instances (keep past ones for history)
+    const { error: futureDeleteError } = await supabase
+      .from('events')
+      .delete()
+      .eq('parent_event_id', parentId)
+      .gte('start_time', now);
+
+    if (futureDeleteError) throw futureDeleteError;
+
+    alert('✅ Recurring event series deleted. Past occurrences have been preserved for history.');
+    navigate('/events');
+  } catch (err) {
+    console.error('❌ Error deleting series:', err);
+    alert('Failed to delete series. Please try again.');
+  }
+};
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -239,13 +401,37 @@ function EventDetails() {
             </Link>
             {isAdmin && (
               <div className="flex items-center gap-2">
-                <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                <button 
+                  onClick={handleEditClick} 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  ✏️ Edit
+                </button>
+                <button 
+                  onClick={handleDeleteClick} 
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
                   🗑️ Delete
                 </button>
               </div>
             )}
           </div>
-          <h1 className="text-4xl font-bold text-gray-900">{event.title}</h1>
+          
+          {/* Title with recurring indicator */}
+          <div className="flex items-start gap-3">
+            {event.is_recurring && (
+              <span className="text-3xl mt-1" title="Recurring Event">🔄</span>
+            )}
+            <div className="flex-1">
+              <h1 className="text-4xl font-bold text-gray-900">{event.title}</h1>
+              {event.is_recurring && (
+                <p className="text-sm text-blue-600 mt-1 font-semibold">
+                  {event.parent_event_id ? 'Part of recurring series' : 'Recurring event series'}
+                </p>
+              )}
+            </div>
+          </div>
+          
           {organization && (
             <p className="text-lg text-gray-600 mt-2">{organization.name}</p>
           )}
@@ -409,6 +595,34 @@ function EventDetails() {
           </div>
         </div>
       </div>
+
+      {/* Recurring Event Options Modal */}
+      {showRecurringOptions && (
+        <RecurringEventOptions
+          event={event}
+          action={recurringAction}
+          onSelect={handleRecurringOptionSelect}
+          onCancel={() => {
+            setShowRecurringOptions(false);
+            setRecurringAction(null);
+          }}
+        />
+      )}
+
+      {/* Edit Event Modal */}
+      {showEditModal && (
+        <EditEvent
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditScope(null);
+          }}
+          onSuccess={handleEventUpdated}
+          event={event}
+          editScope={editScope}
+          isRecurring={event.is_recurring || !!event.parent_event_id}
+        />
+      )}
     </div>
   );
 }

@@ -137,13 +137,24 @@ function EventCalendar() {
   };
 
   // Transform events for calendar display
-  const calendarEvents = useMemo(() => {
-    let filteredEvents = events;
+const calendarEvents = useMemo(() => {
+  let filteredEvents = events;
 
-    // Filter by selected organization
-    if (selectedOrg !== 'all') {
-      filteredEvents = events.filter(e => e.organization_id === selectedOrg);
-    }
+  // Filter out parent events (they're just templates, not actual events)
+  // Only show: instances (has parent_event_id) OR non-recurring events
+  filteredEvents = filteredEvents.filter(event => {
+    // If it's not recurring, show it
+    if (!event.is_recurring) return true;
+    // If it's recurring but has a parent_event_id, it's an instance - show it
+    if (event.parent_event_id) return true;
+    // If it's recurring with no parent_event_id, it's a parent template - hide it
+    return false;
+  });
+
+  // Filter by selected organization
+  if (selectedOrg !== 'all') {
+    filteredEvents = filteredEvents.filter(e => e.organization_id === selectedOrg);
+  }
 
     return filteredEvents.map((event, index) => {
       // Assign color based on organization

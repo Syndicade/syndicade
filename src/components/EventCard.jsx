@@ -19,7 +19,6 @@ import { Link } from 'react-router-dom';
  * - Color contrast meets WCAG AA standards
  */
 function EventCard({ event, showOrganization = false, compact = false }) {
-  
   // Safety check: ensure event object exists
   if (!event || !event.id) {
     console.error('EventCard: Invalid event object', event);
@@ -43,13 +42,11 @@ function EventCard({ event, showOrganization = false, compact = false }) {
   // Get event type icon and label
   const getEventTypeDisplay = () => {
     const eventType = getEventType();
-    
     const displays = {
       'hybrid': { icon: '🌐', label: 'Hybrid Event' },
       'virtual': { icon: '💻', label: 'Virtual Event' },
       'in-person': { icon: '📍', label: event.location || 'In-Person Event' }
     };
-    
     return displays[eventType];
   };
 
@@ -62,17 +59,36 @@ function EventCard({ event, showOrganization = false, compact = false }) {
     return new Date(event.start_time);
   };
 
-  // Format time from timestamp
+// Format time from timestamp with timezone indicator
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString('en-US', { 
+      
+      // Verify it's a valid date
+      if (isNaN(date.getTime())) {
+        console.error('EventCard: Invalid date', timestamp);
+        return '';
+      }
+      
+      // Use event timezone if specified, otherwise user's timezone
+      const displayTimezone = event.event_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      // Get time in specified timezone
+      const timeString = date.toLocaleTimeString('en-US', { 
         hour: 'numeric', 
         minute: '2-digit',
-        hour12: true 
+        hour12: true,
+        timeZone: displayTimezone
       });
+      
+      // Get timezone abbreviation (EST, PST, etc.)
+      const timezone = date.toLocaleTimeString('en-US', {
+        timeZoneName: 'short',
+        timeZone: displayTimezone
+      }).split(' ').pop();
+      
+      return `${timeString} ${timezone}`;
     } catch (error) {
       console.error('EventCard: Error formatting time', error, timestamp);
       return '';
@@ -188,7 +204,7 @@ function EventCard({ event, showOrganization = false, compact = false }) {
             </p>
           )}
 
-          {/* Time */}
+          {/* Time with Timezone */}
           {event.start_time && (
             <div className="flex items-center text-sm text-gray-600 mb-2">
               <span className="mr-2">🕐</span>

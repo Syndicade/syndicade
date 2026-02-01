@@ -117,13 +117,25 @@ function EventDiscovery() {
         throw fetchError;
       }
 
-      console.log('Raw events from database:', data);
+     console.log('Raw events from database:', data);
       console.log('Number of events found:', data?.length || 0);
 
       let filteredEvents = data || [];
 
-      // Log before filtering
-      console.log('Events before filters:', filteredEvents.length);
+      // Filter out parent events (they're just templates, not actual events)
+      // Only show: instances (has parent_event_id) OR non-recurring events
+      filteredEvents = filteredEvents.filter(event => {
+        // If it's not recurring, show it
+        if (!event.is_recurring) return true;
+        // If it's recurring but has a parent_event_id, it's an instance - show it
+        if (event.parent_event_id) return true;
+        // If it's recurring with no parent_event_id, it's a parent template - hide it
+        return false;
+      });
+
+      // Log before other filters
+      console.log('Events after parent filter:', filteredEvents.length);
+      console.log('Events before other filters:', filteredEvents.length);
 
       if (filters.organizationType !== 'all') {
         filteredEvents = filteredEvents.filter(

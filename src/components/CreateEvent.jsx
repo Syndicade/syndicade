@@ -30,12 +30,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   const [addressInput, setAddressInput] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
 
-  // Recurring event state
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrenceType, setRecurrenceType] = useState('monthly');
-  const [dayOfWeek, setDayOfWeek] = useState(1); // 1 = Monday
-  const [weekOfMonth, setWeekOfMonth] = useState(1); // 1 = First week
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+// Recurring event state
+const [isRecurring, setIsRecurring] = useState(false);
+const [recurrenceType, setRecurrenceType] = useState('monthly');
+const [dayOfWeek, setDayOfWeek] = useState(1);
+const [weekOfMonth, setWeekOfMonth] = useState(1);
+const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+
+// Timezone selector state
+const [showTimezoneSelector, setShowTimezoneSelector] = useState(false);
+const [selectedTimezone, setSelectedTimezone] = useState(null);
+const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Proper state name to abbreviation mapping
   const stateMap = {
@@ -91,14 +96,35 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     'wyoming': 'WY'
   };
 
+  const formatTimezone = (tz) => {
+    const tzMap = {
+      'America/New_York': 'Eastern Time (EST/EDT)',
+      'America/Chicago': 'Central Time (CST/CDT)',
+      'America/Denver': 'Mountain Time (MST/MDT)',
+      'America/Phoenix': 'Mountain Time (MST - no DST)',
+      'America/Los_Angeles': 'Pacific Time (PST/PDT)',
+      'America/Anchorage': 'Alaska Time (AKST/AKDT)',
+      'Pacific/Honolulu': 'Hawaii Time (HST)',
+      'America/Toronto': 'Eastern Time (EST/EDT)',
+      'Europe/London': 'London (GMT/BST)',
+      'Europe/Paris': 'Central Europe (CET/CEST)',
+      'Asia/Tokyo': 'Japan (JST)',
+      'Asia/Kolkata': 'India (IST)',
+      'Australia/Sydney': 'Australia East (AEST/AEDT)'
+    };
+    return tzMap[tz] || tz;
+  };
+
   // Reset recurring state when modal closes
-  useEffect(() => {
+useEffect(() => {
     if (!isOpen) {
       setIsRecurring(false);
       setRecurrenceType('monthly');
       setDayOfWeek(1);
       setWeekOfMonth(1);
       setRecurrenceEndDate('');
+      setShowTimezoneSelector(false);
+      setSelectedTimezone(null);
     }
   }, [isOpen]);
 
@@ -315,17 +341,23 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         throw new Error('Hybrid events require a virtual meeting link');
       }
 
+      // FIXED: Create timestamps in local timezone (not UTC)
       const firstDay = formData.schedule[0];
-      const startDateTime = new Date(`${firstDay.date}T${firstDay.startTime}`);
+      const [year, month, day] = firstDay.date.split('-');
+      const [hours, minutes] = firstDay.startTime.split(':');
+      const startDateTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), 0);
       
       let endDateTime = null;
       if (formData.isMultiDay && formData.schedule.length > 1) {
         const lastDay = formData.schedule[formData.schedule.length - 1];
         if (lastDay.date && lastDay.endTime) {
-          endDateTime = new Date(`${lastDay.date}T${lastDay.endTime}`);
+          const [endYear, endMonth, endDay] = lastDay.date.split('-');
+          const [endHours, endMinutes] = lastDay.endTime.split(':');
+          endDateTime = new Date(parseInt(endYear), parseInt(endMonth) - 1, parseInt(endDay), parseInt(endHours), parseInt(endMinutes), 0);
         }
       } else if (firstDay.endTime) {
-        endDateTime = new Date(`${firstDay.date}T${firstDay.endTime}`);
+        const [endHours, endMinutes] = firstDay.endTime.split(':');
+        endDateTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(endHours), parseInt(endMinutes), 0);
       }
 
       if (formData.maxAttendees && parseInt(formData.maxAttendees) < 1) {
@@ -348,12 +380,30 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         }
       }
 
-      const eventData = {
-        organization_id: organizationId,
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime ? endDateTime.toISOString() : null,
+// Helper function to format datetime for Postgres with timezone
+const formatForPostgres = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  // Get timezone offset
+  const offset = -date.getTimezoneOffset();
+  const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+  const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+  const offsetSign = offset >= 0 ? '+' : '-';
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+};
+
+const eventData = {
+  organization_id: organizationId,
+  title: formData.title.trim(),
+  description: formData.description.trim(),
+  start_time: formatForPostgres(startDateTime),
+  end_time: endDateTime ? formatForPostgres(endDateTime) : null,
         location: formData.eventType === 'virtual' ? 'Virtual Event' : formData.locationName.trim(),
         full_address: (formData.eventType === 'in-person' || formData.eventType === 'hybrid') ? formData.locationName.trim() : null,
         city: formData.city.trim() || null,
@@ -368,18 +418,18 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         visibility: formData.visibility,
         require_rsvp: formData.requireRSVP,
         created_by: user.id,
-        // NEW: Recurring event fields
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? {
           type: 'monthly',
           dayOfWeek: dayOfWeek,
           weekOfMonth: weekOfMonth,
-          time: formData.schedule[0].startTime
+          time: formData.schedule[0].startTime + ':00'
         } : null,
         recurrence_end_date: isRecurring && recurrenceEndDate 
           ? new Date(recurrenceEndDate).toISOString() 
           : null,
-        parent_event_id: null
+        parent_event_id: null,
+        event_timezone: showTimezoneSelector ? selectedTimezone : null
       };
 
       const { data: newEvent, error: eventError } = await supabase
@@ -956,7 +1006,96 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               </div>
             )}
           </div>
-          {/* ===== END RECURRING EVENT SECTION ===== */}
+        {/* ===== TIMEZONE SELECTOR SECTION ===== */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  🌍 Event Timezone
+                </span>
+                <span className="text-xs text-gray-500">
+                  (Optional)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTimezoneSelector(!showTimezoneSelector)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                aria-label={showTimezoneSelector ? "Use automatic timezone" : "Specify timezone"}
+              >
+                {showTimezoneSelector ? 'Use Auto-Detect' : 'Specify Different Timezone'}
+              </button>
+            </div>
+
+            {!showTimezoneSelector ? (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  Auto-detected: <strong>{formatTimezone(userTimezone)}</strong>
+                </span>
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="eventTimezone" className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Event Timezone
+                </label>
+                <select
+                  id="eventTimezone"
+                  value={selectedTimezone || userTimezone}
+                  onChange={(e) => setSelectedTimezone(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-label="Select the timezone where this event takes place"
+                >
+                  <optgroup label="🇺🇸 United States">
+                    <option value="America/New_York">Eastern Time (ET) - New York, Miami, Boston</option>
+                    <option value="America/Chicago">Central Time (CT) - Chicago, Dallas, Houston</option>
+                    <option value="America/Denver">Mountain Time (MT) - Denver, Salt Lake City</option>
+                    <option value="America/Phoenix">Mountain Time (MT) - Arizona (No DST)</option>
+                    <option value="America/Los_Angeles">Pacific Time (PT) - LA, Seattle, San Francisco</option>
+                    <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
+                    <option value="Pacific/Honolulu">Hawaii Time (HST) - Honolulu</option>
+                  </optgroup>
+                  <optgroup label="🇨🇦 Canada">
+                    <option value="America/Toronto">Eastern Time - Toronto, Ottawa</option>
+                    <option value="America/Winnipeg">Central Time - Winnipeg</option>
+                    <option value="America/Edmonton">Mountain Time - Edmonton, Calgary</option>
+                    <option value="America/Vancouver">Pacific Time - Vancouver</option>
+                  </optgroup>
+                  <optgroup label="🌍 International">
+                    <option value="Europe/London">United Kingdom (GMT/BST) - London</option>
+                    <option value="Europe/Paris">Central Europe (CET/CEST) - Paris, Berlin, Rome</option>
+                    <option value="Asia/Tokyo">Japan (JST) - Tokyo</option>
+                    <option value="Asia/Shanghai">China (CST) - Beijing, Shanghai</option>
+                    <option value="Asia/Kolkata">India (IST) - Mumbai, Delhi</option>
+                    <option value="Australia/Sydney">Australia East (AEST/AEDT) - Sydney</option>
+                  </optgroup>
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  ℹ️ This is the timezone where the event takes place. Attendees will see the time converted to their local timezone.
+                </p>
+
+                {selectedTimezone && selectedTimezone !== userTimezone && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="text-sm">
+                      <p className="font-medium text-yellow-800">Different Timezone Selected</p>
+                      <p className="text-yellow-700 mt-1">
+                        You're in <strong>{formatTimezone(userTimezone)}</strong> but creating event in{' '}
+                        <strong>{formatTimezone(selectedTimezone)}</strong>.
+                        Make sure the time you entered ({formData.schedule[0].startTime}) is correct for{' '}
+                        {formatTimezone(selectedTimezone)}.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* ===== END TIMEZONE SELECTOR SECTION ===== */}
 
           {/* Settings */}
           <div className="border-t border-gray-200 pt-6">

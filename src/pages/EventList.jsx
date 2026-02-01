@@ -58,8 +58,20 @@ function EventList() {
 
         if (eventsError) throw eventsError;
 
-        setEvents(eventsData || []);
-        setFilteredEvents(eventsData || []);
+        // Filter out parent events (they're just templates, not actual events)
+        // Only show: instances (has parent_event_id) OR non-recurring events
+        const visibleEvents = (eventsData || []).filter(event => {
+          // If it's not recurring, show it
+          if (!event.is_recurring) return true;
+          // If it's recurring but has a parent_event_id, it's an instance - show it
+          if (event.parent_event_id) return true;
+          // If it's recurring with no parent_event_id, it's a parent template - hide it
+          return false;
+        });
+
+        setEvents(visibleEvents);
+        setFilteredEvents(visibleEvents);
+
 
       } catch (err) {
         console.error('Error fetching events:', err);
