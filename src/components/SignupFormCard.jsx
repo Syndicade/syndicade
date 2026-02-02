@@ -13,6 +13,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [signupQuantities, setSignupQuantities] = useState({});
 
   // Fetch items and responses
   useEffect(() => {
@@ -74,62 +75,81 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
     return item.current_signups >= item.max_slots;
   };
 
-  // Handle sign up
-  const handleSignUp = async (itemId) => {
+    // Handle sign up with quantity
+    const handleSignUp = async (itemId, maxSlots) => {
     if (submitting) return;
 
-    try {
-      setSubmitting(true);
-      setError(null);
+    // Get quantity from state or default to 1
+    const quantity = parseInt(signupQuantities[itemId]) || 1;
 
-      const { error: signupError } = await supabase
+    // Validate quantity doesn't exceed available slots
+    const item = items.find(i => i.id === itemId);
+    const available = item.max_slots - item.current_signups;
+    
+    if (quantity > available) {
+        setError(`Only ${available} item${available !== 1 ? 's' : ''} available`);
+        return;
+    }
+
+    try {
+        setSubmitting(true);
+        setError(null);
+
+        const { error: signupError } = await supabase
         .from('signup_responses')
         .insert({
-          item_id: itemId,
-          member_id: currentUserId
+            item_id: itemId,
+            member_id: currentUserId,
+            quantity: quantity
         });
 
-      if (signupError) throw signupError;
+        if (signupError) throw signupError;
 
-      // Refresh data
-      await fetchData();
-      if (onUpdate) onUpdate();
+        // Clear quantity input
+        setSignupQuantities(prev => ({ ...prev, [itemId]: 1 }));
+
+        // Refresh data
+        await fetchData();
+        if (onUpdate) onUpdate();
 
     } catch (err) {
-      console.error('Error signing up:', err);
-      setError(err.message || 'Failed to sign up');
+        console.error('Error signing up:', err);
+        setError(err.message || 'Failed to sign up');
     } finally {
-      setSubmitting(false);
+        setSubmitting(false);
     }
-  };
+    };
 
-  // Handle unsign up
-  const handleUnsignUp = async (itemId) => {
+    // Handle unsign up
+    const handleUnsignUp = async (itemId) => {
     if (submitting) return;
 
     try {
-      setSubmitting(true);
-      setError(null);
+        setSubmitting(true);
+        setError(null);
 
-      const { error: deleteError } = await supabase
+        const { error: deleteError } = await supabase
         .from('signup_responses')
         .delete()
         .eq('item_id', itemId)
         .eq('member_id', currentUserId);
 
-      if (deleteError) throw deleteError;
+        if (deleteError) throw deleteError;
 
-      // Refresh data
-      await fetchData();
-      if (onUpdate) onUpdate();
+        // Clear quantity input
+        setSignupQuantities(prev => ({ ...prev, [itemId]: 1 }));
+
+        // Refresh data
+        await fetchData();
+        if (onUpdate) onUpdate();
 
     } catch (err) {
-      console.error('Error unsigning up:', err);
-      setError(err.message || 'Failed to unsign up');
+        console.error('Error unsigning up:', err);
+        setError(err.message || 'Failed to unsign up');
     } finally {
-      setSubmitting(false);
+        setSubmitting(false);
     }
-  };
+    };
 
   // Handle delete form (admin only)
   const handleDelete = async () => {
@@ -284,59 +304,88 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
                       <div className="bg-gray-50 rounded-lg p-3 mb-3">
                         <p className="text-xs font-medium text-gray-700 mb-2">Signed up:</p>
                         <div className="space-y-1">
-                    {itemResponses.map((response) => (
-                    <div key={response.id} className="flex items-center gap-2 text-sm">
-                        <Check size={14} className="text-green-600" />
-                        <span className="text-gray-700">
-                        {response.member?.first_name} {response.member?.last_name}
-                        </span>
-                        {response.member?.user_id === currentUserId && (
-                        <span className="text-xs text-blue-600">(You)</span>
-                        )}
-                    </div>
-                    ))}
+                        {itemResponses.map((response) => (
+                        <div key={response.id} className="flex items-center gap-2 text-sm">
+                            <Check size={14} className="text-green-600" />
+                            <span className="text-gray-700">
+                            {response.member?.first_name} {response.member?.last_name}
+                            {response.quantity > 1 && (
+                                <span className="text-blue-600 font-medium"> ({response.quantity} items)</span>
+                            )}
+                            </span>
+                            {response.member?.user_id === currentUserId && (
+                            <span className="text-xs text-blue-600">(You)</span>
+                            )}
+                        </div>
+                        ))}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Sign Up Button */}
-                  <div>
-                    {!isClosed && (
-                      <>
-                        {userSignedUp ? (
-                          <button
-                            onClick={() => handleUnsignUp(item.id)}
-                            disabled={submitting}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Unsign up"
-                          >
-                            <X size={16} />
-                            <span className="text-sm font-medium">Unsign Up</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleSignUp(item.id)}
-                            disabled={submitting || itemFull}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Sign up"
-                          >
-                            <Check size={16} />
-                            <span className="text-sm font-medium">
-                              {itemFull ? 'Full' : 'Sign Up'}
-                            </span>
-                          </button>
+{/* Sign Up Section */}
+              <div className="space-y-2">
+                {!isClosed && (
+                  <>
+                    {userSignedUp ? (
+                      <button
+                        onClick={() => handleUnsignUp(item.id)}
+                        disabled={submitting}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full justify-center"
+                        aria-label="Unsign up"
+                      >
+                        <X size={16} />
+                        <span className="text-sm font-medium">Unsign Up</span>
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Quantity Input */}
+                        {item.max_slots > 1 && !itemFull && (
+                          <div>
+                            <label htmlFor={`quantity-${item.id}`} className="block text-xs font-medium text-gray-700 mb-1">
+                              How many?
+                            </label>
+                            <input
+                                type="number"
+                                id={`quantity-${item.id}`}
+                                min="1"
+                                max={spotsRemaining}
+                                value={signupQuantities[item.id] || ''}
+                                placeholder="Enter quantity"
+                                onChange={(e) => setSignupQuantities(prev => ({
+                                    ...prev,
+                                    [item.id]: e.target.value
+                                }))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting || itemFull}
+                                />
+                          </div>
                         )}
-                      </>
+                        
+                        {/* Sign Up Button */}
+                        <button
+                          onClick={() => handleSignUp(item.id, item.max_slots)}
+                          disabled={submitting || itemFull}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full justify-center"
+                          aria-label="Sign up"
+                        >
+                          <Check size={16} />
+                          <span className="text-sm font-medium">
+                            {itemFull ? 'Full' : 'Sign Up'}
+                          </span>
+                        </button>
+                      </div>
                     )}
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
-            );
-          })
-        )}
-      </div>
-    </div>
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</div>
   );
 }
 

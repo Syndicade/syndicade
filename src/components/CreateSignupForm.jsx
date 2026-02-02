@@ -17,7 +17,7 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
   });
   
   const [items, setItems] = useState([
-    { item_name: '', description: '', max_slots: 1 }
+    { item_name: '', description: '', max_slots: 1, slot_type: 'spots' }
   ]);
   
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
 
   // Add new item to the list
   const addItem = () => {
-    setItems([...items, { item_name: '', description: '', max_slots: 1 }]);
+    setItems([...items, { item_name: '', description: '', max_slots: 1, slot_type: 'spots' }]);
   };
 
   // Remove item from list
@@ -108,6 +108,7 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
         item_name: item.item_name.trim(),
         description: item.description.trim() || null,
         max_slots: parseInt(item.max_slots),
+        slot_type: item.slot_type,
         order_number: index + 1
       }));
 
@@ -279,7 +280,7 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
                           id={`item-name-${index}`}
                           value={item.item_name}
                           onChange={(e) => updateItem(index, 'item_name', e.target.value)}
-                          placeholder="e.g., Bring dessert, 9:00 AM slot, Setup help"
+                          placeholder="e.g., Bring dessert, 9:00 AM slot, Setup help, Canned goods"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
@@ -300,10 +301,41 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
                         />
                       </div>
 
+                      {/* Slot Type */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Type
+                        </label>
+                        <div className="flex gap-4">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name={`slot-type-${index}`}
+                              value="spots"
+                              checked={item.slot_type === 'spots'}
+                              onChange={() => updateItem(index, 'slot_type', 'spots')}
+                              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Spots (people/time slots)</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name={`slot-type-${index}`}
+                              value="items"
+                              checked={item.slot_type === 'items'}
+                              onChange={() => updateItem(index, 'slot_type', 'items')}
+                              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Items (quantities needed)</span>
+                          </label>
+                        </div>
+                      </div>
+
                       {/* Max Slots */}
                       <div>
                         <label htmlFor={`max-slots-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Number of Spots
+                          Number of {item.slot_type === 'spots' ? 'Spots' : 'Items'}
                         </label>
                         <input
                           type="number"
@@ -311,12 +343,14 @@ function CreateSignupForm({ organizationId, onClose, onFormCreated }) {
                           value={item.max_slots}
                           onChange={(e) => updateItem(index, 'max_slots', e.target.value)}
                           min="1"
-                          max="100"
+                          max="1000"
                           className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          How many people can sign up for this?
+                          {item.slot_type === 'spots' 
+                            ? 'How many people can sign up?' 
+                            : 'Total quantity needed (e.g., 50 canned goods)'}
                         </p>
                       </div>
                     </div>
