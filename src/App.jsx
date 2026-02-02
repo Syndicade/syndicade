@@ -18,6 +18,7 @@ import MemberDirectory from './pages/MemberDirectory';
 import CheckInPage from './pages/CheckInPage';
 import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
+import SurveysList from './pages/SurveysList';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -204,6 +205,11 @@ function App() {
 <Route 
           path="/organizations/:organizationId/polls" 
           element={session ? <PollsList /> : <Navigate to="/login" replace />} 
+        />
+
+<Route 
+          path="/organizations/:organizationId/surveys" 
+          element={session ? <SurveysList /> : <Navigate to="/login" replace />} 
         />
 
           {/* 404 - Catch All Route */}
