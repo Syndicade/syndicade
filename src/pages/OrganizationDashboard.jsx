@@ -6,6 +6,7 @@ import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import AnnouncementCard from '../components/AnnouncementCard';
+import MySignups from '../components/MySignups';
 
 function OrganizationDashboard() {
   const { organizationId } = useParams();
@@ -602,6 +603,11 @@ function OrganizationDashboard() {
           </div>
         </div>
       </div>
+
+    {/* My Sign-Ups Widget */}
+    <div className="mt-6">
+      <MySignups organizationId={organizationId} showFilter={false} />
+    </div>
 
       <CreateEvent
         isOpen={showCreateEvent}

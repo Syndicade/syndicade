@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import CreateOrganization from '../components/CreateOrganization';
 import CreateEvent from '../components/CreateEvent.jsx';
 import EventCard from '../components/EventCard';
+import MySignups from '../components/MySignups';
 
 function UnifiedDashboard() {
   const [organizations, setOrganizations] = useState([]);
@@ -549,10 +550,14 @@ function UnifiedDashboard() {
                   </div>
                 )}
               </section>
+              
+              {/* My Sign-Ups Widget */}
+              <MySignups showFilter={true} />
             </div>
           </div>
         )}
       </main>
+
 
       <CreateOrganization
         isOpen={showCreateModal}
