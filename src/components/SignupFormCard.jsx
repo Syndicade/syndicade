@@ -34,17 +34,17 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
       if (itemsError) throw itemsError;
       setItems(itemsData || []);
 
-      // Fetch responses
-      const { data: responsesData, error: responsesError } = await supabase
+        // Fetch responses
+        const { data: responsesData, error: responsesError } = await supabase
         .from('signup_responses')
         .select(`
-          *,
-          member:member_id (
-            id,
+            *,
+            member:members!signup_responses_member_id_fkey (
+            user_id,
             first_name,
             last_name,
             email
-          )
+            )
         `)
         .in('item_id', (itemsData || []).map(item => item.id));
 
@@ -284,17 +284,17 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
                       <div className="bg-gray-50 rounded-lg p-3 mb-3">
                         <p className="text-xs font-medium text-gray-700 mb-2">Signed up:</p>
                         <div className="space-y-1">
-                          {itemResponses.map((response) => (
-                            <div key={response.id} className="flex items-center gap-2 text-sm">
-                              <Check size={14} className="text-green-600" />
-                              <span className="text-gray-700">
-                                {response.member?.first_name} {response.member?.last_name}
-                              </span>
-                              {response.member_id === currentUserId && (
-                                <span className="text-xs text-blue-600">(You)</span>
-                              )}
-                            </div>
-                          ))}
+                    {itemResponses.map((response) => (
+                    <div key={response.id} className="flex items-center gap-2 text-sm">
+                        <Check size={14} className="text-green-600" />
+                        <span className="text-gray-700">
+                        {response.member?.first_name} {response.member?.last_name}
+                        </span>
+                        {response.member?.user_id === currentUserId && (
+                        <span className="text-xs text-blue-600">(You)</span>
+                        )}
+                    </div>
+                    ))}
                         </div>
                       </div>
                     )}
