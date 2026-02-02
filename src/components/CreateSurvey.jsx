@@ -166,7 +166,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
         if (!q.question_text.trim()) {
           throw new Error(`Question ${i + 1} is empty`);
         }
-        if (['single_choice', 'multiple_choice', 'rating'].includes(q.question_type)) {
+        if (['single_choice', 'multiple_choice'].includes(q.question_type)) {
           if (!q.options || q.options.length < 2) {
             throw new Error(`Question ${i + 1} needs at least 2 options`);
           }
@@ -206,7 +206,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
         question_text: q.question_text.trim(),
         question_type: q.question_type,
         required: q.required,
-        options: ['single_choice', 'multiple_choice', 'rating'].includes(q.question_type) 
+        options: ['single_choice', 'multiple_choice'].includes(q.question_type) 
           ? q.options.filter(opt => opt.trim()) 
           : null,
         order_number: q.order_number

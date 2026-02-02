@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 function SurveyCard({ survey, onDelete, isAdmin, showOrganization = false }) {
@@ -193,27 +193,41 @@ function SurveyCard({ survey, onDelete, isAdmin, showOrganization = false }) {
     }
   };
 
-  const handleAnswerChange = (questionId, value, questionType) => {
-    if (questionType === 'multiple_choice') {
-      const current = answers[questionId] || [];
+const handleAnswerChange = useCallback((questionId, value, questionType) => {
+  console.log('=== handleAnswerChange called ===');
+  console.log('questionId:', questionId);
+  console.log('value:', value);
+  console.log('questionType:', questionType);
+  
+  if (questionType === 'multiple_choice') {
+    setAnswers(prevAnswers => {
+      const current = Array.isArray(prevAnswers[questionId]) ? prevAnswers[questionId] : [];
+      console.log('current array:', current);
+      console.log('includes value?', current.includes(value));
+      
       if (current.includes(value)) {
-        setAnswers({
-          ...answers,
-          [questionId]: current.filter(v => v !== value)
-        });
+        const newArray = current.filter(v => v !== value);
+        console.log('Removing - new array:', newArray);
+        return {
+          ...prevAnswers,
+          [questionId]: newArray
+        };
       } else {
-        setAnswers({
-          ...answers,
-          [questionId]: [...current, value]
-        });
+        const newArray = [...current, value];
+        console.log('Adding - new array:', newArray);
+        return {
+          ...prevAnswers,
+          [questionId]: newArray
+        };
       }
-    } else {
-      setAnswers({
-        ...answers,
-        [questionId]: value
-      });
-    }
-  };
+    });
+  } else {
+    setAnswers(prevAnswers => ({
+      ...prevAnswers,
+      [questionId]: value
+    }));
+  }
+}, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -460,22 +474,44 @@ function SurveyCard({ survey, onDelete, isAdmin, showOrganization = false }) {
                 </div>
               )}
 
-              {question.question_type === 'multiple_choice' && (
-                <div className="space-y-2">
-                  {question.options.map((option, optIndex) => (
-                    <label key={optIndex} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        value={option}
-                        checked={(answers[question.id] || []).includes(option)}
-                        onChange={(e) => handleAnswerChange(question.id, option, 'multiple_choice')}
-                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm text-gray-700">{option}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
+             {question.question_type === 'multiple_choice' && (
+  <div className="space-y-2">
+    {question.options.map((option, optIndex) => {
+      const isChecked = Array.isArray(answers[question.id]) && answers[question.id].includes(option);
+      const checkboxId = `q${question.id}-opt${optIndex}`;
+      
+      return (
+        <div key={checkboxId} className="flex items-center">
+          <input
+            id={checkboxId}
+            type="checkbox"
+            checked={isChecked}
+            onChange={(e) => {
+              e.stopPropagation();
+              const currentAnswers = Array.isArray(answers[question.id]) ? [...answers[question.id]] : [];
+              let newAnswers;
+              
+              if (currentAnswers.includes(option)) {
+                newAnswers = currentAnswers.filter(v => v !== option);
+              } else {
+                newAnswers = [...currentAnswers, option];
+              }
+              
+              setAnswers(prev => ({
+                ...prev,
+                [question.id]: newAnswers
+              }));
+            }}
+            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor={checkboxId} className="text-sm text-gray-700 cursor-pointer">
+            {option}
+          </label>
+        </div>
+      );
+    })}
+  </div>
+)}
 
               {question.question_type === 'rating' && (
                 <div className="flex gap-4">
