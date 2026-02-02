@@ -434,6 +434,18 @@ function OrganizationDashboard() {
                       <span className="font-semibold text-gray-900">View Surveys</span>
                     </button>
                     
+                    <button
+                      onClick={() => navigate(`/organizations/${organizationId}/signup-forms`)}
+                      className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                      aria-label="View sign-up forms"
+                    >
+                      <span className="text-2xl">📝</span>
+                      <div className="text-left">
+                        <div className="font-semibold text-gray-900">Sign-Up Forms</div>
+                        <div className="text-sm text-gray-600">Volunteer lists & time slots</div>
+                      </div>
+                    </button>
+
                     <button 
                       onClick={() => setActiveTab('settings')}
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
