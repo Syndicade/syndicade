@@ -6,7 +6,6 @@ import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import AnnouncementCard from '../components/AnnouncementCard';
-import MySignups from '../components/MySignups';
 
 function OrganizationDashboard() {
   const { organizationId } = useParams();
@@ -31,13 +30,19 @@ function OrganizationDashboard() {
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [announcementFilter, setAnnouncementFilter] = useState('all');
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'members', label: 'Members', icon: '👥' },
-    { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements },
-    { id: 'invite', label: 'Invite', icon: '✉️' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' }
+  // Define all available tabs
+  const allTabs = [
+    { id: 'overview', label: 'Overview', icon: '📊', roles: ['admin', 'member'] },
+    { id: 'members', label: 'Members', icon: '👥', roles: ['admin', 'member'] },
+    { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements, roles: ['admin', 'member'] },
+    { id: 'invite', label: 'Invite', icon: '✉️', roles: ['admin'] }, // Admin only
+    { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] } // Admin only
   ];
+
+  // Filter tabs based on user role
+  const tabs = membership 
+    ? allTabs.filter(tab => tab.roles.includes(membership.role))
+    : allTabs.filter(tab => tab.roles.includes('member')); // Default to member view
 
   useEffect(() => {
     fetchData();
@@ -319,8 +324,16 @@ function OrganizationDashboard() {
           <div className="p-6">
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {membership?.role === 'admin' ? '👑 Admin Dashboard' : '👤 Member Dashboard'}
+                  </h2>
+                  <span className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
+                    {membership?.role === 'admin' ? 'Administrator View' : 'Member View'}
+                  </span>
+                </div>
                 
+                {/* Action Buttons - Different for Admin vs Member */}
                 <div className="flex flex-wrap gap-3 mb-6">
                   <button
                     type="button"
@@ -345,6 +358,7 @@ function OrganizationDashboard() {
                   )}
                 </div>
                 
+                {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
                     <div className="flex items-center justify-between">
@@ -356,15 +370,17 @@ function OrganizationDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-yellow-600 text-sm font-semibold uppercase">Pending Invites</p>
-                        <p className="text-3xl font-bold text-yellow-900 mt-2">{stats.pendingInvites}</p>
+                  {membership?.role === 'admin' && (
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-yellow-600 text-sm font-semibold uppercase">Pending Invites</p>
+                          <p className="text-3xl font-bold text-yellow-900 mt-2">{stats.pendingInvites}</p>
+                        </div>
+                        <div className="text-4xl">✉️</div>
                       </div>
-                      <div className="text-4xl">✉️</div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
                     <div className="flex items-center justify-between">
@@ -387,16 +403,17 @@ function OrganizationDashboard() {
                   </div>
                 </div>
 
+                {/* Quick Actions - Different for Admin vs Member */}
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button 
-  onClick={() => navigate(`/organizations/${organizationId}/members`)}
-  className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
->
-  <span className="text-2xl group-hover:scale-110 transition-transform">👥</span>
-  <span className="font-semibold text-gray-900">View Member Directory</span>
-</button>
+                      onClick={() => navigate(`/organizations/${organizationId}/members`)}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform">👥</span>
+                      <span className="font-semibold text-gray-900">View Member Directory</span>
+                    </button>
                     
                     <button 
                       onClick={() => setActiveTab('announcements')}
@@ -447,15 +464,44 @@ function OrganizationDashboard() {
                       </div>
                     </button>
 
-                    <button 
-                      onClick={() => setActiveTab('settings')}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
-                    >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">⚙️</span>
-                      <span className="font-semibold text-gray-900">Organization Settings</span>
-                    </button>
+                    {membership?.role === 'admin' && (
+                      <button 
+                        onClick={() => setActiveTab('settings')}
+                        className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      >
+                        <span className="text-2xl group-hover:scale-110 transition-transform">⚙️</span>
+                        <span className="font-semibold text-gray-900">Organization Settings</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+                
+                {/* Admin-only section */}
+                {membership?.role === 'admin' && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                    <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
+                      <span>👑</span>
+                      Admin Tools
+                    </h3>
+                    <p className="text-purple-700 text-sm mb-4">
+                      These management features are only visible to administrators.
+                    </p>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setActiveTab('invite')}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold"
+                      >
+                        ✉️ Invite Members
+                      </button>
+                      <button 
+                        onClick={() => setActiveTab('settings')}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold"
+                      >
+                        ⚙️ Manage Settings
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -603,11 +649,6 @@ function OrganizationDashboard() {
           </div>
         </div>
       </div>
-
-    {/* My Sign-Ups Widget */}
-    <div className="mt-6">
-      <MySignups organizationId={organizationId} showFilter={false} />
-    </div>
 
       <CreateEvent
         isOpen={showCreateEvent}
