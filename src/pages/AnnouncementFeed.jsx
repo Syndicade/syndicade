@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
+import PageHeader from '../components/PageHeader';
 
 /**
  * AnnouncementFeed Page
@@ -259,29 +260,25 @@ function AnnouncementFeed() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            📢 Announcements
-          </h1>
-          {organization && (
-            <p className="text-gray-600">
-              {organization.name}
-            </p>
-          )}
-        </div>
-        
-        {/* Create Button (Admin Only) */}
-        {isAdmin && (
+    <PageHeader
+      title="Announcements"
+      subtitle="View and manage organization announcements"
+      icon="📢"
+      organizationName={organization?.name}
+      organizationId={organizationId}
+      backTo={`/organizations/${organizationId}`}
+      backLabel="Back to Dashboard"
+      actions={
+        isAdmin && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
           >
             ➕ Create Announcement
           </button>
-        )}
-      </div>
+        )
+      }
+    />
 
       {/* Controls */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">

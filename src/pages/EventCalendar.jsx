@@ -4,6 +4,7 @@ import { format, parse, startOfWeek, getDay } from 'date-fns';
 import enUS from 'date-fns/locale/en-US';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import PageHeader from '../components/PageHeader';
 
 const locales = {
   'en-US': enUS
@@ -137,24 +138,24 @@ function EventCalendar() {
   };
 
   // Transform events for calendar display
-const calendarEvents = useMemo(() => {
-  let filteredEvents = events;
+  const calendarEvents = useMemo(() => {
+    let filteredEvents = events;
 
-  // Filter out parent events (they're just templates, not actual events)
-  // Only show: instances (has parent_event_id) OR non-recurring events
-  filteredEvents = filteredEvents.filter(event => {
-    // If it's not recurring, show it
-    if (!event.is_recurring) return true;
-    // If it's recurring but has a parent_event_id, it's an instance - show it
-    if (event.parent_event_id) return true;
-    // If it's recurring with no parent_event_id, it's a parent template - hide it
-    return false;
-  });
+    // Filter out parent events (they're just templates, not actual events)
+    // Only show: instances (has parent_event_id) OR non-recurring events
+    filteredEvents = filteredEvents.filter(event => {
+      // If it's not recurring, show it
+      if (!event.is_recurring) return true;
+      // If it's recurring but has a parent_event_id, it's an instance - show it
+      if (event.parent_event_id) return true;
+      // If it's recurring with no parent_event_id, it's a parent template - hide it
+      return false;
+    });
 
-  // Filter by selected organization
-  if (selectedOrg !== 'all') {
-    filteredEvents = filteredEvents.filter(e => e.organization_id === selectedOrg);
-  }
+    // Filter by selected organization
+    if (selectedOrg !== 'all') {
+      filteredEvents = filteredEvents.filter(e => e.organization_id === selectedOrg);
+    }
 
     return filteredEvents.map((event, index) => {
       // Assign color based on organization
@@ -384,37 +385,35 @@ const calendarEvents = useMemo(() => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            📅 Event Calendar
-          </h1>
-          <p className="text-gray-600">
-            View and manage events from all your organizations
-          </p>
-        </div>
-
-        {/* View Toggle */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link 
-            to="/events"
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
-          >
-            <span>📋</span>
-            List View
-          </Link>
-          <Link 
-            to="/calendar"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
-          >
-            <span>📅</span>
-            Calendar View
-          </Link>
-        </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <PageHeader
+          title="Event Calendar"
+          subtitle="View and manage events from all your organizations"
+          icon="📅"
+          backTo="/organizations"
+          backLabel="My Organizations"
+          actions={
+            <div className="flex items-center gap-3">
+              <Link 
+                to="/events"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+              >
+                <span>📋</span>
+                List View
+              </Link>
+              <Link 
+                to="/calendar"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+              >
+                <span>📅</span>
+                Calendar View
+              </Link>
+            </div>
+          }
+        />
 
         {/* Calendar Container */}
-        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mt-6">
           {events.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📅</div>

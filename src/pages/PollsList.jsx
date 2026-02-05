@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import PollCard from '../components/PollCard';
 import CreatePoll from '../components/CreatePoll';
+import PageHeader from '../components/PageHeader';
 
 /**
  * PollsList Page
@@ -207,29 +208,25 @@ function PollsList() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            📊 Polls
-          </h1>
-          {organization && (
-            <p className="text-gray-600">
-              {organization.name}
-            </p>
-          )}
-        </div>
-        
-        {/* Create Button (Admin Only) */}
-        {isAdmin && (
+    <PageHeader
+      title="Polls"
+      subtitle="Create and participate in organization polls"
+      icon="📊"
+      organizationName={organization?.name}
+      organizationId={organizationId}
+      backTo={`/organizations/${organizationId}`}
+      backLabel="Back to Dashboard"
+      actions={
+        isAdmin && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
           >
             ➕ Create Poll
           </button>
-        )}
-      </div>
+        )
+      }
+    />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-6">

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import CreateSurvey from '../components/CreateSurvey';
 import SurveyCard from '../components/SurveyCard';
+import PageHeader from '../components/PageHeader';
+
 
 function SurveysList() {
   const { organizationId } = useParams();
@@ -148,54 +150,46 @@ function SurveysList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <button
-                onClick={() => navigate(`/organizations/${organizationId}`)}
-                className="text-blue-600 hover:text-blue-700 mb-2 flex items-center gap-2"
-              >
-                ← Back to Dashboard
-              </button>
-              <h1 className="text-3xl font-bold text-gray-900">
-                📋 Surveys
-              </h1>
-              <p className="text-gray-600 mt-1">{organization.name}</p>
-            </div>
-            {isAdmin && (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <PageHeader
+          title="Surveys"
+          subtitle="Create surveys and collect member feedback"
+          icon="📋"
+          organizationName={organization?.name}
+          organizationId={organizationId}
+          backTo={`/organizations/${organizationId}`}
+          backLabel="Back to Dashboard"
+          actions={
+            isAdmin && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all flex items-center gap-2"
               >
                 <span className="text-xl">+</span>
-                <span>Create Survey</span>
+                Create Survey
               </button>
-            )}
-          </div>
+            )
+          }
+        />
 
-          {/* Stats */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-gray-900">{surveys.length}</div>
-              <div className="text-sm text-gray-600">Total Surveys</div>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-green-700">{activeSurveys.length}</div>
-              <div className="text-sm text-gray-600">Active</div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-gray-700">{closedSurveys.length}</div>
-              <div className="text-sm text-gray-600">Closed</div>
-            </div>
+        {/* Stats */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-900">{surveys.length}</div>
+            <div className="text-sm text-gray-600">Total Surveys</div>
+          </div>
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="text-2xl font-bold text-green-700">{activeSurveys.length}</div>
+            <div className="text-sm text-gray-600">Active</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-700">{closedSurveys.length}</div>
+            <div className="text-sm text-gray-600">Closed</div>
           </div>
         </div>
-      </div>
 
-      {/* Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6 mt-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <input
@@ -283,18 +277,18 @@ function SurveysList() {
             ))}
           </div>
         )}
-      </div>
 
-      {/* Create Survey Modal */}
-      {showCreateModal && (
-        <CreateSurvey
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleSurveyCreated}
-          organizationId={organizationId}
-          organizationName={organization.name}
-        />
-      )}
+        {/* Create Survey Modal */}
+        {showCreateModal && (
+          <CreateSurvey
+            isOpen={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            onSuccess={handleSurveyCreated}
+            organizationId={organizationId}
+            organizationName={organization.name}
+          />
+        )}
+      </div>
     </div>
   );
 }

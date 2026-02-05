@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Plus, Search, Filter } from 'lucide-react';
 import CreateSignupForm from '../components/CreateSignupForm';
 import SignupFormCard from '../components/SignupFormCard';
+import PageHeader from '../components/PageHeader';
 
 /**
  * SignupFormsList Page
@@ -21,10 +22,12 @@ function SignupFormsList() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [organization, setOrganization] = useState(null);
 
   // Fetch current user and their role
   useEffect(() => {
     fetchUserRole();
+    fetchOrganization();
   }, [organizationId]);
 
   // Fetch forms when component mounts or after changes
@@ -38,6 +41,20 @@ function SignupFormsList() {
   useEffect(() => {
     applyFilters();
   }, [forms, searchTerm, statusFilter]);
+
+  const fetchOrganization = async () => {
+    try {
+      const { data } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', organizationId)
+        .single();
+      
+      setOrganization(data);
+    } catch (err) {
+      console.error('Error fetching organization:', err);
+    }
+  };
 
   const fetchUserRole = async () => {
     try {
@@ -143,25 +160,27 @@ function SignupFormsList() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold text-gray-900">Sign-Up Forms</h1>
-            {userRole === 'admin' && (
+        <PageHeader
+          title="Sign-Up Forms"
+          subtitle="Volunteer sign-ups, time slots, potluck items, and more"
+          icon="📝"
+          organizationName={organization?.name}
+          organizationId={organizationId}
+          backTo={`/organizations/${organizationId}`}
+          backLabel="Back to Dashboard"
+          actions={
+            userRole === 'admin' && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
                 aria-label="Create new sign-up form"
               >
                 <Plus size={20} />
                 Create Form
               </button>
-            )}
-          </div>
-          <p className="text-gray-600">
-            Volunteer sign-ups, time slots, potluck items, and more
-          </p>
-        </div>
+            )
+          }
+        />
 
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
