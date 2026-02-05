@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import MemberCard from '../components/MemberCard';
+import PageHeader from '../components/PageHeader';
 
 /**
  * MemberDirectory Page
@@ -139,10 +140,12 @@ function MemberDirectory() {
   // Loading state
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" aria-hidden="true"></div>
-          <span className="sr-only">Loading members...</span>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" aria-hidden="true"></div>
+            <span className="sr-only">Loading members...</span>
+          </div>
         </div>
       </div>
     );
@@ -151,139 +154,141 @@ function MemberDirectory() {
   // Error state
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
-          <h2 className="text-red-800 font-semibold text-xl mb-2">Error Loading Members</h2>
-          <p className="text-red-700">{error}</p>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
+            <h2 className="text-red-800 font-semibold text-xl mb-2">Error Loading Members</h2>
+            <p className="text-red-700">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Page Header */}
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {organizationName} Members
-        </h1>
-        <p className="text-gray-600">
-          {filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'}
-          {searchQuery && ` matching "${searchQuery}"`}
-          {roleFilter !== 'all' && ` with role: ${roleFilter}`}
-        </p>
-      </header>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <PageHeader
+          title="Members"
+          subtitle={`${filteredMembers.length} ${filteredMembers.length === 1 ? 'member' : 'members'}${searchQuery ? ` matching "${searchQuery}"` : ''}${roleFilter !== 'all' ? ` with role: ${roleFilter}` : ''}`}
+          icon="👥"
+          organizationName={organizationName}
+          organizationId={organizationId}
+          backTo={`/organizations/${organizationId}`}
+          backLabel="Back to Dashboard"
+        />
 
-      {/* Search and Filter Controls */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Search Input */}
-          <div className="lg:col-span-2">
-            <label 
-              htmlFor="member-search" 
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Search Members
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+        {/* Search and Filter Controls */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Search Input */}
+            <div className="lg:col-span-2">
+              <label 
+                htmlFor="member-search" 
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Search Members
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  id="member-search"
+                  type="text"
+                  placeholder="Search by name, email, or location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-describedby="search-help"
+                />
               </div>
-              <input
-                id="member-search"
-                type="text"
-                placeholder="Search by name, email, or location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-describedby="search-help"
-              />
+              <p id="search-help" className="sr-only">
+                Search for members by their name, email, or location
+              </p>
             </div>
-            <p id="search-help" className="sr-only">
-              Search for members by their name, email, or location
-            </p>
+
+            {/* Role Filter */}
+            <div>
+              <label 
+                htmlFor="role-filter" 
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Filter by Role
+              </label>
+              <select
+                id="role-filter"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                aria-label="Filter members by their role"
+              >
+                <option value="all">All Roles</option>
+                <option value="admin">Administrators</option>
+                <option value="moderator">Moderators</option>
+                <option value="member">Members</option>
+                <option value="guest">Guests</option>
+              </select>
+            </div>
           </div>
 
-          {/* Role Filter */}
-          <div>
-            <label 
-              htmlFor="role-filter" 
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Filter by Role
-            </label>
-            <select
-              id="role-filter"
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              aria-label="Filter members by their role"
-            >
-              <option value="all">All Roles</option>
-              <option value="admin">Administrators</option>
-              <option value="moderator">Moderators</option>
-              <option value="member">Members</option>
-              <option value="guest">Guests</option>
-            </select>
-          </div>
+          {/* Clear Filters Button */}
+          {(searchQuery || roleFilter !== 'all') && (
+            <div className="mt-4 flex items-center">
+              <button
+                onClick={handleClearFilters}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                aria-label="Clear all filters and show all members"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear Filters
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Clear Filters Button */}
-        {(searchQuery || roleFilter !== 'all') && (
-          <div className="mt-4 flex items-center">
-            <button
-              onClick={handleClearFilters}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              aria-label="Clear all filters and show all members"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Clear Filters
-            </button>
+        {/* Members List */}
+        {filteredMembers.length === 0 ? (
+          <div className="bg-gray-50 rounded-lg p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Members Found</h3>
+            <p className="text-gray-600">
+              {searchQuery || roleFilter !== 'all' 
+                ? 'No members match your current filters. Try adjusting your search or filters.' 
+                : 'This organization doesn\'t have any members yet.'}
+            </p>
+          </div>
+        ) : (
+          <div 
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+            role="list"
+            aria-label="List of organization members"
+          >
+            {filteredMembers.map(member => (
+              <div key={member.user_id} role="listitem">
+                <MemberCard 
+                  member={member} 
+                  role={member.role}
+                  organizationId={organizationId}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Member Count Footer */}
+        {filteredMembers.length > 0 && (
+          <div className="mt-8 text-center text-sm text-gray-500">
+            Showing {filteredMembers.length} of {members.length} total members
           </div>
         )}
       </div>
-
-      {/* Members List */}
-      {filteredMembers.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg p-12 text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Members Found</h3>
-          <p className="text-gray-600">
-            {searchQuery || roleFilter !== 'all' 
-              ? 'No members match your current filters. Try adjusting your search or filters.' 
-              : 'This organization doesn\'t have any members yet.'}
-          </p>
-        </div>
-      ) : (
-        <div 
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          role="list"
-          aria-label="List of organization members"
-        >
-          {filteredMembers.map(member => (
-            <div key={member.user_id} role="listitem">
-              <MemberCard 
-                member={member} 
-                role={member.role}
-                organizationId={organizationId}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Member Count Footer */}
-      {filteredMembers.length > 0 && (
-        <div className="mt-8 text-center text-sm text-gray-500">
-          Showing {filteredMembers.length} of {members.length} total members
-        </div>
-      )}
     </div>
   );
 }
