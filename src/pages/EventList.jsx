@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import EventCard from '../components/EventCard';
+import PageHeader from '../components/PageHeader';
 
 function EventList() {
   const [events, setEvents] = useState([]);
@@ -154,28 +155,14 @@ function EventList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">All Events</h1>
-              <p className="text-gray-600 mt-1">
-                {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
-              </p>
-            </div>
-            <Link
-              to="/dashboard"
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all"
-            >
-              ← Back to Dashboard
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <PageHeader
+          title="All Events"
+          subtitle={`${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''} found`}
+          icon="📅"
+          backTo="/organizations"
+          backLabel="My Organizations"
+          actions={
             <div className="flex items-center gap-3">
               <Link 
                 to="/events"
@@ -191,21 +178,19 @@ function EventList() {
                 <span>📅</span>
                 Calendar View
               </Link>
+              <Link 
+                to="/discover"
+                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold inline-flex items-center gap-2 shadow-md"
+              >
+                <span>🌍</span>
+                Discover Public Events
+              </Link>
             </div>
+          }
+        />
 
-            <Link 
-              to="/discover"
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold inline-flex items-center gap-2 shadow-md"
-            >
-              <span>🌍</span>
-              Discover Public Events
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        {/* Filters Section */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6 mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             
             <div>
@@ -334,9 +319,8 @@ function EventList() {
             </div>
           )}
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Events Grid */}
         {filteredEvents.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📅</div>
