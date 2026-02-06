@@ -30,6 +30,8 @@ function OrganizationDashboard() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [announcementFilter, setAnnouncementFilter] = useState('all');
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   // Define all available tabs
   const allTabs = [
@@ -41,13 +43,13 @@ function OrganizationDashboard() {
     { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] } // Admin only
   ];
 
-// Determine effective role based on view mode
-const effectiveRole = (membership?.role === 'admin' && viewMode === 'admin')
-  ? 'admin' 
-  : 'member';
+  // Determine effective role based on view mode
+  const effectiveRole = (membership?.role === 'admin' && viewMode === 'admin')
+    ? 'admin' 
+    : 'member';
 
-// Filter tabs based on effective role
-const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
+  // Filter tabs based on effective role
+  const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
 
   useEffect(() => {
     fetchData();
@@ -58,6 +60,12 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
       fetchAnnouncements();
     }
   }, [activeTab, organizationId, currentUserId]);
+
+  useEffect(() => {
+    if (activeTab === 'overview' && organizationId) {
+      fetchRecentActivity();
+    }
+  }, [activeTab, organizationId]);
 
   async function fetchData() {
     try {
@@ -94,6 +102,7 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
 
       setMembership(membershipData);
       await fetchStats(user.id);
+      await fetchRecentActivity();
 
     } catch (err) {
       setError(err.message);
@@ -149,6 +158,90 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
+    }
+  }
+
+  async function fetchRecentActivity() {
+    try {
+      setActivityLoading(true);
+      const activities = [];
+
+      // Fetch recent events
+      const { data: events } = await supabase
+        .from('events')
+        .select('id, title, start_time, created_at, event_type')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (events) {
+        events.forEach(event => {
+          activities.push({
+            id: `event-${event.id}`,
+            type: 'event',
+            title: `New event: ${event.title}`,
+            icon: event.event_type === 'in_person' ? '📍' : event.event_type === 'virtual' ? '💻' : '🔀',
+            timestamp: event.created_at,
+            color: 'green'
+          });
+        });
+      }
+
+      // Fetch recent announcements
+      const { data: announcementsData } = await supabase
+        .from('announcements')
+        .select('id, title, created_at, priority')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (announcementsData) {
+        announcementsData.forEach(announcement => {
+          activities.push({
+            id: `announcement-${announcement.id}`,
+            type: 'announcement',
+            title: announcement.title,
+            icon: announcement.priority === 'urgent' ? '🚨' : '📢',
+            timestamp: announcement.created_at,
+            color: announcement.priority === 'urgent' ? 'red' : 'purple'
+          });
+        });
+      }
+
+      // Fetch recent members
+      const { data: newMembers } = await supabase
+        .from('memberships')
+        .select(`
+          id,
+          created_at,
+          members!inner(first_name, last_name)
+        `)
+        .eq('organization_id', organizationId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (newMembers) {
+        newMembers.forEach(membership => {
+          activities.push({
+            id: `member-${membership.id}`,
+            type: 'member',
+            title: `${membership.members.first_name} ${membership.members.last_name} joined`,
+            icon: '👋',
+            timestamp: membership.created_at,
+            color: 'blue'
+          });
+        });
+      }
+
+      // Sort all activities by timestamp and take top 10
+      activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setRecentActivity(activities.slice(0, 10));
+
+    } catch (err) {
+      console.error('Error fetching recent activity:', err);
+    } finally {
+      setActivityLoading(false);
     }
   }
 
@@ -299,64 +392,64 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
           </div>
         </div>
 
-{/* View Mode Toggle - Only visible to admins */}
-{membership?.role === 'admin' && (
-  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl" aria-hidden="true">👁️</span>
-        <div>
-          <h3 className="font-semibold text-gray-900">View Mode</h3>
-          <p className="text-sm text-gray-600">
-            Switch between admin and member perspective
-          </p>
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${
-          viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'
-        }`}>
-          Admin
-        </span>
-        
-        <button
-          onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
-          className={`relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ${
-            viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600'
-          }`}
-          role="switch"
-          aria-checked={viewMode === 'admin'}
-          aria-label="Toggle between admin and member view"
-        >
-          <span
-            className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-              viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
-            }`}
-          />
-        </button>
-        
-        <span className={`text-sm font-medium ${
-          viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'
-        }`}>
-          Member
-        </span>
-      </div>
-    </div>
-    
-    <div className="mt-3 text-sm">
-      {viewMode === 'admin' ? (
-        <p className="text-purple-700">
-          <span className="font-medium">Admin View:</span> Full access to all management features, settings, and member data
-        </p>
-      ) : (
-        <p className="text-blue-700">
-          <span className="font-medium">Member View:</span> See exactly what regular members see (limited features)
-        </p>
-      )}
-    </div>
-  </div>
-)}
+        {/* View Mode Toggle - Only visible to admins */}
+        {membership?.role === 'admin' && (
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl" aria-hidden="true">👁️</span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">View Mode</h3>
+                  <p className="text-sm text-gray-600">
+                    Switch between admin and member perspective
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-medium ${
+                  viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'
+                }`}>
+                  Admin
+                </span>
+                
+                <button
+                  onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ${
+                    viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600'
+                  }`}
+                  role="switch"
+                  aria-checked={viewMode === 'admin'}
+                  aria-label="Toggle between admin and member view"
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                      viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
+                    }`}
+                  />
+                </button>
+                
+                <span className={`text-sm font-medium ${
+                  viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'
+                }`}>
+                  Member
+                </span>
+              </div>
+            </div>
+            
+            <div className="mt-3 text-sm">
+              {viewMode === 'admin' ? (
+                <p className="text-purple-700">
+                  <span className="font-medium">Admin View:</span> Full access to all management features, settings, and member data
+                </p>
+              ) : (
+                <p className="text-blue-700">
+                  <span className="font-medium">Member View:</span> See exactly what regular members see (limited features)
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="border-b border-gray-200">
@@ -422,49 +515,77 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
                   )}
                 </div>
                 
-                {/* Stats Grid */}
+                {/* Enhanced Stats Grid - Clickable Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
+                  {/* Total Members Card */}
+                  <button
+                    onClick={() => setActiveTab('members')}
+                    className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    aria-label={`View ${stats.totalMembers} total members`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-600 text-sm font-semibold uppercase">Total Members</p>
+                        <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">Total Members</p>
                         <p className="text-3xl font-bold text-blue-900 mt-2">{stats.totalMembers}</p>
+                        <p className="text-xs text-blue-700 mt-1">Click to view directory</p>
                       </div>
-                      <div className="text-4xl">👥</div>
+                      <div className="text-4xl" aria-hidden="true">👥</div>
                     </div>
-                  </div>
+                  </button>
 
+                  {/* Pending Invites Card - Admin Only */}
                   {effectiveRole === 'admin' && (
-                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
+                    <button
+                      onClick={() => setActiveTab('invite')}
+                      className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border-2 border-yellow-200 hover:border-yellow-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                      aria-label={`Manage ${stats.pendingInvites} pending invitations`}
+                    >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-yellow-600 text-sm font-semibold uppercase">Pending Invites</p>
+                          <p className="text-yellow-600 text-sm font-semibold uppercase tracking-wide">Pending Invites</p>
                           <p className="text-3xl font-bold text-yellow-900 mt-2">{stats.pendingInvites}</p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            {stats.pendingInvites === 0 ? 'All caught up!' : 'Click to manage'}
+                          </p>
                         </div>
-                        <div className="text-4xl">✉️</div>
+                        <div className="text-4xl" aria-hidden="true">✉️</div>
                       </div>
-                    </div>
+                    </button>
                   )}
 
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+                  {/* Upcoming Events Card */}
+                  <button
+                    onClick={() => navigate(`/organizations/${organizationId}/events`)}
+                    className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    aria-label={`View ${stats.activeEvents} upcoming events`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-green-600 text-sm font-semibold uppercase">Upcoming Events</p>
+                        <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Upcoming Events</p>
                         <p className="text-3xl font-bold text-green-900 mt-2">{stats.activeEvents}</p>
+                        <p className="text-xs text-green-700 mt-1">Click to view calendar</p>
                       </div>
-                      <div className="text-4xl">📅</div>
+                      <div className="text-4xl" aria-hidden="true">📅</div>
                     </div>
-                  </div>
+                  </button>
 
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border border-orange-200">
+                  {/* Unread Announcements Card */}
+                  <button
+                    onClick={() => setActiveTab('announcements')}
+                    className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border-2 border-orange-200 hover:border-orange-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                    aria-label={`Read ${stats.unreadAnnouncements} unread announcements`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-orange-600 text-sm font-semibold uppercase">Unread News</p>
+                        <p className="text-orange-600 text-sm font-semibold uppercase tracking-wide">Unread News</p>
                         <p className="text-3xl font-bold text-orange-900 mt-2">{stats.unreadAnnouncements}</p>
+                        <p className="text-xs text-orange-700 mt-1">
+                          {stats.unreadAnnouncements === 0 ? 'All caught up!' : 'Click to read'}
+                        </p>
                       </div>
-                      <div className="text-4xl">📢</div>
+                      <div className="text-4xl" aria-hidden="true">📢</div>
                     </div>
-                  </div>
+                  </button>
                 </div>
 
                 {/* Quick Actions - Different for Admin vs Member */}
@@ -566,6 +687,68 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
                     </div>
                   </div>
                 )}
+
+                {/* Recent Activity Feed */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <span className="text-2xl" aria-hidden="true">📊</span>
+                      Recent Activity
+                    </h3>
+                    <button
+                      onClick={() => fetchRecentActivity()}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                      aria-label="Refresh activity feed"
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+
+                  {activityLoading ? (
+                    <div className="flex justify-center items-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : recentActivity.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No recent activity</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentActivity.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div 
+                            className={`text-2xl flex-shrink-0 ${
+                              activity.color === 'green' ? 'text-green-600' :
+                              activity.color === 'blue' ? 'text-blue-600' :
+                              activity.color === 'purple' ? 'text-purple-600' :
+                              activity.color === 'red' ? 'text-red-600' :
+                              'text-gray-600'
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {activity.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(activity.timestamp).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -579,71 +762,71 @@ const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
               </div>
             )}
 
-{activeTab === 'documents' && (
-  <div className="space-y-6">
-    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            📁 Document Library
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Access organization documents, files, and resources
-          </p>
-        </div>
-        {effectiveRole === 'admin' && (
-          <button
-            onClick={() => navigate(`/organizations/${organizationId}/documents`)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            aria-label="Manage documents"
-          >
-            📂 Manage Documents
-          </button>
-        )}
-      </div>
+            {activeTab === 'documents' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        📁 Document Library
+                      </h2>
+                      <p className="text-gray-600 mt-1">
+                        Access organization documents, files, and resources
+                      </p>
+                    </div>
+                    {effectiveRole === 'admin' && (
+                      <button
+                        onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                        aria-label="Manage documents"
+                      >
+                        📂 Manage Documents
+                      </button>
+                    )}
+                  </div>
 
-      <div className="mt-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Recent Documents
-        </h3>
-        
-        <div className="space-y-3">
-          <p className="text-gray-500 text-sm">
-            Loading recent documents...
-          </p>
-        </div>
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                      Recent Documents
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      <p className="text-gray-500 text-sm">
+                        Loading recent documents...
+                      </p>
+                    </div>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => navigate(`/organizations/${organizationId}/documents`)}
-            className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2"
-            aria-label="View all documents"
-          >
-            View All Documents
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      </div>
+                    <div className="mt-6 text-center">
+                      <button
+                        onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+                        className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2"
+                        aria-label="View all documents"
+                      >
+                        View All Documents
+                        <span aria-hidden="true">→</span>
+                      </button>
+                    </div>
+                  </div>
 
-      {effectiveRole === 'admin' && (
-        <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">-</p>
-            <p className="text-sm text-gray-600">Total Files</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">-</p>
-            <p className="text-sm text-gray-600">Folders</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">- MB</p>
-            <p className="text-sm text-gray-600">Storage Used</p>
-          </div>
-        </div>
-      )}
-    </div>
-  </div>
-)}
+                  {effectiveRole === 'admin' && (
+                    <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-gray-900">-</p>
+                        <p className="text-sm text-gray-600">Total Files</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-gray-900">-</p>
+                        <p className="text-sm text-gray-600">Folders</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-gray-900">- MB</p>
+                        <p className="text-sm text-gray-600">Storage Used</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {activeTab === 'announcements' && (
               <div>
