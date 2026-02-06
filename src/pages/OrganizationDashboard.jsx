@@ -23,6 +23,7 @@ function OrganizationDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [viewMode, setViewMode] = useState('admin');
   
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
@@ -34,15 +35,19 @@ function OrganizationDashboard() {
   const allTabs = [
     { id: 'overview', label: 'Overview', icon: '📊', roles: ['admin', 'member'] },
     { id: 'members', label: 'Members', icon: '👥', roles: ['admin', 'member'] },
+    { id: 'documents', label: 'Documents', icon: '📁', roles: ['admin', 'member'] },
     { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements, roles: ['admin', 'member'] },
     { id: 'invite', label: 'Invite', icon: '✉️', roles: ['admin'] }, // Admin only
     { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] } // Admin only
   ];
 
-  // Filter tabs based on user role
-  const tabs = membership 
-    ? allTabs.filter(tab => tab.roles.includes(membership.role))
-    : allTabs.filter(tab => tab.roles.includes('member')); // Default to member view
+// Determine effective role based on view mode
+const effectiveRole = (membership?.role === 'admin' && viewMode === 'admin')
+  ? 'admin' 
+  : 'member';
+
+// Filter tabs based on effective role
+const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
 
   useEffect(() => {
     fetchData();
@@ -294,6 +299,65 @@ function OrganizationDashboard() {
           </div>
         </div>
 
+{/* View Mode Toggle - Only visible to admins */}
+{membership?.role === 'admin' && (
+  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl" aria-hidden="true">👁️</span>
+        <div>
+          <h3 className="font-semibold text-gray-900">View Mode</h3>
+          <p className="text-sm text-gray-600">
+            Switch between admin and member perspective
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-medium ${
+          viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'
+        }`}>
+          Admin
+        </span>
+        
+        <button
+          onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
+          className={`relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ${
+            viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600'
+          }`}
+          role="switch"
+          aria-checked={viewMode === 'admin'}
+          aria-label="Toggle between admin and member view"
+        >
+          <span
+            className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+              viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
+            }`}
+          />
+        </button>
+        
+        <span className={`text-sm font-medium ${
+          viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'
+        }`}>
+          Member
+        </span>
+      </div>
+    </div>
+    
+    <div className="mt-3 text-sm">
+      {viewMode === 'admin' ? (
+        <p className="text-purple-700">
+          <span className="font-medium">Admin View:</span> Full access to all management features, settings, and member data
+        </p>
+      ) : (
+        <p className="text-blue-700">
+          <span className="font-medium">Member View:</span> See exactly what regular members see (limited features)
+        </p>
+      )}
+    </div>
+  </div>
+)}
+
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6" aria-label="Tabs">
@@ -326,10 +390,10 @@ function OrganizationDashboard() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {membership?.role === 'admin' ? '👑 Admin Dashboard' : '👤 Member Dashboard'}
+                    {effectiveRole === 'admin' ? '👑 Admin Dashboard' : '👤 Member Dashboard'}
                   </h2>
                   <span className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-                    {membership?.role === 'admin' ? 'Administrator View' : 'Member View'}
+                    {effectiveRole === 'admin' ? 'Administrator View' : 'Member View'}
                   </span>
                 </div>
                 
@@ -345,7 +409,7 @@ function OrganizationDashboard() {
                     Create Event
                   </button>
                   
-                  {membership?.role === 'admin' && (
+                  {effectiveRole === 'admin' && (
                     <button
                       type="button"
                       onClick={() => setShowCreateAnnouncement(true)}
@@ -370,7 +434,7 @@ function OrganizationDashboard() {
                     </div>
                   </div>
 
-                  {membership?.role === 'admin' && (
+                  {effectiveRole === 'admin' && (
                     <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
                       <div className="flex items-center justify-between">
                         <div>
@@ -464,7 +528,7 @@ function OrganizationDashboard() {
                       </div>
                     </button>
 
-                    {membership?.role === 'admin' && (
+                    {effectiveRole === 'admin' && (
                       <button 
                         onClick={() => setActiveTab('settings')}
                         className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
@@ -477,7 +541,7 @@ function OrganizationDashboard() {
                 </div>
                 
                 {/* Admin-only section */}
-                {membership?.role === 'admin' && (
+                {effectiveRole === 'admin' && (
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
                     <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
                       <span>👑</span>
@@ -515,11 +579,77 @@ function OrganizationDashboard() {
               </div>
             )}
 
+{activeTab === 'documents' && (
+  <div className="space-y-6">
+    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            📁 Document Library
+          </h2>
+          <p className="text-gray-600 mt-1">
+            Access organization documents, files, and resources
+          </p>
+        </div>
+        {effectiveRole === 'admin' && (
+          <button
+            onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            aria-label="Manage documents"
+          >
+            📂 Manage Documents
+          </button>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Recent Documents
+        </h3>
+        
+        <div className="space-y-3">
+          <p className="text-gray-500 text-sm">
+            Loading recent documents...
+          </p>
+        </div>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+            className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2"
+            aria-label="View all documents"
+          >
+            View All Documents
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </div>
+
+      {effectiveRole === 'admin' && (
+        <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">-</p>
+            <p className="text-sm text-gray-600">Total Files</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">-</p>
+            <p className="text-sm text-gray-600">Folders</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">- MB</p>
+            <p className="text-sm text-gray-600">Storage Used</p>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
             {activeTab === 'announcements' && (
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">📢 Announcements</h2>
-                  {membership?.role === 'admin' && (
+                  {effectiveRole === 'admin' && (
                     <button
                       type="button"
                       onClick={() => setShowCreateAnnouncement(true)}
@@ -583,7 +713,7 @@ function OrganizationDashboard() {
                         : 'No announcements yet'
                       }
                     </p>
-                    {!announcementSearch && announcementFilter === 'all' && membership?.role === 'admin' && (
+                    {!announcementSearch && announcementFilter === 'all' && effectiveRole === 'admin' && (
                       <button
                         type="button"
                         onClick={() => setShowCreateAnnouncement(true)}
@@ -601,7 +731,7 @@ function OrganizationDashboard() {
                         announcement={announcement}
                         onRead={handleAnnouncementRead}
                         onDelete={handleAnnouncementDelete}
-                        isAdmin={membership?.role === 'admin'}
+                        isAdmin={effectiveRole === 'admin'}
                         showOrganization={false}
                       />
                     ))}

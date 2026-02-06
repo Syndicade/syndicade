@@ -8,7 +8,7 @@ import AttendanceReport from '../components/AttendanceReport';
 import EventCheckIn from '../components/EventCheckIn';
 
 function EventDetails() {
-  const { eventId } = useParams();
+const { eventId, organizationId } = useParams();
   const navigate = useNavigate();
 
   const [event, setEvent] = useState(null);

@@ -114,7 +114,28 @@ function App() {
           />
 
           <Route 
+            path="/organizations/:organizationId/events" 
+            element={
+              session ? (
+                <EventList />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+
+          <Route 
             path="/events/:eventId" 
+            element={
+              session ? (
+                <EventDetails />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+          <Route 
+            path="/organizations/:organizationId/events/:eventId" 
             element={
               session ? (
                 <EventDetails />

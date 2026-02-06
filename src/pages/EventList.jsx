@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import EventCard from '../components/EventCard';
 import PageHeader from '../components/PageHeader';
 
 function EventList() {
+  const { organizationId } = useParams();
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
   const [organizations, setOrganizations] = useState([]);
@@ -30,25 +31,32 @@ function EventList() {
           return;
         }
 
-        const { data: memberships, error: membershipError } = await supabase
-          .from('memberships')
-          .select('organization_id, organizations(id, name)')
-          .eq('member_id', user.id)
-          .eq('status', 'active');
+  const { data: memberships, error: membershipError } = await supabase
+            .from('memberships')
+            .select('organization_id, organizations(id, name)')
+            .eq('member_id', user.id)
+            .eq('status', 'active');
 
-        if (membershipError) throw membershipError;
+          if (membershipError) throw membershipError;
 
-        const userOrgs = memberships.map(m => m.organizations);
-        setOrganizations(userOrgs);
+          const userOrgs = (memberships || []).map(m => m.organizations);
+          setOrganizations(userOrgs);
 
-        const orgIds = userOrgs.map(org => org.id);
+          // If viewing organization-specific events, filter to that org only
+          let orgIds;
+          if (organizationId) {
+            orgIds = [organizationId];
+            setSelectedOrg(organizationId);
+          } else {
+            orgIds = userOrgs.map(org => org.id);
+          }
 
-        if (orgIds.length === 0) {
-          setEvents([]);
-          setFilteredEvents([]);
-          setLoading(false);
-          return;
-        }
+          if (orgIds.length === 0) {
+            setEvents([]);
+            setFilteredEvents([]);
+            setLoading(false);
+            return;
+          }
 
         // FIXED: Just use * to get all columns including recurring fields
         const { data: eventsData, error: eventsError } = await supabase
@@ -83,7 +91,7 @@ function EventList() {
     }
 
     fetchEventsAndOrganizations();
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
     let filtered = [...events];
