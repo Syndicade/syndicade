@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyOrganizationMembers } from '../lib/notificationService';
 
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
   const [formData, setFormData] = useState({
@@ -497,6 +498,21 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       if (onSuccess) {
         onSuccess(newEvent);
       }
+
+      // Send notifications to all organization members
+      const eventTypeIcon = formData.eventType === 'in_person' ? '📍' : 
+                           formData.eventType === 'virtual' ? '💻' : '🔀';
+      
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      await notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'event',
+        title: `${eventTypeIcon} New Event Created`,
+        message: `${formData.title} - ${new Date(formData.schedule[0].date).toLocaleDateString()}`,
+        link: `/organizations/${organizationId}/events`,
+        excludeUserId: currentUser?.id
+      });
 
       setFormData({
         title: '',

@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import Header from './components/Header';
 
 // Import your pages
 import UnifiedDashboard from './pages/UnifiedDashboard';
@@ -61,10 +62,11 @@ function App() {
     );
   }
 
-  return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
+ return (
+  <Router>
+    <div className="min-h-screen bg-gray-50">
+      {session && <Header />}
+      <Routes>
           {/* Home Route */}
           <Route 
             path="/" 

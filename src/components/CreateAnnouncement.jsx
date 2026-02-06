@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyOrganizationMembers } from '../lib/notificationService';
 
 /**
  * CreateAnnouncement Component
@@ -73,9 +74,29 @@ function CreateAnnouncement({
 
       if (createError) throw createError;
 
-      // Success!
+// Success!
       if (onSuccess) {
         onSuccess(newAnnouncement);
+      }
+
+// Send notification to creator (for testing)
+      try {
+        console.log('Creating test notification');
+        const { data: testNotif, error: notifError } = await supabase
+          .from('notifications')
+          .insert([{
+            user_id: user.id,
+            organization_id: organizationId,
+            type: 'announcement',
+            title: 'Test: New Announcement',
+            message: formData.title,
+            link: `/organizations/${organizationId}`,
+            read: false
+          }])
+          .select();
+        console.log('Test notification result:', testNotif, notifError);
+      } catch (error) {
+        console.error('Failed to create notification:', error);
       }
 
       // Reset form
