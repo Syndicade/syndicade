@@ -48,6 +48,8 @@ export async function createNotification({ userId, organizationId, type, title, 
  */
 export async function notifyOrganizationMembers({ organizationId, type, title, message, link, excludeUserId }) {
   try {
+    console.log('🔍 Querying memberships for org:', organizationId);
+    
     // Get all active members of the organization
     const { data: memberships, error: membershipsError } = await supabase
       .from('memberships')
@@ -55,12 +57,38 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
       .eq('organization_id', organizationId)
       .eq('status', 'active');
 
-    if (membershipsError) throw membershipsError;
+    console.log('📊 Memberships query result:', { 
+      data: memberships, 
+      error: membershipsError,
+      count: memberships?.length || 0 
+    });
+
+    if (membershipsError) {
+      console.error('❌ Memberships error details:', {
+        message: membershipsError.message,
+        details: membershipsError.details,
+        hint: membershipsError.hint,
+        code: membershipsError.code
+      });
+      throw membershipsError;
+    }
+
+    if (!memberships || memberships.length === 0) {
+      console.warn('⚠️ No members found for organization');
+      return { data: [], error: null };
+    }
 
     // Filter out excluded user if provided
     const memberIds = memberships
       .map(m => m.member_id)
       .filter(id => id !== excludeUserId);
+
+    console.log('👥 Member IDs to notify:', memberIds);
+
+    if (memberIds.length === 0) {
+      console.warn('⚠️ No members to notify after filtering');
+      return { data: [], error: null };
+    }
 
     // Create notifications for all members
     const notifications = memberIds.map(memberId => ({
@@ -73,15 +101,20 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
       read: false
     }));
 
+    console.log('📤 Creating notifications:', notifications);
+
     const { data, error } = await supabase
       .from('notifications')
       .insert(notifications)
       .select();
 
     if (error) throw error;
+    
+    console.log('✅ Notifications created successfully:', data);
+    
     return { data, error: null };
   } catch (error) {
-    console.error('Error notifying organization members:', error);
+    console.error('❌ Error notifying organization members:', error);
     return { data: null, error };
   }
 }

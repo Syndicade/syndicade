@@ -14,11 +14,15 @@ function NotificationBell() {
     fetchNotifications();
     
     // Set up real-time subscription
+    let channel;
+    
     const setupSubscription = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const channel = supabase
+      console.log('🔔 Setting up real-time subscription for notifications');
+
+      channel = supabase
         .channel('notifications')
         .on(
           'postgres_changes',
@@ -28,18 +32,25 @@ function NotificationBell() {
             table: 'notifications',
             filter: `user_id=eq.${user.id}`
           },
-          () => {
+          (payload) => {
+            console.log('🔔 Real-time notification event:', payload);
             fetchNotifications();
           }
         )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        .subscribe((status) => {
+          console.log('🔔 Subscription status:', status);
+        });
     };
 
     setupSubscription();
+
+    // Cleanup function
+    return () => {
+      if (channel) {
+        console.log('🔔 Cleaning up notification subscription');
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   // Close dropdown when clicking outside
@@ -56,6 +67,20 @@ function NotificationBell() {
     }
   }, [isOpen]);
 
+  // Listen for custom notification events
+  useEffect(() => {
+    const handleNotificationCreated = () => {
+      console.log('🔔 Custom event received - refreshing notifications');
+      fetchNotifications();
+    };
+
+    window.addEventListener('notificationCreated', handleNotificationCreated);
+
+    return () => {
+      window.removeEventListener('notificationCreated', handleNotificationCreated);
+    };
+  }, []);
+
   async function fetchNotifications() {
     try {
       setLoading(true);
@@ -65,7 +90,7 @@ function NotificationBell() {
         return;
       }
 
-      console.log('Fetching notifications for user:', user.id);
+      console.log('📥 Fetching notifications for user:', user.id);
 
       const { data, error } = await supabase
         .from('notifications')
@@ -79,13 +104,12 @@ function NotificationBell() {
         throw error;
       }
 
-      console.log('Fetched notifications:', data);
-      console.log('Unread count:', data?.filter(n => !n.read).length);
+      console.log('📥 Fetched notifications:', data?.length || 0);
 
       setNotifications(data || []);
       const unread = data?.filter(n => !n.read).length || 0;
       setUnreadCount(unread);
-      console.log('Set unread count to:', unread);
+      console.log('📊 Unread count:', unread);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {

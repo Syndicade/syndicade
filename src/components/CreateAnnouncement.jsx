@@ -74,29 +74,30 @@ function CreateAnnouncement({
 
       if (createError) throw createError;
 
-// Success!
-      if (onSuccess) {
-        onSuccess(newAnnouncement);
-      }
+      console.log('✅ Announcement created:', newAnnouncement);
 
-// Send notification to creator (for testing)
+      // Send notifications to all organization members (don't let errors break the flow)
       try {
-        console.log('Creating test notification');
-        const { data: testNotif, error: notifError } = await supabase
-          .from('notifications')
-          .insert([{
-            user_id: user.id,
-            organization_id: organizationId,
-            type: 'announcement',
-            title: 'Test: New Announcement',
-            message: formData.title,
-            link: `/organizations/${organizationId}`,
-            read: false
-          }])
-          .select();
-        console.log('Test notification result:', testNotif, notifError);
-      } catch (error) {
-        console.error('Failed to create notification:', error);
+        console.log('🔔 Attempting to notify organization members...');
+        const notificationResult = await notifyOrganizationMembers({
+          organizationId: organizationId,
+          type: 'announcement',
+          title: '📢 New Announcement',
+          message: formData.title,
+          link: `/organizations/${organizationId}`,
+          excludeUserId: null // Include all members
+        });
+        
+        if (notificationResult.error) {
+          console.error('⚠️ Notification error:', notificationResult.error);
+        } else {
+          console.log('✅ Notifications sent:', notificationResult.data?.length || 0);
+              // Trigger event for bell to refresh
+              window.dispatchEvent(new CustomEvent('notificationCreated'));
+        }
+      } catch (notifError) {
+        // Log but don't fail the announcement
+        console.error('⚠️ Failed to send notifications (announcement still created):', notifError);
       }
 
       // Reset form
@@ -107,10 +108,17 @@ function CreateAnnouncement({
         is_pinned: false,
         expires_at: ''
       });
+
+      // Success callback
+      if (onSuccess) {
+        onSuccess(newAnnouncement);
+      }
+
+      // Close modal
       onClose();
 
     } catch (err) {
-      console.error('Error creating announcement:', err);
+      console.error('❌ Error creating announcement:', err);
       setError(err.message);
     } finally {
       setLoading(false);
