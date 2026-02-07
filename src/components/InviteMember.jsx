@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyUsers } from '../lib/notificationService';
 
 function InviteMember({ organizationId, organizationName, onInviteSent }) {
   const [email, setEmail] = useState('');

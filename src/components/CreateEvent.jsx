@@ -499,20 +499,31 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         onSuccess(newEvent);
       }
 
-      // Send notifications to all organization members
-      const eventTypeIcon = formData.eventType === 'in_person' ? '📍' : 
-                           formData.eventType === 'virtual' ? '💻' : '🔀';
-      
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      await notifyOrganizationMembers({
-        organizationId: organizationId,
-        type: 'event',
-        title: `${eventTypeIcon} New Event Created`,
-        message: `${formData.title} - ${new Date(formData.schedule[0].date).toLocaleDateString()}`,
-        link: `/organizations/${organizationId}/events`,
-        excludeUserId: currentUser?.id
-      });
+// Send notifications to all organization members
+try {
+  console.log('🔔 Attempting to notify organization members about new event...');
+  const eventTypeIcon = formData.eventType === 'in_person' ? '📍' : 
+                       formData.eventType === 'virtual' ? '💻' : '🔀';
+
+  const notificationResult = await notifyOrganizationMembers({
+    organizationId: organizationId,
+    type: 'event',
+    title: `${eventTypeIcon} New Event`,
+    message: `${formData.title} - ${new Date(formData.schedule[0].date).toLocaleDateString()}`,
+    link: `/organizations/${organizationId}/events`,
+    excludeUserId: null // Include all members
+  });
+  
+  if (notificationResult.error) {
+    console.error('⚠️ Notification error:', notificationResult.error);
+  } else {
+    console.log('✅ Event notifications sent:', notificationResult.data?.length || 0);
+    // Trigger event for bell to refresh
+    window.dispatchEvent(new CustomEvent('notificationCreated'));
+  }
+} catch (notifError) {
+  console.error('⚠️ Failed to send event notifications (event still created):', notifError);
+}
 
       setFormData({
         title: '',

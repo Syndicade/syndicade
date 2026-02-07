@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { uploadDocument, validateFile } from '../lib/documentService';
+import { notifyOrganizationMembers } from '../lib/notificationService';
 
 function FileUploadModal({ isOpen, onClose, organizationId, folderId, onSuccess }) {
   const [file, setFile] = useState(null);
@@ -39,31 +40,54 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, onSuccess 
     }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!file) return;
+async function handleSubmit(e) {
+  e.preventDefault();
+  if (!file) return;
 
-    setUploading(true);
-    setError(null);
+  setUploading(true);
+  setError(null);
 
-    const { data, error: uploadError } = await uploadDocument(file, {
-      organizationId,
-      folderId,
-      title,
-      description
-    });
+  const { data, error: uploadError } = await uploadDocument(file, {
+    organizationId,
+    folderId,
+    title,
+    description
+  });
 
-    if (uploadError) {
-      setError(uploadError);
-      setUploading(false);
-    } else {
-      onSuccess(data);
-      // Reset form
-      setFile(null);
-      setTitle('');
-      setDescription('');
+  if (uploadError) {
+    setError(uploadError);
+    setUploading(false);
+  } else {
+    // Send notifications to all organization members
+    try {
+      console.log('🔔 Attempting to notify organization members about new document...');
+      const notificationResult = await notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'document',
+        title: '📁 New Document',
+        message: title || file.name,
+        link: `/organizations/${organizationId}/documents`,
+        excludeUserId: null // Include all members
+      });
+      
+      if (notificationResult.error) {
+        console.error('⚠️ Notification error:', notificationResult.error);
+      } else {
+        console.log('✅ Document notifications sent:', notificationResult.data?.length || 0);
+        // Trigger event for bell to refresh
+        window.dispatchEvent(new CustomEvent('notificationCreated'));
+      }
+    } catch (notifError) {
+      console.error('⚠️ Failed to send document notifications (document still uploaded):', notifError);
     }
+
+    onSuccess(data);
+    // Reset form
+    setFile(null);
+    setTitle('');
+    setDescription('');
   }
+}
 
   if (!isOpen) return null;
 
