@@ -338,15 +338,28 @@ if (loading) {
           )}
         </div>
 
-        {/* Events Grid */}
+{/* Events Grid */}
         {filteredEvents.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📅</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Events Found</h2>
-            <p className="text-gray-600 mb-6">
+          <div className="text-center py-20">
+            <svg 
+              className="mx-auto h-32 w-32 text-gray-400 mb-6" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={1} 
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+              />
+            </svg>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">No Events Found</h2>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
               {searchTerm || selectedOrg !== 'all' || dateFilter !== 'upcoming'
                 ? "Try adjusting your filters to see more events."
-                : "No events available yet. Check back soon!"}
+                : "No events available yet. Check back soon or create your first event!"}
             </p>
             {(searchTerm || selectedOrg !== 'all' || dateFilter !== 'upcoming') && (
               <button
@@ -355,8 +368,11 @@ if (loading) {
                   setSelectedOrg('all');
                   setDateFilter('upcoming');
                 }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all shadow-md"
               >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
                 Clear All Filters
               </button>
             )}

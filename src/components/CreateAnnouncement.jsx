@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
+import toast from 'react-hot-toast';
 
 /**
  * CreateAnnouncement Component
@@ -114,11 +115,14 @@ function CreateAnnouncement({
         onSuccess(newAnnouncement);
       }
 
+      toast.success('📢 Announcement posted successfully!');
+
       // Close modal
       onClose();
 
     } catch (err) {
       console.error('❌ Error creating announcement:', err);
+      toast.error('Failed to create announcement: ' + err.message);
       setError(err.message);
     } finally {
       setLoading(false);

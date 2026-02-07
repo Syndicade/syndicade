@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import Header from './components/Header';
+import { Toaster } from 'react-hot-toast';
 
 // Import your pages
 import UnifiedDashboard from './pages/UnifiedDashboard';
@@ -62,9 +63,34 @@ function App() {
     );
   }
 
- return (
-  <Router>
-    <div className="min-h-screen bg-gray-50">
+      return (
+  <>
+    <Toaster 
+      position="top-right"
+      toastOptions={{
+        duration: 4000,
+        style: {
+          background: '#363636',
+          color: '#fff',
+        },
+        success: {
+          duration: 3000,
+          iconTheme: {
+            primary: '#10b981',
+            secondary: '#fff',
+          },
+        },
+        error: {
+          duration: 4000,
+          iconTheme: {
+            primary: '#ef4444',
+            secondary: '#fff',
+          },
+        },
+      }}
+    />
+    <Router>
+      <div className="min-h-screen bg-gray-50">
       {session && <Header />}
       <Routes>
           {/* Home Route */}
@@ -262,6 +288,7 @@ function App() {
         </Routes>
       </div>
     </Router>
+    </>
   );
 }
 

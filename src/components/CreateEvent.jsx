@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
+import toast from 'react-hot-toast';
 
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
   const [formData, setFormData] = useState({
@@ -493,7 +494,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       const recurringMsg = isRecurring 
         ? ' 🔄 Recurring instances have been generated for the next 6 months!' 
         : '';
-      alert(`✅ Event "${newEvent.title}" created successfully!${recurringMsg}`);
+      toast.success(`✅ Event "${newEvent.title}" created successfully!${recurringMsg}`);
 
       if (onSuccess) {
         onSuccess(newEvent);
@@ -550,6 +551,7 @@ try {
 
     } catch (err) {
       console.error('Error creating event:', err);
+      toast.error('Failed to create event: ' + err.message);
       setError(err.message);
     } finally {
       setLoading(false);

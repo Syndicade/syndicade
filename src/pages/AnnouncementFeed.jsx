@@ -342,24 +342,48 @@ function AnnouncementFeed() {
         </div>
       </div>
 
-      {/* Announcements List */}
-      {filteredAnnouncements.length === 0 ? (
-        // Empty state
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-          <p className="text-gray-600 text-lg mb-2">
-            {searchTerm || priorityFilter !== 'all'
-              ? '🔍 No announcements match your filters'
-              : '📭 No announcements yet'}
-          </p>
-          <p className="text-gray-500">
-            {searchTerm || priorityFilter !== 'all'
-              ? 'Try adjusting your search or filters'
-              : isAdmin
-              ? 'Create your first announcement to get started!'
-              : 'Check back later for updates'}
-          </p>
-        </div>
-      ) : (
+{/* Announcements List */}
+        {filteredAnnouncements.length === 0 ? (
+          <div className="text-center py-20">
+            <svg 
+              className="mx-auto h-32 w-32 text-gray-400 mb-6" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={1} 
+                d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" 
+              />
+            </svg>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              {searchTerm || priorityFilter !== 'all'
+                ? '🔍 No announcements match your filters'
+                : '📢 No announcements yet'}
+            </h2>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              {searchTerm || priorityFilter !== 'all'
+                ? 'Try adjusting your search or filters'
+                : isAdmin
+                ? 'Create your first announcement to get started!'
+                : 'Check back later for updates'}
+            </p>
+            {isAdmin && !searchTerm && priorityFilter === 'all' && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all shadow-md font-medium"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create First Announcement
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="space-y-4">
           {filteredAnnouncements.map(announcement => (
             <AnnouncementCard
