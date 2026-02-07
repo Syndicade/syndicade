@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import PageHeader from '../components/PageHeader';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 
 /**
  * AnnouncementFeed Page
@@ -229,18 +231,30 @@ function AnnouncementFeed() {
     }
   };
 
-  // Loading state
+// Loading state
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex justify-center items-center p-12">
-          <div
-            className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"
-            role="status"
-            aria-label="Loading announcements"
-          >
-            <span className="sr-only">Loading...</span>
-          </div>
+        <Skeleton height={40} width={250} className="mb-4" />
+        <Skeleton height={20} width={180} className="mb-8" />
+        
+        <div className="space-y-6">
+          {[1, 2, 3].map(n => (
+            <div key={n} className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <Skeleton height={28} width="70%" className="mb-2" />
+                  <Skeleton height={16} width="40%" />
+                </div>
+                <Skeleton circle width={40} height={40} />
+              </div>
+              <Skeleton count={3} className="mb-4" />
+              <div className="flex gap-3">
+                <Skeleton height={36} width={100} />
+                <Skeleton height={36} width={80} />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

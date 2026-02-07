@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import EventCard from '../components/EventCard';
 import PageHeader from '../components/PageHeader';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 
 function EventList() {
   const { organizationId } = useParams();
@@ -124,18 +126,26 @@ function EventList() {
     setFilteredEvents(filtered);
   }, [searchTerm, selectedOrg, dateFilter, sortOrder, events]);
 
-  if (loading) {
+if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div 
-            className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"
-            role="status"
-            aria-label="Loading events"
-          >
-            <span className="sr-only">Loading events...</span>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Skeleton height={40} width={200} className="mb-4" />
+          <Skeleton height={20} width={150} className="mb-8" />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <div key={n} className="bg-white rounded-lg shadow-md p-6">
+                <Skeleton height={24} className="mb-3" />
+                <Skeleton height={16} width="60%" className="mb-4" />
+                <Skeleton height={100} className="mb-4" />
+                <div className="flex gap-2">
+                  <Skeleton height={32} width={80} />
+                  <Skeleton height={32} width={80} />
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="mt-4 text-gray-600 font-semibold">Loading events...</p>
         </div>
       </div>
     );
