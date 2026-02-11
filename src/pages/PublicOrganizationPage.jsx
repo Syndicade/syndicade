@@ -10,6 +10,12 @@ export default function PublicOrganizationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Join Us form state
+  const [joinForm, setJoinForm] = useState({ name: '', email: '', message: '' });
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState(null);
+  const [joinSuccess, setJoinSuccess] = useState(false);
+
   useEffect(() => {
     fetchOrganization();
   }, [slug]);
@@ -27,7 +33,6 @@ export default function PublicOrganizationPage() {
       if (orgError) throw orgError;
       setOrganization(org);
 
-      // Fetch upcoming public events
       const { data: eventsData } = await supabase
         .from('events')
         .select('*')
@@ -39,7 +44,6 @@ export default function PublicOrganizationPage() {
 
       setEvents(eventsData || []);
 
-      // Fetch public announcements
       const { data: announcementsData } = await supabase
         .from('announcements')
         .select('*')
@@ -57,10 +61,44 @@ export default function PublicOrganizationPage() {
     }
   }
 
+  const handleJoinChange = (e) => {
+    const { name, value } = e.target;
+    setJoinForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleJoinSubmit = async (e) => {
+    e.preventDefault();
+    setJoinError(null);
+    setJoinLoading(true);
+
+    try {
+      const { error: insertError } = await supabase
+        .from('contact_inquiries')
+        .insert([{
+          organization_id: organization.id,
+          name: joinForm.name.trim(),
+          email: joinForm.email.trim(),
+          message: joinForm.message.trim(),
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) throw insertError;
+
+      setJoinSuccess(true);
+      setJoinForm({ name: '', email: '', message: '' });
+
+    } catch (err) {
+      console.error('Error submitting form:', err);
+      setJoinError('Something went wrong. Please try again or contact us directly.');
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div 
+        <div
           className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"
           role="status"
           aria-label="Loading organization"
@@ -78,7 +116,7 @@ export default function PublicOrganizationPage() {
           <p className="text-6xl mb-4">😕</p>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Organization Not Found</h1>
           <p className="text-gray-600 mb-6">This organization doesn't exist or has been removed.</p>
-          <Link 
+          <Link
             to="/"
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -93,7 +131,7 @@ export default function PublicOrganizationPage() {
     <div className="min-h-screen bg-white">
 
       {/* Hero Header */}
-      <header 
+      <header
         className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-16 px-6"
         role="banner"
       >
@@ -111,7 +149,6 @@ export default function PublicOrganizationPage() {
           )}
           <p className="text-blue-100 capitalize">{organization.type}</p>
 
-          {/* Member Login Button */}
           <div className="mt-8">
             <Link
               to="/login"
@@ -130,10 +167,7 @@ export default function PublicOrganizationPage() {
         {/* About Section */}
         {organization.description && (
           <section className="mb-12" aria-labelledby="about-heading">
-            <h2 
-              id="about-heading"
-              className="text-2xl font-bold text-gray-900 mb-4"
-            >
+            <h2 id="about-heading" className="text-2xl font-bold text-gray-900 mb-4">
               About Us
             </h2>
             <p className="text-lg text-gray-700 leading-relaxed">
@@ -145,29 +179,20 @@ export default function PublicOrganizationPage() {
         {/* Upcoming Events */}
         {events.length > 0 && (
           <section className="mb-12" aria-labelledby="events-heading">
-            <h2 
-              id="events-heading"
-              className="text-2xl font-bold text-gray-900 mb-6"
-            >
+            <h2 id="events-heading" className="text-2xl font-bold text-gray-900 mb-6">
               📅 Upcoming Events
             </h2>
             <div className="space-y-4">
               {events.map(event => (
-                <div 
+                <div
                   key={event.id}
                   className="bg-gray-50 rounded-lg p-6 border border-gray-200"
                 >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">
-                    {event.title}
-                  </h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">{event.title}</h3>
                   <p className="text-blue-600 font-medium mb-2">
                     📅 {new Date(event.start_time).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
+                      weekday: 'long', year: 'numeric', month: 'long',
+                      day: 'numeric', hour: '2-digit', minute: '2-digit'
                     })}
                   </p>
                   {event.location && (
@@ -185,21 +210,16 @@ export default function PublicOrganizationPage() {
         {/* Announcements */}
         {announcements.length > 0 && (
           <section className="mb-12" aria-labelledby="announcements-heading">
-            <h2 
-              id="announcements-heading"
-              className="text-2xl font-bold text-gray-900 mb-6"
-            >
+            <h2 id="announcements-heading" className="text-2xl font-bold text-gray-900 mb-6">
               📢 Latest News
             </h2>
             <div className="space-y-4">
               {announcements.map(announcement => (
-                <div 
+                <div
                   key={announcement.id}
                   className="bg-gray-50 rounded-lg p-6 border border-gray-200"
                 >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">
-                    {announcement.title}
-                  </h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">{announcement.title}</h3>
                   <p className="text-gray-500 text-sm mb-3">
                     {new Date(announcement.created_at).toLocaleDateString()}
                   </p>
@@ -210,20 +230,17 @@ export default function PublicOrganizationPage() {
           </section>
         )}
 
-        {/* Contact Section */}
+        {/* Contact Info */}
         {(organization.contact_email || organization.contact_phone || organization.address) && (
           <section className="mb-12" aria-labelledby="contact-heading">
-            <h2 
-              id="contact-heading"
-              className="text-2xl font-bold text-gray-900 mb-6"
-            >
+            <h2 id="contact-heading" className="text-2xl font-bold text-gray-900 mb-6">
               📬 Contact Us
             </h2>
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 space-y-3">
               {organization.contact_email && (
                 <p className="text-gray-700">
                   ✉️{' '}
-                  <a 
+                  <a
                     href={`mailto:${organization.contact_email}`}
                     className="text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                   >
@@ -234,7 +251,7 @@ export default function PublicOrganizationPage() {
               {organization.contact_phone && (
                 <p className="text-gray-700">
                   📞{' '}
-                  <a 
+                  <a
                     href={`tel:${organization.contact_phone}`}
                     className="text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                   >
@@ -254,10 +271,149 @@ export default function PublicOrganizationPage() {
           </section>
         )}
 
+        {/* ── Join Us Form ── */}
+        <section
+          className="mb-12 bg-blue-50 border border-blue-200 rounded-xl p-8"
+          aria-labelledby="join-heading"
+        >
+          <h2 id="join-heading" className="text-2xl font-bold text-gray-900 mb-2">
+            🙋 Join Us
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Interested in getting involved? Send us a message and we'll be in touch.
+          </p>
+
+          {joinSuccess ? (
+            <div
+              className="bg-green-50 border border-green-200 rounded-lg p-6 text-center"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-4xl mb-3">🎉</p>
+              <p className="text-green-800 font-bold text-lg">Message sent!</p>
+              <p className="text-green-700 mt-1">
+                Thanks for reaching out. {organization.name} will get back to you soon.
+              </p>
+              <button
+                onClick={() => setJoinSuccess(false)}
+                className="mt-4 px-4 py-2 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+              >
+                Send another message
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleJoinSubmit}
+              noValidate
+              aria-label={`Contact form for ${organization.name}`}
+            >
+              {joinError && (
+                <div
+                  className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <p className="text-red-700">{joinError}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label
+                    htmlFor="join-name"
+                    className="block text-sm font-semibold text-gray-900 mb-2"
+                  >
+                    Your Name *
+                  </label>
+                  <input
+                    id="join-name"
+                    name="name"
+                    type="text"
+                    required
+                    value={joinForm.name}
+                    onChange={handleJoinChange}
+                    placeholder="Jane Smith"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-required="true"
+                    maxLength={100}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="join-email"
+                    className="block text-sm font-semibold text-gray-900 mb-2"
+                  >
+                    Email Address *
+                  </label>
+                  <input
+                    id="join-email"
+                    name="email"
+                    type="email"
+                    required
+                    value={joinForm.email}
+                    onChange={handleJoinChange}
+                    placeholder="jane@example.com"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-required="true"
+                    maxLength={200}
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label
+                  htmlFor="join-message"
+                  className="block text-sm font-semibold text-gray-900 mb-2"
+                >
+                  Message *
+                </label>
+                <textarea
+                  id="join-message"
+                  name="message"
+                  required
+                  value={joinForm.message}
+                  onChange={handleJoinChange}
+                  placeholder="Tell us a bit about yourself and why you'd like to get involved..."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  aria-required="true"
+                  maxLength={1000}
+                />
+                <p className="text-sm text-gray-500 mt-1" aria-live="polite">
+                  {joinForm.message.length}/1000 characters
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={joinLoading || !joinForm.name.trim() || !joinForm.email.trim() || !joinForm.message.trim()}
+                className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                aria-label={joinLoading ? 'Sending your message, please wait' : 'Send message'}
+              >
+                {joinLoading ? (
+                  <>
+                    <div
+                      className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
+                      aria-hidden="true"
+                    ></div>
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true">✉️</span>
+                    Send Message
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+        </section>
+
       </main>
 
       {/* Footer */}
-      <footer 
+      <footer
         className="bg-gray-900 text-white py-8 px-6 text-center"
         role="contentinfo"
       >
