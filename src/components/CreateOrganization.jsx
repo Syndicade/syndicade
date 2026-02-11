@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
+// Generates a URL-safe slug from the org name
+// e.g. "Toledo Tech Community!" -> "toledo-tech-community"
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
+    .replace(/\s+/g, '-')            // spaces to hyphens
+    .replace(/-+/g, '-')             // collapse multiple hyphens
+    .substring(0, 50);               // max 50 chars
+};
+
 function CreateOrganization({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -29,21 +41,32 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
 
       const { data, error: userError } = await supabase.auth.getUser();
       const user = data?.user;
-      
+
       if (userError) throw userError;
       if (!user) throw new Error('You must be logged in to create an organization');
 
-      console.log('User ID:', user.id);
+      // Generate base slug from name
+      let slug = generateSlug(formData.name);
+
+      // Check if slug already exists; append random suffix if so
+      const { data: existing } = await supabase
+        .from('organizations')
+        .select('slug')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (existing) {
+        slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
+      }
 
       const orgData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         type: formData.type,
         created_by: user.id,
+        slug,
         settings: {}
       };
-
-      console.log('About to insert:', orgData);
 
       const { data: newOrg, error: orgError } = await supabase
         .from('organizations')
@@ -68,7 +91,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
       if (onSuccess) {
         onSuccess(newOrg);
       }
-      
+
       setFormData({ name: '', description: '', type: 'community' });
       onClose();
 
@@ -94,7 +117,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
       onClick={onClose}
       onKeyDown={handleKeyDown}
@@ -102,12 +125,12 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
       aria-modal="true"
       aria-labelledby="create-org-title"
     >
-      <div 
+      <div
         className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-gray-200 px-6 py-4">
-          <h2 
+          <h2
             id="create-org-title"
             className="text-2xl font-bold text-gray-900"
           >
@@ -120,7 +143,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
           {error && (
-            <div 
+            <div
               className="bg-red-50 border border-red-200 rounded-lg p-4"
               role="alert"
             >
@@ -130,7 +153,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
           )}
 
           <div>
-            <label 
+            <label
               htmlFor="org-name"
               className="block text-sm font-semibold text-gray-900 mb-2"
             >
@@ -145,15 +168,22 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
               onChange={handleChange}
               placeholder="e.g., Toledo Tech Community"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              aria-required="true"
+              aria-describedby="name-hint"
               maxLength={100}
             />
-            <p className="text-sm text-gray-500 mt-1">
+            <p id="name-hint" className="text-sm text-gray-500 mt-1">
               {formData.name.length}/100 characters
+              {formData.name.trim().length >= 3 && (
+                <span className="ml-2 text-gray-400">
+                  · Public URL: /org/{generateSlug(formData.name)}
+                </span>
+              )}
             </p>
           </div>
 
           <div>
-            <label 
+            <label
               htmlFor="org-type"
               className="block text-sm font-semibold text-gray-900 mb-2"
             >
@@ -166,6 +196,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
               value={formData.type}
               onChange={handleChange}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              aria-required="true"
             >
               {orgTypes.map(type => (
                 <option key={type.value} value={type.value}>
@@ -176,7 +207,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div>
-            <label 
+            <label
               htmlFor="org-description"
               className="block text-sm font-semibold text-gray-900 mb-2"
             >
@@ -190,9 +221,10 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
               placeholder="Describe your organization's purpose and activities..."
               rows={4}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              aria-describedby="description-hint"
               maxLength={500}
             />
-            <p className="text-sm text-gray-500 mt-1">
+            <p id="description-hint" className="text-sm text-gray-500 mt-1">
               {formData.description.length}/500 characters
             </p>
           </div>
@@ -202,23 +234,28 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
+              className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || formData.name.trim().length < 3}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2"
+              aria-label={loading ? 'Creating organization, please wait' : 'Create organization'}
             >
               {loading ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Creating...
+                  <div
+                    className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
+                    role="status"
+                    aria-hidden="true"
+                  ></div>
+                  <span>Creating...</span>
                 </>
               ) : (
                 <>
-                  <span>✨</span>
+                  <span aria-hidden="true">✨</span>
                   Create Organization
                 </>
               )}
