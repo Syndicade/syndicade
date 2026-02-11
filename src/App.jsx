@@ -22,6 +22,7 @@ import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
 import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
+import PublicOrganizationPage from './pages/PublicOrganizationPage';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -91,8 +92,7 @@ function App() {
     />
     <Router>
       <div className="min-h-screen bg-gray-50">
-      {session && <Header />}
-      <Routes>
+      {session && !window.location.pathname.startsWith('/org/') && <Header />}      <Routes>
           {/* Home Route */}
           <Route 
             path="/" 
@@ -266,6 +266,12 @@ function App() {
           path="/organizations/:organizationId/surveys" 
           element={session ? <SurveysList /> : <Navigate to="/login" replace />} 
         />
+
+{/* Public Organization Page - No login required */}
+<Route 
+  path="/org/:slug" 
+  element={<PublicOrganizationPage />} 
+/>
 
           {/* 404 - Catch All Route */}
           <Route 
