@@ -24,7 +24,7 @@ function OrganizationDashboard() {
   const [error, setError] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [viewMode, setViewMode] = useState('admin');
-  
+
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
@@ -33,22 +33,26 @@ function OrganizationDashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
+  // Inbox state
+  const [inquiries, setInquiries] = useState([]);
+  const [inquiriesLoading, setInquiriesLoading] = useState(false);
+  const [unreadInquiriesCount, setUnreadInquiriesCount] = useState(0);
+
   // Define all available tabs
   const allTabs = [
     { id: 'overview', label: 'Overview', icon: '📊', roles: ['admin', 'member'] },
     { id: 'members', label: 'Members', icon: '👥', roles: ['admin', 'member'] },
     { id: 'documents', label: 'Documents', icon: '📁', roles: ['admin', 'member'] },
     { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements, roles: ['admin', 'member'] },
-    { id: 'invite', label: 'Invite', icon: '✉️', roles: ['admin'] }, // Admin only
-    { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] } // Admin only
+    { id: 'inbox', label: 'Inbox', icon: '📬', badge: unreadInquiriesCount, roles: ['admin'] },
+    { id: 'invite', label: 'Invite', icon: '✉️', roles: ['admin'] },
+    { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] }
   ];
 
-  // Determine effective role based on view mode
   const effectiveRole = (membership?.role === 'admin' && viewMode === 'admin')
-    ? 'admin' 
+    ? 'admin'
     : 'member';
 
-  // Filter tabs based on effective role
   const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
 
   useEffect(() => {
@@ -64,6 +68,12 @@ function OrganizationDashboard() {
   useEffect(() => {
     if (activeTab === 'overview' && organizationId) {
       fetchRecentActivity();
+    }
+  }, [activeTab, organizationId]);
+
+  useEffect(() => {
+    if (activeTab === 'inbox' && organizationId) {
+      fetchInquiries();
     }
   }, [activeTab, organizationId]);
 
@@ -104,10 +114,78 @@ function OrganizationDashboard() {
       await fetchStats(user.id);
       await fetchRecentActivity();
 
+      // Fetch unread inquiry count for badge
+      if (membershipData.role === 'admin') {
+        const { count } = await supabase
+          .from('contact_inquiries')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organizationId)
+          .eq('is_read', false);
+        setUnreadInquiriesCount(count || 0);
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchInquiries() {
+    try {
+      setInquiriesLoading(true);
+      const { data, error } = await supabase
+        .from('contact_inquiries')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInquiries(data || []);
+      setUnreadInquiriesCount((data || []).filter(i => !i.is_read).length);
+    } catch (err) {
+      console.error('Error fetching inquiries:', err);
+    } finally {
+      setInquiriesLoading(false);
+    }
+  }
+
+  async function handleMarkInquiryRead(inquiryId) {
+    try {
+      const { error } = await supabase
+        .from('contact_inquiries')
+        .update({ is_read: true })
+        .eq('id', inquiryId);
+
+      if (error) throw error;
+
+      setInquiries(prev =>
+        prev.map(i => i.id === inquiryId ? { ...i, is_read: true } : i)
+      );
+      setUnreadInquiriesCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Error marking inquiry as read:', err);
+    }
+  }
+
+  async function handleDeleteInquiry(inquiryId) {
+    if (!window.confirm('Delete this message? This cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('contact_inquiries')
+        .delete()
+        .eq('id', inquiryId);
+
+      if (error) throw error;
+
+      const deleted = inquiries.find(i => i.id === inquiryId);
+      setInquiries(prev => prev.filter(i => i.id !== inquiryId));
+      if (deleted && !deleted.is_read) {
+        setUnreadInquiriesCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (err) {
+      console.error('Error deleting inquiry:', err);
     }
   }
 
@@ -137,7 +215,7 @@ function OrganizationDashboard() {
         .eq('organization_id', organizationId);
 
       const announcementIds = (allAnnouncements || []).map(a => a.id);
-      
+
       let unreadCount = 0;
       if (announcementIds.length > 0 && userId) {
         const { data: reads } = await supabase
@@ -166,7 +244,6 @@ function OrganizationDashboard() {
       setActivityLoading(true);
       const activities = [];
 
-      // Fetch recent events
       const { data: events } = await supabase
         .from('events')
         .select('id, title, start_time, created_at, event_type')
@@ -187,7 +264,6 @@ function OrganizationDashboard() {
         });
       }
 
-      // Fetch recent announcements
       const { data: announcementsData } = await supabase
         .from('announcements')
         .select('id, title, created_at, priority')
@@ -208,14 +284,9 @@ function OrganizationDashboard() {
         });
       }
 
-      // Fetch recent members
       const { data: newMembers } = await supabase
         .from('memberships')
-        .select(`
-          id,
-          created_at,
-          members!inner(first_name, last_name)
-        `)
+        .select(`id, created_at, members!inner(first_name, last_name)`)
         .eq('organization_id', organizationId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -234,7 +305,6 @@ function OrganizationDashboard() {
         });
       }
 
-      // Sort all activities by timestamp and take top 10
       activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setRecentActivity(activities.slice(0, 10));
 
@@ -251,10 +321,7 @@ function OrganizationDashboard() {
 
       const { data, error } = await supabase
         .from('announcements')
-        .select(`
-          *,
-          announcement_reads!left(id, member_id)
-        `)
+        .select(`*, announcement_reads!left(id, member_id)`)
         .eq('organization_id', organizationId)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
@@ -286,10 +353,9 @@ function OrganizationDashboard() {
   }
 
   async function handleAnnouncementRead(announcementId) {
-    setAnnouncements(prev => 
+    setAnnouncements(prev =>
       prev.map(a => a.id === announcementId ? { ...a, is_read: true } : a)
     );
-    
     setStats(prev => ({
       ...prev,
       unreadAnnouncements: Math.max(0, prev.unreadAnnouncements - 1)
@@ -303,7 +369,6 @@ function OrganizationDashboard() {
 
   async function handleMarkAllAsRead() {
     if (!currentUserId) return;
-
     const unreadAnnouncements = announcements.filter(a => !a.is_read);
     if (unreadAnnouncements.length === 0) return;
 
@@ -321,30 +386,27 @@ function OrganizationDashboard() {
 
       setAnnouncements(prev => prev.map(a => ({ ...a, is_read: true })));
       setStats(prev => ({ ...prev, unreadAnnouncements: 0 }));
-
     } catch (err) {
       console.error('Error marking all as read:', err);
     }
   }
 
   const filteredAnnouncements = announcements.filter(announcement => {
-    const matchesSearch = announcementSearch === '' || 
+    const matchesSearch = announcementSearch === '' ||
       announcement.title.toLowerCase().includes(announcementSearch.toLowerCase()) ||
       announcement.content.toLowerCase().includes(announcementSearch.toLowerCase());
-
-    const matchesPriority = announcementFilter === 'all' || 
+    const matchesPriority = announcementFilter === 'all' ||
       announcement.priority === announcementFilter;
-
-    const isExpired = announcement.expires_at && 
+    const isExpired = announcement.expires_at &&
       new Date(announcement.expires_at) < new Date();
-
     return matchesSearch && matchesPriority && !isExpired;
   });
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      <div className="flex justify-center items-center min-h-screen" role="status" aria-label="Loading dashboard">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600" aria-hidden="true"></div>
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -352,12 +414,12 @@ function OrganizationDashboard() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto mt-12 px-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
           <p className="text-red-800 font-semibold text-lg">Access Denied</p>
           <p className="text-red-700 mt-2">{error}</p>
           <button
             onClick={() => navigate('/organizations')}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             ← Back to Organizations
           </button>
@@ -385,14 +447,14 @@ function OrganizationDashboard() {
             </div>
             <button
               onClick={() => navigate('/organizations')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
             >
               ← All Organizations
             </button>
           </div>
         </div>
 
-        {/* View Mode Toggle - Only visible to admins */}
+        {/* View Mode Toggle */}
         {membership?.role === 'admin' && (
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between">
@@ -400,19 +462,13 @@ function OrganizationDashboard() {
                 <span className="text-2xl" aria-hidden="true">👁️</span>
                 <div>
                   <h3 className="font-semibold text-gray-900">View Mode</h3>
-                  <p className="text-sm text-gray-600">
-                    Switch between admin and member perspective
-                  </p>
+                  <p className="text-sm text-gray-600">Switch between admin and member perspective</p>
                 </div>
               </div>
-              
               <div className="flex items-center gap-2">
-                <span className={`text-sm font-medium ${
-                  viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'
-                }`}>
+                <span className={`text-sm font-medium ${viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'}`}>
                   Admin
                 </span>
-                
                 <button
                   onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
                   className={`relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ${
@@ -422,21 +478,15 @@ function OrganizationDashboard() {
                   aria-checked={viewMode === 'admin'}
                   aria-label="Toggle between admin and member view"
                 >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                      viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
-                    }`}
-                  />
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
+                  }`} />
                 </button>
-                
-                <span className={`text-sm font-medium ${
-                  viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'
-                }`}>
+                <span className={`text-sm font-medium ${viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'}`}>
                   Member
                 </span>
               </div>
             </div>
-            
             <div className="mt-3 text-sm">
               {viewMode === 'admin' ? (
                 <p className="text-purple-700">
@@ -453,23 +503,27 @@ function OrganizationDashboard() {
 
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+            <nav className="flex space-x-8 px-6 overflow-x-auto" aria-label="Organization tabs">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    py-4 px-1 border-b-2 font-medium text-sm transition-all relative
+                    py-4 px-1 border-b-2 font-medium text-sm transition-all relative whitespace-nowrap
                     ${activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }
                   `}
+                  aria-current={activeTab === tab.id ? 'page' : undefined}
                 >
-                  <span className="mr-2">{tab.icon}</span>
-                  {tab.label}
+                  <span aria-hidden="true">{tab.icon}</span>
+                  <span className="ml-1">{tab.label}</span>
                   {tab.badge > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full">
+                    <span
+                      className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full"
+                      aria-label={`${tab.badge} unread`}
+                    >
                       {tab.badge}
                     </span>
                   )}
@@ -479,6 +533,101 @@ function OrganizationDashboard() {
           </div>
 
           <div className="p-6">
+
+            {/* ── INBOX TAB ── */}
+            {activeTab === 'inbox' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">📬 Inbox</h2>
+                    <p className="text-gray-600 mt-1">
+                      Messages submitted via the public Join Us form
+                    </p>
+                  </div>
+                  {inquiries.length > 0 && (
+                    <span className="text-sm text-gray-500">
+                      {inquiries.filter(i => !i.is_read).length} unread · {inquiries.length} total
+                    </span>
+                  )}
+                </div>
+
+                {inquiriesLoading ? (
+                  <div className="flex justify-center items-center py-12" role="status" aria-label="Loading messages">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" aria-hidden="true"></div>
+                    <span className="sr-only">Loading messages...</span>
+                  </div>
+                ) : inquiries.length === 0 ? (
+                  <div className="bg-gray-50 rounded-lg p-12 text-center border border-gray-200">
+                    <p className="text-5xl mb-4" aria-hidden="true">📭</p>
+                    <p className="text-gray-600 font-semibold text-lg">No messages yet</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Messages submitted via your public page will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4" role="list" aria-label="Contact inquiries">
+                    {inquiries.map(inquiry => (
+                      <div
+                        key={inquiry.id}
+                        role="listitem"
+                        className={`rounded-lg border p-5 transition-all ${
+                          inquiry.is_read
+                            ? 'bg-white border-gray-200'
+                            : 'bg-blue-50 border-blue-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="font-bold text-gray-900">{inquiry.name}</span>
+                              {!inquiry.is_read && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                  New
+                                </span>
+                              )}
+                              <span className="text-sm text-gray-500">
+                                {new Date(inquiry.created_at).toLocaleDateString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric',
+                                  hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <a
+                              href={`mailto:${inquiry.email}`}
+                              className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                              aria-label={`Email ${inquiry.name} at ${inquiry.email}`}
+                            >
+                              {inquiry.email}
+                            </a>
+                            <p className="text-gray-700 mt-3 leading-relaxed">{inquiry.message}</p>
+                          </div>
+
+                          <div className="flex flex-col gap-2 flex-shrink-0">
+                            {!inquiry.is_read && (
+                              <button
+                                onClick={() => handleMarkInquiryRead(inquiry.id)}
+                                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all whitespace-nowrap"
+                                aria-label={`Mark message from ${inquiry.name} as read`}
+                              >
+                                ✓ Mark Read
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteInquiry(inquiry.id)}
+                              className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all whitespace-nowrap"
+                              aria-label={`Delete message from ${inquiry.name}`}
+                            >
+                              🗑 Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -489,8 +638,7 @@ function OrganizationDashboard() {
                     {effectiveRole === 'admin' ? 'Administrator View' : 'Member View'}
                   </span>
                 </div>
-                
-                {/* Action Buttons - Different for Admin vs Member */}
+
                 <div className="flex flex-wrap gap-3 mb-6">
                   <button
                     type="button"
@@ -498,10 +646,10 @@ function OrganizationDashboard() {
                     className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all flex items-center gap-2"
                     aria-label="Create new event"
                   >
-                    <span>📅</span>
+                    <span aria-hidden="true">📅</span>
                     Create Event
                   </button>
-                  
+
                   {effectiveRole === 'admin' && (
                     <button
                       type="button"
@@ -509,15 +657,13 @@ function OrganizationDashboard() {
                       className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all flex items-center gap-2"
                       aria-label="Create new announcement"
                     >
-                      <span>📢</span>
+                      <span aria-hidden="true">📢</span>
                       Create Announcement
                     </button>
                   )}
                 </div>
-                
-                {/* Enhanced Stats Grid - Clickable Cards */}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Total Members Card */}
                   <button
                     onClick={() => setActiveTab('members')}
                     className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -533,7 +679,6 @@ function OrganizationDashboard() {
                     </div>
                   </button>
 
-                  {/* Pending Invites Card - Admin Only */}
                   {effectiveRole === 'admin' && (
                     <button
                       onClick={() => setActiveTab('invite')}
@@ -553,7 +698,6 @@ function OrganizationDashboard() {
                     </button>
                   )}
 
-                  {/* Upcoming Events Card */}
                   <button
                     onClick={() => navigate(`/organizations/${organizationId}/events`)}
                     className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -569,7 +713,6 @@ function OrganizationDashboard() {
                     </div>
                   </button>
 
-                  {/* Unread Announcements Card */}
                   <button
                     onClick={() => setActiveTab('announcements')}
                     className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border-2 border-orange-200 hover:border-orange-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
@@ -588,61 +731,60 @@ function OrganizationDashboard() {
                   </button>
                 </div>
 
-                {/* Quick Actions - Different for Admin vs Member */}
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button 
+                    <button
                       onClick={() => navigate(`/organizations/${organizationId}/members`)}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">👥</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">👥</span>
                       <span className="font-semibold text-gray-900">View Member Directory</span>
                     </button>
-                    
-                    <button 
+
+                    <button
                       onClick={() => setActiveTab('announcements')}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">📢</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📢</span>
                       <span className="font-semibold text-gray-900">View Announcements</span>
                       {stats.unreadAnnouncements > 0 && (
-                        <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-orange-500 rounded-full">
+                        <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-orange-500 rounded-full" aria-label={`${stats.unreadAnnouncements} unread`}>
                           {stats.unreadAnnouncements}
                         </span>
                       )}
                     </button>
-                    
-                    <button 
+
+                    <button
                       onClick={() => navigate(`/organizations/${organizationId}/events`)}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">📅</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📅</span>
                       <span className="font-semibold text-gray-900">View Events</span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => navigate(`/organizations/${organizationId}/polls`)}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">📊</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📊</span>
                       <span className="font-semibold text-gray-900">View Polls</span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => navigate(`/organizations/${organizationId}/surveys`)}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">📋</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📋</span>
                       <span className="font-semibold text-gray-900">View Surveys</span>
                     </button>
-                    
+
                     <button
                       onClick={() => navigate(`/organizations/${organizationId}/signup-forms`)}
-                      className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                      className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                       aria-label="View sign-up forms"
                     >
-                      <span className="text-2xl">📝</span>
+                      <span className="text-2xl" aria-hidden="true">📝</span>
                       <div className="text-left">
                         <div className="font-semibold text-gray-900">Sign-Up Forms</div>
                         <div className="text-sm text-gray-600">Volunteer lists & time slots</div>
@@ -650,37 +792,62 @@ function OrganizationDashboard() {
                     </button>
 
                     {effectiveRole === 'admin' && (
-                      <button 
-                        onClick={() => setActiveTab('settings')}
-                        className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group"
-                      >
-                        <span className="text-2xl group-hover:scale-110 transition-transform">⚙️</span>
-                        <span className="font-semibold text-gray-900">Organization Settings</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setActiveTab('inbox')}
+                          className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📬</span>
+                          <span className="font-semibold text-gray-900">View Inbox</span>
+                          {unreadInquiriesCount > 0 && (
+                            <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-blue-500 rounded-full" aria-label={`${unreadInquiriesCount} unread`}>
+                              {unreadInquiriesCount}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => setActiveTab('settings')}
+                          className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">⚙️</span>
+                          <span className="font-semibold text-gray-900">Organization Settings</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
-                
-                {/* Admin-only section */}
+
                 {effectiveRole === 'admin' && (
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
                     <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
-                      <span>👑</span>
+                      <span aria-hidden="true">👑</span>
                       Admin Tools
                     </h3>
                     <p className="text-purple-700 text-sm mb-4">
                       These management features are only visible to administrators.
                     </p>
-                    <div className="flex gap-3">
-                      <button 
+                    <div className="flex gap-3 flex-wrap">
+                      <button
                         onClick={() => setActiveTab('invite')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold"
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
                       >
                         ✉️ Invite Members
                       </button>
-                      <button 
+                      <button
+                        onClick={() => setActiveTab('inbox')}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold flex items-center gap-2"
+                      >
+                        📬 View Inbox
+                        {unreadInquiriesCount > 0 && (
+                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-purple-600 bg-white rounded-full">
+                            {unreadInquiriesCount}
+                          </span>
+                        )}
+                      </button>
+                      <button
                         onClick={() => setActiveTab('settings')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold"
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
                       >
                         ⚙️ Manage Settings
                       </button>
@@ -688,7 +855,6 @@ function OrganizationDashboard() {
                   </div>
                 )}
 
-                {/* Recent Activity Feed */}
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -705,8 +871,9 @@ function OrganizationDashboard() {
                   </div>
 
                   {activityLoading ? (
-                    <div className="flex justify-center items-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="flex justify-center items-center py-8" role="status">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" aria-hidden="true"></div>
+                      <span className="sr-only">Loading activity...</span>
                     </div>
                   ) : recentActivity.length === 0 ? (
                     <div className="text-center py-8">
@@ -719,28 +886,15 @@ function OrganizationDashboard() {
                           key={activity.id}
                           className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                         >
-                          <div 
-                            className={`text-2xl flex-shrink-0 ${
-                              activity.color === 'green' ? 'text-green-600' :
-                              activity.color === 'blue' ? 'text-blue-600' :
-                              activity.color === 'purple' ? 'text-purple-600' :
-                              activity.color === 'red' ? 'text-red-600' :
-                              'text-gray-600'
-                            }`}
-                            aria-hidden="true"
-                          >
+                          <div className="text-2xl flex-shrink-0" aria-hidden="true">
                             {activity.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">
-                              {activity.title}
-                            </p>
+                            <p className="text-sm font-medium text-gray-900">{activity.title}</p>
                             <p className="text-xs text-gray-500 mt-1">
                               {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit'
+                                month: 'short', day: 'numeric',
+                                hour: 'numeric', minute: '2-digit'
                               })}
                             </p>
                           </div>
@@ -756,7 +910,7 @@ function OrganizationDashboard() {
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Members</h2>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                  <div className="text-4xl mb-3">👥</div>
+                  <div className="text-4xl mb-3" aria-hidden="true">👥</div>
                   <p className="text-gray-600">Member management coming in next phase!</p>
                 </div>
               </div>
@@ -767,63 +921,26 @@ function OrganizationDashboard() {
                 <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900">
-                        📁 Document Library
-                      </h2>
-                      <p className="text-gray-600 mt-1">
-                        Access organization documents, files, and resources
-                      </p>
+                      <h2 className="text-2xl font-bold text-gray-900">📁 Document Library</h2>
+                      <p className="text-gray-600 mt-1">Access organization documents, files, and resources</p>
                     </div>
                     {effectiveRole === 'admin' && (
                       <button
                         onClick={() => navigate(`/organizations/${organizationId}/documents`)}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                        aria-label="Manage documents"
                       >
                         📂 Manage Documents
                       </button>
                     )}
                   </div>
-
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                      Recent Documents
-                    </h3>
-                    
-                    <div className="space-y-3">
-                      <p className="text-gray-500 text-sm">
-                        Loading recent documents...
-                      </p>
-                    </div>
-
-                    <div className="mt-6 text-center">
-                      <button
-                        onClick={() => navigate(`/organizations/${organizationId}/documents`)}
-                        className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2"
-                        aria-label="View all documents"
-                      >
-                        View All Documents
-                        <span aria-hidden="true">→</span>
-                      </button>
-                    </div>
+                  <div className="mt-6 text-center">
+                    <button
+                      onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+                      className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    >
+                      View All Documents <span aria-hidden="true">→</span>
+                    </button>
                   </div>
-
-                  {effectiveRole === 'admin' && (
-                    <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">-</p>
-                        <p className="text-sm text-gray-600">Total Files</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">-</p>
-                        <p className="text-sm text-gray-600">Folders</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">- MB</p>
-                        <p className="text-sm text-gray-600">Storage Used</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -837,7 +954,6 @@ function OrganizationDashboard() {
                       type="button"
                       onClick={() => setShowCreateAnnouncement(true)}
                       className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
-                      aria-label="Create new announcement"
                     >
                       ➕ Create Announcement
                     </button>
@@ -882,19 +998,19 @@ function OrganizationDashboard() {
                 </p>
 
                 {announcementsLoading ? (
-                  <div className="flex justify-center items-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <div className="flex justify-center items-center py-12" role="status">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" aria-hidden="true"></div>
+                    <span className="sr-only">Loading announcements...</span>
                   </div>
                 ) : filteredAnnouncements.length === 0 ? (
                   <div className="bg-gray-50 rounded-lg p-12 text-center border border-gray-200">
-                    <div className="text-4xl mb-3">
+                    <div className="text-4xl mb-3" aria-hidden="true">
                       {announcementSearch || announcementFilter !== 'all' ? '🔍' : '📭'}
                     </div>
                     <p className="text-gray-600 font-semibold">
-                      {announcementSearch || announcementFilter !== 'all' 
+                      {announcementSearch || announcementFilter !== 'all'
                         ? 'No announcements match your filters'
-                        : 'No announcements yet'
-                      }
+                        : 'No announcements yet'}
                     </p>
                     {!announcementSearch && announcementFilter === 'all' && effectiveRole === 'admin' && (
                       <button
@@ -932,7 +1048,7 @@ function OrganizationDashboard() {
                     onInviteSent={() => fetchStats(currentUserId)}
                   />
                 ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6" role="alert">
                     <p className="text-yellow-800 font-semibold">Permission Required</p>
                     <p className="text-yellow-700">
                       Member invitations are disabled. Contact an admin to enable this feature.
@@ -952,13 +1068,14 @@ function OrganizationDashboard() {
                     }}
                   />
                 ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6" role="alert">
                     <p className="text-yellow-800 font-semibold">Admin Access Required</p>
                     <p className="text-yellow-700">Only organization admins can modify settings.</p>
                   </div>
                 )}
               </>
             )}
+
           </div>
         </div>
       </div>
