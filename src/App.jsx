@@ -23,6 +23,7 @@ import PollsList from './pages/PollsList';
 import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
+import OrgPageEditor from './pages/OrgPageEditor';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -271,6 +272,12 @@ function App() {
 <Route 
   path="/org/:slug" 
   element={<PublicOrganizationPage />} 
+/>
+
+{/* Org Page Editor - Admin only */}
+<Route
+  path="/organizations/:organizationId/page-editor"
+  element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />}
 />
 
           {/* 404 - Catch All Route */}
