@@ -6,6 +6,7 @@ import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import AnnouncementCard from '../components/AnnouncementCard';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 function OrganizationDashboard() {
   const { organizationId } = useParams();
@@ -46,6 +47,7 @@ function OrganizationDashboard() {
     { id: 'announcements', label: 'Announcements', icon: '📢', badge: stats.unreadAnnouncements, roles: ['admin', 'member'] },
     { id: 'inbox', label: 'Inbox', icon: '📬', badge: unreadInquiriesCount, roles: ['admin'] },
     { id: 'invite', label: 'Invite', icon: '✉️', roles: ['admin'] },
+    { id: 'analytics', label: 'Analytics', icon: '📈', roles: ['admin'] },
     { id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'] }
   ];
 
@@ -844,6 +846,12 @@ function OrganizationDashboard() {
                             {unreadInquiriesCount}
                           </span>
                         )}
+                      <button
+                        onClick={() => setActiveTab('analytics')}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
+                        aria-label="View analytics dashboard"
+                      >
+                        📈 View Analytics
                       </button>
                       <button
                         onClick={() => setActiveTab('settings')}
@@ -1065,6 +1073,9 @@ function OrganizationDashboard() {
               </>
             )}
 
+            {activeTab === 'analytics' && (
+              <AnalyticsDashboard organizationId={organizationId} />
+            )}  
             {activeTab === 'settings' && (
               <>
                 {membership.role === 'admin' ? (
