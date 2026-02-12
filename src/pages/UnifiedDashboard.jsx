@@ -10,9 +10,8 @@ function UnifiedDashboard() {
   const [organizations, setOrganizations] = useState([]);
   const [activities, setActivities] = useState([]);
   const [dismissedActivities, setDismissedActivities] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('dismissedActivities') || '[]');
-    } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('dismissedActivities') || '[]'); }
+    catch { return []; }
   });
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,22 +24,14 @@ function UnifiedDashboard() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        fetchDashboardData();
-      } else if (event === 'SIGNED_OUT') {
-        navigate('/login');
-      }
+      if (event === 'SIGNED_IN' && session) fetchDashboardData();
+      else if (event === 'SIGNED_OUT') navigate('/login');
     });
-
     const checkAuthAndFetch = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        fetchDashboardData();
-      } else {
-        setLoading(false);
-      }
+      if (session) fetchDashboardData();
+      else setLoading(false);
     };
-
     checkAuthAndFetch();
     return () => { subscription?.unsubscribe(); };
   }, []);
@@ -49,44 +40,35 @@ function UnifiedDashboard() {
     try {
       setLoading(true);
       setError(null);
-
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
       if (!user) { setLoading(false); throw new Error('Auth session missing!'); }
-
       setCurrentUser(user);
 
       const { data: orgsData, error: orgsError } = await supabase
         .from('memberships')
-        .select(`
-          id, role, status, custom_title, joined_date,
-          organization:organizations (id, name, description, type, logo_url)
-        `)
+        .select(`id, role, status, custom_title, joined_date,
+          organization:organizations (id, name, description, type, logo_url)`)
         .eq('member_id', user.id)
         .eq('status', 'active')
         .order('joined_date', { ascending: false });
-
       if (orgsError) throw orgsError;
 
       const orgsWithStats = await Promise.all(
         (orgsData || []).map(async (membership) => {
           const orgId = membership.organization.id;
-
           const { count: memberCount } = await supabase
             .from('memberships').select('*', { count: 'exact', head: true })
             .eq('organization_id', orgId).eq('status', 'active');
-
           const { count: eventCount } = await supabase
             .from('events').select('*', { count: 'exact', head: true })
             .eq('organization_id', orgId)
             .gte('start_time', new Date().toISOString())
             .in('visibility', ['public', 'members']);
-
           const { data: announcements } = await supabase
             .from('announcements').select('id')
             .eq('organization_id', orgId)
             .in('visibility', ['public', 'members']);
-
           const announcementIds = (announcements || []).map(a => a.id);
           let unreadCount = 0;
           if (announcementIds.length > 0) {
@@ -96,7 +78,6 @@ function UnifiedDashboard() {
             const readIds = new Set((reads || []).map(r => r.announcement_id));
             unreadCount = announcementIds.length - readIds.size;
           }
-
           return {
             ...membership.organization,
             role: membership.role,
@@ -107,14 +88,14 @@ function UnifiedDashboard() {
           };
         })
       );
-
       setOrganizations(orgsWithStats);
 
       const orgIds = orgsWithStats.map(org => org.id);
       if (orgIds.length > 0) {
         const { data: eventsData } = await supabase
           .from('events')
-          .select(`id, title, start_time, location, organization:organizations (id, name, type)`)
+          .select(`id, title, start_time, location,
+            organization:organizations (id, name, type)`)
           .in('organization_id', orgIds)
           .gte('start_time', new Date().toISOString())
           .in('visibility', ['public', 'members'])
@@ -124,12 +105,12 @@ function UnifiedDashboard() {
 
         const { data: recentAnnouncements } = await supabase
           .from('announcements')
-          .select(`id, title, created_at, priority, organization:organizations (id, name)`)
+          .select(`id, title, created_at, priority,
+            organization:organizations (id, name)`)
           .in('organization_id', orgIds)
           .in('visibility', ['public', 'members'])
           .order('created_at', { ascending: false })
           .limit(10);
-
         setActivities(
           (recentAnnouncements || []).map(item => ({
             id: item.id,
@@ -158,12 +139,7 @@ function UnifiedDashboard() {
 
   const visibleActivities = activities.filter(a => !dismissedActivities.includes(a.id));
 
-  const handleOrganizationCreated = () => {
-    fetchDashboardData();
-    setShowCreateModal(false);
-  };
-
-  const handleEventCreated = () => { fetchDashboardData(); };
+  const totalUnread = organizations.reduce((sum, org) => sum + (org.unreadCount || 0), 0);
 
   const getOrgTypeIcon = (type) => {
     const icons = { nonprofit: '🤝', club: '🎭', association: '💼', community: '🏘️', other: '📋' };
@@ -227,7 +203,7 @@ function UnifiedDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Page Title + User Profile Row */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Dashboard</h1>
             <p className="text-gray-600 mt-1">
@@ -236,161 +212,202 @@ function UnifiedDashboard() {
                 : 'Managing ' + organizations.length + ' organization' + (organizations.length !== 1 ? 's' : '')}
             </p>
           </div>
-
-          {/* User Profile Pill */}
           {currentUser && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/account-settings')}
-                className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Go to account settings"
-              >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                  {currentUser.email?.charAt(0).toUpperCase() || '👤'}
-                </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-sm font-semibold text-gray-900 leading-tight">
-                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User'}
-                  </p>
-                  <p className="text-xs text-blue-600">Account Settings</p>
-                </div>
-              </button>
-            </div>
+            <button
+              onClick={() => navigate('/account-settings')}
+              className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Go to account settings"
+            >
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+                {currentUser.email?.charAt(0).toUpperCase() || '?'}
+              </div>
+              <div className="text-left hidden sm:block">
+                <p className="text-sm font-semibold text-gray-900 leading-tight">
+                  {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User'}
+                </p>
+                <p className="text-xs text-blue-600">Account Settings</p>
+              </div>
+            </button>
           )}
         </div>
 
         {organizations.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-6xl mb-4">🏘️</div>
+            <div className="text-6xl mb-4" aria-hidden="true">🏘️</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Organizations Yet</h2>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
               Create your first organization or ask an admin to invite you to join one.
             </p>
             <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
+              <button onClick={() => setShowCreateModal(true)}
+                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 Create Organization
               </button>
-              <button
-                onClick={() => navigate('/organizations/discover')}
-                className="px-6 py-3 bg-white text-gray-700 font-semibold rounded-lg border-2 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
+              <button onClick={() => navigate('/organizations/discover')}
+                className="px-6 py-3 bg-white text-gray-700 font-semibold rounded-lg border-2 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                 Discover Organizations
               </button>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-6">
 
-            {/* LEFT: Orgs + Events */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* STATS ROW */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" role="region" aria-label="Dashboard summary">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{organizations.length}</p>
+                  <div className="w-1 h-8 rounded-full bg-blue-500" aria-hidden="true"></div>
+                </div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Organizations</p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{upcomingEvents.length}</p>
+                  <div className="w-1 h-8 rounded-full bg-green-500" aria-hidden="true"></div>
+                </div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Upcoming Events</p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{totalUnread}</p>
+                  <div className="w-1 h-8 rounded-full bg-amber-500" aria-hidden="true"></div>
+                </div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Unread Announcements</p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{visibleActivities.length}</p>
+                  <div className="w-1 h-8 rounded-full bg-purple-500" aria-hidden="true"></div>
+                </div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Recent Activity</p>
+              </div>
+            </div>
+
+            {/* ROW 2: Organizations + Upcoming Events */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* My Organizations */}
-              <section aria-labelledby="organizations-heading">
+              <section aria-labelledby="organizations-heading"
+                className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 id="organizations-heading" className="text-xl font-bold text-gray-900">
+                  <h2 id="organizations-heading" className="text-lg font-bold text-gray-900">
                     My Organizations
                   </h2>
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex items-center gap-1"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
                     aria-label="Create a new organization"
                   >
-                    <span aria-hidden="true">+</span> New Organization
+                    + New
                   </button>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
                   {organizations.map((org) => (
                     <Link
                       key={org.id}
                       to={'/organizations/' + org.id}
-                      className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                       aria-label={'Go to ' + org.name + ' dashboard'}
                     >
-                      <div className="flex items-start gap-3 mb-3">
-                        {org.logo_url ? (
-                          <img src={org.logo_url} alt={org.name + ' logo'} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl flex-shrink-0">
-                            {getOrgTypeIcon(org.type)}
-                          </div>
-                        )}
-                        <div>
-                          <h3 className="font-bold text-gray-900">{org.name}</h3>
-                          <span className={'inline-block px-2 py-0.5 text-xs font-semibold rounded border ' + getRoleBadgeColor(org.role)}>
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt={org.name + ' logo'}
+                          className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0"
+                          aria-hidden="true">
+                          {org.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-semibold text-gray-900 text-sm truncate">{org.name}</p>
+                          <span className={'inline-block px-2 py-0.5 text-xs font-semibold rounded border flex-shrink-0 ' + getRoleBadgeColor(org.role)}>
                             {org.custom_title || org.role.charAt(0).toUpperCase() + org.role.slice(1)}
                           </span>
                         </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <span>{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
+                          <span>{org.eventCount} event{org.eventCount !== 1 ? 's' : ''}</span>
+                          {org.unreadCount > 0 && (
+                            <span className="text-amber-600 font-semibold">
+                              {org.unreadCount} new
+                            </span>
+                          )}
+                        </div>
                       </div>
-
-                      {org.description && (
-                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{org.description}</p>
-                      )}
-
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <span><span aria-label="Members">👥</span> {org.memberCount}</span>
-                        <span><span aria-label="Upcoming events">📅</span> {org.eventCount}</span>
-                        {org.unreadCount > 0 && (
-                          <span className="text-orange-600 font-semibold">
-                            <span aria-label="Unread announcements">🔔</span> {org.unreadCount} new
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-gray-300 flex-shrink-0" aria-hidden="true">›</span>
                     </Link>
                   ))}
                 </div>
               </section>
 
               {/* Upcoming Events */}
-              {upcomingEvents.length > 0 && (
-                <section aria-labelledby="events-heading" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h2 id="events-heading" className="text-xl font-bold text-gray-900 mb-4">Upcoming Events</h2>
-                  <div className="space-y-4 mb-4">
-                    {upcomingEvents.slice(0, 3).map((event) => (
+              <section aria-labelledby="events-heading"
+                className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 id="events-heading" className="text-lg font-bold text-gray-900">
+                    Upcoming Events
+                  </h2>
+                  <Link to="/events"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
+                    View all →
+                  </Link>
+                </div>
+                {upcomingEvents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 text-sm">No upcoming events</p>
+                    <Link to="/discover"
+                      className="text-blue-600 text-sm hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded mt-1 inline-block">
+                      Discover public events →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {upcomingEvents.slice(0, 4).map((event) => (
                       <EventCard key={event.id} event={event} showOrganization={true} />
                     ))}
+                    <div className="flex gap-3 pt-2 border-t border-gray-100">
+                      <Link to="/events"
+                        className="flex-1 text-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-semibold">
+                        View All Events
+                      </Link>
+                      <Link to="/calendar"
+                        className="flex-1 text-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-sm font-semibold">
+                        View Calendar
+                      </Link>
+                    </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                    <Link to="/events"
-                      className="flex-1 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-semibold">
-                      📋 View All Events
-                    </Link>
-                    <Link to="/calendar"
-                      className="flex-1 text-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-semibold">
-                      📅 View Calendar
-                    </Link>
-                  </div>
-                </section>
-              )}
+                )}
+              </section>
             </div>
 
-            {/* RIGHT SIDEBAR */}
-            <div className="space-y-6">
+            {/* ROW 3: Recent Activity + My Sign-Ups */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* Recent Activity */}
-              <section aria-labelledby="activity-heading" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 id="activity-heading" className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
+              <section aria-labelledby="activity-heading"
+                className="bg-white rounded-lg border border-gray-200 p-6">
+                <h2 id="activity-heading" className="text-lg font-bold text-gray-900 mb-4">
+                  Recent Activity
+                </h2>
                 {visibleActivities.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8 text-sm">No recent activity</p>
+                  <p className="text-gray-500 text-sm text-center py-6">No recent activity</p>
                 ) : (
                   <div className="space-y-1">
                     {visibleActivities.map((activity) => (
-                      <div key={activity.id} className="flex items-start gap-2 group pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                      <div key={activity.id}
+                        className="flex items-start gap-2 group pb-3 border-b border-gray-100 last:border-0 last:pb-0">
                         <Link
                           to={'/organizations/' + activity.organizationId + '/announcements'}
                           className="flex items-start gap-3 flex-1 hover:bg-gray-50 -ml-2 pl-2 pr-1 py-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                           aria-label={'View announcement: ' + activity.title}
                         >
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm" aria-hidden="true">
-                            📢
-                          </div>
+                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400 mt-2"
+                            aria-hidden="true"></div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-900 text-sm truncate">{activity.title}</p>
-                            <p className="text-xs text-gray-600">{activity.organizationName}</p>
-                            <p className="text-xs text-gray-400">{formatTimestamp(activity.timestamp)}</p>
+                            <p className="text-xs text-gray-500">{activity.organizationName} · {formatTimestamp(activity.timestamp)}</p>
                           </div>
                           {activity.priority === 'urgent' && (
                             <span className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-red-800 bg-red-100 rounded border border-red-200">
@@ -401,7 +418,7 @@ function UnifiedDashboard() {
                         <button
                           onClick={() => handleDismissActivity(activity.id)}
                           className="flex-shrink-0 mt-1 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label={'Dismiss notification: ' + activity.title}
+                          aria-label={'Dismiss: ' + activity.title}
                         >
                           <span aria-hidden="true">×</span>
                         </button>
@@ -411,10 +428,7 @@ function UnifiedDashboard() {
                 )}
                 {dismissedActivities.length > 0 && (
                   <button
-                    onClick={() => {
-                      setDismissedActivities([]);
-                      localStorage.removeItem('dismissedActivities');
-                    }}
+                    onClick={() => { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); }}
                     className="mt-3 text-xs text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded"
                   >
                     Show {dismissedActivities.length} hidden item{dismissedActivities.length !== 1 ? 's' : ''}
@@ -423,8 +437,11 @@ function UnifiedDashboard() {
               </section>
 
               {/* My Sign-Ups */}
-              <MySignups showFilter={true} />
+              <section aria-labelledby="signups-heading">
+                <MySignups showFilter={true} headingId="signups-heading" />
+              </section>
             </div>
+
           </div>
         )}
       </main>
@@ -432,14 +449,13 @@ function UnifiedDashboard() {
       <CreateOrganization
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSuccess={handleOrganizationCreated}
+        onSuccess={() => { fetchDashboardData(); setShowCreateModal(false); }}
       />
-
       {selectedOrgForEvent && (
         <CreateEvent
           isOpen={showCreateEvent}
           onClose={() => { setShowCreateEvent(false); setSelectedOrgForEvent(null); }}
-          onSuccess={handleEventCreated}
+          onSuccess={fetchDashboardData}
           organizationId={selectedOrgForEvent.id}
           organizationName={selectedOrgForEvent.name}
         />
