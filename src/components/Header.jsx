@@ -121,10 +121,7 @@ function Header() {
               className="text-gray-700 hover:text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
               Dashboard
             </button>
-            <button onClick={() => navigate('/organizations')}
-              className="text-gray-700 hover:text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
-              Organizations
-            </button>
+
             <button onClick={() => navigate('/discover')}
               className="text-gray-700 hover:text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
               Discover Events

@@ -128,9 +128,9 @@ function MySignups({ organizationId = null, showFilter = false }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          <Package size={20} className="text-blue-600" />
+<div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 flex-shrink-0">
+          <Package size={20} className="text-blue-600" aria-hidden="true" />
           My Sign-Ups
         </h3>
         {showFilter && organizations.length > 1 && (
