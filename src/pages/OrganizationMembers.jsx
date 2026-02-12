@@ -28,6 +28,30 @@ const roleIcon = {
   guest: '👁️'
 };
 
+// Builds and downloads a CSV file from an array of objects
+const exportToCSV = (rows, filename) => {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(','),
+    ...rows.map(row =>
+      headers.map(h => {
+        const val = row[h] ?? '';
+        return /[",\n]/.test(String(val))
+          ? `"${String(val).replace(/"/g, '""')}"`
+          : String(val);
+      }).join(',')
+    )
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 function OrganizationMembers() {
   const { organizationId } = useParams();
   const [members, setMembers] = useState([]);
@@ -133,6 +157,19 @@ function OrganizationMembers() {
     }
   }
 
+  const handleExportMembers = () => {
+    const rows = activeMembers.map(m => ({
+      'First Name': m.member.first_name,
+      'Last Name': m.member.last_name,
+      'Email': m.member.email || '',
+      'Role': m.role,
+      'Status': m.status,
+      'Joined Date': m.joined_date ? new Date(m.joined_date).toLocaleDateString() : ''
+    }));
+    const orgSlug = organization?.name?.toLowerCase().replace(/\s+/g, '-') || 'org';
+    exportToCSV(rows, `${orgSlug}-members-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen" role="status" aria-label="Loading members">
@@ -195,6 +232,19 @@ function OrganizationMembers() {
               <option value="guest">👁️ Guest ({activeMembers.filter(m => m.role === 'guest').length})</option>
             </select>
           </div>
+          {isAdmin && (
+            <button
+              onClick={handleExportMembers}
+              disabled={activeMembers.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              aria-label={`Export ${activeMembers.length} members to CSV`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
+          )}
         </div>
 
         {/* Results count */}
