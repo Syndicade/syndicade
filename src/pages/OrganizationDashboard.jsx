@@ -836,7 +836,7 @@ function OrganizationDashboard() {
                       >
                         ✉️ Invite Members
                       </button>
-                      <button
+                      <button>
                         onClick={() => setActiveTab('inbox')}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold flex items-center gap-2"
                       >
@@ -846,6 +846,7 @@ function OrganizationDashboard() {
                             {unreadInquiriesCount}
                           </span>
                         )}
+                        </button>
                       <button
                         onClick={() => setActiveTab('analytics')}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
@@ -860,7 +861,7 @@ function OrganizationDashboard() {
                         ⚙️ Manage Settings
                       </button>
                       <button
-                        onClick={() => navigate(`/organizations/${organizationId}/page-editor`)}
+                        onClick={() => navigate('/organizations/' + organizationId + '/page-editor')}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all font-semibold"
                         aria-label="Edit public page"
                       >

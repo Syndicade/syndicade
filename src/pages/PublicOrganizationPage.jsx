@@ -132,9 +132,28 @@ export default function PublicOrganizationPage() {
 
       {/* Hero Header */}
       <header
-        className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-16 px-6"
+        className="relative text-white py-16 px-6"
         role="banner"
+        style={{
+          background: organization.banner_url
+            ? 'none'
+            : 'linear-gradient(to right, #2563eb, #4338ca)',
+        }}
       >
+        {organization.banner_url && (
+          <div
+            className="absolute inset-0 z-0"
+            aria-hidden="true"
+            style={{
+              backgroundImage: 'url(' + organization.banner_url + ')',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="absolute inset-0 bg-black bg-opacity-40"></div>
+          </div>
+        )}
+        <div className="relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           {organization.logo_url && (
             <img
@@ -158,6 +177,7 @@ export default function PublicOrganizationPage() {
               🔑 Member Login
             </Link>
           </div>
+        </div>
         </div>
       </header>
 

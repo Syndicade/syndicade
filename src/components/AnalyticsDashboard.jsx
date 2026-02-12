@@ -35,19 +35,19 @@ export default function AnalyticsDashboard({ organizationId }) {
     }
   }
 
-  async function fetchMemberGrowth() {
+async function fetchMemberGrowth() {
     const { data } = await supabase
       .from('memberships')
-      .select('created_at')
+      .select('joined_date')
       .eq('organization_id', organizationId)
       .eq('status', 'active')
-      .order('created_at', { ascending: true });
+      .order('joined_date', { ascending: true });
 
     if (!data) return;
 
     const monthMap = {};
     data.forEach(m => {
-      const date = new Date(m.created_at);
+      const date = new Date(m.joined_date);
       const key = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       monthMap[key] = (monthMap[key] || 0) + 1;
     });
@@ -92,7 +92,7 @@ export default function AnalyticsDashboard({ organizationId }) {
 
   async function fetchTotals() {
     const [members, events, rsvps, announcements] = await Promise.all([
-      supabase.from('memberships').select('*', { count: 'exact', head: true })
+    supabase.from('memberships').select('id', { count: 'exact', head: true })
         .eq('organization_id', organizationId).eq('status', 'active'),
       supabase.from('events').select('*', { count: 'exact', head: true })
         .eq('organization_id', organizationId),
