@@ -47,8 +47,7 @@ function UnifiedDashboard() {
 
       const { data: orgsData, error: orgsError } = await supabase
         .from('memberships')
-        .select(`id, role, status, custom_title, joined_date,
-          organization:organizations (id, name, description, type, logo_url)`)
+        .select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)')
         .eq('member_id', user.id)
         .eq('status', 'active')
         .order('joined_date', { ascending: false });
@@ -94,8 +93,7 @@ function UnifiedDashboard() {
       if (orgIds.length > 0) {
         const { data: eventsData } = await supabase
           .from('events')
-          .select(`id, title, start_time, location,
-            organization:organizations (id, name, type)`)
+          .select('id, title, start_time, location, organization:organizations (id, name, type)')
           .in('organization_id', orgIds)
           .gte('start_time', new Date().toISOString())
           .in('visibility', ['public', 'members'])
@@ -105,8 +103,7 @@ function UnifiedDashboard() {
 
         const { data: recentAnnouncements } = await supabase
           .from('announcements')
-          .select(`id, title, created_at, priority,
-            organization:organizations (id, name)`)
+          .select('id, title, created_at, priority, organization:organizations (id, name)')
           .in('organization_id', orgIds)
           .in('visibility', ['public', 'members'])
           .order('created_at', { ascending: false })
@@ -138,13 +135,7 @@ function UnifiedDashboard() {
   };
 
   const visibleActivities = activities.filter(a => !dismissedActivities.includes(a.id));
-
   const totalUnread = organizations.reduce((sum, org) => sum + (org.unreadCount || 0), 0);
-
-  const getOrgTypeIcon = (type) => {
-    const icons = { nonprofit: '🤝', club: '🎭', association: '💼', community: '🏘️', other: '📋' };
-    return icons[type] || icons.other;
-  };
 
   const getRoleBadgeColor = (role) => {
     const colors = {
@@ -198,6 +189,15 @@ function UnifiedDashboard() {
     );
   }
 
+  const gradients = [
+    'from-blue-500 to-purple-600',
+    'from-emerald-500 to-teal-600',
+    'from-orange-500 to-red-500',
+    'from-pink-500 to-rose-600',
+    'from-violet-500 to-indigo-600',
+    'from-amber-500 to-orange-600',
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -250,7 +250,7 @@ function UnifiedDashboard() {
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
 
             {/* STATS ROW */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" role="region" aria-label="Dashboard summary">
@@ -288,58 +288,67 @@ function UnifiedDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* My Organizations */}
-              <section aria-labelledby="organizations-heading"
-                className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 id="organizations-heading" className="text-lg font-bold text-gray-900">
-                    My Organizations
-                  </h2>
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
-                    aria-label="Create a new organization"
-                  >
-                    + New
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {organizations.map((org) => (
-                    <Link
-                      key={org.id}
-                      to={'/organizations/' + org.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label={'Go to ' + org.name + ' dashboard'}
-                    >
-                      {org.logo_url ? (
-                        <img src={org.logo_url} alt={org.name + ' logo'}
-                          className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0"
-                          aria-hidden="true">
-                          {org.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="font-semibold text-gray-900 text-sm truncate">{org.name}</p>
-                          <span className={'inline-block px-2 py-0.5 text-xs font-semibold rounded border flex-shrink-0 ' + getRoleBadgeColor(org.role)}>
+<section aria-labelledby="organizations-heading"
+                className="bg-white rounded-lg border border-gray-200 p-6 pb-4">
+                <h2 id="organizations-heading" className="text-lg font-bold text-gray-900 mb-4">
+                  My Organizations
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {organizations.map((org) => {
+                    const gradient = gradients[org.name.charCodeAt(0) % gradients.length];
+                    return (
+                      <Link
+                        key={org.id}
+                        to={'/organizations/' + org.id}
+                        className="flex flex-col rounded-xl border border-gray-200 bg-white hover:border-blue-300 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label={'Go to ' + org.name + ' dashboard'}
+                      >
+                        <div className="p-4 flex flex-col flex-1">
+                          {/* Circular logo */}
+                          <div className="mb-3">
+                            {org.logo_url ? (
+                              <img
+                                src={org.logo_url}
+                                alt={org.name + ' logo'}
+                                className="w-14 h-14 rounded-full object-cover border-2 border-gray-100 shadow-sm"
+                              />
+                            ) : (
+                              <div
+                                className={'w-14 h-14 rounded-full border-2 border-gray-100 shadow-sm bg-gradient-to-br ' + gradient + ' flex items-center justify-center text-white font-bold text-xl'}
+                                aria-hidden="true"
+                              >
+                                {org.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          {/* Name */}
+                          <p className="font-semibold text-gray-900 text-sm leading-tight mb-1 truncate">
+                            {org.name}
+                          </p>
+                          {/* Role badge */}
+                          <span className={'inline-block self-start px-2 py-0.5 text-xs font-semibold rounded border mb-3 ' + getRoleBadgeColor(org.role)}>
                             {org.custom_title || org.role.charAt(0).toUpperCase() + org.role.slice(1)}
                           </span>
+                          {/* Stats */}
+                          <div className="flex items-center gap-2 text-xs text-gray-500 mt-auto flex-wrap">
+                            <span>{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
+                            <span>{org.eventCount} event{org.eventCount !== 1 ? 's' : ''}</span>
+                            {org.unreadCount > 0 && (
+                              <span className="text-amber-600 font-semibold">{org.unreadCount} new</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
-                          <span>{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
-                          <span>{org.eventCount} event{org.eventCount !== 1 ? 's' : ''}</span>
-                          {org.unreadCount > 0 && (
-                            <span className="text-amber-600 font-semibold">
-                              {org.unreadCount} new
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-gray-300 flex-shrink-0" aria-hidden="true">›</span>
-                    </Link>
-                  ))}
+                      </Link>
+                    );
+                  })}
                 </div>
+                {/* Create new org button */}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+className="mt-4 w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl"                  aria-label="Create a new organization"
+                >
+                  + Create a new organization
+                </button>
               </section>
 
               {/* Upcoming Events */}
@@ -403,8 +412,7 @@ function UnifiedDashboard() {
                           className="flex items-start gap-3 flex-1 hover:bg-gray-50 -ml-2 pl-2 pr-1 py-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                           aria-label={'View announcement: ' + activity.title}
                         >
-                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400 mt-2"
-                            aria-hidden="true"></div>
+                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400 mt-2" aria-hidden="true"></div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-900 text-sm truncate">{activity.title}</p>
                             <p className="text-xs text-gray-500">{activity.organizationName} · {formatTimestamp(activity.timestamp)}</p>
