@@ -49,6 +49,13 @@ function OrganizationDashboard() {
   const [groupTypeFilter, setGroupTypeFilter] = useState('all');
   const [managingGroup, setManagingGroup] = useState(null);
 
+  // Add member to group state
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [addMemberSearch, setAddMemberSearch] = useState('');
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [addMemberError, setAddMemberError] = useState(null);
+  const [addMemberSuccess, setAddMemberSuccess] = useState(null);
+
   const allTabs = [
     { id: 'overview', label: 'Overview', icon: '📊', roles: ['admin', 'member'] },
     { id: 'members', label: 'Members', icon: '👥', roles: ['admin', 'member'] },
@@ -94,6 +101,64 @@ function OrganizationDashboard() {
       fetchGroups();
     }
   }, [activeTab, organizationId]);
+
+  useEffect(() => {
+    if (managingGroup && organizationId) {
+      fetchOrgMembers();
+      setAddMemberSearch('');
+      setAddMemberError(null);
+      setAddMemberSuccess(null);
+    }
+  }, [managingGroup?.id]);
+
+  async function fetchOrgMembers() {
+    try {
+      const { data, error } = await supabase
+        .from('memberships')
+        .select('member_id, members(user_id, first_name, last_name, profile_photo_url)')
+        .eq('organization_id', organizationId)
+        .eq('status', 'active');
+      if (error) throw error;
+      setOrgMembers(data || []);
+    } catch (err) {
+      console.error('Error fetching org members:', err);
+    }
+  }
+
+  async function handleAddMemberToGroup(memberId) {
+    if (!managingGroup) return;
+    try {
+      setAddMemberLoading(true);
+      setAddMemberError(null);
+      setAddMemberSuccess(null);
+
+      const { error } = await supabase
+        .from('group_memberships')
+        .insert({ group_id: managingGroup.id, member_id: memberId, status: 'active' });
+
+      if (error) {
+        if (error.code === '23505') {
+          setAddMemberError('This member is already in the group.');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      const added = orgMembers.find(m => m.member_id === memberId);
+      const name = added?.members
+        ? added.members.first_name + ' ' + added.members.last_name
+        : 'Member';
+      setAddMemberSuccess(name + ' added to group.');
+      setAddMemberSearch('');
+      await fetchGroups();
+    } catch (err) {
+      console.error('Error adding member to group:', err);
+      setAddMemberError('Could not add member: ' + err.message);
+    } finally {
+      setAddMemberLoading(false);
+    }
+  }
 
   async function fetchData() {
     try {
@@ -157,6 +222,11 @@ function OrganizationDashboard() {
 
       if (error) throw error;
       setGroups(data || []);
+
+      if (managingGroup) {
+        const refreshed = (data || []).find(g => g.id === managingGroup.id);
+        if (refreshed) setManagingGroup(refreshed);
+      }
     } catch (err) {
       console.error('Error fetching groups:', err);
     } finally {
@@ -212,15 +282,16 @@ function OrganizationDashboard() {
       if (error) throw error;
       setGroups(prev => prev.filter(g => g.id !== group.id));
       setStats(prev => ({ ...prev, totalGroups: Math.max(0, prev.totalGroups - 1) }));
+      if (managingGroup?.id === group.id) setManagingGroup(null);
     } catch (err) {
       console.error('Error deleting group:', err);
       alert('Could not delete group: ' + err.message);
     }
   }
-  
+
   function handleUpdateGroup(updatedGroup) {
-  setGroups(prev => prev.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
-}
+    setGroups(prev => prev.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
+  }
 
   async function handleManageGroup(group) {
     setManagingGroup(group);
@@ -253,10 +324,6 @@ function OrganizationDashboard() {
 
       if (error) throw error;
       await fetchGroups();
-      if (managingGroup?.id === groupId) {
-        const updated = groups.find(g => g.id === groupId);
-        setManagingGroup(updated || null);
-      }
     } catch (err) {
       console.error('Error removing member:', err);
       alert('Could not remove member: ' + err.message);
@@ -691,6 +758,87 @@ function OrganizationDashboard() {
                       </button>
                     </div>
 
+                    {/* ── ADD MEMBER SECTION ── */}
+                    <div className="mb-5 p-4 bg-white border border-blue-100 rounded-lg">
+                      <h4 className="text-sm font-bold text-gray-800 mb-3">Add Member to Group</h4>
+
+                      {addMemberError && (
+                        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700" role="alert">
+                          {addMemberError}
+                        </div>
+                      )}
+                      {addMemberSuccess && (
+                        <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700" role="status">
+                          {addMemberSuccess}
+                        </div>
+                      )}
+
+                      {(() => {
+                        const liveGroup = groups.find(g => g.id === managingGroup.id);
+                        const currentGroupMemberIds = new Set(
+                          (liveGroup?.group_memberships || []).map(gm => gm.member_id)
+                        );
+                        const availableToAdd = orgMembers.filter(m =>
+                          !currentGroupMemberIds.has(m.member_id) &&
+                          (addMemberSearch === '' ||
+                            (m.members?.first_name + ' ' + m.members?.last_name)
+                              .toLowerCase()
+                              .includes(addMemberSearch.toLowerCase()))
+                        );
+
+                        return (
+                          <div>
+                            <label htmlFor="add-member-search" className="sr-only">Search org members to add</label>
+                            <input
+                              id="add-member-search"
+                              type="text"
+                              placeholder="Search members by name..."
+                              value={addMemberSearch}
+                              onChange={e => {
+                                setAddMemberSearch(e.target.value);
+                                setAddMemberError(null);
+                                setAddMemberSuccess(null);
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                              aria-label="Search organization members to add to group"
+                            />
+
+                            {addMemberSearch && availableToAdd.length === 0 && (
+                              <p className="text-sm text-gray-500 text-center py-2">
+                                No members found — they may already be in this group.
+                              </p>
+                            )}
+
+                            {availableToAdd.length > 0 && (
+                              <ul className="space-y-1 max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100" aria-label="Members available to add">
+                                {availableToAdd.map(m => (
+                                  <li key={m.member_id} className="flex items-center justify-between px-3 py-2 bg-white hover:bg-gray-50">
+                                    <span className="text-sm text-gray-900">
+                                      {m.members ? m.members.first_name + ' ' + m.members.last_name : 'Unknown'}
+                                    </span>
+                                    <button
+                                      onClick={() => handleAddMemberToGroup(m.member_id)}
+                                      disabled={addMemberLoading}
+                                      className="px-3 py-1 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                      aria-label={'Add ' + (m.members?.first_name || 'member') + ' to group'}
+                                    >
+                                      {addMemberLoading ? 'Adding...' : 'Add'}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+
+                            {!addMemberSearch && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                Type a name above to find org members to add.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
                     {(() => {
                       const liveGroup = groups.find(g => g.id === managingGroup.id);
                       const pending = (liveGroup?.group_memberships || []).filter(gm => gm.status === 'pending');
@@ -862,7 +1010,7 @@ function OrganizationDashboard() {
                               </span>
                             </div>
                             
-                              href={'mailto:' + inquiry.email}
+<a href={'mailto:' + inquiry.email}
                               className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                               aria-label={'Email ' + inquiry.name + ' at ' + inquiry.email}
                             >
@@ -962,7 +1110,6 @@ function OrganizationDashboard() {
                     </div>
                   </button>
 
-                  {/* Groups Stat Card */}
                   <button
                     onClick={() => setActiveTab('groups')}
                     className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
