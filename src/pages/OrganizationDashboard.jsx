@@ -20,7 +20,8 @@ function OrganizationDashboard() {
     totalMembers: 0,
     pendingInvites: 0,
     activeEvents: 0,
-    unreadAnnouncements: 0
+    unreadAnnouncements: 0,
+    totalGroups: 0
   });
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -165,6 +166,7 @@ function OrganizationDashboard() {
 
   async function handleGroupCreated(newGroup) {
     setGroups(prev => [newGroup, ...prev]);
+    setStats(prev => ({ ...prev, totalGroups: prev.totalGroups + 1 }));
   }
 
   async function handleJoinGroup(group) {
@@ -209,6 +211,7 @@ function OrganizationDashboard() {
 
       if (error) throw error;
       setGroups(prev => prev.filter(g => g.id !== group.id));
+      setStats(prev => ({ ...prev, totalGroups: Math.max(0, prev.totalGroups - 1) }));
     } catch (err) {
       console.error('Error deleting group:', err);
       alert('Could not delete group: ' + err.message);
@@ -326,6 +329,11 @@ function OrganizationDashboard() {
         .eq('organization_id', organizationId)
         .gte('start_time', new Date().toISOString());
 
+      const { count: groupCount } = await supabase
+        .from('groups')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organizationId);
+
       const { data: allAnnouncements } = await supabase
         .from('announcements')
         .select('id')
@@ -347,7 +355,8 @@ function OrganizationDashboard() {
         totalMembers: memberCount || 0,
         pendingInvites: inviteCount || 0,
         activeEvents: eventCount || 0,
-        unreadAnnouncements: unreadCount
+        unreadAnnouncements: unreadCount,
+        totalGroups: groupCount || 0
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -678,7 +687,6 @@ function OrganizationDashboard() {
                       </button>
                     </div>
 
-                    {/* Pending Requests */}
                     {(() => {
                       const liveGroup = groups.find(g => g.id === managingGroup.id);
                       const pending = (liveGroup?.group_memberships || []).filter(gm => gm.status === 'pending');
@@ -886,7 +894,7 @@ function OrganizationDashboard() {
             {/* ── OVERVIEW TAB ── */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   <button
                     onClick={() => setActiveTab('members')}
                     className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -946,6 +954,22 @@ function OrganizationDashboard() {
                         <p className="text-xs text-orange-700 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up!' : 'Click to read'}</p>
                       </div>
                       <div className="text-4xl" aria-hidden="true">📢</div>
+                    </div>
+                  </button>
+
+                  {/* Groups Stat Card */}
+                  <button
+                    onClick={() => setActiveTab('groups')}
+                    className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                    aria-label={'View ' + stats.totalGroups + ' groups and committees'}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-600 text-sm font-semibold uppercase tracking-wide">Groups</p>
+                        <p className="text-3xl font-bold text-purple-900 mt-2">{stats.totalGroups}</p>
+                        <p className="text-xs text-purple-700 mt-1">Click to view all</p>
+                      </div>
+                      <div className="text-4xl" aria-hidden="true">🏛</div>
                     </div>
                   </button>
                 </div>
