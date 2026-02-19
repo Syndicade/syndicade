@@ -217,6 +217,10 @@ function OrganizationDashboard() {
       alert('Could not delete group: ' + err.message);
     }
   }
+  
+  function handleUpdateGroup(updatedGroup) {
+  setGroups(prev => prev.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
+}
 
   async function handleManageGroup(group) {
     setManagingGroup(group);
@@ -800,6 +804,7 @@ function OrganizationDashboard() {
                           onJoin={handleJoinGroup}
                           onLeave={handleLeaveGroup}
                           onDelete={handleDeleteGroup}
+                          onUpdate={handleUpdateGroup}
                         />
                       </div>
                     ))}
