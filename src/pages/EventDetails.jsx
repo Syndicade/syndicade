@@ -494,13 +494,13 @@ const handleDeleteSeries = async () => {
               ← Back to Events
             </Link>
 <div className="flex items-center gap-2">
-              {/* iCal Export - Available to everyone */}
+{/* iCal Export - Available to everyone */}
               <button
                 onClick={() => downloadICS(event)}
                 className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                 title="Add to Calendar"
               >
-                📅 Add to Calendar
+                Add to Calendar
               </button>
 
               {/* Print Button - Available to everyone */}
@@ -509,42 +509,42 @@ const handleDeleteSeries = async () => {
                 className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 print-button"
                 title="Print Event Details"
               >
-                🖨️ Print
+                Print
               </button>
 
               {/* Admin-only buttons */}
               {isAdmin && (
                 <>
                 
-                  {/* Check-In Button - Admin Only */}
+{/* Check-In Button - Admin Only */}
                   <button
                     onClick={() => setShowCheckIn(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                     title="Event Check-In"
                   >
-                    🎫 Check-In
+                    Check-In
                   </button>
 
                  {/* Attendance Report Button - Admin Only */}
                   <button
                     onClick={() => setShowAttendanceReport(true)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                     title="View Attendance Report"
                   >
-                    📊 Attendance
+                    Attendance
                   </button>
 
                   <button
                     onClick={handleEditClick}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
-                    ✏️ Edit
+                    Edit
                   </button>
                   <button
                     onClick={handleDeleteClick}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                   >
-                    🗑️ Delete
+                    Delete
                   </button>
                 </>
               )}
