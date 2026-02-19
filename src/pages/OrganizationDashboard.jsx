@@ -256,9 +256,9 @@ function OrganizationDashboard() {
       if (events) {
         events.forEach(event => {
           activities.push({
-            id: `event-${event.id}`,
+            id: 'event-' + event.id,
             type: 'event',
-            title: `New event: ${event.title}`,
+            title: 'New event: ' + event.title,
             icon: event.event_type === 'in_person' ? '📍' : event.event_type === 'virtual' ? '💻' : '🔀',
             timestamp: event.created_at,
             color: 'green'
@@ -276,7 +276,7 @@ function OrganizationDashboard() {
       if (announcementsData) {
         announcementsData.forEach(announcement => {
           activities.push({
-            id: `announcement-${announcement.id}`,
+            id: 'announcement-' + announcement.id,
             type: 'announcement',
             title: announcement.title,
             icon: announcement.priority === 'urgent' ? '🚨' : '📢',
@@ -288,7 +288,7 @@ function OrganizationDashboard() {
 
       const { data: newMembers } = await supabase
         .from('memberships')
-        .select(`id, created_at, members!inner(first_name, last_name)`)
+        .select('id, created_at, members!inner(first_name, last_name)')
         .eq('organization_id', organizationId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -297,9 +297,9 @@ function OrganizationDashboard() {
       if (newMembers) {
         newMembers.forEach(membership => {
           activities.push({
-            id: `member-${membership.id}`,
+            id: 'member-' + membership.id,
             type: 'member',
-            title: `${membership.members.first_name} ${membership.members.last_name} joined`,
+            title: membership.members.first_name + ' ' + membership.members.last_name + ' joined',
             icon: '👋',
             timestamp: membership.created_at,
             color: 'blue'
@@ -323,7 +323,7 @@ function OrganizationDashboard() {
 
       const { data, error } = await supabase
         .from('announcements')
-        .select(`*, announcement_reads!left(id, member_id)`)
+        .select('*, announcement_reads!left(id, member_id)')
         .eq('organization_id', organizationId)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
@@ -433,75 +433,52 @@ function OrganizationDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-              <p className="text-gray-600 mt-1">{organization.description}</p>
-              <div className="flex items-center gap-4 mt-3">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-                  {organization.type}
-                </span>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                  {membership.role === 'admin' ? '👑 Admin' : '👤 Member'}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/organizations')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
-            >
-              ← All Organizations
-            </button>
-          </div>
-        </div>
-
-        {/* View Mode Toggle */}
-        {membership?.role === 'admin' && (
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl" aria-hidden="true">👁️</span>
-                <div>
-                  <h3 className="font-semibold text-gray-900">View Mode</h3>
-                  <p className="text-sm text-gray-600">Switch between admin and member perspective</p>
+            <div className="flex items-center gap-4">
+              {organization.logo_url && (
+                <img
+                  src={organization.logo_url}
+                  alt={organization.name + ' logo'}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm flex-shrink-0"
+                />
+              )}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
+                <p className="text-gray-600 mt-1">{organization.description}</p>
+                <div className="flex items-center gap-4 mt-3">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
+                    {organization.type}
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                    {membership.role === 'admin' ? '👑 Admin' : '👤 Member'}
+                  </span>
                 </div>
               </div>
+            </div>
+
+            {/* View Mode Toggle - Admin Only */}
+            {membership?.role === 'admin' && (
               <div className="flex items-center gap-2">
-                <span className={`text-sm font-medium ${viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500'}`}>
-                  Admin
+                <span className={'text-sm font-medium ' + (viewMode === 'admin' ? 'text-purple-700' : 'text-gray-500')}>
+                  Admin View
                 </span>
                 <button
                   onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ${
-                    viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600'
-                  }`}
+                  className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ' + (viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600')}
                   role="switch"
                   aria-checked={viewMode === 'admin'}
                   aria-label="Toggle between admin and member view"
                 >
-                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                    viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7'
-                  }`} />
+                  <span className={'inline-block h-6 w-6 transform rounded-full bg-white transition-transform ' + (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
                 </button>
-                <span className={`text-sm font-medium ${viewMode === 'member' ? 'text-blue-700' : 'text-gray-500'}`}>
-                  Member
+                <span className={'text-sm font-medium ' + (viewMode === 'member' ? 'text-blue-700' : 'text-gray-500')}>
+                  Member View
                 </span>
               </div>
-            </div>
-            <div className="mt-3 text-sm">
-              {viewMode === 'admin' ? (
-                <p className="text-purple-700">
-                  <span className="font-medium">Admin View:</span> Full access to all management features, settings, and member data
-                </p>
-              ) : (
-                <p className="text-blue-700">
-                  <span className="font-medium">Member View:</span> See exactly what regular members see (limited features)
-                </p>
-              )}
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="border-b border-gray-200">
@@ -510,13 +487,7 @@ function OrganizationDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    py-4 px-1 border-b-2 font-medium text-sm transition-all relative whitespace-nowrap
-                    ${activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }
-                  `}
+                  className={'py-4 px-1 border-b-2 font-medium text-sm transition-all relative whitespace-nowrap ' + (activeTab === tab.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
                   aria-current={activeTab === tab.id ? 'page' : undefined}
                 >
                   <span aria-hidden="true">{tab.icon}</span>
@@ -524,7 +495,7 @@ function OrganizationDashboard() {
                   {tab.badge > 0 && (
                     <span
                       className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full"
-                      aria-label={`${tab.badge} unread`}
+                      aria-label={tab.badge + ' unread'}
                     >
                       {tab.badge}
                     </span>
@@ -572,11 +543,7 @@ function OrganizationDashboard() {
                       <div
                         key={inquiry.id}
                         role="listitem"
-                        className={`rounded-lg border p-5 transition-all ${
-                          inquiry.is_read
-                            ? 'bg-white border-gray-200'
-                            : 'bg-blue-50 border-blue-300'
-                        }`}
+                        className={'rounded-lg border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-300')}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
@@ -594,13 +561,12 @@ function OrganizationDashboard() {
                                 })}
                               </span>
                             </div>
-                            <a
-                              href={`mailto:${inquiry.email}`}
+                            
+                        href={'mailto:' + inquiry.email}
                               className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                              aria-label={`Email ${inquiry.name} at ${inquiry.email}`}
+                              aria-label={'Email ' + inquiry.name + ' at ' + inquiry.email}
                             >
                               {inquiry.email}
-                            </a>
                             <p className="text-gray-700 mt-3 leading-relaxed">{inquiry.message}</p>
                           </div>
 
@@ -609,7 +575,7 @@ function OrganizationDashboard() {
                               <button
                                 onClick={() => handleMarkInquiryRead(inquiry.id)}
                                 className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all whitespace-nowrap"
-                                aria-label={`Mark message from ${inquiry.name} as read`}
+                                aria-label={'Mark message from ' + inquiry.name + ' as read'}
                               >
                                 ✓ Mark Read
                               </button>
@@ -617,7 +583,7 @@ function OrganizationDashboard() {
                             <button
                               onClick={() => handleDeleteInquiry(inquiry.id)}
                               className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all whitespace-nowrap"
-                              aria-label={`Delete message from ${inquiry.name}`}
+                              aria-label={'Delete message from ' + inquiry.name}
                             >
                               🗑 Delete
                             </button>
@@ -632,44 +598,12 @@ function OrganizationDashboard() {
 
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {effectiveRole === 'admin' ? '👑 Admin Dashboard' : '👤 Member Dashboard'}
-                  </h2>
-                  <span className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-                    {effectiveRole === 'admin' ? 'Administrator View' : 'Member View'}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-3 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateEvent(true)}
-                    className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all flex items-center gap-2"
-                    aria-label="Create new event"
-                  >
-                    <span aria-hidden="true">📅</span>
-                    Create Event
-                  </button>
-
-                  {effectiveRole === 'admin' && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateAnnouncement(true)}
-                      className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all flex items-center gap-2"
-                      aria-label="Create new announcement"
-                    >
-                      <span aria-hidden="true">📢</span>
-                      Create Announcement
-                    </button>
-                  )}
-                </div>
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <button
                     onClick={() => setActiveTab('members')}
                     className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    aria-label={`View ${stats.totalMembers} total members`}
+                    aria-label={'View ' + stats.totalMembers + ' total members'}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -685,7 +619,7 @@ function OrganizationDashboard() {
                     <button
                       onClick={() => setActiveTab('invite')}
                       className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border-2 border-yellow-200 hover:border-yellow-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
-                      aria-label={`Manage ${stats.pendingInvites} pending invitations`}
+                      aria-label={'Manage ' + stats.pendingInvites + ' pending invitations'}
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -701,9 +635,9 @@ function OrganizationDashboard() {
                   )}
 
                   <button
-                    onClick={() => navigate(`/organizations/${organizationId}/events`)}
+                    onClick={() => navigate('/organizations/' + organizationId + '/events')}
                     className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    aria-label={`View ${stats.activeEvents} upcoming events`}
+                    aria-label={'View ' + stats.activeEvents + ' upcoming events'}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -718,7 +652,7 @@ function OrganizationDashboard() {
                   <button
                     onClick={() => setActiveTab('announcements')}
                     className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border-2 border-orange-200 hover:border-orange-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                    aria-label={`Read ${stats.unreadAnnouncements} unread announcements`}
+                    aria-label={'Read ' + stats.unreadAnnouncements + ' unread announcements'}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -736,8 +670,27 @@ function OrganizationDashboard() {
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
                     <button
-                      onClick={() => navigate(`/organizations/${organizationId}/members`)}
+                      onClick={() => setShowCreateEvent(true)}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📅</span>
+                      <span className="font-semibold text-gray-900">Create Event</span>
+                    </button>
+
+                    {effectiveRole === 'admin' && (
+                      <button
+                        onClick={() => setShowCreateAnnouncement(true)}
+                        className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📢</span>
+                        <span className="font-semibold text-gray-900">Create Announcement</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => navigate('/organizations/' + organizationId + '/members')}
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">👥</span>
@@ -745,131 +698,45 @@ function OrganizationDashboard() {
                     </button>
 
                     <button
-                      onClick={() => setActiveTab('announcements')}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📢</span>
-                      <span className="font-semibold text-gray-900">View Announcements</span>
-                      {stats.unreadAnnouncements > 0 && (
-                        <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-orange-500 rounded-full" aria-label={`${stats.unreadAnnouncements} unread`}>
-                          {stats.unreadAnnouncements}
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => navigate(`/organizations/${organizationId}/events`)}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📅</span>
-                      <span className="font-semibold text-gray-900">View Events</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate(`/organizations/${organizationId}/polls`)}
+                      onClick={() => navigate('/organizations/' + organizationId + '/polls')}
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📊</span>
-                      <span className="font-semibold text-gray-900">View Polls</span>
+                     <span className="font-semibold text-gray-900">Polls</span>
                     </button>
 
                     <button
-                      onClick={() => navigate(`/organizations/${organizationId}/surveys`)}
+                      onClick={() => navigate('/organizations/' + organizationId + '/surveys')}
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📋</span>
-                      <span className="font-semibold text-gray-900">View Surveys</span>
+                      <span className="font-semibold text-gray-900">Surveys</span>
                     </button>
 
                     <button
-                      onClick={() => navigate(`/organizations/${organizationId}/signup-forms`)}
-                      className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onClick={() => navigate('/organizations/' + organizationId + '/signup-forms')}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                       aria-label="View sign-up forms"
                     >
-                      <span className="text-2xl" aria-hidden="true">📝</span>
-                      <div className="text-left">
+                      <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📝</span>
+                      <div className="text-center">
                         <div className="font-semibold text-gray-900">Sign-Up Forms</div>
                         <div className="text-sm text-gray-600">Volunteer lists & time slots</div>
                       </div>
                     </button>
 
                     {effectiveRole === 'admin' && (
-                      <>
-                        <button
-                          onClick={() => setActiveTab('inbox')}
-                          className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">📬</span>
-                          <span className="font-semibold text-gray-900">View Inbox</span>
-                          {unreadInquiriesCount > 0 && (
-                            <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-blue-500 rounded-full" aria-label={`${unreadInquiriesCount} unread`}>
-                              {unreadInquiriesCount}
-                            </span>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => setActiveTab('settings')}
-                          className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">⚙️</span>
-                          <span className="font-semibold text-gray-900">Organization Settings</span>
-                        </button>
-                      </>
+                      <button
+                        onClick={() => navigate('/organizations/' + organizationId + '/page-editor')}
+                        className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Edit public page"
+                      >
+                        <span className="text-2xl group-hover:scale-110 transition-transform" aria-hidden="true">🌐</span>
+                        <span className="font-semibold text-gray-900">Edit Public Page</span>
+                      </button>
                     )}
                   </div>
                 </div>
-
-                {effectiveRole === 'admin' && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-                    <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
-                      <span aria-hidden="true">👑</span>
-                      Admin Tools
-                    </h3>
-                    <p className="text-purple-700 text-sm mb-4">
-                      These management features are only visible to administrators.
-                    </p>
-                    <div className="flex gap-3 flex-wrap">
-                      <button
-                        onClick={() => setActiveTab('invite')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
-                      >
-                        ✉️ Invite Members
-                      </button>
-                      <button>
-                        onClick={() => setActiveTab('inbox')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold flex items-center gap-2"
-                      >
-                        📬 View Inbox
-                        {unreadInquiriesCount > 0 && (
-                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-purple-600 bg-white rounded-full">
-                            {unreadInquiriesCount}
-                          </span>
-                        )}
-                        </button>
-                      <button
-                        onClick={() => setActiveTab('analytics')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
-                        aria-label="View analytics dashboard"
-                      >
-                        📈 View Analytics
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('settings')}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-semibold"
-                      >
-                        ⚙️ Manage Settings
-                      </button>
-                      <button
-                        onClick={() => navigate('/organizations/' + organizationId + '/page-editor')}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all font-semibold"
-                        aria-label="Edit public page"
-                      >
-                        🌐 Edit Public Page
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -942,7 +809,7 @@ function OrganizationDashboard() {
                     </div>
                     {effectiveRole === 'admin' && (
                       <button
-                        onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+                        onClick={() => navigate('/organizations/' + organizationId + '/documents')}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                       >
                         📂 Manage Documents
@@ -951,7 +818,7 @@ function OrganizationDashboard() {
                   </div>
                   <div className="mt-6 text-center">
                     <button
-                      onClick={() => navigate(`/organizations/${organizationId}/documents`)}
+                      onClick={() => navigate('/organizations/' + organizationId + '/documents')}
                       className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                     >
                       View All Documents <span aria-hidden="true">→</span>

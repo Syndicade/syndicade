@@ -101,6 +101,7 @@ function UnifiedDashboard() {
           .limit(5);
         setUpcomingEvents(eventsData || []);
 
+// Fetch announcements
         const { data: recentAnnouncements } = await supabase
           .from('announcements')
           .select('id, title, created_at, priority, organization:organizations (id, name)')
@@ -108,17 +109,56 @@ function UnifiedDashboard() {
           .in('visibility', ['public', 'members'])
           .order('created_at', { ascending: false })
           .limit(10);
-        setActivities(
-          (recentAnnouncements || []).map(item => ({
-            id: item.id,
+
+        // Fetch recent events
+        const { data: recentEvents } = await supabase
+          .from('events')
+          .select('id, title, created_at, organization:organizations (id, name)')
+          .in('organization_id', orgIds)
+          .in('visibility', ['public', 'members'])
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        // Fetch recent documents
+        const { data: recentDocuments } = await supabase
+          .from('documents')
+          .select('id, title, created_at, organization:organizations (id, name)')
+          .in('organization_id', orgIds)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        // Merge all activities
+        const allActivities = [
+          ...(recentAnnouncements || []).map(item => ({
+            id: 'announcement-' + item.id,
             type: 'announcement',
             title: item.title,
             organizationName: item.organization.name,
             organizationId: item.organization.id,
             timestamp: item.created_at,
             priority: item.priority
+          })),
+          ...(recentEvents || []).map(item => ({
+            id: 'event-' + item.id,
+            type: 'event',
+            title: item.title,
+            organizationName: item.organization.name,
+            organizationId: item.organization.id,
+            timestamp: item.created_at
+          })),
+          ...(recentDocuments || []).map(item => ({
+            id: 'document-' + item.id,
+            type: 'document',
+            title: item.title,
+            organizationName: item.organization.name,
+            organizationId: item.organization.id,
+            timestamp: item.created_at
           }))
-        );
+        ];
+
+        // Sort by timestamp descending and limit to 10
+        allActivities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setActivities(allActivities.slice(0, 10));
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -284,173 +324,195 @@ function UnifiedDashboard() {
               </div>
             </div>
 
-            {/* ROW 2: Organizations + Upcoming Events */}
+           {/* ROW 2: Left (Orgs + Events) | Right (Activity + Signups) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* My Organizations */}
-<section aria-labelledby="organizations-heading"
-                className="bg-white rounded-lg border border-gray-200 p-6 pb-4">
-                <h2 id="organizations-heading" className="text-lg font-bold text-gray-900 mb-4">
-                  My Organizations
-                </h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {organizations.map((org) => {
-                    const gradient = gradients[org.name.charCodeAt(0) % gradients.length];
-                    return (
-                      <Link
-                        key={org.id}
-                        to={'/organizations/' + org.id}
-                        className="flex flex-col rounded-xl border border-gray-200 bg-white hover:border-blue-300 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={'Go to ' + org.name + ' dashboard'}
-                      >
-                        <div className="p-4 flex flex-col flex-1">
-                          {/* Circular logo */}
-                          <div className="mb-3">
-                            {org.logo_url ? (
-                              <img
-                                src={org.logo_url}
-                                alt={org.name + ' logo'}
-                                className="w-14 h-14 rounded-full object-cover border-2 border-gray-100 shadow-sm"
-                              />
-                            ) : (
-                              <div
-                                className={'w-14 h-14 rounded-full border-2 border-gray-100 shadow-sm bg-gradient-to-br ' + gradient + ' flex items-center justify-center text-white font-bold text-xl'}
-                                aria-hidden="true"
-                              >
-                                {org.name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          {/* Name */}
-                          <p className="font-semibold text-gray-900 text-sm leading-tight mb-1 truncate">
-                            {org.name}
-                          </p>
-                          {/* Role badge */}
-                          <span className={'inline-block self-start px-2 py-0.5 text-xs font-semibold rounded border mb-3 ' + getRoleBadgeColor(org.role)}>
-                            {org.custom_title || org.role.charAt(0).toUpperCase() + org.role.slice(1)}
-                          </span>
-                          {/* Stats */}
-                          <div className="flex items-center gap-2 text-xs text-gray-500 mt-auto flex-wrap">
-                            <span>{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
-                            <span>{org.eventCount} event{org.eventCount !== 1 ? 's' : ''}</span>
-                            {org.unreadCount > 0 && (
-                              <span className="text-amber-600 font-semibold">{org.unreadCount} new</span>
-                            )}
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-                {/* Create new org button */}
-                <button
-                  onClick={() => setShowCreateModal(true)}
-className="mt-4 w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl"                  aria-label="Create a new organization"
-                >
-                  + Create a new organization
-                </button>
-              </section>
-
-              {/* Upcoming Events */}
-              <section aria-labelledby="events-heading"
-                className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 id="events-heading" className="text-lg font-bold text-gray-900">
-                    Upcoming Events
+              {/* LEFT COLUMN */}
+              <div className="space-y-4">
+                {/* My Organizations */}
+                <section aria-labelledby="organizations-heading"
+                  className="bg-white rounded-lg border border-gray-200 p-6 pb-2">
+                  <h2 id="organizations-heading" className="text-lg font-bold text-gray-900 mb-4">
+                    My Organizations
                   </h2>
-                  <Link to="/events"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
-                    View all →
-                  </Link>
-                </div>
-                {upcomingEvents.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 text-sm">No upcoming events</p>
-                    <Link to="/discover"
-                      className="text-blue-600 text-sm hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded mt-1 inline-block">
-                      Discover public events →
+                  <div className="grid grid-cols-2 gap-3">
+                    {organizations.map((org) => {
+                      const gradient = gradients[org.name.charCodeAt(0) % gradients.length];
+                      return (
+                        <Link
+                          key={org.id}
+                          to={'/organizations/' + org.id}
+                          className="flex flex-col rounded-xl border border-gray-200 bg-white hover:border-blue-300 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label={'Go to ' + org.name + ' dashboard'}
+                        >
+                          <div className="p-4 flex flex-col flex-1">
+                            {/* Circular logo */}
+                            <div className="mb-3">
+                              {org.logo_url ? (
+                                <img
+                                  src={org.logo_url}
+                                  alt={org.name + ' logo'}
+                                  className="w-14 h-14 rounded-full object-cover border-2 border-gray-100 shadow-sm"
+                                />
+                              ) : (
+                                <div
+                                  className={'w-14 h-14 rounded-full border-2 border-gray-100 shadow-sm bg-gradient-to-br ' + gradient + ' flex items-center justify-center text-white font-bold text-xl'}
+                                  aria-hidden="true"
+                                >
+                                  {org.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            {/* Name */}
+                            <p className="font-semibold text-gray-900 text-sm leading-tight mb-1 truncate">
+                              {org.name}
+                            </p>
+                            {/* Role badge */}
+                            <span className={'inline-block self-start px-2 py-0.5 text-xs font-semibold rounded border mb-3 ' + getRoleBadgeColor(org.role)}>
+                              {org.custom_title || org.role.charAt(0).toUpperCase() + org.role.slice(1)}
+                            </span>
+                            {/* Stats */}
+                            <div className="flex items-center gap-2 text-xs text-gray-500 mt-auto flex-wrap">
+                              <span>{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
+                              <span>{org.eventCount} event{org.eventCount !== 1 ? 's' : ''}</span>
+                              {org.unreadCount > 0 && (
+                                <span className="text-amber-600 font-semibold">{org.unreadCount} new</span>
+                              )}
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                  {/* Create new org button */}
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="mt-4 w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl"
+                    aria-label="Create a new organization"
+                  >
+                    + Create a new organization
+                  </button>
+                </section>
+
+                {/* Upcoming Events */}
+                <section aria-labelledby="events-heading"
+                  className="bg-white rounded-lg border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 id="events-heading" className="text-lg font-bold text-gray-900">
+                      Upcoming Events
+                    </h2>
+                    <Link to="/events"
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
+                      View all →
                     </Link>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {upcomingEvents.slice(0, 4).map((event) => (
-                      <EventCard key={event.id} event={event} showOrganization={true} />
-                    ))}
-                    <div className="flex gap-3 pt-2 border-t border-gray-100">
-                      <Link to="/events"
-                        className="flex-1 text-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-semibold">
-                        View All Events
-                      </Link>
-                      <Link to="/calendar"
-                        className="flex-1 text-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-sm font-semibold">
-                        View Calendar
+                  {upcomingEvents.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 text-sm">No upcoming events</p>
+                      <Link to="/discover"
+                        className="text-blue-600 text-sm hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded mt-1 inline-block">
+                        Discover public events →
                       </Link>
                     </div>
-                  </div>
-                )}
-              </section>
-            </div>
-
-            {/* ROW 3: Recent Activity + My Sign-Ups */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Recent Activity */}
-              <section aria-labelledby="activity-heading"
-                className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 id="activity-heading" className="text-lg font-bold text-gray-900 mb-4">
-                  Recent Activity
-                </h2>
-                {visibleActivities.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-6">No recent activity</p>
-                ) : (
-                  <div className="space-y-1">
-                    {visibleActivities.map((activity) => (
-                      <div key={activity.id}
-                        className="flex items-start gap-2 group pb-3 border-b border-gray-100 last:border-0 last:pb-0">
-                        <Link
-                          to={'/organizations/' + activity.organizationId + '/announcements'}
-                          className="flex items-start gap-3 flex-1 hover:bg-gray-50 -ml-2 pl-2 pr-1 py-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label={'View announcement: ' + activity.title}
-                        >
-                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-400 mt-2" aria-hidden="true"></div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 text-sm truncate">{activity.title}</p>
-                            <p className="text-xs text-gray-500">{activity.organizationName} · {formatTimestamp(activity.timestamp)}</p>
-                          </div>
-                          {activity.priority === 'urgent' && (
-                            <span className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-red-800 bg-red-100 rounded border border-red-200">
-                              URGENT
-                            </span>
-                          )}
+                  ) : (
+                    <div className="space-y-3">
+                      {upcomingEvents.slice(0, 4).map((event) => (
+                        <EventCard key={event.id} event={event} showOrganization={true} />
+                      ))}
+                      <div className="flex gap-3 pt-2 border-t border-gray-100">
+                        <Link to="/events"
+                          className="flex-1 text-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-semibold">
+                          View All Events
                         </Link>
-                        <button
-                          onClick={() => handleDismissActivity(activity.id)}
-                          className="flex-shrink-0 mt-1 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label={'Dismiss: ' + activity.title}
-                        >
-                          <span aria-hidden="true">×</span>
-                        </button>
+                        <Link to="/calendar"
+                          className="flex-1 text-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-sm font-semibold">
+                          View Calendar
+                        </Link>
                       </div>
-                    ))}
-                  </div>
-                )}
-                {dismissedActivities.length > 0 && (
-                  <button
-                    onClick={() => { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); }}
-                    className="mt-3 text-xs text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded"
-                  >
-                    Show {dismissedActivities.length} hidden item{dismissedActivities.length !== 1 ? 's' : ''}
-                  </button>
-                )}
-              </section>
+                    </div>
+                  )}
+                </section>
+              </div>
 
-              {/* My Sign-Ups */}
-              <section aria-labelledby="signups-heading">
-                <MySignups showFilter={true} headingId="signups-heading" />
-              </section>
+              {/* RIGHT COLUMN */}
+              <div className="space-y-4">
+                {/* Recent Activity */}
+                <section aria-labelledby="activity-heading"
+                  className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h2 id="activity-heading" className="text-lg font-bold text-gray-900 mb-4">
+                    Recent Activity
+                  </h2>
+                  {visibleActivities.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-6">No recent activity</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {visibleActivities.map((activity) => (
+                        <div key={activity.id}
+                          className="flex items-start gap-2 group pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                          <Link
+                            to={
+                              activity.type === 'announcement' 
+                                ? '/organizations/' + activity.organizationId + '/announcements'
+                                : activity.type === 'event'
+                                ? '/organizations/' + activity.organizationId + '/events'
+                                : '/organizations/' + activity.organizationId + '/documents'
+                            }
+                            className="flex items-start gap-3 flex-1 hover:bg-gray-50 -ml-2 pl-2 pr-1 py-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label={'View ' + activity.type + ': ' + activity.title}
+                          >
+                            <div 
+                              className={
+                                'flex-shrink-0 w-2 h-2 rounded-full mt-2 ' +
+                                (activity.type === 'announcement' ? 'bg-blue-400' : 
+                                 activity.type === 'event' ? 'bg-green-400' : 
+                                 'bg-purple-400')
+                              }
+                              aria-hidden="true"
+                            ></div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm truncate">
+                                {activity.type === 'event' && '📅 '}
+                                {activity.type === 'document' && '📄 '}
+                                {activity.title}
+                              </p>
+                              <p className="text-xs text-gray-500">{activity.organizationName} · {formatTimestamp(activity.timestamp)}</p>
+                            </div>
+                            {activity.priority === 'urgent' && (
+                              <span className="flex-shrink-0 px-2 py-0.5 text-xs font-bold text-red-800 bg-red-100 rounded border border-red-200">
+                                URGENT
+                              </span>
+                            )}
+                          </Link>
+                          <button
+                            onClick={() => handleDismissActivity(activity.id)}
+                            className="flex-shrink-0 mt-1 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label={'Dismiss: ' + activity.title}
+                          >
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {dismissedActivities.length > 0 && (
+                    <button
+                      onClick={() => { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); }}
+                      className="mt-3 text-xs text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded"
+                    >
+                      Show {dismissedActivities.length} hidden item{dismissedActivities.length !== 1 ? 's' : ''}
+                    </button>
+                  )}
+                </section>
+
+                {/* My Sign-Ups */}
+                <section aria-labelledby="signups-heading">
+                  <MySignups showFilter={true} headingId="signups-heading" />
+                </section>
+              </div>
+
+              </div>
+
             </div>
-
-          </div>
         )}
       </main>
 
