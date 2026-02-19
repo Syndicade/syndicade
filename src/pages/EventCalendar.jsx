@@ -385,32 +385,81 @@ function EventCalendar() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        .rbc-time-header-content > .rbc-row {
+          min-height: 50px !important;
+        }
+        .rbc-header {
+          padding: 8px 4px !important;
+          white-space: normal !important;
+          overflow: visible !important;
+          height: auto !important;
+          min-height: 50px !important;
+        }
+        .rbc-time-header {
+          min-height: 50px !important;
+        }
+        .rbc-allday-cell {
+          display: none !important;
+        }
+        .rbc-time-content > .rbc-row.rbc-allday-cell {
+          display: none !important;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <PageHeader
+<PageHeader
           title="Event Calendar"
           subtitle="View and manage events from all your organizations"
-          icon="📅"
-          backTo="/organizations"
-          backLabel="My Organizations"
+          backTo={null}
+          backLabel={null}
           actions={
             <div className="flex items-center gap-3">
               <Link 
                 to="/events"
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium"
               >
-                <span>📋</span>
                 List View
               </Link>
               <Link 
                 to="/calendar"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium"
               >
-                <span>📅</span>
                 Calendar View
               </Link>
             </div>
           }
         />
+
+        {/* Organization Legend - Moved above calendar */}
+        {organizations.length > 0 && events.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Organizations</h3>
+            <div className="flex flex-wrap gap-3">
+              {organizations.map((org, index) => {
+                const color = orgColors[index % Object.keys(orgColors).length];
+                const eventCount = events.filter(e => e.organization_id === org.id).length;
+                return (
+                  <div
+                    key={org.id}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
+                  >
+                    <div
+                      className="w-4 h-4 rounded"
+                      style={{ backgroundColor: color }}
+                      aria-hidden="true"
+                    ></div>
+                    <span className="text-sm text-gray-700 font-medium">
+                      {org.name}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({eventCount} {eventCount === 1 ? 'event' : 'events'})
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Calendar Container */}
         <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mt-6">
@@ -438,7 +487,7 @@ function EventCalendar() {
               )}
             </div>
           ) : (
-            <div style={{ height: '700px' }}>
+<div style={{ height: '700px' }} className="week-view-fix">
               <Calendar
                 localizer={localizer}
                 events={calendarEvents}
@@ -490,36 +539,6 @@ function EventCalendar() {
           </div>
         )}
 
-        {/* Organization Legend */}
-        {organizations.length > 0 && events.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Organizations</h3>
-            <div className="flex flex-wrap gap-3">
-              {organizations.map((org, index) => {
-                const color = orgColors[index % Object.keys(orgColors).length];
-                const eventCount = events.filter(e => e.organization_id === org.id).length;
-                return (
-                  <div
-                    key={org.id}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
-                  >
-                    <div
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: color }}
-                      aria-hidden="true"
-                    ></div>
-                    <span className="text-sm text-gray-700 font-medium">
-                      {org.name}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      ({eventCount} {eventCount === 1 ? 'event' : 'events'})
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

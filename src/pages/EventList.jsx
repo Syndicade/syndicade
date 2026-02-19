@@ -174,26 +174,23 @@ if (loading) {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <PageHeader
+<PageHeader
           title="All Events"
           subtitle={`${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''} found`}
-          icon="📅"
-          backTo="/organizations"
-          backLabel="My Organizations"
+          backTo={null}
+          backLabel={null}
           actions={
             <div className="flex items-center gap-3">
               <Link 
                 to="/events"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium"
               >
-                <span>📋</span>
                 List View
               </Link>
               <Link 
                 to="/calendar"
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium inline-flex items-center gap-2"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium"
               >
-                <span>📅</span>
                 Calendar View
               </Link>
               <Link 
