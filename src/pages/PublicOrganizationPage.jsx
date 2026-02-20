@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -7,6 +7,9 @@ export default function PublicOrganizationPage() {
   const [organization, setOrganization] = useState(null);
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -53,11 +56,53 @@ export default function PublicOrganizationPage() {
 
       setAnnouncements(announcementsData || []);
 
+      const { data: photosData } = await supabase
+        .from('org_photos')
+        .select('*')
+        .eq('organization_id', org.id)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+      setPhotos(photosData || []);
+
     } catch (err) {
       console.error('Error:', err);
       setError('Organization not found');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Lightbox keyboard navigation
+  const handleKeyDown = useCallback((e) => {
+    if (!lightboxPhoto) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') navigateLightbox(1);
+    if (e.key === 'ArrowLeft') navigateLightbox(-1);
+  }, [lightboxPhoto, lightboxIndex, photos]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  function openLightbox(photo, index) {
+    setLightboxPhoto(photo);
+    setLightboxIndex(index);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    setLightboxPhoto(null);
+    setLightboxIndex(null);
+    document.body.style.overflow = '';
+  }
+
+  function navigateLightbox(direction) {
+    const newIndex = lightboxIndex + direction;
+    if (newIndex >= 0 && newIndex < photos.length) {
+      setLightboxPhoto(photos[newIndex]);
+      setLightboxIndex(newIndex);
     }
   }
 
@@ -154,30 +199,30 @@ export default function PublicOrganizationPage() {
           </div>
         )}
         <div className="relative z-10">
-        <div className="max-w-4xl mx-auto text-center">
-          {organization.logo_url && (
-            <img
-              src={organization.logo_url}
-              alt={`${organization.name} logo`}
-              className="h-24 w-24 object-contain bg-white rounded-full mx-auto mb-6 p-2"
-            />
-          )}
-          <h1 className="text-4xl font-bold mb-3">{organization.name}</h1>
-          {organization.tagline && (
-            <p className="text-xl text-blue-100 mb-4">{organization.tagline}</p>
-          )}
-          <p className="text-blue-100 capitalize">{organization.type}</p>
+          <div className="max-w-4xl mx-auto text-center">
+            {organization.logo_url && (
+              <img
+                src={organization.logo_url}
+                alt={organization.name + ' logo'}
+                className="h-24 w-24 object-contain bg-white rounded-full mx-auto mb-6 p-2"
+              />
+            )}
+            <h1 className="text-4xl font-bold mb-3">{organization.name}</h1>
+            {organization.tagline && (
+              <p className="text-xl text-blue-100 mb-4">{organization.tagline}</p>
+            )}
+            <p className="text-blue-100 capitalize">{organization.type}</p>
 
-          <div className="mt-8">
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 transition-all shadow-lg text-lg"
-              aria-label="Member login portal"
-            >
-              🔑 Member Login
-            </Link>
+            <div className="mt-8">
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 transition-all shadow-lg text-lg"
+                aria-label="Member login portal"
+              >
+                &#128273; Member Login
+              </Link>
+            </div>
           </div>
-        </div>
         </div>
       </header>
 
@@ -196,11 +241,49 @@ export default function PublicOrganizationPage() {
           </section>
         )}
 
+        {/* Photo Gallery */}
+        {photos.length > 0 && (
+          <section className="mb-12" aria-labelledby="gallery-heading">
+            <h2 id="gallery-heading" className="text-2xl font-bold text-gray-900 mb-6">
+              &#128247; Photo Gallery
+            </h2>
+            <div
+              className="grid grid-cols-2 md:grid-cols-3 gap-3"
+              role="list"
+              aria-label="Organization photo gallery"
+            >
+              {photos.map((photo, index) => (
+                <div key={photo.id} role="listitem">
+                  <button
+                    onClick={() => openLightbox(photo, index)}
+                    className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-lg overflow-hidden group"
+                    aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : ' ' + (index + 1))}
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+                      <img
+                        src={photo.photo_url}
+                        alt={photo.caption || ('Photo ' + (index + 1) + ' from ' + organization.name)}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        loading="lazy"
+                      />
+                      {photo.caption && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          {photo.caption}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Upcoming Events */}
         {events.length > 0 && (
           <section className="mb-12" aria-labelledby="events-heading">
             <h2 id="events-heading" className="text-2xl font-bold text-gray-900 mb-6">
-              📅 Upcoming Events
+              &#128197; Upcoming Events
             </h2>
             <div className="space-y-4">
               {events.map(event => (
@@ -210,13 +293,13 @@ export default function PublicOrganizationPage() {
                 >
                   <h3 className="text-lg font-bold text-gray-900 mb-2">{event.title}</h3>
                   <p className="text-blue-600 font-medium mb-2">
-                    📅 {new Date(event.start_time).toLocaleDateString('en-US', {
+                    {new Date(event.start_time).toLocaleDateString('en-US', {
                       weekday: 'long', year: 'numeric', month: 'long',
                       day: 'numeric', hour: '2-digit', minute: '2-digit'
                     })}
                   </p>
                   {event.location && (
-                    <p className="text-gray-600">📍 {event.location}</p>
+                    <p className="text-gray-600">&#128205; {event.location}</p>
                   )}
                   {event.description && (
                     <p className="text-gray-700 mt-3">{event.description}</p>
@@ -231,7 +314,7 @@ export default function PublicOrganizationPage() {
         {announcements.length > 0 && (
           <section className="mb-12" aria-labelledby="announcements-heading">
             <h2 id="announcements-heading" className="text-2xl font-bold text-gray-900 mb-6">
-              📢 Latest News
+              &#128226; Latest News
             </h2>
             <div className="space-y-4">
               {announcements.map(announcement => (
@@ -250,18 +333,17 @@ export default function PublicOrganizationPage() {
           </section>
         )}
 
-        {/* Contact Info */}
+{/* Contact Info */}
         {(organization.contact_email || organization.contact_phone || organization.address) && (
           <section className="mb-12" aria-labelledby="contact-heading">
             <h2 id="contact-heading" className="text-2xl font-bold text-gray-900 mb-6">
-              📬 Contact Us
+              Contact Us
             </h2>
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 space-y-3">
-              {organization.contact_email && (
-                <p className="text-gray-700">
-                  ✉️{' '}
-                  <a
-                    href={`mailto:${organization.contact_email}`}
+{organization.contact_email && (
+                <p className="text-gray-700"><a
+                  
+                    href={'mailto:' + organization.contact_email}
                     className="text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                   >
                     {organization.contact_email}
@@ -269,35 +351,34 @@ export default function PublicOrganizationPage() {
                 </p>
               )}
               {organization.contact_phone && (
-                <p className="text-gray-700">
-                  📞{' '}
-                  <a
-                    href={`tel:${organization.contact_phone}`}
+                <p className="text-gray-700"><a
+                  
+                    href={'tel:' + organization.contact_phone}
                     className="text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                   >
-                    {organization.contact_phone}
+                    {'📞 ' + organization.contact_phone}
                   </a>
                 </p>
               )}
               {organization.address && (
                 <p className="text-gray-700">
-                  📍 {organization.address}
-                  {organization.city && `, ${organization.city}`}
-                  {organization.state && `, ${organization.state}`}
-                  {organization.zip_code && ` ${organization.zip_code}`}
+                  {'📍 ' + organization.address}
+                  {organization.city && ', ' + organization.city}
+                  {organization.state && ', ' + organization.state}
+                  {organization.zip_code && ' ' + organization.zip_code}
                 </p>
               )}
             </div>
           </section>
         )}
 
-        {/* ── Join Us Form ── */}
+        {/* Join Us Form */}
         <section
           className="mb-12 bg-blue-50 border border-blue-200 rounded-xl p-8"
           aria-labelledby="join-heading"
         >
           <h2 id="join-heading" className="text-2xl font-bold text-gray-900 mb-2">
-            🙋 Join Us
+            &#128587; Join Us
           </h2>
           <p className="text-gray-600 mb-6">
             Interested in getting involved? Send us a message and we'll be in touch.
@@ -309,7 +390,7 @@ export default function PublicOrganizationPage() {
               role="status"
               aria-live="polite"
             >
-              <p className="text-4xl mb-3">🎉</p>
+              <p className="text-4xl mb-3">&#127881;</p>
               <p className="text-green-800 font-bold text-lg">Message sent!</p>
               <p className="text-green-700 mt-1">
                 Thanks for reaching out. {organization.name} will get back to you soon.
@@ -325,7 +406,7 @@ export default function PublicOrganizationPage() {
             <form
               onSubmit={handleJoinSubmit}
               noValidate
-              aria-label={`Contact form for ${organization.name}`}
+              aria-label={'Contact form for ' + organization.name}
             >
               {joinError && (
                 <div
@@ -421,7 +502,7 @@ export default function PublicOrganizationPage() {
                   </>
                 ) : (
                   <>
-                    <span aria-hidden="true">✉️</span>
+                    <span aria-hidden="true">&#9993;</span>
                     Send Message
                   </>
                 )}
@@ -446,9 +527,78 @@ export default function PublicOrganizationPage() {
           to="/login"
           className="inline-block mt-4 text-blue-400 hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
         >
-          Member Login →
+          Member Login &#8594;
         </Link>
       </footer>
+
+      {/* Lightbox Modal */}
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo lightbox"
+          onClick={closeLightbox}
+        >
+          <div
+            className="relative max-w-4xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={closeLightbox}
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-1"
+              aria-label="Close photo lightbox"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Image */}
+            <img
+              src={lightboxPhoto.photo_url}
+              alt={lightboxPhoto.caption || ('Photo ' + (lightboxIndex + 1) + ' from ' + organization.name)}
+              className="w-full max-h-screen-3/4 object-contain rounded-lg"
+              style={{ maxHeight: '75vh' }}
+            />
+
+            {/* Caption */}
+            {lightboxPhoto.caption && (
+              <p className="text-white text-center mt-4 text-sm">{lightboxPhoto.caption}</p>
+            )}
+
+            {/* Navigation */}
+            <div className="flex justify-between items-center mt-4">
+              <button
+                onClick={() => navigateLightbox(-1)}
+                disabled={lightboxIndex === 0}
+                className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Previous photo"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              <p className="text-gray-400 text-sm" aria-live="polite">
+                {lightboxIndex + 1} / {photos.length}
+              </p>
+
+              <button
+                onClick={() => navigateLightbox(1)}
+                disabled={lightboxIndex === photos.length - 1}
+                className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Next photo"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
