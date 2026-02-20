@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { uploadDocument, validateFile } from '../lib/documentService';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 
-function FileUploadModal({ isOpen, onClose, organizationId, folderId, onSuccess }) {
+function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, onSuccess }) {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -24,9 +24,9 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, onSuccess 
   function handleDrag(e) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   }
@@ -40,54 +40,55 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, onSuccess 
     }
   }
 
-async function handleSubmit(e) {
-  e.preventDefault();
-  if (!file) return;
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!file) return;
 
-  setUploading(true);
-  setError(null);
+    setUploading(true);
+    setError(null);
 
-  const { data, error: uploadError } = await uploadDocument(file, {
-    organizationId,
-    folderId,
-    title,
-    description
-  });
+    const uploadOptions = {
+      organizationId,
+      folderId,
+      title,
+      description,
+    };
 
-  if (uploadError) {
-    setError(uploadError);
-    setUploading(false);
-  } else {
-    // Send notifications to all organization members
-    try {
-      console.log('🔔 Attempting to notify organization members about new document...');
-      const notificationResult = await notifyOrganizationMembers({
-        organizationId: organizationId,
-        type: 'document',
-        title: '📁 New Document',
-        message: title || file.name,
-        link: `/organizations/${organizationId}/documents`,
-        excludeUserId: null // Include all members
-      });
-      
-      if (notificationResult.error) {
-        console.error('⚠️ Notification error:', notificationResult.error);
-      } else {
-        console.log('✅ Document notifications sent:', notificationResult.data?.length || 0);
-        // Trigger event for bell to refresh
-        window.dispatchEvent(new CustomEvent('notificationCreated'));
-      }
-    } catch (notifError) {
-      console.error('⚠️ Failed to send document notifications (document still uploaded):', notifError);
+    // If uploading from a group context, tag the document with that group
+    if (groupId) {
+      uploadOptions.allowedGroups = [groupId];
+      uploadOptions.visibility = 'groups';
     }
+    const { data, error: uploadError } = await uploadDocument(file, uploadOptions);
 
-    onSuccess(data);
-    // Reset form
-    setFile(null);
-    setTitle('');
-    setDescription('');
+    if (uploadError) {
+      setError(uploadError);
+      setUploading(false);
+    } else {
+      try {
+        const notificationResult = await notifyOrganizationMembers({
+          organizationId,
+          type: 'document',
+          title: 'New Document',
+          message: title || file.name,
+          link: `/organizations/${organizationId}/documents`,
+          excludeUserId: null,
+        });
+        if (notificationResult.error) {
+          console.error('Notification error:', notificationResult.error);
+        } else {
+          window.dispatchEvent(new CustomEvent('notificationCreated'));
+        }
+      } catch (notifError) {
+        console.error('Failed to send document notifications (document still uploaded):', notifError);
+      }
+
+      onSuccess(data);
+      setFile(null);
+      setTitle('');
+      setDescription('');
+    }
   }
-}
 
   if (!isOpen) return null;
 
@@ -107,6 +108,9 @@ async function handleSubmit(e) {
           <h2 id="upload-modal-title" className="text-2xl font-bold text-gray-900">
             Upload Document
           </h2>
+          {groupId && (
+            <p className="text-sm text-gray-500 mt-1">This document will be shared with this group.</p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
@@ -128,7 +132,7 @@ async function handleSubmit(e) {
           >
             {file ? (
               <div>
-                <p className="text-green-600 font-semibold mb-2">✓ File selected:</p>
+                <p className="text-green-600 font-semibold mb-2">File selected:</p>
                 <p className="text-gray-900">{file.name}</p>
                 <p className="text-sm text-gray-500 mt-1">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -136,7 +140,7 @@ async function handleSubmit(e) {
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="mt-3 text-sm text-blue-600 hover:underline"
+                  className="mt-3 text-sm text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                 >
                   Choose different file
                 </button>
@@ -149,11 +153,11 @@ async function handleSubmit(e) {
                   onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
                   className="hidden"
                   id="file-input"
-                  aria-label="Select file"
+                  aria-label="Select file to upload"
                 />
                 <label
                   htmlFor="file-input"
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer inline-block"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer inline-block focus-within:ring-2 focus-within:ring-blue-500"
                 >
                   Choose File
                 </label>
@@ -164,27 +168,28 @@ async function handleSubmit(e) {
 
           {/* Title */}
           <div>
-            <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
-              Title *
+            <label htmlFor="doc-title" className="block text-sm font-semibold text-gray-900 mb-2">
+              Title <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <input
-              id="title"
+              id="doc-title"
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               maxLength={200}
+              aria-required="true"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="description" className="block text-sm font-semibold text-gray-900 mb-2">
-              Description (Optional)
+            <label htmlFor="doc-description" className="block text-sm font-semibold text-gray-900 mb-2">
+              Description <span className="text-gray-400 font-normal">(Optional)</span>
             </label>
             <textarea
-              id="description"
+              id="doc-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -199,22 +204,25 @@ async function handleSubmit(e) {
               type="button"
               onClick={onClose}
               disabled={uploading}
-              className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={uploading || !file}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2"
+              aria-busy={uploading}
             >
               {uploading ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" role="status">
+                    <span className="sr-only">Uploading...</span>
+                  </div>
                   Uploading...
                 </>
               ) : (
-                '⬆️ Upload'
+                'Upload'
               )}
             </button>
           </div>

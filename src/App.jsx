@@ -25,6 +25,8 @@ import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
 import SchedulingPolls from './pages/SchedulingPolls';
+import GroupsList from './pages/GroupsList';
+import GroupDetail from './pages/GroupDetail';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -100,6 +102,8 @@ function App() {
             <Route path="/organizations/:organizationId/signup-forms" element={session ? <SignupFormsList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/surveys" element={session ? <SurveysList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/scheduling" element={session ? <SchedulingPolls /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/groups" element={session ? <GroupsList /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/groups/:groupId" element={session ? <GroupDetail /> : <Navigate to="/login" replace />} />
 
             <Route path="/check-in/:eventId" element={<CheckInPage />} />
             <Route path="/guest-check-in/:eventId" element={<GuestCheckInPage />} />

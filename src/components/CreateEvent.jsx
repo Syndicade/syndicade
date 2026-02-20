@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
 
-function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
+function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -105,7 +105,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     setLoadingGroups(true);
     try {
       const { data, error: fetchError } = await supabase
-        .from('groups')
+        .from('org_groups')
         .select('id, name, description')
         .eq('organization_id', organizationId)
         .order('name');
@@ -120,11 +120,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     }
   };
 
-  const toggleGroupSelection = (groupId) => {
+  const toggleGroupSelection = (gId) => {
     setSelectedGroupIds(prev =>
-      prev.includes(groupId)
-        ? prev.filter(id => id !== groupId)
-        : [...prev, groupId]
+      prev.includes(gId)
+        ? prev.filter(id => id !== gId)
+        : [...prev, gId]
     );
   };
 
@@ -303,7 +303,6 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       if ((formData.eventType === 'in-person' || formData.eventType === 'hybrid') && !formData.locationName.trim()) throw new Error('Please provide a location');
       if (formData.eventType === 'hybrid' && !formData.virtualLink.trim()) throw new Error('Hybrid events require a virtual meeting link');
 
-      // Validate group selection
       if (formData.visibility === 'groups' && selectedGroupIds.length === 0) {
         throw new Error('Please select at least one group for group-restricted events');
       }
@@ -397,18 +396,24 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
       if (eventError) throw eventError;
 
-      // Save group restrictions if visibility is 'groups'
-      if (formData.visibility === 'groups' && selectedGroupIds.length > 0) {
-        const groupRows = selectedGroupIds.map(groupId => ({
+      // Build the full list of group IDs to link
+      // Always include the groupId prop (from group context) plus any selected from the UI
+      const groupIdsToLink = [
+        ...(groupId ? [groupId] : []),
+        ...(formData.visibility === 'groups' ? selectedGroupIds.filter(id => id !== groupId) : [])
+      ];
+
+      if (groupIdsToLink.length > 0) {
+        const groupRows = groupIdsToLink.map(gId => ({
           event_id: newEvent.id,
-          group_id: groupId
+          group_id: gId
         }));
         const { error: groupError } = await supabase
           .from('event_groups')
           .insert(groupRows);
         if (groupError) {
-          console.error('Warning: event created but group restrictions failed:', groupError);
-          toast.error('Event created but group restrictions could not be saved. Please edit the event.');
+          console.error('Warning: event created but group link failed:', groupError);
+          toast.error('Event created but group link could not be saved.');
         }
       }
 
@@ -419,11 +424,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
       // Send notifications
       try {
-        const eventTypeIcon = formData.eventType === 'in_person' ? '📍' : formData.eventType === 'virtual' ? '💻' : '🔀';
         const notificationResult = await notifyOrganizationMembers({
           organizationId: organizationId,
           type: 'event',
-          title: eventTypeIcon + ' New Event',
+          title: 'New Event',
           message: formData.title + ' - ' + new Date(formData.schedule[0].date).toLocaleDateString(),
           link: '/organizations/' + organizationId + '/events',
           excludeUserId: null
@@ -476,9 +480,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="border-b border-gray-200 px-6 py-4">
           <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">
-            📅 Create New Event
+            Create New Event
           </h2>
-          <p className="text-gray-600 mt-1">Create an event for {organizationName}</p>
+          <p className="text-gray-600 mt-1">
+            Create an event for {organizationName}
+            {groupId && <span className="ml-1 text-blue-600 font-medium">(will be linked to this group)</span>}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
@@ -492,7 +499,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           {/* Title */}
           <div>
             <label htmlFor="event-title" className="block text-sm font-semibold text-gray-900 mb-2">
-              Event Title *
+              Event Title <span className="text-red-500" aria-hidden="true">*</span>
             </label>
             <input
               id="event-title"
@@ -528,44 +535,30 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
           {/* Event Type */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Event Type *</label>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">Event Type <span className="text-red-500" aria-hidden="true">*</span></label>
             <div className="space-y-3">
-              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ borderColor: formData.eventType === 'in-person' ? '#3b82f6' : '#d1d5db' }}>
-                <input type="radio" name="eventType" value="in-person"
-                  checked={formData.eventType === 'in-person'} onChange={handleChange}
-                  className="w-4 h-4 text-blue-600" />
-                <div className="ml-3">
-                  <p className="font-semibold text-gray-900">📍 In-Person Event</p>
-                  <p className="text-sm text-gray-600">Physical location only</p>
-                </div>
-              </label>
-              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ borderColor: formData.eventType === 'virtual' ? '#3b82f6' : '#d1d5db' }}>
-                <input type="radio" name="eventType" value="virtual"
-                  checked={formData.eventType === 'virtual'} onChange={handleChange}
-                  className="w-4 h-4 text-blue-600" />
-                <div className="ml-3">
-                  <p className="font-semibold text-gray-900">💻 Virtual Event</p>
-                  <p className="text-sm text-gray-600">Online only (Zoom, Google Meet, etc.)</p>
-                </div>
-              </label>
-              <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ borderColor: formData.eventType === 'hybrid' ? '#3b82f6' : '#d1d5db' }}>
-                <input type="radio" name="eventType" value="hybrid"
-                  checked={formData.eventType === 'hybrid'} onChange={handleChange}
-                  className="w-4 h-4 text-blue-600" />
-                <div className="ml-3">
-                  <p className="font-semibold text-gray-900">🌐 Hybrid Event</p>
-                  <p className="text-sm text-gray-600">Both in-person and virtual options</p>
-                </div>
-              </label>
+              {[
+                { value: 'in-person', label: 'In-Person Event', desc: 'Physical location only' },
+                { value: 'virtual', label: 'Virtual Event', desc: 'Online only (Zoom, Google Meet, etc.)' },
+                { value: 'hybrid', label: 'Hybrid Event', desc: 'Both in-person and virtual options' },
+              ].map(opt => (
+                <label key={opt.value} className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                  style={{ borderColor: formData.eventType === opt.value ? '#3b82f6' : '#d1d5db' }}>
+                  <input type="radio" name="eventType" value={opt.value}
+                    checked={formData.eventType === opt.value} onChange={handleChange}
+                    className="w-4 h-4 text-blue-600" />
+                  <div className="ml-3">
+                    <p className="font-semibold text-gray-900">{opt.label}</p>
+                    <p className="text-sm text-gray-600">{opt.desc}</p>
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
 
           {/* Schedule */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Schedule *</label>
+            <label className="block text-sm font-semibold text-gray-900 mb-3">Schedule <span className="text-red-500" aria-hidden="true">*</span></label>
             <div className="space-y-4">
               {formData.schedule.map((day, index) => (
                 <div key={index} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
@@ -628,7 +621,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           {(formData.eventType === 'virtual' || formData.eventType === 'hybrid') && (
             <div>
               <label htmlFor="virtual-link" className="block text-sm font-semibold text-gray-900 mb-2">
-                Meeting Link *
+                Meeting Link <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <input id="virtual-link" name="virtualLink" type="url" required
                 value={formData.virtualLink} onChange={handleChange}
@@ -643,7 +636,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             <>
               <div>
                 <label htmlFor="location-name" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Location *
+                  Location <span className="text-red-500" aria-hidden="true">*</span>
                 </label>
                 <input id="location-name" name="locationName" type="text" required
                   value={formData.locationName} onChange={handleChange}
@@ -675,7 +668,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                         onMouseDown={(e) => { e.preventDefault(); selectAddress(suggestion); }}
                         className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors">
                         <div className="flex items-center gap-2">
-                          <span className="text-blue-600">📍</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                            className="text-blue-500 flex-shrink-0" aria-hidden="true">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                            <circle cx="12" cy="10" r="3"/>
+                          </svg>
                           <p className="text-sm font-medium text-gray-900">{suggestion.formatted}</p>
                         </div>
                       </button>
@@ -692,7 +690,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               {(formData.city || formData.state || formData.zipCode) && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-start gap-2">
-                    <span className="text-green-600 text-lg">✓</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className="text-green-600 flex-shrink-0 mt-0.5" aria-hidden="true">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                      <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
                     <div className="text-sm text-green-800">
                       <p className="font-semibold mb-1">Auto-detected:</p>
                       {formData.city && <p>City: {formData.city}</p>}
@@ -735,7 +738,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 aria-describedby="recurring-description" />
               <label htmlFor="isRecurring" className="text-base font-semibold text-gray-900 cursor-pointer">
-                🔄 Make this a recurring event
+                Make this a recurring event
               </label>
             </div>
             <p id="recurring-description" className="text-sm text-gray-600 mb-4">
@@ -751,7 +754,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                       <button key={type} type="button" onClick={() => setRecurrenceType(type)}
                         className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' +
                           (recurrenceType === type ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
-                        {type === 'daily' ? '📆 Daily' : type === 'weekly' ? '📅 Weekly' : '🗓️ Monthly'}
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
                       </button>
                     ))}
                   </div>
@@ -775,7 +778,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                       <label htmlFor="weekdaysOnly" className="text-sm text-gray-700">Weekdays only (Monday - Friday)</label>
                     </div>
                     <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>📅 Preview:</strong> Repeats every {dailyInterval} day{dailyInterval > 1 ? 's' : ''}
+                      <strong>Preview:</strong> Repeats every {dailyInterval} day{dailyInterval > 1 ? 's' : ''}
                       {weekdaysOnly && ' (weekdays only)'} at <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
                     </div>
                   </div>
@@ -794,7 +797,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                       ))}
                     </div>
                     <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>📅 Preview:</strong> Repeats every {weeklyDays.map(d => fullDayNames[d]).join(', ')} at{' '}
+                      <strong>Preview:</strong> Repeats every {weeklyDays.map(d => fullDayNames[d]).join(', ')} at{' '}
                       <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
                     </div>
                   </div>
@@ -825,7 +828,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                       </div>
                     </div>
                     <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>📅 Preview:</strong> Repeats on the{' '}
+                      <strong>Preview:</strong> Repeats on the{' '}
                       {weekOfMonth === -1 ? 'Last' : weekOfMonth === 1 ? 'First' : weekOfMonth === 2 ? 'Second' : weekOfMonth === 3 ? 'Third' : 'Fourth'}{' '}
                       {fullDayNames[dayOfWeek]} of every month at{' '}
                       <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
@@ -851,7 +854,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">🌍 Event Timezone</span>
+                <span className="text-sm font-medium text-gray-700">Event Timezone</span>
                 <span className="text-xs text-gray-500">(Optional)</span>
               </div>
               <button type="button" onClick={() => setShowTimezoneSelector(!showTimezoneSelector)}
@@ -861,7 +864,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             </div>
             {!showTimezoneSelector ? (
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>Auto-detected: <strong>{formatTimezone(userTimezone)}</strong></span>
@@ -872,7 +875,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 <select id="eventTimezone" value={selectedTimezone || userTimezone}
                   onChange={(e) => setSelectedTimezone(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <optgroup label="🇺🇸 United States">
+                  <optgroup label="United States">
                     <option value="America/New_York">Eastern Time (ET)</option>
                     <option value="America/Chicago">Central Time (CT)</option>
                     <option value="America/Denver">Mountain Time (MT)</option>
@@ -881,13 +884,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                     <option value="America/Anchorage">Alaska Time (AKT)</option>
                     <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
                   </optgroup>
-                  <optgroup label="🇨🇦 Canada">
+                  <optgroup label="Canada">
                     <option value="America/Toronto">Eastern Time - Toronto</option>
                     <option value="America/Winnipeg">Central Time - Winnipeg</option>
                     <option value="America/Edmonton">Mountain Time - Edmonton</option>
                     <option value="America/Vancouver">Pacific Time - Vancouver</option>
                   </optgroup>
-                  <optgroup label="🌍 International">
+                  <optgroup label="International">
                     <option value="Europe/London">United Kingdom (GMT/BST)</option>
                     <option value="Europe/Paris">Central Europe (CET/CEST)</option>
                     <option value="Asia/Tokyo">Japan (JST)</option>
@@ -898,13 +901,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 </select>
                 {selectedTimezone && selectedTimezone !== userTimezone && (
                   <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <div className="text-sm">
                       <p className="font-medium text-yellow-800">Different Timezone Selected</p>
                       <p className="text-yellow-700 mt-1">
-                        You're in <strong>{formatTimezone(userTimezone)}</strong> but creating event in{' '}
+                        You are in <strong>{formatTimezone(userTimezone)}</strong> but creating event in{' '}
                         <strong>{formatTimezone(selectedTimezone)}</strong>.
                       </p>
                     </div>
@@ -922,14 +925,14 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               {/* Visibility Selector */}
               <fieldset>
                 <legend className="block text-sm font-semibold text-gray-900 mb-3">
-                  👁️ Who can see this event?
+                  Who can see this event?
                 </legend>
                 <div className="space-y-2">
                   {[
-                    { value: 'public', label: '🌍 Public', desc: 'Anyone can see this event (appears in event discovery)' },
-                    { value: 'members', label: '👥 All Members', desc: 'All active members of this organization' },
-                    { value: 'groups', label: '🔒 Specific Groups Only', desc: 'Only members of the groups you select below' },
-                    { value: 'draft', label: '📝 Draft', desc: 'Only visible to you and other admins' }
+                    { value: 'public', label: 'Public', desc: 'Anyone can see this event (appears in event discovery)' },
+                    { value: 'members', label: 'All Members', desc: 'All active members of this organization' },
+                    { value: 'groups', label: 'Specific Groups Only', desc: 'Only members of the groups you select below' },
+                    { value: 'draft', label: 'Draft', desc: 'Only visible to you and other admins' }
                   ].map(option => (
                     <label key={option.value}
                       className={'flex items-start p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ' +
@@ -955,18 +958,19 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   aria-labelledby="group-selector-label"
                 >
                   <p id="group-selector-label" className="text-sm font-semibold text-purple-900 mb-3">
-                    🔒 Select which groups can see this event *
+                    Select which groups can see this event <span className="text-red-500" aria-hidden="true">*</span>
                   </p>
 
                   {loadingGroups ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
-                      Loading groups...
+                    <div className="space-y-2 animate-pulse">
+                      {[1, 2].map(i => (
+                        <div key={i} className="h-10 bg-purple-100 rounded-lg" />
+                      ))}
                     </div>
                   ) : availableGroups.length === 0 ? (
                     <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">
                       <p className="font-semibold text-gray-800 mb-1">No groups found</p>
-                      <p>This organization has no groups yet. Create groups first in the Groups tab, then come back to restrict event visibility.</p>
+                      <p>This organization has no groups yet. Create groups first in the Groups tab.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -996,7 +1000,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
                   {selectedGroupIds.length > 0 && (
                     <p className="mt-3 text-xs text-purple-700 font-medium">
-                      ✓ {selectedGroupIds.length} group{selectedGroupIds.length > 1 ? 's' : ''} selected
+                      {selectedGroupIds.length} group{selectedGroupIds.length > 1 ? 's' : ''} selected
                     </p>
                   )}
                 </div>
@@ -1010,7 +1014,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                     className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500" />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900">✓ Require RSVP</label>
+                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900">Require RSVP</label>
                   <p className="text-sm text-gray-600">Members must RSVP to attend this event</p>
                 </div>
               </div>
@@ -1028,11 +1032,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
               {loading || geocoding ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" role="status">
+                    <span className="sr-only">{geocoding ? 'Finding location...' : 'Creating event...'}</span>
+                  </div>
                   {geocoding ? 'Finding Location...' : 'Creating Event...'}
                 </>
               ) : (
-                <><span>✨</span> Create Event</>
+                'Create Event'
               )}
             </button>
           </div>
