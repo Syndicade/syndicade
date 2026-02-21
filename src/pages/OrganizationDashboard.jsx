@@ -305,12 +305,12 @@ function OrganizationDashboard() {
       }
 
       // Members — two-step to avoid join 400 errors
-      const { data: membershipRows } = await supabase
+const { data: membershipRows } = await supabase
         .from('memberships')
-        .select('id, created_at, member_id')
+        .select('id, joined_date, member_id')
         .eq('organization_id', organizationId)
         .eq('status', 'active')
-        .order('created_at', { ascending: false })
+        .order('joined_date', { ascending: false })
         .limit(5);
 
       if (membershipRows && membershipRows.length > 0) {
@@ -329,7 +329,7 @@ function OrganizationDashboard() {
               type: 'member',
               title: p.first_name + ' ' + p.last_name + ' joined',
               iconKey: 'userPlus',
-              timestamp: m.created_at,
+              timestamp: m.joined_date,
             });
           }
         });

@@ -3,6 +3,126 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
+const TEMPLATES = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    description: 'Simple hero, events list, footer navigation',
+    preview: (
+      <svg viewBox="0 0 160 100" className="w-full h-full" aria-hidden="true">
+        <rect x="0" y="0" width="160" height="100" fill="#f9fafb" rx="4"/>
+        <rect x="8" y="8" width="60" height="10" fill="#d1d5db" rx="2"/>
+        <rect x="100" y="8" width="52" height="10" fill="#d1d5db" rx="2"/>
+        <rect x="8" y="24" width="80" height="8" fill="#374151" rx="2"/>
+        <rect x="8" y="36" width="100" height="5" fill="#9ca3af" rx="2"/>
+        <rect x="8" y="44" width="80" height="5" fill="#9ca3af" rx="2"/>
+        <rect x="8" y="55" width="50" height="6" fill="#1d4ed8" rx="2"/>
+        <rect x="8" y="65" width="70" height="4" fill="#374151" rx="1"/>
+        <rect x="8" y="72" width="140" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="78" width="130" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="84" width="110" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="0" y="93" width="160" height="7" fill="#1f2937" rx="2"/>
+      </svg>
+    )
+  },
+  {
+    id: 'modern',
+    name: 'Modern',
+    description: '3-column layout with events, pages, and news',
+    preview: (
+      <svg viewBox="0 0 160 100" className="w-full h-full" aria-hidden="true">
+        <rect x="0" y="0" width="160" height="100" fill="#f9fafb" rx="4"/>
+        <rect x="8" y="6" width="30" height="8" fill="#d1d5db" rx="2"/>
+        <rect x="110" y="6" width="42" height="8" fill="#1d4ed8" rx="3"/>
+        <rect x="8" y="20" width="100" height="9" fill="#374151" rx="2"/>
+        <rect x="8" y="33" width="130" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="8" y="41" width="30" height="3" fill="#6b7280" rx="1"/>
+        <rect x="8" y="46" width="44" height="22" fill="#e5e7eb" rx="2"/>
+        <rect x="57" y="41" width="30" height="3" fill="#6b7280" rx="1"/>
+        <rect x="57" y="46" width="44" height="22" fill="#e5e7eb" rx="2"/>
+        <rect x="106" y="41" width="30" height="3" fill="#6b7280" rx="1"/>
+        <rect x="106" y="46" width="44" height="22" fill="#e5e7eb" rx="2"/>
+        <rect x="0" y="93" width="160" height="7" fill="#1f2937" rx="2"/>
+      </svg>
+    )
+  },
+  {
+    id: 'banner',
+    name: 'Banner',
+    description: 'Full-width banner image with name overlay',
+    preview: (
+      <svg viewBox="0 0 160 100" className="w-full h-full" aria-hidden="true">
+        <rect x="0" y="0" width="160" height="100" fill="#f9fafb" rx="4"/>
+        <rect x="8" y="5" width="30" height="7" fill="#d1d5db" rx="2"/>
+        <rect x="90" y="5" width="62" height="7" fill="#d1d5db" rx="2"/>
+        <rect x="0" y="16" width="160" height="32" fill="#6b7280" rx="2"/>
+        <rect x="30" y="24" width="100" height="8" fill="#ffffff" rx="2" opacity="0.9"/>
+        <rect x="50" y="35" width="60" height="5" fill="#ffffff" rx="1" opacity="0.6"/>
+        <rect x="8" y="54" width="60" height="5" fill="#374151" rx="1"/>
+        <rect x="8" y="62" width="68" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="67" width="68" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="72" width="68" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="84" y="54" width="60" height="5" fill="#374151" rx="1"/>
+        <rect x="84" y="62" width="68" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="84" y="67" width="50" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="84" y="72" width="58" height="3" fill="#e5e7eb" rx="1"/>
+        <rect x="0" y="93" width="160" height="7" fill="#1f2937" rx="2"/>
+      </svg>
+    )
+  },
+  {
+    id: 'sidebar',
+    name: 'Sidebar Nav',
+    description: 'Left sidebar navigation with main content area',
+    preview: (
+      <svg viewBox="0 0 160 100" className="w-full h-full" aria-hidden="true">
+        <rect x="0" y="0" width="160" height="100" fill="#f9fafb" rx="4"/>
+        <rect x="8" y="5" width="30" height="7" fill="#d1d5db" rx="2"/>
+        <rect x="90" y="5" width="62" height="7" fill="#1d4ed8" rx="3"/>
+        <rect x="0" y="16" width="40" height="84" fill="#f3f4f6" rx="2"/>
+        <rect x="4" y="20" width="32" height="4" fill="#374151" rx="1"/>
+        <rect x="4" y="27" width="32" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="4" y="34" width="32" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="4" y="41" width="32" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="4" y="48" width="32" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="4" y="55" width="32" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="48" y="20" width="80" height="8" fill="#374151" rx="2"/>
+        <rect x="48" y="32" width="104" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="48" y="40" width="55" height="5" fill="#6b7280" rx="1"/>
+        <rect x="48" y="48" width="104" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="48" y="55" width="104" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="48" y="62" width="90" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="0" y="93" width="160" height="7" fill="#1f2937" rx="2"/>
+      </svg>
+    )
+  },
+  {
+    id: 'featured',
+    name: 'Full Featured',
+    description: 'Events, member spotlight, contact info, and more',
+    preview: (
+      <svg viewBox="0 0 160 100" className="w-full h-full" aria-hidden="true">
+        <rect x="0" y="0" width="160" height="100" fill="#f9fafb" rx="4"/>
+        <circle cx="16" cy="9" r="6" fill="#d1d5db"/>
+        <rect x="26" y="5" width="30" height="7" fill="#d1d5db" rx="2"/>
+        <rect x="110" y="5" width="42" height="7" fill="#1d4ed8" rx="3"/>
+        <rect x="30" y="18" width="100" height="8" fill="#374151" rx="2"/>
+        <rect x="40" y="30" width="80" height="4" fill="#9ca3af" rx="1"/>
+        <rect x="45" y="37" width="32" height="6" fill="#1d4ed8" rx="2"/>
+        <rect x="82" y="37" width="36" height="6" fill="#e5e7eb" rx="2"/>
+        <rect x="8" y="48" width="68" height="5" fill="#374151" rx="1"/>
+        <rect x="8" y="56" width="68" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="62" width="68" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="8" y="68" width="68" height="4" fill="#e5e7eb" rx="1"/>
+        <rect x="84" y="48" width="68" height="5" fill="#374151" rx="1"/>
+        <rect x="84" y="56" width="68" height="10" fill="#e5e7eb" rx="2"/>
+        <rect x="84" y="70" width="68" height="10" fill="#e5e7eb" rx="2"/>
+        <rect x="0" y="93" width="160" height="7" fill="#1f2937" rx="2"/>
+      </svg>
+    )
+  }
+];
+
 export default function OrgPageEditor() {
   const { organizationId } = useParams();
   const navigate = useNavigate();
@@ -14,7 +134,7 @@ export default function OrgPageEditor() {
   const [saving, setSaving] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [activeSection, setActiveSection] = useState('appearance');
+  const [activeSection, setActiveSection] = useState('template');
 
   const [form, setForm] = useState({
     name: '',
@@ -30,8 +150,9 @@ export default function OrgPageEditor() {
     logo_url: '',
     banner_url: '',
     social_links: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
-    page_sections: { about: true, events: true, announcements: true, contact: true, join: true },
+    page_sections: { about: true, events: true, announcements: true, photos: true, members: false, contact: true, join: true },
     is_public: false,
+    template: 'classic',
   });
 
   useEffect(() => { fetchOrg(); }, [organizationId]);
@@ -53,6 +174,8 @@ export default function OrgPageEditor() {
         .from('organizations').select('*').eq('id', organizationId).single();
       if (error) throw error;
       setOrg(data);
+      const savedSections = data.page_sections || {};
+      const savedSettings = data.settings || {};
       setForm({
         name: data.name || '',
         tagline: data.tagline || '',
@@ -67,8 +190,17 @@ export default function OrgPageEditor() {
         logo_url: data.logo_url || '',
         banner_url: data.banner_url || '',
         social_links: data.social_links || { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
-        page_sections: data.page_sections || { about: true, events: true, announcements: true, contact: true, join: true },
+        page_sections: {
+          about: savedSections.about !== false,
+          events: savedSections.events !== false,
+          announcements: savedSections.announcements !== false,
+          photos: savedSections.photos !== false,
+          members: savedSections.members === true,
+          contact: savedSections.contact !== false,
+          join: savedSections.join !== false,
+        },
         is_public: data.is_public || false,
+        template: savedSettings.template || 'classic',
       });
     } catch (err) {
       toast.error('Failed to load organization');
@@ -103,6 +235,10 @@ export default function OrgPageEditor() {
     if (!form.name.trim()) { toast.error('Organization name is required'); return; }
     setSaving(true);
     try {
+      const { data: existingOrg } = await supabase
+        .from('organizations').select('settings').eq('id', organizationId).single();
+      const updatedSettings = Object.assign({}, existingOrg ? existingOrg.settings || {} : {}, { template: form.template });
+
       const { error } = await supabase.from('organizations').update({
         name: form.name.trim(),
         tagline: form.tagline.trim(),
@@ -119,6 +255,7 @@ export default function OrgPageEditor() {
         social_links: form.social_links,
         page_sections: form.page_sections,
         is_public: form.is_public,
+        settings: updatedSettings,
       }).eq('id', organizationId);
       if (error) throw error;
       toast.success('Page saved!');
@@ -146,28 +283,90 @@ export default function OrgPageEditor() {
     }));
   }
 
-  const sections = [
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'info', label: 'Info', icon: '📝' },
-    { id: 'contact', label: 'Contact', icon: '📬' },
-    { id: 'social', label: 'Social', icon: '🔗' },
-    { id: 'sections', label: 'Sections', icon: '🧩' },
-    { id: 'publish', label: 'Publish', icon: '🌐' },
+  const navSections = [
+    { id: 'template', label: 'Template' },
+    { id: 'appearance', label: 'Appearance' },
+    { id: 'info', label: 'Info' },
+    { id: 'contact', label: 'Contact' },
+    { id: 'social', label: 'Social' },
+    { id: 'sections', label: 'Sections' },
+    { id: 'publish', label: 'Publish' },
   ];
 
   const pageSectionLabels = {
-    about: { label: 'About Us', icon: '📖', desc: 'Your mission and description' },
-    events: { label: 'Upcoming Events', icon: '📅', desc: 'Auto-populated from your events' },
-    announcements: { label: 'Latest News', icon: '📢', desc: 'Recent announcements' },
-    contact: { label: 'Contact Info', icon: '📬', desc: 'Email, phone, and address' },
-    join: { label: 'Join Us Form', icon: '🙋', desc: 'Contact form for new members' },
+    about: {
+      label: 'About Us',
+      desc: 'Your mission and description',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    },
+    events: {
+      label: 'Upcoming Events',
+      desc: 'Auto-populated from your events',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    announcements: {
+      label: 'Latest News',
+      desc: 'Recent announcements',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+        </svg>
+      )
+    },
+    photos: {
+      label: 'Photo Gallery',
+      desc: 'Images uploaded via org photos',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    members: {
+      label: 'Member Spotlight',
+      desc: 'Showcase featured members publicly',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      )
+    },
+    contact: {
+      label: 'Contact Info',
+      desc: 'Email, phone, and address',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    join: {
+      label: 'Join Us Form',
+      desc: 'Contact form for new members',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+        </svg>
+      )
+    },
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center" role="status" aria-label="Loading page editor">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600" aria-hidden="true"></div>
-        <span className="sr-only">Loading...</span>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4" aria-hidden="true"></div>
+          <p className="text-gray-600 font-medium">Loading editor...</p>
+        </div>
+        <span className="sr-only">Loading page editor</span>
       </div>
     );
   }
@@ -175,16 +374,21 @@ export default function OrgPageEditor() {
   return (
     <div className="min-h-screen bg-gray-50">
 
+      {/* Sticky top bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => navigate('/organizations/' + organizationId)}
-              className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded p-1 flex-shrink-0"
+              className="flex items-center gap-1 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded p-1 flex-shrink-0 text-sm font-medium"
               aria-label="Back to dashboard"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Back
             </button>
+            <div className="w-px h-6 bg-gray-200" aria-hidden="true"></div>
             <div className="min-w-0">
               <h1 className="text-lg font-bold text-gray-900 truncate">Edit Public Page</h1>
               <p className="text-sm text-gray-500 truncate">{org && org.name}</p>
@@ -192,23 +396,38 @@ export default function OrgPageEditor() {
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             {org && org.slug && (
-              <a
-                href={"/org/" + org.slug}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                aria-label="Preview public page in new tab"
-              >
-                Preview
-              </a>
-            )}
+  <a
+    href={"/org/" + org.slug}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="hidden sm:inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+    aria-label="Preview public page in new tab"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+    Preview
+  </a>
+)}
             <button
               onClick={handleSave}
               disabled={saving}
               className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               aria-label={saving ? 'Saving changes' : 'Save changes'}
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Save
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -217,10 +436,11 @@ export default function OrgPageEditor() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-6">
 
+          {/* Sidebar nav */}
           <aside className="lg:w-48 flex-shrink-0">
             <nav aria-label="Page editor sections">
               <ul className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
-                {sections.map(function(s) {
+                {navSections.map(function(s) {
                   return (
                     <li key={s.id}>
                       <button
@@ -233,7 +453,7 @@ export default function OrgPageEditor() {
                         }
                         aria-current={activeSection === s.id ? 'page' : undefined}
                       >
-                        <span aria-hidden="true">{s.icon}</span> {s.label}
+                        {s.label}
                       </button>
                     </li>
                   );
@@ -242,8 +462,61 @@ export default function OrgPageEditor() {
             </nav>
           </aside>
 
+          {/* Main panel */}
           <main className="flex-1 min-w-0" aria-label="Editor panel">
 
+            {/* TEMPLATE SECTION */}
+            {activeSection === 'template' && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-1">Choose a Template</h2>
+                <p className="text-gray-500 text-sm mb-6">Select the layout for your public organization page</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="radiogroup" aria-label="Page templates">
+                  {TEMPLATES.map(function(t) {
+                    var isSelected = form.template === t.id;
+                    return (
+                      <div key={t.id}>
+                        <button
+                          onClick={() => setForm(prev => ({ ...prev, template: t.id }))}
+                          className={
+                            'w-full rounded-xl border-2 p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' +
+                            (isSelected
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm')
+                          }
+                          role="radio"
+                          aria-checked={isSelected}
+                          aria-label={'Select ' + t.name + ' template: ' + t.description}
+                        >
+                          <div className="aspect-video bg-gray-50 rounded-lg overflow-hidden mb-3 border border-gray-100">
+                            {t.preview}
+                          </div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{t.name}</p>
+                              <p className="text-xs text-gray-500 mt-0.5 leading-snug">{t.description}</p>
+                            </div>
+                            {isSelected && (
+                              <div className="flex-shrink-0 mt-0.5" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    <span className="font-semibold">Tip:</span> Click Save after selecting a template, then use the Preview button to see how your page looks.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* APPEARANCE SECTION */}
             {activeSection === 'appearance' && (
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -274,14 +547,17 @@ export default function OrgPageEditor() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center justify-center h-36 text-gray-400 group-hover:text-blue-500 transition-colors">
+                        <div className="flex flex-col items-center justify-center h-36 text-gray-400 group-hover:text-blue-500 transition-colors gap-2">
                           {uploadingBanner ? (
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" aria-hidden="true"></div>
                           ) : (
-                            <div>
-                              <p className="text-sm font-medium text-center">Click to upload banner</p>
-                              <p className="text-xs mt-1 text-center">PNG, JPG, WebP supported</p>
-                            </div>
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <p className="text-sm font-medium">Click to upload banner</p>
+                              <p className="text-xs">PNG, JPG, WebP supported</p>
+                            </>
                           )}
                         </div>
                       )}
@@ -327,11 +603,16 @@ export default function OrgPageEditor() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex flex-col items-center text-gray-400 group-hover:text-blue-500 transition-colors">
+                          <div className="flex flex-col items-center text-gray-400 group-hover:text-blue-500 transition-colors gap-1">
                             {uploadingLogo ? (
                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" aria-hidden="true"></div>
                             ) : (
-                              <p className="text-xs text-center leading-tight px-1">Add Logo</p>
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <p className="text-xs text-center leading-tight px-1">Add Logo</p>
+                              </>
                             )}
                           </div>
                         )}
@@ -385,6 +666,7 @@ export default function OrgPageEditor() {
               </div>
             )}
 
+            {/* INFO SECTION */}
             {activeSection === 'info' && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
                 <div>
@@ -427,6 +709,7 @@ export default function OrgPageEditor() {
               </div>
             )}
 
+            {/* CONTACT SECTION */}
             {activeSection === 'contact' && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
                 <div>
@@ -475,6 +758,7 @@ export default function OrgPageEditor() {
               </div>
             )}
 
+            {/* SOCIAL SECTION */}
             {activeSection === 'social' && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
                 <div>
@@ -508,6 +792,7 @@ export default function OrgPageEditor() {
               </div>
             )}
 
+            {/* SECTIONS PANEL */}
             {activeSection === 'sections' && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
                 <div>
@@ -518,29 +803,30 @@ export default function OrgPageEditor() {
                   {Object.entries(pageSectionLabels).map(function(entry) {
                     var key = entry[0];
                     var val = entry[1];
+                    var isOn = form.page_sections[key];
                     return (
                       <li key={key}>
                         <button
                           onClick={() => toggleSection(key)}
                           className={
                             'w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 text-left ' +
-                            (form.page_sections[key] ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 opacity-60')
+                            (isOn ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 opacity-60')
                           }
-                          aria-pressed={form.page_sections[key]}
-                          aria-label={(form.page_sections[key] ? 'Hide ' : 'Show ') + val.label + ' section'}
+                          aria-pressed={isOn}
+                          aria-label={(isOn ? 'Hide ' : 'Show ') + val.label + ' section'}
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl" aria-hidden="true">{val.icon}</span>
+                            {val.icon}
                             <div>
                               <p className="font-semibold text-gray-900">{val.label}</p>
                               <p className="text-sm text-gray-500">{val.desc}</p>
                             </div>
                           </div>
                           <div
-                            className={'w-12 h-6 rounded-full flex items-center transition-colors flex-shrink-0 ' + (form.page_sections[key] ? 'bg-blue-600' : 'bg-gray-300')}
+                            className={'w-12 h-6 rounded-full flex items-center transition-colors flex-shrink-0 ' + (isOn ? 'bg-blue-600' : 'bg-gray-300')}
                             aria-hidden="true"
                           >
-                            <div className={'w-5 h-5 rounded-full bg-white shadow-sm transition-transform mx-0.5 ' + (form.page_sections[key] ? 'translate-x-6' : 'translate-x-0')} />
+                            <div className={'w-5 h-5 rounded-full bg-white shadow-sm transition-transform mx-0.5 ' + (isOn ? 'translate-x-6' : 'translate-x-0')} />
                           </div>
                         </button>
                       </li>
@@ -550,6 +836,7 @@ export default function OrgPageEditor() {
               </div>
             )}
 
+            {/* PUBLISH SECTION */}
             {activeSection === 'publish' && (
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
@@ -565,6 +852,14 @@ export default function OrgPageEditor() {
                     aria-label={form.is_public ? 'Page is public, click to make private' : 'Page is private, click to make public'}
                   >
                     <div className="flex items-center gap-4">
+                      <div className={
+                        'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ' +
+                        (form.is_public ? 'bg-green-100' : 'bg-gray-200')
+                      } aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" className={'h-5 w-5 ' + (form.is_public ? 'text-green-600' : 'text-gray-500')} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+                        </svg>
+                      </div>
                       <div className="text-left">
                         <p className="text-lg font-bold text-gray-900">{form.is_public ? 'Page is Public' : 'Page is Private'}</p>
                         <p className="text-sm text-gray-600">
