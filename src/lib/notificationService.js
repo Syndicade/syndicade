@@ -1,33 +1,15 @@
 import { supabase } from './supabase';
 
 /**
- * Create a notification for a user
- * @param {Object} params - Notification parameters
- * @param {string} params.userId - User ID to notify
- * @param {string} params.organizationId - Organization ID (optional)
- * @param {string} params.type - Type: 'announcement', 'event', 'member', 'invitation', 'document'
- * @param {string} params.title - Notification title
- * @param {string} params.message - Notification message
- * @param {string} params.link - Link to navigate to (optional)
+ * Create a notification for a single user.
  */
 export async function createNotification({ userId, organizationId, type, title, message, link }) {
   try {
     const { data, error } = await supabase
       .from('notifications')
-      .insert([
-        {
-          user_id: userId,
-          organization_id: organizationId,
-          type,
-          title,
-          message,
-          link,
-          read: false
-        }
-      ])
+      .insert([{ user_id: userId, organization_id: organizationId, type, title, message, link, read: false }])
       .select()
       .single();
-
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
@@ -37,60 +19,38 @@ export async function createNotification({ userId, organizationId, type, title, 
 }
 
 /**
- * Notify all members of an organization
- * @param {Object} params - Notification parameters
- * @param {string} params.organizationId - Organization ID
- * @param {string} params.type - Notification type
- * @param {string} params.title - Notification title
- * @param {string} params.message - Notification message
- * @param {string} params.link - Link to navigate to (optional)
- * @param {string} params.excludeUserId - User ID to exclude (optional, e.g., the creator)
+ * Notify all active members of an organization.
+ * Uses two-step query to avoid RLS 400 errors.
  */
 export async function notifyOrganizationMembers({ organizationId, type, title, message, link, excludeUserId }) {
   try {
-    console.log('🔍 Querying memberships for org:', organizationId);
-    
-    // Get all active members of the organization
+    // Step 1: get member IDs
     const { data: memberships, error: membershipsError } = await supabase
       .from('memberships')
       .select('member_id')
       .eq('organization_id', organizationId)
       .eq('status', 'active');
 
-    console.log('📊 Memberships query result:', { 
-      data: memberships, 
-      error: membershipsError,
-      count: memberships?.length || 0 
-    });
-
     if (membershipsError) {
-      console.error('❌ Memberships error details:', {
-        message: membershipsError.message,
-        details: membershipsError.details,
-        hint: membershipsError.hint,
-        code: membershipsError.code
-      });
+      console.error('Error fetching memberships:', membershipsError);
       throw membershipsError;
     }
 
     if (!memberships || memberships.length === 0) {
-      console.warn('⚠️ No members found for organization');
+      console.warn('No active members found for organization:', organizationId);
       return { data: [], error: null };
     }
 
-    // Filter out excluded user if provided
     const memberIds = memberships
       .map(m => m.member_id)
       .filter(id => id !== excludeUserId);
 
-    console.log('👥 Member IDs to notify:', memberIds);
-
     if (memberIds.length === 0) {
-      console.warn('⚠️ No members to notify after filtering');
+      console.warn('No members to notify after filtering.');
       return { data: [], error: null };
     }
 
-    // Create notifications for all members
+    // Step 2: insert notifications
     const notifications = memberIds.map(memberId => ({
       user_id: memberId,
       organization_id: organizationId,
@@ -98,10 +58,8 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
       title,
       message,
       link,
-      read: false
+      read: false,
     }));
-
-    console.log('📤 Creating notifications:', notifications);
 
     const { data, error } = await supabase
       .from('notifications')
@@ -109,25 +67,15 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
       .select();
 
     if (error) throw error;
-    
-    console.log('✅ Notifications created successfully:', data);
-    
     return { data, error: null };
   } catch (error) {
-    console.error('❌ Error notifying organization members:', error);
+    console.error('Error notifying organization members:', error);
     return { data: null, error };
   }
 }
 
 /**
- * Notify specific users
- * @param {Object} params - Notification parameters
- * @param {string[]} params.userIds - Array of user IDs to notify
- * @param {string} params.organizationId - Organization ID (optional)
- * @param {string} params.type - Notification type
- * @param {string} params.title - Notification title
- * @param {string} params.message - Notification message
- * @param {string} params.link - Link to navigate to (optional)
+ * Notify a specific list of users.
  */
 export async function notifyUsers({ userIds, organizationId, type, title, message, link }) {
   try {
@@ -138,7 +86,7 @@ export async function notifyUsers({ userIds, organizationId, type, title, messag
       title,
       message,
       link,
-      read: false
+      read: false,
     }));
 
     const { data, error } = await supabase
@@ -155,8 +103,7 @@ export async function notifyUsers({ userIds, organizationId, type, title, messag
 }
 
 /**
- * Mark notification as read
- * @param {string} notificationId - Notification ID
+ * Mark a single notification as read.
  */
 export async function markNotificationAsRead(notificationId) {
   try {
@@ -166,7 +113,6 @@ export async function markNotificationAsRead(notificationId) {
       .eq('id', notificationId)
       .select()
       .single();
-
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
@@ -176,8 +122,7 @@ export async function markNotificationAsRead(notificationId) {
 }
 
 /**
- * Delete old notifications (older than 30 days)
- * @param {string} userId - User ID
+ * Delete notifications older than 30 days for a user.
  */
 export async function deleteOldNotifications(userId) {
   try {
