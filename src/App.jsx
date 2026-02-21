@@ -5,6 +5,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import Header from './components/Header';
 import { Toaster } from 'react-hot-toast';
 
+import LandingPage from './pages/LandingPage';
 import UnifiedDashboard from './pages/UnifiedDashboard';
 import Login from './pages/Login';
 import EventList from './pages/EventList';
@@ -111,6 +112,7 @@ function App() {
             <Route path="/org/:slug" element={<PublicOrganizationPage />} />
             <Route path="/organizations/:organizationId/page-editor" element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />} />
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
+            <Route path="/home" element={<LandingPage />} />
 
             <Route
               path="*"
