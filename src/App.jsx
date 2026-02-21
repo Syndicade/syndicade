@@ -79,7 +79,7 @@ function App() {
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-          {session && !window.location.pathname.startsWith('/org/') && <Header />}
+          {session && !window.location.pathname.startsWith('/org/') && !window.location.pathname.startsWith('/home') && <Header />}
           <Routes>
 
             <Route path="/" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
