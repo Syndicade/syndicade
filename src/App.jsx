@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 
 import LandingPage from './pages/LandingPage';
 import AboutPage from './pages/AboutPage';
+import WelcomePage from './pages/WelcomePage';
 import UnifiedDashboard from './pages/UnifiedDashboard';
 import Login from './pages/Login';
 import EventList from './pages/EventList';
@@ -83,14 +84,21 @@ function App() {
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-          {session && !window.location.pathname.startsWith('/org/') && !window.location.pathname.startsWith('/home') && window.location.pathname !== '/about' && <Header />}
-          <Routes>
+  {session &&
+    !window.location.pathname.startsWith('/org/') &&
+    !window.location.pathname.startsWith('/home') &&
+    window.location.pathname !== '/about' &&
+    window.location.pathname !== '/onboarding' &&
+    window.location.pathname !== '/welcome' &&
+    <Header />}
+            <Routes>
 
             <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
             <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <Signup />} />
             <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+            <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
 
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
