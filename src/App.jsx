@@ -32,6 +32,7 @@ import GroupsList from './pages/GroupsList';
 import GroupDetail from './pages/GroupDetail';
 import Signup from './pages/Signup';
 import OnboardingPage from './pages/OnboardingPage';
+import WishlistPage from './pages/WishlistPage';
 
 
 function App() {
@@ -99,6 +100,7 @@ function App() {
             <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <Signup />} />
             <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
             <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
 
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
