@@ -755,6 +755,13 @@ export default function LandingPage() {
                 className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
               >
                 Log In
+                <Link
+                to="/wishlist"
+                className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+              >
+                Wishlist
+              </Link>
+            </nav>
               </button>
             </nav>
             <p className="text-xs text-slate-600">&copy; {new Date().getFullYear()} Syndicade. All rights reserved.</p>
