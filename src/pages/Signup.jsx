@@ -32,12 +32,11 @@ function Signup() {
       
       await signUp(email, password)
       
-      setMessage('Check your email for the confirmation link!')
-      
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
+setMessage('Account created! Setting up your organization...')
+
+setTimeout(() => {
+  navigate('/onboarding')
+}, 1500)
       
     } catch (err) {
       setError(err.message || 'Failed to create account')

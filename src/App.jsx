@@ -6,6 +6,7 @@ import Header from './components/Header';
 import { Toaster } from 'react-hot-toast';
 
 import LandingPage from './pages/LandingPage';
+import AboutPage from './pages/AboutPage';
 import UnifiedDashboard from './pages/UnifiedDashboard';
 import Login from './pages/Login';
 import EventList from './pages/EventList';
@@ -28,6 +29,9 @@ import AccountSettings from './pages/AccountSettings';
 import SchedulingPolls from './pages/SchedulingPolls';
 import GroupsList from './pages/GroupsList';
 import GroupDetail from './pages/GroupDetail';
+import Signup from './pages/Signup';
+import OnboardingPage from './pages/OnboardingPage';
+
 
 function App() {
   const [session, setSession] = useState(null);
@@ -79,12 +83,14 @@ function App() {
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-          {session && !window.location.pathname.startsWith('/org/') && !window.location.pathname.startsWith('/home') && <Header />}
+          {session && !window.location.pathname.startsWith('/org/') && !window.location.pathname.startsWith('/home') && window.location.pathname !== '/about' && <Header />}
           <Routes>
 
-            <Route path="/" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
+            <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
+            <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <Signup />} />
+            <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
 
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
@@ -113,6 +119,7 @@ function App() {
             <Route path="/organizations/:organizationId/page-editor" element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />} />
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
             <Route path="/home" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
 
             <Route
               path="*"
