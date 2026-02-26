@@ -32,11 +32,11 @@ function Signup() {
       
       await signUp(email, password)
       
-setMessage('Account created! Setting up your organization...')
+    setMessage('Account created! Setting up your organization...')
 
-setTimeout(() => {
-  navigate('/onboarding')
-}, 1500)
+    setTimeout(() => {
+      navigate('/onboarding')
+    }, 1500)
       
     } catch (err) {
       setError(err.message || 'Failed to create account')

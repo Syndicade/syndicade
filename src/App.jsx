@@ -33,6 +33,7 @@ import GroupDetail from './pages/GroupDetail';
 import Signup from './pages/Signup';
 import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
+import OrganizationDiscovery from './pages/OrganizationDiscovery';
 
 
 function App() {
@@ -85,14 +86,14 @@ function App() {
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-  {session &&
-    !window.location.pathname.startsWith('/org/') &&
-    !window.location.pathname.startsWith('/home') &&
-    window.location.pathname !== '/about' &&
-    window.location.pathname !== '/onboarding' &&
-    window.location.pathname !== '/welcome' &&
-    <Header />}
-            <Routes>
+          {session &&
+            !window.location.pathname.startsWith('/org/') &&
+            !window.location.pathname.startsWith('/home') &&
+            window.location.pathname !== '/about' &&
+            window.location.pathname !== '/onboarding' &&
+            window.location.pathname !== '/welcome' &&
+            <Header />}
+          <Routes>
 
             <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
@@ -108,6 +109,7 @@ function App() {
             <Route path="/organizations/:organizationId/events/:eventId" element={session ? <EventDetails /> : <Navigate to="/login" replace />} />
 
             <Route path="/discover" element={<EventDiscovery />} />
+            <Route path="/explore" element={<OrganizationDiscovery />} />
             <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
 
             <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />

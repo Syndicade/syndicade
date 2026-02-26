@@ -201,6 +201,14 @@ function Header() {
               )}
             </div>
 
+            <Link
+              to="/wishlist"
+              className="text-slate-300 hover:text-white text-sm font-medium transition-colors focus:outline-none focus:underline"
+              aria-label="Feature wishlist"
+            >
+              Wishlist
+            </Link>
+
             <NotificationBell />
 
             <button
