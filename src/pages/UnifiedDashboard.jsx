@@ -252,23 +252,6 @@ function UnifiedDashboard() {
                 : 'Managing ' + organizations.length + ' organization' + (organizations.length !== 1 ? 's' : '')}
             </p>
           </div>
-          {currentUser && (
-            <button
-              onClick={() => navigate('/account-settings')}
-              className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Go to account settings"
-            >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                {currentUser.email?.charAt(0).toUpperCase() || '?'}
-              </div>
-              <div className="text-left hidden sm:block">
-                <p className="text-sm font-semibold text-gray-900 leading-tight">
-                  {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User'}
-                </p>
-                <p className="text-xs text-blue-600">Account Settings</p>
-              </div>
-            </button>
-          )}
         </div>
 
         {organizations.length === 0 ? (
