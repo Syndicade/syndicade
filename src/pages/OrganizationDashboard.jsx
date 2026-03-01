@@ -9,26 +9,26 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 // ── Icon primitive ────────────────────────────────────────────────────────────
-function Icon({ path, className = 'h-5 w-5', strokeWidth = 2 }) {
+function Icon({ path, className, strokeWidth }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
+      className={className || 'h-5 w-5'}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
       aria-hidden="true"
     >
       {Array.isArray(path)
-        ? path.map((d, i) => (
-            <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={d} />
-          ))
-        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={path} />}
+        ? path.map(function(d, i) {
+            return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={d} />;
+          })
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={path} />}
     </svg>
   );
 }
 
-const ICONS = {
+var ICONS = {
   chart:     'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   members:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
   building:  ['M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
@@ -52,31 +52,36 @@ const ICONS = {
   video:     'M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
   shuffle:   ['M7 16V4m0 0L3 8m4-4l4 4', 'M17 8v12m0 0l4-4m-4 4l-4-4'],
   chevRight: 'M9 5l7 7-7 7',
+  chevLeft:  'M15 19l-7-7 7-7',
   eye:       ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
+  pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
 };
+
+var ACTIVITY_PER_PAGE = 5;
 
 // ── Toast system ──────────────────────────────────────────────────────────────
 function ToastContainer({ toasts, removeToast }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" aria-live="polite" aria-label="Notifications">
-      {toasts.map(t => (
-        <div
-          key={t.id}
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium min-w-64 max-w-sm ${
-            t.type === 'error' ? 'bg-red-600' : t.type === 'warning' ? 'bg-yellow-600' : 'bg-green-600'
-          }`}
-          role="alert"
-        >
-          <span className="flex-1">{t.message}</span>
-          <button
-            onClick={() => removeToast(t.id)}
-            className="text-white/70 hover:text-white flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-white rounded"
-            aria-label="Dismiss notification"
+      {toasts.map(function(t) {
+        return (
+          <div
+            key={t.id}
+            className={'flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium min-w-64 max-w-sm ' +
+              (t.type === 'error' ? 'bg-red-600' : t.type === 'warning' ? 'bg-yellow-600' : 'bg-green-600')}
+            role="alert"
           >
-            <Icon path={ICONS.x} className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
+            <span className="flex-1">{t.message}</span>
+            <button
+              onClick={function() { removeToast(t.id); }}
+              className="text-white/70 hover:text-white flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-white rounded"
+              aria-label="Dismiss notification"
+            >
+              <Icon path={ICONS.x} className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -84,7 +89,7 @@ function ToastContainer({ toasts, removeToast }) {
 // ── Skeleton cards ────────────────────────────────────────────────────────────
 function StatCardSkeleton() {
   return (
-    <div className="bg-gray-100 rounded-lg p-6 border-2 border-gray-200 animate-pulse">
+    <div className="bg-gray-100 rounded-xl p-6 border-2 border-gray-200 animate-pulse">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <div className="h-3 w-24 bg-gray-300 rounded" />
@@ -99,119 +104,136 @@ function StatCardSkeleton() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 function OrganizationDashboard() {
-  const { organizationId } = useParams();
-  const navigate = useNavigate();
+  var params = useParams();
+  var organizationId = params.organizationId;
+  var navigate = useNavigate();
 
   // Core state
-  const [organization, setOrganization] = useState(null);
-  const [membership, setMembership] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [stats, setStats] = useState({
+  var [organization, setOrganization] = useState(null);
+  var [membership, setMembership] = useState(null);
+  var [currentUserId, setCurrentUserId] = useState(null);
+  var [stats, setStats] = useState({
     totalMembers: 0,
     pendingInvites: 0,
     activeEvents: 0,
     unreadAnnouncements: 0,
     totalGroups: 0,
   });
-  const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('admin');
+  var [activeTab, setActiveTab] = useState('overview');
+  var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
+  var [viewMode, setViewMode] = useState('admin');
 
   // Toast
-  const [toasts, setToasts] = useState([]);
-  function addToast(message, type = 'success') {
-    const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  var [toasts, setToasts] = useState([]);
+  function addToast(message, type) {
+    var id = Date.now() + Math.random();
+    setToasts(function(prev) { return prev.concat([{ id: id, message: message, type: type || 'success' }]); });
+    setTimeout(function() { setToasts(function(prev) { return prev.filter(function(t) { return t.id !== id; }); }); }, 4000);
   }
-  function removeToast(id) { setToasts(prev => prev.filter(t => t.id !== id)); }
+  function removeToast(id) { setToasts(function(prev) { return prev.filter(function(t) { return t.id !== id; }); }); }
 
   // Modals
-  const [showCreateEvent, setShowCreateEvent] = useState(false);
-  const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  var [showCreateEvent, setShowCreateEvent] = useState(false);
+  var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
 
   // Recent activity
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [readActivityIds, setReadActivityIds] = useState(new Set());
+  var [recentActivity, setRecentActivity] = useState([]);
+  var [activityLoading, setActivityLoading] = useState(false);
+  var [activityPage, setActivityPage] = useState(1);
+  var [readActivityIds, setReadActivityIds] = useState(new Set());
+
+  // Pending approvals
+  var [pendingApprovals, setPendingApprovals] = useState([]);
+  var [pendingApprovalsLoading, setPendingApprovalsLoading] = useState(false);
+  var [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
 
   // Inbox
-  const [inquiries, setInquiries] = useState([]);
-  const [inquiriesLoading, setInquiriesLoading] = useState(false);
-  const [unreadInquiriesCount, setUnreadInquiriesCount] = useState(0);
+  var [inquiries, setInquiries] = useState([]);
+  var [inquiriesLoading, setInquiriesLoading] = useState(false);
+  var [unreadInquiriesCount, setUnreadInquiriesCount] = useState(0);
 
   // Photos
-  const [photos, setPhotos] = useState([]);
-  const [photosLoading, setPhotosLoading] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [photoCaption, setPhotoCaption] = useState('');
-  const [photoError, setPhotoError] = useState(null);
-  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
-  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  var [photos, setPhotos] = useState([]);
+  var [photosLoading, setPhotosLoading] = useState(false);
+  var [photoUploading, setPhotoUploading] = useState(false);
+  var [photoCaption, setPhotoCaption] = useState('');
+  var [photoError, setPhotoError] = useState(null);
+  var [deletingPhotoId, setDeletingPhotoId] = useState(null);
+  var [lightboxPhoto, setLightboxPhoto] = useState(null);
 
-  // Tabs — Groups, Members, Announcements removed; accessible via overview cards
-  const allTabs = [
+  // Tabs
+  var allTabs = [
     { id: 'overview',   label: 'Overview',   iconKey: 'chart',    roles: ['admin', 'member'] },
     { id: 'documents',  label: 'Documents',  iconKey: 'folder',   roles: ['admin', 'member'] },
     { id: 'photos',     label: 'Photos',     iconKey: 'photo',    roles: ['admin', 'member'] },
-    { id: 'inbox',      label: 'Inbox',      iconKey: 'inbox',    badge: unreadInquiriesCount, roles: ['admin'] },
+    { id: 'approvals',  label: 'Approvals',  iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
+    { id: 'inbox',      label: 'Inbox',      iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
     { id: 'invite',     label: 'Invite',     iconKey: 'mail',     roles: ['admin'] },
     { id: 'analytics',  label: 'Analytics',  iconKey: 'trendUp',  roles: ['admin'] },
     { id: 'settings',   label: 'Settings',   iconKey: 'settings', roles: ['admin'] },
   ];
 
-  const effectiveRole = (membership?.role === 'admin' && viewMode === 'admin') ? 'admin' : 'member';
-  const tabs = allTabs.filter(tab => tab.roles.includes(effectiveRole));
+  var effectiveRole = (membership && membership.role === 'admin' && viewMode === 'admin') ? 'admin' : 'member';
+  var tabs = allTabs.filter(function(tab) { return tab.roles.includes(effectiveRole); });
 
-  // ── Effects ─────────────────────────────────────────────────────────────────
-  useEffect(() => { fetchData(); }, [organizationId]);
-  useEffect(() => { if (activeTab === 'overview' && organizationId) fetchRecentActivity(); }, [activeTab, organizationId]);
-  useEffect(() => { if (activeTab === 'inbox' && organizationId) fetchInquiries(); }, [activeTab, organizationId]);
-  useEffect(() => { if (activeTab === 'photos' && organizationId) fetchPhotos(); }, [activeTab, organizationId]);
+  // ── Effects ──────────────────────────────────────────────────────────────────
+  useEffect(function() { fetchData(); }, [organizationId]);
+  useEffect(function() { if (activeTab === 'overview' && organizationId) fetchRecentActivity(); }, [activeTab, organizationId]);
+  useEffect(function() { if (activeTab === 'inbox' && organizationId) fetchInquiries(); }, [activeTab, organizationId]);
+  useEffect(function() { if (activeTab === 'photos' && organizationId) fetchPhotos(); }, [activeTab, organizationId]);
+  useEffect(function() { if (activeTab === 'approvals' && organizationId) fetchPendingApprovals(); }, [activeTab, organizationId]);
 
-  // ── Data fetchers ────────────────────────────────────────────────────────────
+  // ── Data fetchers ─────────────────────────────────────────────────────────────
   async function fetchData() {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) { navigate('/login'); return; }
-      setCurrentUserId(user.id);
+      var authResult = await supabase.auth.getUser();
+      if (authResult.error) throw authResult.error;
+      if (!authResult.data.user) { navigate('/login'); return; }
+      setCurrentUserId(authResult.data.user.id);
 
-      const { data: orgData, error: orgError } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', organizationId)
-        .single();
-      if (orgError) throw orgError;
-      setOrganization(orgData);
+      var orgResult = await supabase.from('organizations').select('*').eq('id', organizationId).single();
+      if (orgResult.error) throw orgResult.error;
+      setOrganization(orgResult.data);
 
-      // Two-step membership check to avoid 400 from complex joins
-      const { data: membershipData, error: membershipError } = await supabase
+      var memberResult = await supabase
         .from('memberships')
         .select('id, role, status, joined_date, member_id, organization_id')
         .eq('organization_id', organizationId)
-        .eq('member_id', user.id)
+        .eq('member_id', authResult.data.user.id)
         .eq('status', 'active')
         .maybeSingle();
 
-      if (membershipError) throw membershipError;
-      if (!membershipData) {
+      if (memberResult.error) throw memberResult.error;
+      if (!memberResult.data) {
         setError('You are not a member of this organization.');
         setLoading(false);
         return;
       }
-      setMembership(membershipData);
-      await fetchStats(user.id);
+      setMembership(memberResult.data);
+      await fetchStats(authResult.data.user.id);
       await fetchRecentActivity();
 
-      if (membershipData.role === 'admin') {
-        const { count } = await supabase
+      if (memberResult.data.role === 'admin') {
+        var inboxResult = await supabase
           .from('contact_inquiries')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', organizationId)
           .eq('is_read', false);
-        setUnreadInquiriesCount(count || 0);
+        setUnreadInquiriesCount(inboxResult.count || 0);
+
+        // Load pending approvals count for badge
+        var pendingCountItems = [];
+        var tables = ['events','announcements','polls','surveys','signup_forms'];
+        for (var i = 0; i < tables.length; i++) {
+          var countResult = await supabase
+            .from(tables[i])
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', organizationId)
+            .eq('approval_status', 'pending');
+          pendingCountItems.push(countResult.count || 0);
+        }
+        setPendingApprovalsCount(pendingCountItems.reduce(function(a, b) { return a + b; }, 0));
       }
     } catch (err) {
       console.error('fetchData error:', err);
@@ -223,13 +245,7 @@ function OrganizationDashboard() {
 
   async function fetchStats(userId) {
     try {
-      const [
-        { count: memberCount },
-        { count: inviteCount },
-        { count: eventCount },
-        { count: groupCount },
-        { data: allAnnouncements },
-      ] = await Promise.all([
+      var results = await Promise.all([
         supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'active'),
         supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'pending'),
         supabase.from('events').select('*', { count: 'exact', head: true }).eq('organization_id', organizationId).gte('start_time', new Date().toISOString()),
@@ -237,24 +253,24 @@ function OrganizationDashboard() {
         supabase.from('announcements').select('id').eq('organization_id', organizationId),
       ]);
 
-      const announcementIds = (allAnnouncements || []).map(a => a.id);
-      let unreadCount = 0;
+      var announcementIds = (results[4].data || []).map(function(a) { return a.id; });
+      var unreadCount = 0;
       if (announcementIds.length > 0 && userId) {
-        const { data: reads } = await supabase
+        var readsResult = await supabase
           .from('announcement_reads')
           .select('announcement_id')
           .eq('member_id', userId)
           .in('announcement_id', announcementIds);
-        const readIds = new Set((reads || []).map(r => r.announcement_id));
+        var readIds = new Set((readsResult.data || []).map(function(r) { return r.announcement_id; }));
         unreadCount = announcementIds.length - readIds.size;
       }
 
       setStats({
-        totalMembers: memberCount || 0,
-        pendingInvites: inviteCount || 0,
-        activeEvents: eventCount || 0,
+        totalMembers: results[0].count || 0,
+        pendingInvites: results[1].count || 0,
+        activeEvents: results[2].count || 0,
+        totalGroups: results[3].count || 0,
         unreadAnnouncements: unreadCount,
-        totalGroups: groupCount || 0,
       });
     } catch (err) {
       console.error('fetchStats error:', err);
@@ -264,48 +280,47 @@ function OrganizationDashboard() {
   async function fetchRecentActivity() {
     try {
       setActivityLoading(true);
-      const activities = [];
+      var activities = [];
 
-      // Events
-      const { data: events } = await supabase
+      var eventsResult = await supabase
         .from('events')
         .select('id, title, start_time, created_at, event_type')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
         .limit(5);
-      if (events) {
-        events.forEach(ev =>
+      if (eventsResult.data) {
+        eventsResult.data.forEach(function(ev) {
           activities.push({
             id: 'event-' + ev.id,
             type: 'event',
             title: 'New event: ' + ev.title,
             iconKey: ev.event_type === 'virtual' ? 'video' : ev.event_type === 'hybrid' ? 'shuffle' : 'location',
             timestamp: ev.created_at,
-          })
-        );
+            link: '/organizations/' + organizationId + '/events',
+          });
+        });
       }
 
-      // Announcements
-      const { data: announcementsData } = await supabase
+      var annResult = await supabase
         .from('announcements')
         .select('id, title, created_at, priority')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
         .limit(5);
-      if (announcementsData) {
-        announcementsData.forEach(a =>
+      if (annResult.data) {
+        annResult.data.forEach(function(a) {
           activities.push({
             id: 'announcement-' + a.id,
             type: 'announcement',
             title: a.title,
             iconKey: 'megaphone',
             timestamp: a.created_at,
-          })
-        );
+            link: '/organizations/' + organizationId + '/announcements',
+          });
+        });
       }
 
-      // Members — two-step to avoid join 400 errors
-const { data: membershipRows } = await supabase
+      var memberRows = await supabase
         .from('memberships')
         .select('id, joined_date, member_id')
         .eq('organization_id', organizationId)
@@ -313,16 +328,13 @@ const { data: membershipRows } = await supabase
         .order('joined_date', { ascending: false })
         .limit(5);
 
-      if (membershipRows && membershipRows.length > 0) {
-        const memberIds = membershipRows.map(m => m.member_id);
-        const { data: profiles } = await supabase
-          .from('members')
-          .select('user_id, first_name, last_name')
-          .in('user_id', memberIds);
-        const profileMap = {};
-        (profiles || []).forEach(p => { profileMap[p.user_id] = p; });
-        membershipRows.forEach(m => {
-          const p = profileMap[m.member_id];
+      if (memberRows.data && memberRows.data.length > 0) {
+        var memberIds = memberRows.data.map(function(m) { return m.member_id; });
+        var profilesResult = await supabase.from('members').select('user_id, first_name, last_name').in('user_id', memberIds);
+        var profileMap = {};
+        (profilesResult.data || []).forEach(function(p) { profileMap[p.user_id] = p; });
+        memberRows.data.forEach(function(m) {
+          var p = profileMap[m.member_id];
           if (p) {
             activities.push({
               id: 'member-' + m.id,
@@ -330,13 +342,15 @@ const { data: membershipRows } = await supabase
               title: p.first_name + ' ' + p.last_name + ' joined',
               iconKey: 'userPlus',
               timestamp: m.joined_date,
+              link: '/organizations/' + organizationId + '/members',
             });
           }
         });
       }
 
-      activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setRecentActivity(activities.slice(0, 10));
+      activities.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+      setRecentActivity(activities.slice(0, 20));
+      setActivityPage(1);
     } catch (err) {
       console.error('fetchRecentActivity error:', err);
     } finally {
@@ -344,17 +358,58 @@ const { data: membershipRows } = await supabase
     }
   }
 
+  async function fetchPendingApprovals() {
+    setPendingApprovalsLoading(true);
+    try {
+      var items = [];
+      var tables = [
+        { name: 'events',        label: 'Event',        titleField: 'title'    },
+        { name: 'announcements', label: 'Announcement', titleField: 'title'    },
+        { name: 'polls',         label: 'Poll',         titleField: 'question' },
+        { name: 'surveys',       label: 'Survey',       titleField: 'title'    },
+        { name: 'signup_forms',  label: 'Sign-Up Form', titleField: 'title'    },
+      ];
+      for (var i = 0; i < tables.length; i++) {
+        var t = tables[i];
+        var result = await supabase
+          .from(t.name)
+          .select('id, ' + t.titleField + ', created_at')
+          .eq('organization_id', organizationId)
+          .eq('approval_status', 'pending')
+          .order('created_at', { ascending: false });
+        if (result.data) {
+          result.data.forEach(function(item) {
+            items.push({
+              id: item.id,
+              type: t.label,
+              table: t.name,
+              title: item[t.titleField],
+              created_at: item.created_at,
+            });
+          });
+        }
+      }
+      items.sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+      setPendingApprovals(items);
+      setPendingApprovalsCount(items.length);
+    } catch (err) {
+      console.error('fetchPendingApprovals error:', err);
+    } finally {
+      setPendingApprovalsLoading(false);
+    }
+  }
+
   async function fetchInquiries() {
     try {
       setInquiriesLoading(true);
-      const { data, error } = await supabase
+      var result = await supabase
         .from('contact_inquiries')
         .select('*')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      setInquiries(data || []);
-      setUnreadInquiriesCount((data || []).filter(i => !i.is_read).length);
+      if (result.error) throw result.error;
+      setInquiries(result.data || []);
+      setUnreadInquiriesCount((result.data || []).filter(function(i) { return !i.is_read; }).length);
     } catch (err) {
       console.error('fetchInquiries error:', err);
     } finally {
@@ -365,14 +420,14 @@ const { data: membershipRows } = await supabase
   async function fetchPhotos() {
     try {
       setPhotosLoading(true);
-      const { data, error } = await supabase
+      var result = await supabase
         .from('org_photos')
         .select('*')
         .eq('organization_id', organizationId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      setPhotos(data || []);
+      if (result.error) throw result.error;
+      setPhotos(result.data || []);
     } catch (err) {
       console.error('fetchPhotos error:', err);
     } finally {
@@ -380,18 +435,44 @@ const { data: membershipRows } = await supabase
     }
   }
 
-  // ── Activity actions ─────────────────────────────────────────────────────────
+  // ── Approval actions ──────────────────────────────────────────────────────────
+  async function handleApprove(item) {
+    try {
+      var result = await supabase.from(item.table).update({ approval_status: 'approved' }).eq('id', item.id);
+      if (result.error) throw result.error;
+      setPendingApprovals(function(prev) { return prev.filter(function(i) { return !(i.id === item.id && i.type === item.type); }); });
+      setPendingApprovalsCount(function(prev) { return Math.max(0, prev - 1); });
+      addToast(item.type + ' approved.');
+    } catch (err) {
+      addToast('Could not approve: ' + err.message, 'error');
+    }
+  }
+
+  async function handleReject(item) {
+    if (!window.confirm('Reject this ' + item.type.toLowerCase() + '? It will be marked as rejected.')) return;
+    try {
+      var result = await supabase.from(item.table).update({ approval_status: 'rejected' }).eq('id', item.id);
+      if (result.error) throw result.error;
+      setPendingApprovals(function(prev) { return prev.filter(function(i) { return !(i.id === item.id && i.type === item.type); }); });
+      setPendingApprovalsCount(function(prev) { return Math.max(0, prev - 1); });
+      addToast(item.type + ' rejected.');
+    } catch (err) {
+      addToast('Could not reject: ' + err.message, 'error');
+    }
+  }
+
+  // ── Activity actions ──────────────────────────────────────────────────────────
   function handleMarkActivityRead(activityId) {
-    setReadActivityIds(prev => new Set([...prev, activityId]));
+    setReadActivityIds(function(prev) { return new Set(Array.from(prev).concat([activityId])); });
   }
 
   function handleMarkAllActivityRead() {
-    setReadActivityIds(new Set(recentActivity.map(a => a.id)));
+    setReadActivityIds(new Set(recentActivity.map(function(a) { return a.id; })));
     addToast('All activity marked as read.');
   }
 
   function handleDismissActivity(activityId) {
-    setRecentActivity(prev => prev.filter(a => a.id !== activityId));
+    setRecentActivity(function(prev) { return prev.filter(function(a) { return a.id !== activityId; }); });
   }
 
   function handleDismissAllActivity() {
@@ -399,16 +480,13 @@ const { data: membershipRows } = await supabase
     addToast('Activity feed cleared.');
   }
 
-  // ── Inquiry actions ──────────────────────────────────────────────────────────
+  // ── Inquiry actions ───────────────────────────────────────────────────────────
   async function handleMarkInquiryRead(inquiryId) {
     try {
-      const { error } = await supabase
-        .from('contact_inquiries')
-        .update({ is_read: true })
-        .eq('id', inquiryId);
-      if (error) throw error;
-      setInquiries(prev => prev.map(i => i.id === inquiryId ? { ...i, is_read: true } : i));
-      setUnreadInquiriesCount(prev => Math.max(0, prev - 1));
+      var result = await supabase.from('contact_inquiries').update({ is_read: true }).eq('id', inquiryId);
+      if (result.error) throw result.error;
+      setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiryId ? Object.assign({}, i, { is_read: true }) : i; }); });
+      setUnreadInquiriesCount(function(prev) { return Math.max(0, prev - 1); });
       addToast('Message marked as read.');
     } catch (err) {
       addToast('Could not mark as read.', 'error');
@@ -418,41 +496,39 @@ const { data: membershipRows } = await supabase
   async function handleDeleteInquiry(inquiryId) {
     if (!window.confirm('Delete this message? This cannot be undone.')) return;
     try {
-      const { error } = await supabase.from('contact_inquiries').delete().eq('id', inquiryId);
-      if (error) throw error;
-      const deleted = inquiries.find(i => i.id === inquiryId);
-      setInquiries(prev => prev.filter(i => i.id !== inquiryId));
-      if (deleted && !deleted.is_read) setUnreadInquiriesCount(prev => Math.max(0, prev - 1));
+      var result = await supabase.from('contact_inquiries').delete().eq('id', inquiryId);
+      if (result.error) throw result.error;
+      var deleted = inquiries.find(function(i) { return i.id === inquiryId; });
+      setInquiries(function(prev) { return prev.filter(function(i) { return i.id !== inquiryId; }); });
+      if (deleted && !deleted.is_read) setUnreadInquiriesCount(function(prev) { return Math.max(0, prev - 1); });
       addToast('Message deleted.');
     } catch (err) {
       addToast('Could not delete message.', 'error');
     }
   }
 
-  // ── Photo actions ────────────────────────────────────────────────────────────
+  // ── Photo actions ─────────────────────────────────────────────────────────────
   async function handlePhotoUpload(e) {
-    const file = e.target.files[0];
+    var file = e.target.files[0];
     if (!file) return;
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    var allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowed.includes(file.type)) { setPhotoError('Only JPG, PNG, GIF, and WebP images are allowed.'); return; }
     if (file.size > 5 * 1024 * 1024) { setPhotoError('Image must be under 5MB.'); return; }
     try {
       setPhotoUploading(true);
       setPhotoError(null);
-      const ext = file.name.split('.').pop();
-      const fileName = organizationId + '/' + Date.now() + '.' + ext;
-      const { error: uploadError } = await supabase.storage
-        .from('organization-images')
-        .upload(fileName, file, { upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('organization-images').getPublicUrl(fileName);
-      const { error: insertError } = await supabase.from('org_photos').insert({
+      var ext = file.name.split('.').pop();
+      var fileName = organizationId + '/' + Date.now() + '.' + ext;
+      var uploadResult = await supabase.storage.from('organization-images').upload(fileName, file, { upsert: false });
+      if (uploadResult.error) throw uploadResult.error;
+      var urlData = supabase.storage.from('organization-images').getPublicUrl(fileName);
+      var insertResult = await supabase.from('org_photos').insert({
         organization_id: organizationId,
         uploaded_by: currentUserId,
-        photo_url: urlData.publicUrl,
+        photo_url: urlData.data.publicUrl,
         caption: photoCaption.trim() || null,
       });
-      if (insertError) throw insertError;
+      if (insertResult.error) throw insertResult.error;
       setPhotoCaption('');
       e.target.value = '';
       await fetchPhotos();
@@ -470,13 +546,13 @@ const { data: membershipRows } = await supabase
     if (!window.confirm('Delete this photo? This cannot be undone.')) return;
     try {
       setDeletingPhotoId(photo.id);
-      const urlParts = photo.photo_url.split('/organization-images/');
+      var urlParts = photo.photo_url.split('/organization-images/');
       if (urlParts.length === 2) {
         await supabase.storage.from('organization-images').remove([urlParts[1]]);
       }
-      const { error } = await supabase.from('org_photos').delete().eq('id', photo.id);
-      if (error) throw error;
-      setPhotos(prev => prev.filter(p => p.id !== photo.id));
+      var result = await supabase.from('org_photos').delete().eq('id', photo.id);
+      if (result.error) throw result.error;
+      setPhotos(function(prev) { return prev.filter(function(p) { return p.id !== photo.id; }); });
       addToast('Photo deleted.');
     } catch (err) {
       addToast('Could not delete photo: ' + err.message, 'error');
@@ -485,7 +561,7 @@ const { data: membershipRows } = await supabase
     }
   }
 
-  // ── Event / announcement callbacks ───────────────────────────────────────────
+  // ── Event / announcement callbacks ────────────────────────────────────────────
   async function handleEventCreated() {
     await fetchStats(currentUserId);
     addToast('Event created successfully.');
@@ -496,18 +572,12 @@ const { data: membershipRows } = await supabase
     addToast('Announcement created.');
   }
 
-  // ── Avatar color ─────────────────────────────────────────────────────────────
-  function getAvatarColor(name) {
-    const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-red-500', 'bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
-    return colors[(name || 'A').charCodeAt(0) % colors.length];
-  }
-
   // ── Loading state ─────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <div className="bg-white rounded-lg shadow-lg p-6 animate-pulse">
+          <div className="bg-white rounded-xl shadow-lg p-6 animate-pulse">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-gray-200" />
               <div className="space-y-2">
@@ -517,7 +587,7 @@ const { data: membershipRows } = await supabase
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[...Array(5)].map((_, i) => <StatCardSkeleton key={i} />)}
+            {[1,2,3,4,5].map(function(i) { return <StatCardSkeleton key={i} />; })}
           </div>
         </div>
       </div>
@@ -535,8 +605,8 @@ const { data: membershipRows } = await supabase
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => navigate('/organizations')}
-            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            onClick={function() { navigate('/organizations'); }}
+            className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
             Back to Organizations
           </button>
@@ -545,339 +615,464 @@ const { data: membershipRows } = await supabase
     );
   }
 
+  var totalActivityPages = Math.ceil(recentActivity.length / ACTIVITY_PER_PAGE);
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Org Header */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
-              {organization.logo_url && (
-                <img
-                  src={organization.logo_url}
-                  alt={organization.name + ' logo'}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm flex-shrink-0"
-                />
-              )}
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-                <p className="text-gray-600 mt-1">{organization.description}</p>
-                <div className="flex items-center gap-3 mt-3 flex-wrap">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-                    {organization.type}
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                    {membership.role === 'admin' ? 'Admin' : 'Member'}
-                  </span>
+          {/* Org Header */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-4">
+                {organization.logo_url ? (
+                  <img
+                    src={organization.logo_url}
+                    alt={organization.name + ' logo'}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 border-2 border-blue-200">
+                    <span className="text-blue-600 font-extrabold text-xl">{(organization.name || 'O').charAt(0)}</span>
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
+                  <p className="text-gray-500 mt-1">{organization.description}</p>
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 capitalize">
+                      {organization.type}
+                    </span>
+                    <span className={'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ' +
+                      (membership.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600')}>
+                      {membership.role === 'admin' ? 'Admin' : 'Member'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            {membership?.role === 'admin' && (
-              <div className="flex items-center gap-2">
-                <span className={'text-sm font-medium ' + (viewMode === 'admin' ? 'text-purple-700' : 'text-gray-400')}>
-                  Admin View
-                </span>
-                <button
-                  onClick={() => setViewMode(viewMode === 'admin' ? 'member' : 'admin')}
-                  className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors ' +
-                    (viewMode === 'member' ? 'bg-blue-600' : 'bg-purple-600')}
-                  role="switch"
-                  aria-checked={viewMode === 'admin'}
-                  aria-label="Toggle between admin and member view"
-                >
-                  <span className={'inline-block h-6 w-6 transform rounded-full bg-white transition-transform ' +
-                    (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
-                </button>
-                <span className={'text-sm font-medium ' + (viewMode === 'member' ? 'text-blue-700' : 'text-gray-400')}>
-                  Member View
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-lg mb-6">
-          <div className="border-b border-gray-200">
-            {/* Custom thin scrollbar via inline style */}
-            <nav
-              className="flex px-4 overflow-x-auto"
-              aria-label="Organization tabs"
-              style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
-            >
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={
-                    'flex-shrink-0 py-4 px-5 border-b-2 font-medium text-sm transition-all relative inline-flex items-center gap-2 ' +
-                    (activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')
-                  }
-                  aria-current={activeTab === tab.id ? 'page' : undefined}
-                >
-                  <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap">{tab.label}</span>
-                  {tab.badge > 0 && (
-                    <span
-                      className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full"
-                      aria-label={tab.badge + ' unread'}
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="p-6">
-
-            {/* ── OVERVIEW TAB ── */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-
-                {/* Stat cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              {membership && membership.role === 'admin' && (
+                <div className="flex items-center gap-3">
+                  <span className={'text-sm font-semibold ' + (viewMode === 'admin' ? 'text-purple-600' : 'text-gray-400')}>
+                    Admin View
+                  </span>
                   <button
-                    onClick={() => navigate('/organizations/' + organizationId + '/members')}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    onClick={function() { setViewMode(viewMode === 'admin' ? 'member' : 'admin'); }}
+                    className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ' +
+                      (viewMode === 'member' ? 'bg-blue-500 focus:ring-blue-500' : 'bg-purple-500 focus:ring-purple-500')}
+                    role="switch"
+                    aria-checked={viewMode === 'admin'}
+                    aria-label="Toggle between admin and member view"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">Total Members</p>
-                        <p className="text-3xl font-bold text-blue-900 mt-2">{stats.totalMembers}</p>
-                        <p className="text-xs text-blue-700 mt-1">Click to view directory</p>
-                      </div>
-                      <Icon path={ICONS.members} className="h-10 w-10 text-blue-300" strokeWidth={1.5} />
-                    </div>
+                    <span className={'inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ' +
+                      (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
                   </button>
+                  <span className={'text-sm font-semibold ' + (viewMode === 'member' ? 'text-blue-600' : 'text-gray-400')}>
+                    Member View
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
-                  {effectiveRole === 'admin' && (
+          {/* Tabs */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+            <div className="border-b border-gray-200">
+              <nav
+                className="flex px-4 overflow-x-auto"
+                aria-label="Organization tabs"
+                style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
+              >
+                {tabs.map(function(tab) {
+                  var isActive = activeTab === tab.id;
+                  return (
                     <button
-                      onClick={() => setActiveTab('invite')}
-                      className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border-2 border-yellow-200 hover:border-yellow-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                      key={tab.id}
+                      onClick={function() { setActiveTab(tab.id); }}
+                      className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 ' +
+                        (isActive
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />
+                      <span className="whitespace-nowrap">{tab.label}</span>
+                      {tab.badge > 0 && (
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-yellow-500 rounded-full"
+                          aria-label={tab.badge + ' pending'}
+                        >
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            <div className="p-6">
+
+              {/* ── OVERVIEW TAB ── */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+
+                  {/* Stat cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <button
+                      onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
+                      className="bg-blue-50 rounded-xl p-6 border-2 border-blue-100 hover:border-blue-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-yellow-600 text-sm font-semibold uppercase tracking-wide">Pending Invites</p>
-                          <p className="text-3xl font-bold text-yellow-900 mt-2">{stats.pendingInvites}</p>
-                          <p className="text-xs text-yellow-700 mt-1">{stats.pendingInvites === 0 ? 'All caught up!' : 'Click to manage'}</p>
+                          <p className="text-blue-600 text-xs font-bold uppercase tracking-widest">Members</p>
+                          <p className="text-3xl font-extrabold text-blue-700 mt-2">{stats.totalMembers}</p>
+                          <p className="text-xs text-blue-500 mt-1">View directory</p>
                         </div>
-                        <Icon path={ICONS.mail} className="h-10 w-10 text-yellow-300" strokeWidth={1.5} />
+                        <Icon path={ICONS.members} className="h-9 w-9 text-blue-300" strokeWidth={1.5} />
                       </div>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => navigate('/organizations/' + organizationId + '/events')}
-                    className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Upcoming Events</p>
-                        <p className="text-3xl font-bold text-green-900 mt-2">{stats.activeEvents}</p>
-                        <p className="text-xs text-green-700 mt-1">Click to view calendar</p>
-                      </div>
-                      <Icon path={ICONS.calendar} className="h-10 w-10 text-green-300" strokeWidth={1.5} />
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => navigate('/organizations/' + organizationId + '/announcements')}
-                    className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border-2 border-orange-200 hover:border-orange-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-orange-600 text-sm font-semibold uppercase tracking-wide">Unread News</p>
-                        <p className="text-3xl font-bold text-orange-900 mt-2">{stats.unreadAnnouncements}</p>
-                        <p className="text-xs text-orange-700 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up!' : 'Click to read'}</p>
-                      </div>
-                      <Icon path={ICONS.megaphone} className="h-10 w-10 text-orange-300" strokeWidth={1.5} />
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => navigate('/organizations/' + organizationId + '/groups')}
-                    className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-purple-600 text-sm font-semibold uppercase tracking-wide">Groups</p>
-                        <p className="text-3xl font-bold text-purple-900 mt-2">{stats.totalGroups}</p>
-                        <p className="text-xs text-purple-700 mt-1">Click to view all</p>
-                      </div>
-                      <Icon path={ICONS.building} className="h-10 w-10 text-purple-300" strokeWidth={1.5} />
-                    </div>
-                  </button>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button
-                      onClick={() => setShowCreateEvent(true)}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.calendar} className="h-6 w-6 text-blue-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Create Event</span>
                     </button>
 
                     {effectiveRole === 'admin' && (
                       <button
-                        onClick={() => setShowCreateAnnouncement(true)}
-                        className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onClick={function() { setActiveTab('invite'); }}
+                        className="bg-yellow-50 rounded-xl p-6 border-2 border-yellow-100 hover:border-yellow-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
                       >
-                        <Icon path={ICONS.megaphone} className="h-6 w-6 text-orange-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-900">Create Announcement</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/members')}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.members} className="h-6 w-6 text-blue-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Member Directory</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/scheduling')}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.clock} className="h-6 w-6 text-teal-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Group Scheduling</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/polls')}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.chart} className="h-6 w-6 text-blue-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Polls</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/surveys')}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.clipboard} className="h-6 w-6 text-green-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Surveys</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/signup-forms')}
-                      className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <Icon path={ICONS.pencil} className="h-6 w-6 text-indigo-500 flex-shrink-0" />
-                      <span className="font-semibold text-gray-900">Sign-Up Forms</span>
-                    </button>
-
-                    {effectiveRole === 'admin' && (
-                      <button
-                        onClick={() => navigate('/organizations/' + organizationId + '/page-editor')}
-                        className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <Icon path={ICONS.globe} className="h-6 w-6 text-gray-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-900">Edit Public Page</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Recent Activity */}
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-                    <div className="flex items-center gap-2">
-                      {recentActivity.length > 0 && (
-                        <>
-                          <button
-                            onClick={handleMarkAllActivityRead}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 border border-blue-200 hover:bg-blue-50 transition-colors"
-                          >
-                            Mark All Read
-                          </button>
-                          <button
-                            onClick={handleDismissAllActivity}
-                            className="text-xs text-gray-500 hover:text-red-600 font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1 border border-gray-200 hover:bg-red-50 transition-colors"
-                          >
-                            Clear All
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={fetchRecentActivity}
-                        className="text-xs text-gray-500 hover:text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1 border border-gray-200 hover:bg-gray-50 transition-colors"
-                      >
-                        Refresh
-                      </button>
-                    </div>
-                  </div>
-
-                  {activityLoading ? (
-                    <div className="space-y-3">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
-                          <div className="w-5 h-5 bg-gray-200 rounded mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-3/4" />
-                            <div className="h-3 bg-gray-200 rounded w-1/3" />
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-yellow-600 text-xs font-bold uppercase tracking-widest">Pending Invites</p>
+                            <p className="text-3xl font-extrabold text-yellow-700 mt-2">{stats.pendingInvites}</p>
+                            <p className="text-xs text-yellow-500 mt-1">{stats.pendingInvites === 0 ? 'All caught up' : 'Manage'}</p>
                           </div>
+                          <Icon path={ICONS.mail} className="h-9 w-9 text-yellow-300" strokeWidth={1.5} />
                         </div>
-                      ))}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={function() { navigate('/organizations/' + organizationId + '/events'); }}
+                      className="bg-green-50 rounded-xl p-6 border-2 border-green-100 hover:border-green-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-green-600 text-xs font-bold uppercase tracking-widest">Upcoming Events</p>
+                          <p className="text-3xl font-extrabold text-green-700 mt-2">{stats.activeEvents}</p>
+                          <p className="text-xs text-green-500 mt-1">View calendar</p>
+                        </div>
+                        <Icon path={ICONS.calendar} className="h-9 w-9 text-green-300" strokeWidth={1.5} />
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }}
+                      className="bg-orange-50 rounded-xl p-6 border-2 border-orange-100 hover:border-orange-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Unread News</p>
+                          <p className="text-3xl font-extrabold text-orange-700 mt-2">{stats.unreadAnnouncements}</p>
+                          <p className="text-xs text-orange-500 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up' : 'Read now'}</p>
+                        </div>
+                        <Icon path={ICONS.megaphone} className="h-9 w-9 text-orange-300" strokeWidth={1.5} />
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
+                      className="bg-purple-50 rounded-xl p-6 border-2 border-purple-100 hover:border-purple-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-purple-600 text-xs font-bold uppercase tracking-widest">Groups</p>
+                          <p className="text-3xl font-extrabold text-purple-700 mt-2">{stats.totalGroups}</p>
+                          <p className="text-xs text-purple-500 mt-1">View all</p>
+                        </div>
+                        <Icon path={ICONS.building} className="h-9 w-9 text-purple-300" strokeWidth={1.5} />
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                    <h3 className="text-base font-bold text-gray-900 mb-4 uppercase tracking-wide text-xs" style={{color:'#F5B731'}}>Quick Actions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <button
+                        onClick={function() { setShowCreateEvent(true); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.calendar} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Create Event</span>
+                      </button>
+
+                      {effectiveRole === 'admin' && (
+                        <button
+                          onClick={function() { setShowCreateAnnouncement(true); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.megaphone} className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Create Announcement</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.members} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Member Directory</span>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/scheduling'); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.clock} className="h-5 w-5 text-teal-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Group Scheduling</span>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/polls'); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.chart} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Polls</span>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/surveys'); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.clipboard} className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Surveys</span>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/signup-forms'); }}
+                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      >
+                        <Icon path={ICONS.pencil} className="h-5 w-5 text-indigo-500 flex-shrink-0" />
+                        <span className="font-semibold text-gray-800 text-sm">Sign-Up Forms</span>
+                      </button>
+
+                      {effectiveRole === 'admin' && (
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
+                        </button>
+                      )}
                     </div>
-                  ) : recentActivity.length === 0 ? (
-                    <div className="text-center py-10">
-                      <Icon path={ICONS.clock} className="h-10 w-10 text-gray-300 mx-auto mb-2" strokeWidth={1.5} />
-                      <p className="text-gray-500 text-sm font-medium">No recent activity</p>
-                      <p className="text-gray-400 text-xs mt-1">Activity from events, announcements, and members will appear here.</p>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                      <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {recentActivity.length > 0 && (
+                          <>
+                            <button
+                              onClick={handleMarkAllActivityRead}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-1.5 border border-blue-200 hover:bg-blue-50 transition-colors"
+                            >
+                              Mark All Read
+                            </button>
+                            <button
+                              onClick={handleDismissAllActivity}
+                              className="text-xs text-gray-500 hover:text-red-600 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-red-50 transition-colors"
+                            >
+                              Clear
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={fetchRecentActivity}
+                          className="text-xs text-gray-500 hover:text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-gray-50 transition-colors"
+                        >
+                          Refresh
+                        </button>
+                      </div>
+                    </div>
+
+                    {activityLoading ? (
+                      <div className="space-y-3">
+                        {[1,2,3,4,5].map(function(i) {
+                          return (
+                            <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
+                              <div className="w-5 h-5 bg-gray-200 rounded mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-3/4" />
+                                <div className="h-3 bg-gray-200 rounded w-1/3" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : recentActivity.length === 0 ? (
+                      <div className="text-center py-10">
+                        <Icon path={ICONS.clock} className="h-10 w-10 text-gray-300 mx-auto mb-2" strokeWidth={1.5} />
+                        <p className="text-gray-600 text-sm font-semibold">No recent activity</p>
+                        <p className="text-gray-400 text-xs mt-1">Events, announcements, and new members will appear here.</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="space-y-2" role="list" aria-label="Recent activity">
+                          {recentActivity
+                            .slice((activityPage - 1) * ACTIVITY_PER_PAGE, activityPage * ACTIVITY_PER_PAGE)
+                            .map(function(activity) {
+                              var isRead = readActivityIds.has(activity.id);
+                              return (
+                                <div
+                                  key={activity.id}
+                                  role="listitem"
+                                  className={'rounded-xl border transition-colors group ' +
+                                    (isRead ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200')}
+                                >
+                                  <button
+                                    onClick={function() { if (activity.link) navigate(activity.link); handleMarkActivityRead(activity.id); }}
+                                    className="w-full flex items-center gap-3 p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded-xl"
+                                    aria-label={'View ' + activity.title}
+                                  >
+                                    <div className={'mt-0.5 flex-shrink-0 ' + (isRead ? 'text-gray-400' : 'text-blue-500')}>
+                                      <Icon path={ICONS[activity.iconKey] || ICONS.clock} className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={'text-sm font-semibold truncate ' + (isRead ? 'text-gray-500' : 'text-gray-900')}>
+                                        {activity.title}
+                                      </p>
+                                      <p className="text-xs text-gray-400 mt-0.5">
+                                        {new Date(activity.timestamp).toLocaleDateString('en-US', {
+                                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                                        })}
+                                      </p>
+                                    </div>
+                                    <Icon path={ICONS.chevRight} className={'h-4 w-4 flex-shrink-0 ' + (isRead ? 'text-gray-300' : 'text-blue-400')} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                        </div>
+
+                        {/* Pagination + View All */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={function() { setActivityPage(function(p) { return Math.max(1, p - 1); }); }}
+                              disabled={activityPage === 1}
+                              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                              aria-label="Previous page"
+                            >
+                              <Icon path={ICONS.chevLeft} className="h-4 w-4" />
+                            </button>
+                            <span className="text-xs text-gray-500 font-semibold min-w-12 text-center">
+                              {activityPage} / {Math.max(1, totalActivityPages)}
+                            </span>
+                            <button
+                              onClick={function() { setActivityPage(function(p) { return Math.min(totalActivityPages, p + 1); }); }}
+                              disabled={activityPage >= totalActivityPages}
+                              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                              aria-label="Next page"
+                            >
+                              <Icon path={ICONS.chevRight} className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <button
+                            onClick={function() {
+                              setActivityPage(1);
+                              addToast('Showing ' + recentActivity.length + ' recent activities.');
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-semibold border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                          >
+                            View All Activity
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── APPROVALS TAB ── */}
+              {activeTab === 'approvals' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Pending Approvals</h2>
+                      <p className="text-gray-500 mt-1">Review and approve content submitted by editors.</p>
+                    </div>
+                    {pendingApprovals.length > 0 && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                        {pendingApprovals.length} pending
+                      </span>
+                    )}
+                  </div>
+
+                  {pendingApprovalsLoading ? (
+                    <div className="space-y-3">
+                      {[1,2,3].map(function(i) {
+                        return (
+                          <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
+                            <div className="flex justify-between gap-4">
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-1/4" />
+                                <div className="h-5 bg-gray-200 rounded w-1/2" />
+                                <div className="h-3 bg-gray-200 rounded w-1/3" />
+                              </div>
+                              <div className="flex gap-2">
+                                <div className="h-9 w-20 bg-gray-200 rounded-lg" />
+                                <div className="h-9 w-20 bg-gray-200 rounded-lg" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : pendingApprovals.length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex justify-center mb-3">
+                        <Icon path={ICONS.check} className="h-12 w-12 text-green-400" strokeWidth={1.5} />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-700 mb-1">All caught up!</h3>
+                      <p className="text-gray-500 text-sm">No content waiting for approval.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2" role="list" aria-label="Recent activity">
-                      {recentActivity.map(activity => {
-                        const isRead = readActivityIds.has(activity.id);
+                    <div className="space-y-3" role="list" aria-label="Pending approvals">
+                      {pendingApprovals.map(function(item) {
                         return (
                           <div
-                            key={activity.id}
+                            key={item.type + '-' + item.id}
                             role="listitem"
-                            className={'flex items-start gap-3 p-3 rounded-lg transition-colors group ' + (isRead ? 'bg-gray-50' : 'bg-blue-50 border border-blue-100')}
+                            className="flex items-center justify-between gap-4 p-5 bg-white border border-yellow-200 rounded-xl hover:border-yellow-300 transition-colors"
                           >
-                            <div className={'mt-0.5 flex-shrink-0 ' + (isRead ? 'text-gray-400' : 'text-blue-500')}>
-                              <Icon path={ICONS[activity.iconKey] || ICONS.clock} className="h-5 w-5" />
-                            </div>
                             <div className="flex-1 min-w-0">
-                              <p className={'text-sm font-medium ' + (isRead ? 'text-gray-600' : 'text-gray-900')}>
-                                {activity.title}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                                  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
+                                {item.type}
+                              </span>
+                              <p className="font-semibold text-gray-900 truncate">{item.title}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {'Submitted ' + new Date(item.created_at).toLocaleDateString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
                                 })}
                               </p>
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                              {!isRead && (
-                                <button
-                                  onClick={() => handleMarkActivityRead(activity.id)}
-                                  className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  aria-label="Mark as read"
-                                  title="Mark as read"
-                                >
-                                  <Icon path={ICONS.check} className="h-3.5 w-3.5" />
-                                </button>
-                              )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               <button
-                                onClick={() => handleDismissActivity(activity.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded focus:outline-none focus:ring-2 focus:ring-red-400"
-                                aria-label="Dismiss activity"
-                                title="Dismiss"
+                                onClick={function() { handleApprove(item); }}
+                                className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors"
+                                aria-label={'Approve ' + item.title}
                               >
-                                <Icon path={ICONS.x} className="h-3.5 w-3.5" />
+                                Approve
+                              </button>
+                              <button
+                                onClick={function() { handleReject(item); }}
+                                className="px-4 py-2 bg-white text-red-600 border border-red-300 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+                                aria-label={'Reject ' + item.title}
+                              >
+                                Reject
                               </button>
                             </div>
                           </div>
@@ -886,333 +1081,348 @@ const { data: membershipRows } = await supabase
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── DOCUMENTS TAB ── */}
-            {activeTab === 'documents' && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
-                      <p className="text-gray-600 mt-1">Access organization documents, files, and resources</p>
-                    </div>
-                    {effectiveRole === 'admin' && (
-                      <button
-                        onClick={() => navigate('/organizations/' + organizationId + '/documents')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors font-semibold"
-                      >
-                        Manage Documents
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-6 text-center">
-                    <button
-                      onClick={() => navigate('/organizations/' + organizationId + '/documents')}
-                      className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
-                      View All Documents
-                      <Icon path={ICONS.chevRight} className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── PHOTOS TAB ── */}
-            {activeTab === 'photos' && (
-              <div>
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Photo Gallery</h2>
-                    <p className="text-gray-600 mt-1">{photos.length} photo{photos.length !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-
-                {effectiveRole === 'admin' && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6">
-                    <h3 className="text-base font-bold text-blue-900 mb-4">Upload Photo</h3>
-                    {photoError && (
-                      <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-                        {photoError}
-                      </div>
-                    )}
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <div className="flex-1">
-                        <label htmlFor="photo-caption" className="sr-only">Photo caption</label>
-                        <input
-                          id="photo-caption"
-                          type="text"
-                          placeholder="Caption (optional)"
-                          value={photoCaption}
-                          onChange={e => setPhotoCaption(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          maxLength={200}
-                        />
-                      </div>
+              {/* ── DOCUMENTS TAB ── */}
+              {activeTab === 'documents' && (
+                <div className="space-y-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                       <div>
-                        <label
-                          htmlFor="photo-upload"
-                          className={'cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ' +
-                            (photoUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700')}
-                        >
-                          {photoUploading ? 'Uploading...' : 'Upload Photo'}
-                          <input
-                            id="photo-upload"
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            onChange={handlePhotoUpload}
-                            disabled={photoUploading}
-                            className="sr-only"
-                            aria-label="Choose a photo to upload"
-                          />
-                        </label>
-                        <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP · Max 5MB</p>
+                        <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
+                        <p className="text-gray-500 mt-1">Access organization documents, files, and resources</p>
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {photosLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {[...Array(8)].map((_, i) => (
-                      <div key={i} className="rounded-lg bg-gray-200 animate-pulse h-40" />
-                    ))}
-                  </div>
-                ) : photos.length === 0 ? (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                    <Icon path={ICONS.photo} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                    <h3 className="text-lg font-semibold text-gray-700 mb-1">No photos yet</h3>
-                    <p className="text-gray-500 text-sm">
-                      {effectiveRole === 'admin'
-                        ? 'Upload your first photo using the panel above.'
-                        : 'No photos have been uploaded yet.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
-                    {photos.map(photo => (
-                      <div
-                        key={photo.id}
-                        role="listitem"
-                        className="relative group rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                      >
+                      {effectiveRole === 'admin' && (
                         <button
-                          onClick={() => setLightboxPhoto(photo)}
-                          className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                          aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}
+                          onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-semibold text-sm"
                         >
-                          <img
-                            src={photo.photo_url}
-                            alt={photo.caption || 'Organization photo'}
-                            className="w-full h-40 object-cover"
-                            loading="lazy"
-                          />
+                          Manage Documents
                         </button>
-                        {photo.caption && (
-                          <div className="px-2 py-1.5 bg-white">
-                            <p className="text-xs text-gray-600 truncate">{photo.caption}</p>
-                          </div>
-                        )}
-                        {effectiveRole === 'admin' && (
-                          <button
-                            onClick={() => handleDeletePhoto(photo)}
-                            disabled={deletingPhotoId === photo.id}
-                            className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-red-600 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-                            aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}
-                          >
-                            <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {lightboxPhoto && (
-                  <div
-                    className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Photo viewer"
-                    onClick={() => setLightboxPhoto(null)}
-                  >
-                    <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => setLightboxPhoto(null)}
-                        className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded"
-                        aria-label="Close photo viewer"
-                      >
-                        <Icon path={ICONS.x} className="h-7 w-7" strokeWidth={2.5} />
-                      </button>
-                      <img
-                        src={lightboxPhoto.photo_url}
-                        alt={lightboxPhoto.caption || 'Organization photo'}
-                        className="w-full max-h-screen object-contain rounded-lg"
-                      />
-                      {lightboxPhoto.caption && (
-                        <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>
                       )}
                     </div>
+                    <div className="mt-6 text-center">
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
+                        className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      >
+                        View All Documents
+                        <Icon path={ICONS.chevRight} className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* ── INBOX TAB ── */}
-            {activeTab === 'inbox' && (
-              <div>
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Inbox</h2>
-                    <p className="text-gray-600 mt-1">Messages submitted via the public Join Us form</p>
-                  </div>
-                  {inquiries.length > 0 && (
-                    <span className="text-sm text-gray-500">
-                      {inquiries.filter(i => !i.is_read).length} unread &middot; {inquiries.length} total
-                    </span>
-                  )}
                 </div>
+              )}
 
-                {inquiriesLoading ? (
-                  <div className="space-y-4">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="rounded-lg border border-gray-200 p-5 animate-pulse">
-                        <div className="flex justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-1/3" />
-                            <div className="h-3 bg-gray-200 rounded w-1/4" />
-                            <div className="h-3 bg-gray-200 rounded w-full mt-3" />
-                            <div className="h-3 bg-gray-200 rounded w-3/4" />
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <div className="h-8 w-24 bg-gray-200 rounded" />
-                            <div className="h-8 w-24 bg-gray-200 rounded" />
-                          </div>
+              {/* ── PHOTOS TAB ── */}
+              {activeTab === 'photos' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Photo Gallery</h2>
+                      <p className="text-gray-500 mt-1">{photos.length + ' photo' + (photos.length !== 1 ? 's' : '')}</p>
+                    </div>
+                  </div>
+
+                  {effectiveRole === 'admin' && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
+                      <h3 className="text-base font-bold text-blue-900 mb-4">Upload Photo</h3>
+                      {photoError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
+                          {photoError}
+                        </div>
+                      )}
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex-1">
+                          <label htmlFor="photo-caption" className="sr-only">Photo caption</label>
+                          <input
+                            id="photo-caption"
+                            type="text"
+                            placeholder="Caption (optional)"
+                            value={photoCaption}
+                            onChange={function(e) { setPhotoCaption(e.target.value); }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                            maxLength={200}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="photo-upload"
+                            className={'cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ' +
+                              (photoUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600')}
+                          >
+                            {photoUploading ? 'Uploading...' : 'Upload Photo'}
+                            <input
+                              id="photo-upload"
+                              type="file"
+                              accept="image/jpeg,image/png,image/gif,image/webp"
+                              onChange={handlePhotoUpload}
+                              disabled={photoUploading}
+                              className="sr-only"
+                              aria-label="Choose a photo to upload"
+                            />
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP · Max 5MB</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : inquiries.length === 0 ? (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex justify-center mb-4">
-                      <Icon path={ICONS.inbox} className="h-12 w-12 text-gray-300" strokeWidth={1.5} />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-1">No messages yet</h3>
-                    <p className="text-gray-500 text-sm">Messages submitted via your public page will appear here.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4" role="list" aria-label="Contact inquiries">
-                    {inquiries.map(inquiry => (
-                      <div
-                        key={inquiry.id}
-                        role="listitem"
-                        className={'rounded-lg border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-300')}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className="font-bold text-gray-900">{inquiry.name}</span>
-                              {!inquiry.is_read && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">New</span>
-                              )}
-                              <span className="text-sm text-gray-500">
-                                {new Date(inquiry.created_at).toLocaleDateString('en-US', {
-                                  month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                                })}
-                              </span>
-                            </div>
-                            <a
-                              href={'mailto:' + inquiry.email}
-                              className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  )}
+
+                  {photosLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {[1,2,3,4,5,6,7,8].map(function(i) {
+                        return <div key={i} className="rounded-xl bg-gray-200 animate-pulse h-40" />;
+                      })}
+                    </div>
+                  ) : photos.length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                      <Icon path={ICONS.photo} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-1">No photos yet</h3>
+                      <p className="text-gray-500 text-sm">
+                        {effectiveRole === 'admin' ? 'Upload your first photo using the panel above.' : 'No photos have been uploaded yet.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
+                      {photos.map(function(photo) {
+                        return (
+                          <div
+                            key={photo.id}
+                            role="listitem"
+                            className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            <button
+                              onClick={function() { setLightboxPhoto(photo); }}
+                              className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                              aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}
                             >
-                              {inquiry.email}
-                            </a>
-                            <p className="text-gray-700 mt-3 leading-relaxed">{inquiry.message}</p>
-                          </div>
-                          <div className="flex flex-col gap-2 flex-shrink-0">
-                            {!inquiry.is_read && (
+                              <img
+                                src={photo.photo_url}
+                                alt={photo.caption || 'Organization photo'}
+                                className="w-full h-40 object-cover"
+                                loading="lazy"
+                              />
+                            </button>
+                            {photo.caption && (
+                              <div className="px-2 py-1.5 bg-white">
+                                <p className="text-xs text-gray-600 truncate">{photo.caption}</p>
+                              </div>
+                            )}
+                            {effectiveRole === 'admin' && (
                               <button
-                                onClick={() => handleMarkInquiryRead(inquiry.id)}
-                                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all whitespace-nowrap"
+                                onClick={function() { handleDeletePhoto(photo); }}
+                                disabled={deletingPhotoId === photo.id}
+                                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+                                aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}
                               >
-                                Mark Read
+                                <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
                               </button>
                             )}
-                            <button
-                              onClick={() => handleDeleteInquiry(inquiry.id)}
-                              className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all whitespace-nowrap"
-                            >
-                              Delete
-                            </button>
                           </div>
-                        </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {lightboxPhoto && (
+                    <div
+                      className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Photo viewer"
+                      onClick={function() { setLightboxPhoto(null); }}
+                    >
+                      <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
+                        <button
+                          onClick={function() { setLightboxPhoto(null); }}
+                          className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded"
+                          aria-label="Close photo viewer"
+                        >
+                          <Icon path={ICONS.x} className="h-7 w-7" strokeWidth={2.5} />
+                        </button>
+                        <img
+                          src={lightboxPhoto.photo_url}
+                          alt={lightboxPhoto.caption || 'Organization photo'}
+                          className="w-full max-h-screen object-contain rounded-xl"
+                        />
+                        {lightboxPhoto.caption && (
+                          <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>
+                        )}
                       </div>
-                    ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── INBOX TAB ── */}
+              {activeTab === 'inbox' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Inbox</h2>
+                      <p className="text-gray-500 mt-1">Messages submitted via the public Join Us form</p>
+                    </div>
+                    {inquiries.length > 0 && (
+                      <span className="text-sm text-gray-500">
+                        {inquiries.filter(function(i) { return !i.is_read; }).length + ' unread · ' + inquiries.length + ' total'}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* ── INVITE TAB ── */}
-            {activeTab === 'invite' && (
-              <>
-                {membership.role === 'admin' || organization.settings?.allowMemberInvites ? (
-                  <InviteMember
-                    organizationId={organizationId}
-                    organizationName={organization.name}
-                    onInviteSent={() => fetchStats(currentUserId)}
-                  />
-                ) : (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                    <Icon path={ICONS.mail} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                    <h3 className="text-lg font-semibold text-gray-700 mb-1">Permission Required</h3>
-                    <p className="text-gray-500 text-sm">Member invitations are disabled. Contact an admin to enable this feature.</p>
-                  </div>
-                )}
-              </>
-            )}
+                  {inquiriesLoading ? (
+                    <div className="space-y-4">
+                      {[1,2,3].map(function(i) {
+                        return (
+                          <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
+                            <div className="flex justify-between gap-4">
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-1/3" />
+                                <div className="h-3 bg-gray-200 rounded w-1/4" />
+                                <div className="h-3 bg-gray-200 rounded w-full mt-3" />
+                                <div className="h-3 bg-gray-200 rounded w-3/4" />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <div className="h-8 w-24 bg-gray-200 rounded" />
+                                <div className="h-8 w-24 bg-gray-200 rounded" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : inquiries.length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                      <Icon path={ICONS.inbox} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-1">No messages yet</h3>
+                      <p className="text-gray-500 text-sm">Messages submitted via your public page will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4" role="list" aria-label="Contact inquiries">
+                      {inquiries.map(function(inquiry) {
+                        return (
+                          <div
+                            key={inquiry.id}
+                            role="listitem"
+                            className={'rounded-xl border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200')}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="font-bold text-gray-900">{inquiry.name}</span>
+                                  {!inquiry.is_read && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>
+                                  )}
+                                  <span className="text-sm text-gray-400">
+                                    {new Date(inquiry.created_at).toLocaleDateString('en-US', {
+                                      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                                    })}
+                                  </span>
+                                </div>
+                                <a
+                                  href={'mailto:' + inquiry.email}
+                                  className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                                >
+                                  {inquiry.email}
+                                </a>
+                                <p className="text-gray-700 mt-3 leading-relaxed text-sm">{inquiry.message}</p>
+                              </div>
+                              <div className="flex flex-col gap-2 flex-shrink-0">
+                                {!inquiry.is_read && (
+                                  <button
+                                    onClick={function() { handleMarkInquiryRead(inquiry.id); }}
+                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
+                                  >
+                                    Mark Read
+                                  </button>
+                                )}
+                                <button
+                                  onClick={function() { handleDeleteInquiry(inquiry.id); }}
+                                  className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* ── ANALYTICS TAB ── */}
-            {activeTab === 'analytics' && <AnalyticsDashboard organizationId={organizationId} />}
+              {/* ── INVITE TAB ── */}
+              {activeTab === 'invite' && (
+                <div>
+                  {membership.role === 'admin' || (organization.settings && organization.settings.allowMemberInvites) ? (
+                    <InviteMember
+                      organizationId={organizationId}
+                      organizationName={organization.name}
+                      onInviteSent={function() { fetchStats(currentUserId); }}
+                    />
+                  ) : (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                      <Icon path={ICONS.mail} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-1">Permission Required</h3>
+                      <p className="text-gray-500 text-sm">Member invitations are disabled. Contact an admin to enable this feature.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* ── SETTINGS TAB ── */}
-            {activeTab === 'settings' && (
-              <>
-                {membership.role === 'admin' ? (
-                  <OrganizationSettings
-                    organizationId={organizationId}
-                    onUpdate={updatedData => setOrganization(prev => ({ ...prev, ...updatedData }))}
-                  />
-                ) : (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                    <Icon path={ICONS.settings} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                    <h3 className="text-lg font-semibold text-gray-700 mb-1">Admin Access Required</h3>
-                    <p className="text-gray-500 text-sm">Only organization admins can modify settings.</p>
-                  </div>
-                )}
-              </>
-            )}
+              {/* ── ANALYTICS TAB ── */}
+              {activeTab === 'analytics' && <AnalyticsDashboard organizationId={organizationId} />}
 
+              {/* ── SETTINGS TAB ── */}
+              {activeTab === 'settings' && (
+                <div>
+                  {membership.role === 'admin' ? (
+                    <OrganizationSettings
+                      organizationId={organizationId}
+                      onUpdate={function(updatedData) { setOrganization(function(prev) { return Object.assign({}, prev, updatedData); }); }}
+                    />
+                  ) : (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                      <Icon path={ICONS.settings} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-1">Admin Access Required</h3>
+                      <p className="text-gray-500 text-sm">Only organization admins can modify settings.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-8 mt-2" role="contentinfo">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-gray-900 font-extrabold text-xl">Syndi</span><span className="font-extrabold text-xl" style={{color:'#F5B731'}}>cade</span>
+              <span className="text-gray-400 text-sm hidden sm:inline">— Connecting communities.</span>
+            </div>
+            <p className="text-gray-400 text-xs">{'© ' + new Date().getFullYear() + ' Syndicade. All rights reserved.'}</p>
+          </div>
+        </div>
+      </footer>
+
       {/* Modals */}
       <CreateEvent
         isOpen={showCreateEvent}
-        onClose={() => setShowCreateEvent(false)}
+        onClose={function() { setShowCreateEvent(false); }}
         onSuccess={handleEventCreated}
         organizationId={organizationId}
-        organizationName={organization?.name || 'Your Organization'}
+        organizationName={organization ? organization.name : 'Your Organization'}
       />
       <CreateAnnouncement
         isOpen={showCreateAnnouncement}
-        onClose={() => setShowCreateAnnouncement(false)}
+        onClose={function() { setShowCreateAnnouncement(false); }}
         onSuccess={handleAnnouncementCreated}
         organizationId={organizationId}
-        organizationName={organization?.name || 'Your Organization'}
+        organizationName={organization ? organization.name : 'Your Organization'}
       />
 
       {/* Toast notifications */}

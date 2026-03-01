@@ -3,1046 +3,860 @@ import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
 
+// ── Constants ────────────────────────────────────────────────────────────────
+var EVENT_TYPES = [
+  'Arts & Culture','Charity & Fundraiser','Community Meeting',
+  'Education & Workshop','Festival & Fair','Food & Drink',
+  'Health & Wellness','Networking','Religious & Spiritual',
+  'Social & Mixer','Sports & Recreation','Volunteer',
+];
+
+var AUDIENCE_OPTIONS = [
+  'Adults (18+)','Children','Families','LGBTQ+',
+  'Seniors','Students','Veterans','Women','Youth (13–17)',
+];
+
+var LANGUAGE_OPTIONS = [
+  'Arabic','Chinese (Mandarin)','English','French','Haitian Creole',
+  'Hindi','Portuguese','Russian','Somali','Spanish','Tagalog','Vietnamese',
+];
+
+var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400';
+var labelCls = 'block text-sm font-semibold text-gray-900 mb-2';
+
+var STATE_MAP = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+  'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+  'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+  'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM',
+  'new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+  'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+};
+
+var TZ_MAP = {
+  'America/New_York':'Eastern Time (EST/EDT)','America/Chicago':'Central Time (CST/CDT)',
+  'America/Denver':'Mountain Time (MST/MDT)','America/Phoenix':'Mountain Time (MST)',
+  'America/Los_Angeles':'Pacific Time (PST/PDT)','America/Anchorage':'Alaska (AKST)',
+  'Pacific/Honolulu':'Hawaii (HST)','Europe/London':'London (GMT/BST)',
+  'Europe/Paris':'Central Europe (CET)','Asia/Tokyo':'Japan (JST)',
+  'Asia/Kolkata':'India (IST)','Australia/Sydney':'Australia East',
+};
+
+// ── Primitives ───────────────────────────────────────────────────────────────
+function Icon({ path, className }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      {Array.isArray(path)
+        ? path.map(function(d,i){ return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d}/>; })
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path}/>}
+    </svg>
+  );
+}
+
+function Toggle({ checked, onChange, id, label }) {
+  return (
+    <button type="button" role="switch" id={id} aria-checked={checked} aria-label={label} onClick={onChange}
+      className={'relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex-shrink-0 '+(checked?'bg-blue-500':'bg-gray-300')}>
+      <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all '+(checked?'left-[22px]':'left-0.5')} aria-hidden="true"/>
+    </button>
+  );
+}
+
+function MultiCheckbox({ options, selected, onChange, legend }) {
+  function toggle(val) {
+    onChange(selected.includes(val) ? selected.filter(function(v){ return v!==val; }) : selected.concat([val]));
+  }
+  return (
+    <fieldset>
+      <legend className="sr-only">{legend}</legend>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {options.map(function(opt){
+          var checked = selected.includes(opt);
+          return (
+            <label key={opt} className={'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 bg-white hover:border-gray-300')}>
+              <input type="checkbox" checked={checked} onChange={function(){ toggle(opt); }}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"/>
+              <span className="text-sm text-gray-700">{opt}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    eventType: 'in-person',
-    isMultiDay: false,
-    schedule: [
-      { date: '', startTime: '', endTime: '' }
-    ],
-    locationName: '',
-    fullAddress: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    virtualLink: '',
-    locationLink: '',
-    maxAttendees: '',
-    visibility: 'members',
-    requireRSVP: false
+  var [form, setForm] = useState({
+    title:'', description:'', eventType:'in-person', isMultiDay:false,
+    schedule:[{date:'',startTime:'',endTime:''}],
+    locationName:'', fullAddress:'', city:'', state:'', zipCode:'',
+    virtualLink:'', locationLink:'', maxAttendees:'', visibility:'members', requireRSVP:false,
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [geocoding, setGeocoding] = useState(false);
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchingAddress, setSearchingAddress] = useState(false);
-  const [addressInput, setAddressInput] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState(null);
+  var [loading, setLoading] = useState(false);
+  var [geocoding, setGeocoding] = useState(false);
+  var [error, setError] = useState(null);
 
-  // Group selector state
-  const [availableGroups, setAvailableGroups] = useState([]);
-  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
+  var [addressInput, setAddressInput] = useState('');
+  var [addressSuggestions, setAddressSuggestions] = useState([]);
+  var [showSuggestions, setShowSuggestions] = useState(false);
+  var [searchingAddress, setSearchingAddress] = useState(false);
+  var [searchTimeout, setSearchTimeout] = useState(null);
 
-  // Recurring event state
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrenceType, setRecurrenceType] = useState('monthly');
-  
-  // Monthly state
-  const [dayOfWeek, setDayOfWeek] = useState(1);
-  const [weekOfMonth, setWeekOfMonth] = useState(1);
-  
-  // Weekly state
-  const [weeklyDays, setWeeklyDays] = useState([1]);
-  
-  // Daily state
-  const [dailyInterval, setDailyInterval] = useState(1);
-  const [weekdaysOnly, setWeekdaysOnly] = useState(false);
-  
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  var [availableGroups, setAvailableGroups] = useState([]);
+  var [selectedGroupIds, setSelectedGroupIds] = useState([]);
+  var [loadingGroups, setLoadingGroups] = useState(false);
 
-  // Timezone selector state
-  const [showTimezoneSelector, setShowTimezoneSelector] = useState(false);
-  const [selectedTimezone, setSelectedTimezone] = useState(null);
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  var [isRecurring, setIsRecurring] = useState(false);
+  var [recurrenceType, setRecurrenceType] = useState('monthly');
+  var [dayOfWeek, setDayOfWeek] = useState(1);
+  var [weekOfMonth, setWeekOfMonth] = useState(1);
+  var [weeklyDays, setWeeklyDays] = useState([1]);
+  var [dailyInterval, setDailyInterval] = useState(1);
+  var [weekdaysOnly, setWeekdaysOnly] = useState(false);
+  var [recurrenceEndDate, setRecurrenceEndDate] = useState('');
 
-  const stateMap = {
-    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
-    'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
-    'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
-    'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
-    'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
-    'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
-    'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
-    'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
-    'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
-    'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
-    'wisconsin': 'WI', 'wyoming': 'WY'
-  };
+  var [showTimezoneSelector, setShowTimezoneSelector] = useState(false);
+  var [selectedTimezone, setSelectedTimezone] = useState(null);
+  var userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const formatTimezone = (tz) => {
-    const tzMap = {
-      'America/New_York': 'Eastern Time (EST/EDT)',
-      'America/Chicago': 'Central Time (CST/CDT)',
-      'America/Denver': 'Mountain Time (MST/MDT)',
-      'America/Phoenix': 'Mountain Time (MST - no DST)',
-      'America/Los_Angeles': 'Pacific Time (PST/PDT)',
-      'America/Anchorage': 'Alaska Time (AKST/AKDT)',
-      'Pacific/Honolulu': 'Hawaii Time (HST)',
-      'America/Toronto': 'Eastern Time (EST/EDT)',
-      'Europe/London': 'London (GMT/BST)',
-      'Europe/Paris': 'Central Europe (CET/CEST)',
-      'Asia/Tokyo': 'Japan (JST)',
-      'Asia/Kolkata': 'India (IST)',
-      'Australia/Sydney': 'Australia East (AEST/AEDT)'
-    };
-    return tzMap[tz] || tz;
-  };
+  var [showAdvanced, setShowAdvanced] = useState(false);
+  var [eventTypes, setEventTypes] = useState([]);
+  var [audience, setAudience] = useState([]);
+  var [languages, setLanguages] = useState([]);
+  var [volunteerSignup, setVolunteerSignup] = useState(false);
+  var [donationDropoff, setDonationDropoff] = useState(false);
+  var [publishToDiscovery, setPublishToDiscovery] = useState(false);
+  var [publishToWebsite, setPublishToWebsite] = useState(false);
+  var [flierFile, setFlierFile] = useState(null);
 
-  // Fetch groups when visibility changes to 'groups'
-  useEffect(() => {
-    if (formData.visibility === 'groups' && organizationId) {
-      fetchGroups();
-    }
-  }, [formData.visibility, organizationId]);
+  var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  const fetchGroups = async () => {
-    setLoadingGroups(true);
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('org_groups')
-        .select('id, name, description')
-        .eq('organization_id', organizationId)
-        .order('name');
+  useEffect(function(){
+    if (form.visibility==='groups'&&organizationId) fetchGroups();
+  }, [form.visibility, organizationId]);
 
-      if (fetchError) throw fetchError;
-      setAvailableGroups(data || []);
-    } catch (err) {
-      console.error('Error fetching groups:', err);
-      toast.error('Could not load groups');
-    } finally {
-      setLoadingGroups(false);
-    }
-  };
-
-  const toggleGroupSelection = (gId) => {
-    setSelectedGroupIds(prev =>
-      prev.includes(gId)
-        ? prev.filter(id => id !== gId)
-        : [...prev, gId]
-    );
-  };
-
-  // Reset all state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setIsRecurring(false);
-      setRecurrenceType('monthly');
-      setDayOfWeek(1);
-      setWeekOfMonth(1);
-      setWeeklyDays([1]);
-      setDailyInterval(1);
-      setWeekdaysOnly(false);
-      setRecurrenceEndDate('');
-      setShowTimezoneSelector(false);
-      setSelectedTimezone(null);
-      setSelectedGroupIds([]);
-      setAvailableGroups([]);
-    }
+  useEffect(function(){
+    if (!isOpen) resetAll();
   }, [isOpen]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleScheduleChange = (index, field, value) => {
-    const newSchedule = [...formData.schedule];
-    newSchedule[index][field] = value;
-    setFormData(prev => ({ ...prev, schedule: newSchedule }));
-  };
-
-  const addDay = () => {
-    if (formData.schedule.length < 5) {
-      setFormData(prev => ({
-        ...prev,
-        schedule: [...prev.schedule, { date: '', startTime: '', endTime: '' }]
-      }));
-    }
-  };
-
-  const removeDay = (index) => {
-    if (formData.schedule.length > 1) {
-      const newSchedule = formData.schedule.filter((_, i) => i !== index);
-      setFormData(prev => ({ ...prev, schedule: newSchedule }));
-    }
-  };
-
-  const toggleWeeklyDay = (day) => {
-    setWeeklyDays(prev => {
-      if (prev.includes(day)) {
-        if (prev.length === 1) return prev;
-        return prev.filter(d => d !== day);
-      } else {
-        return [...prev, day].sort((a, b) => a - b);
-      }
-    });
-  };
-
-  const extractStateAbbreviation = (stateName) => {
-    if (!stateName) return '';
-    const normalized = stateName.toLowerCase().trim();
-    if (stateMap[normalized]) return stateMap[normalized];
-    if (stateName.length === 2) return stateName.toUpperCase();
-    return stateName.substring(0, 2).toUpperCase();
-  };
-
-  const formatAddressDisplay = (address) => {
-    const houseNumber = address.house_number || '';
-    const road = address.road || '';
-    const city = address.city || address.town || address.village || '';
-    const state = address.state || '';
-    const postcode = address.postcode || '';
-    const streetAddress = (houseNumber + ' ' + road).trim();
-    const parts = [];
-    if (streetAddress) parts.push(streetAddress);
-    if (city) parts.push(city);
-    if (state) parts.push(extractStateAbbreviation(state));
-    if (postcode) parts.push(postcode);
-    return parts.join(', ');
-  };
-
-  const searchAddresses = async (query) => {
-    try {
-      setSearchingAddress(true);
-      const searchUrl = 'https://nominatim.openstreetmap.org/search?' +
-        'format=json&' +
-        'q=' + encodeURIComponent(query) + ',USA&' +
-        'limit=8&' +
-        'addressdetails=1';
-      const response = await fetch(searchUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      const formattedSuggestions = data
-        .filter(item => {
-          const addr = item.address || {};
-          return (addr.road || addr.house_number) && (addr.city || addr.town || addr.village);
-        })
-        .map(item => ({ ...item, formatted: formatAddressDisplay(item.address) }));
-      setAddressSuggestions(formattedSuggestions);
-      setShowSuggestions(formattedSuggestions.length > 0);
-    } catch (err) {
-      console.error('Search error:', err);
-    } finally {
-      setSearchingAddress(false);
-    }
-  };
-
-  const handleAddressInputChange = (e) => {
-    const value = e.target.value;
-    setAddressInput(value);
-    if (searchTimeout) clearTimeout(searchTimeout);
-    if (value.length >= 3) {
-      const newTimeout = setTimeout(() => { searchAddresses(value); }, 500);
-      setSearchTimeout(newTimeout);
-    } else {
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const selectAddress = (suggestion) => {
-    const addr = suggestion.address;
-    const city = addr.city || addr.town || addr.village || '';
-    const state = extractStateAbbreviation(addr.state || '');
-    const zip = addr.postcode || '';
-    setFormData(prev => ({
-      ...prev,
-      locationName: suggestion.formatted,
-      fullAddress: suggestion.formatted,
-      city: city,
-      state: state,
-      zipCode: zip
-    }));
-    setAddressInput('');
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
-  };
-
-  const geocodeAddress = async (address) => {
-    try {
-      setGeocoding(true);
-      const response = await fetch(
-        'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(address) + ',USA&limit=1&addressdetails=1',
-        { headers: { 'Accept': 'application/json' } }
-      );
-      if (!response.ok) throw new Error('Geocoding service unavailable');
-      const data = await response.json();
-      if (data && data.length > 0) {
-        return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
-      }
-      return null;
-    } catch (err) {
-      console.error('Geocoding error:', err);
-      return null;
-    } finally {
-      setGeocoding(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  function resetAll() {
+    setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false});
+    setAddressInput(''); setAddressSuggestions([]); setShowSuggestions(false);
+    setSelectedGroupIds([]); setAvailableGroups([]);
+    setIsRecurring(false); setRecurrenceType('monthly'); setDayOfWeek(1); setWeekOfMonth(1);
+    setWeeklyDays([1]); setDailyInterval(1); setWeekdaysOnly(false); setRecurrenceEndDate('');
+    setShowTimezoneSelector(false); setSelectedTimezone(null);
+    setShowAdvanced(false); setEventTypes([]); setAudience([]); setLanguages([]);
+    setVolunteerSignup(false); setDonationDropoff(false); setPublishToDiscovery(false); setPublishToWebsite(false); setFlierFile(null);
     setError(null);
-    setLoading(true);
+  }
 
+  async function fetchGroups() {
+    setLoadingGroups(true);
     try {
-      if (formData.title.trim().length < 3) throw new Error('Event title must be at least 3 characters');
-      if (formData.schedule[0].date === '' || formData.schedule[0].startTime === '') throw new Error('Please provide date and start time');
-      if (formData.eventType === 'virtual' && !formData.virtualLink.trim()) throw new Error('Virtual events require a meeting link');
-      if ((formData.eventType === 'in-person' || formData.eventType === 'hybrid') && !formData.locationName.trim()) throw new Error('Please provide a location');
-      if (formData.eventType === 'hybrid' && !formData.virtualLink.trim()) throw new Error('Hybrid events require a virtual meeting link');
+      var { data, error:e } = await supabase.from('org_groups').select('id,name,description').eq('organization_id',organizationId).order('name');
+      if (e) throw e;
+      setAvailableGroups(data||[]);
+    } catch(err) { toast.error('Could not load groups'); }
+    finally { setLoadingGroups(false); }
+  }
 
-      if (formData.visibility === 'groups' && selectedGroupIds.length === 0) {
-        throw new Error('Please select at least one group for group-restricted events');
+  function handleChange(e) {
+    var name=e.target.name, value=e.target.type==='checkbox'?e.target.checked:e.target.value;
+    setForm(function(prev){ var u={}; u[name]=value; return Object.assign({},prev,u); });
+  }
+
+  function handleScheduleChange(index, field, value) {
+    var s=form.schedule.slice(); s[index]=Object.assign({},s[index]); s[index][field]=value;
+    setForm(function(prev){ return Object.assign({},prev,{schedule:s}); });
+  }
+
+  function addDay() {
+    if (form.schedule.length<5)
+      setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.concat([{date:'',startTime:'',endTime:''}])}); });
+  }
+
+  function removeDay(index) {
+    if (form.schedule.length>1)
+      setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.filter(function(_,i){ return i!==index; })}); });
+  }
+
+  function toggleWeeklyDay(day) {
+    setWeeklyDays(function(prev){
+      if (prev.includes(day)) { if(prev.length===1) return prev; return prev.filter(function(d){ return d!==day; }); }
+      return prev.concat([day]).sort(function(a,b){ return a-b; });
+    });
+  }
+
+  function extractState(s) {
+    if (!s) return '';
+    var n=s.toLowerCase().trim();
+    if (STATE_MAP[n]) return STATE_MAP[n];
+    if (s.length===2) return s.toUpperCase();
+    return s.substring(0,2).toUpperCase();
+  }
+
+  function formatAddressDisplay(address) {
+    var num=address.house_number||'', road=address.road||'';
+    var city=address.city||address.town||address.village||'';
+    var parts=[];
+    var street=(num+' '+road).trim();
+    if (street) parts.push(street);
+    if (city) parts.push(city);
+    if (address.state) parts.push(extractState(address.state));
+    if (address.postcode) parts.push(address.postcode);
+    return parts.join(', ');
+  }
+
+  async function searchAddresses(query) {
+    setSearchingAddress(true);
+    try {
+      var res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(query)+',USA&limit=8&addressdetails=1',{headers:{'Accept':'application/json'}});
+      if (!res.ok) return;
+      var data = await res.json();
+      var filtered = data
+        .filter(function(item){ var a=item.address||{}; return (a.road||a.house_number)&&(a.city||a.town||a.village); })
+        .map(function(item){ return Object.assign({},item,{formatted:formatAddressDisplay(item.address)}); });
+      setAddressSuggestions(filtered);
+      setShowSuggestions(filtered.length>0);
+    } catch(err){ console.error(err); }
+    finally { setSearchingAddress(false); }
+  }
+
+  function handleAddressInputChange(e) {
+    var val=e.target.value; setAddressInput(val);
+    if (searchTimeout) clearTimeout(searchTimeout);
+    if (val.length>=3) { var t=setTimeout(function(){ searchAddresses(val); },500); setSearchTimeout(t); }
+    else { setAddressSuggestions([]); setShowSuggestions(false); }
+  }
+
+  function selectAddress(s) {
+    var a=s.address;
+    setForm(function(prev){ return Object.assign({},prev,{locationName:s.formatted,fullAddress:s.formatted,city:a.city||a.town||a.village||'',state:extractState(a.state||''),zipCode:a.postcode||''}); });
+    setAddressInput(''); setShowSuggestions(false); setAddressSuggestions([]);
+  }
+
+  async function geocodeAddress(address) {
+    setGeocoding(true);
+    try {
+      var res=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(address)+',USA&limit=1&addressdetails=1',{headers:{'Accept':'application/json'}});
+      if (!res.ok) return null;
+      var data=await res.json();
+      if (data&&data.length>0) return {latitude:parseFloat(data[0].lat),longitude:parseFloat(data[0].lon)};
+      return null;
+    } catch(err){ return null; }
+    finally { setGeocoding(false); }
+  }
+
+  function formatForPostgres(date) {
+    var yr=date.getFullYear(),mo=String(date.getMonth()+1).padStart(2,'0'),dy=String(date.getDate()).padStart(2,'0');
+    var hr=String(date.getHours()).padStart(2,'0'),mn=String(date.getMinutes()).padStart(2,'0');
+    var offset=-date.getTimezoneOffset();
+    var oh=String(Math.floor(Math.abs(offset)/60)).padStart(2,'0'),om=String(Math.abs(offset)%60).padStart(2,'0');
+    return yr+'-'+mo+'-'+dy+' '+hr+':'+mn+':00'+(offset>=0?'+':'-')+oh+':'+om;
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault(); setError(null);
+    if (form.title.trim().length<3) { toast.error('Event title must be at least 3 characters'); return; }
+    if (!form.schedule[0].date||!form.schedule[0].startTime) { toast.error('Please provide a date and start time'); return; }
+    if (form.eventType==='virtual'&&!form.virtualLink.trim()) { toast.error('Virtual events require a meeting link'); return; }
+    if ((form.eventType==='in-person'||form.eventType==='hybrid')&&!form.locationName.trim()) { toast.error('Please provide a location'); return; }
+    if (form.eventType==='hybrid'&&!form.virtualLink.trim()) { toast.error('Hybrid events require a virtual meeting link'); return; }
+    if (form.visibility==='groups'&&selectedGroupIds.length===0) { toast.error('Please select at least one group'); return; }
+
+    setLoading(true);
+    try {
+      var first=form.schedule[0];
+      var [yr,mo,dy]=first.date.split('-'); var [hr,mn]=first.startTime.split(':');
+      var startDT=new Date(+yr,+mo-1,+dy,+hr,+mn,0);
+      var endDT=null;
+      if (form.isMultiDay&&form.schedule.length>1) {
+        var last=form.schedule[form.schedule.length-1];
+        if (last.date&&last.endTime) { var [ey,em,ed]=last.date.split('-'); var [eh,emin]=last.endTime.split(':'); endDT=new Date(+ey,+em-1,+ed,+eh,+emin,0); }
+      } else if (first.endTime) {
+        var [eh2,emin2]=first.endTime.split(':'); endDT=new Date(+yr,+mo-1,+dy,+eh2,+emin2,0);
       }
 
-      if (isRecurring) {
-        if (recurrenceType === 'weekly' && weeklyDays.length === 0) throw new Error('Please select at least one day for weekly recurring events');
-        if (recurrenceType === 'daily' && dailyInterval < 1) throw new Error('Daily interval must be at least 1');
+      var {data:{user},error:userErr}=await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      if (!user) throw new Error('You must be logged in');
+
+      var lat=null,lng=null;
+      if ((form.eventType==='in-person'||form.eventType==='hybrid')&&form.locationName) {
+        var coords=await geocodeAddress(form.locationName);
+        if (coords) { lat=coords.latitude; lng=coords.longitude; }
       }
 
-      const firstDay = formData.schedule[0];
-      const [year, month, day] = firstDay.date.split('-');
-      const [hours, minutes] = firstDay.startTime.split(':');
-      const startDateTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), 0);
-
-      let endDateTime = null;
-      if (formData.isMultiDay && formData.schedule.length > 1) {
-        const lastDay = formData.schedule[formData.schedule.length - 1];
-        if (lastDay.date && lastDay.endTime) {
-          const [endYear, endMonth, endDay] = lastDay.date.split('-');
-          const [endHours, endMinutes] = lastDay.endTime.split(':');
-          endDateTime = new Date(parseInt(endYear), parseInt(endMonth) - 1, parseInt(endDay), parseInt(endHours), parseInt(endMinutes), 0);
-        }
-      } else if (firstDay.endTime) {
-        const [endHours, endMinutes] = firstDay.endTime.split(':');
-        endDateTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(endHours), parseInt(endMinutes), 0);
-      }
-
-      if (formData.maxAttendees && parseInt(formData.maxAttendees) < 1) throw new Error('Maximum attendees must be at least 1');
-
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) throw new Error('You must be logged in to create events');
-
-      let latitude = null;
-      let longitude = null;
-      if ((formData.eventType === 'in-person' || formData.eventType === 'hybrid') && formData.locationName) {
-        const coords = await geocodeAddress(formData.locationName);
-        if (coords) { latitude = coords.latitude; longitude = coords.longitude; }
-      }
-
-      const formatForPostgres = (date) => {
-        const yr = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const dy = String(date.getDate()).padStart(2, '0');
-        const hr = String(date.getHours()).padStart(2, '0');
-        const mn = String(date.getMinutes()).padStart(2, '0');
-        const sc = String(date.getSeconds()).padStart(2, '0');
-        const offset = -date.getTimezoneOffset();
-        const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-        const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
-        const offsetSign = offset >= 0 ? '+' : '-';
-        return yr + '-' + mo + '-' + dy + ' ' + hr + ':' + mn + ':' + sc + offsetSign + offsetHours + ':' + offsetMinutes;
+      var eventData={
+        organization_id:organizationId, title:form.title.trim(), description:form.description.trim(),
+        start_time:formatForPostgres(startDT), end_time:endDT?formatForPostgres(endDT):null,
+        location:form.eventType==='virtual'?'Virtual Event':form.locationName.trim(),
+        full_address:(form.eventType==='in-person'||form.eventType==='hybrid')?form.locationName.trim():null,
+        city:form.city.trim()||null, state:form.state||null, zip_code:form.zipCode.trim()||null,
+        latitude:lat, longitude:lng,
+        is_virtual:form.eventType==='virtual'||form.eventType==='hybrid',
+        virtual_link:(form.eventType==='virtual'||form.eventType==='hybrid')?form.virtualLink.trim():null,
+        location_link:null,
+        max_attendees:form.maxAttendees?parseInt(form.maxAttendees):null,
+        visibility:form.visibility, require_rsvp:form.requireRSVP, created_by:user.id,
+        is_recurring:isRecurring,
+        recurrence_rule:isRecurring?(
+          recurrenceType==='monthly'?{type:'monthly',dayOfWeek,weekOfMonth,time:first.startTime+':00'}:
+          recurrenceType==='weekly'?{type:'weekly',daysOfWeek:weeklyDays,time:first.startTime+':00'}:
+          {type:'daily',interval:dailyInterval,weekdaysOnly,time:first.startTime+':00'}
+        ):null,
+        recurrence_end_date:isRecurring&&recurrenceEndDate?new Date(recurrenceEndDate).toISOString():null,
+        parent_event_id:null,
+        event_timezone:showTimezoneSelector?selectedTimezone:null,
+        event_types:eventTypes.length>0?eventTypes:null,
+        audience:audience.length>0?audience:null,
+        languages:languages.length>0?languages:null,
+        volunteer_signup:volunteerSignup,
+        donation_dropoff:donationDropoff,
+        publish_to_discovery:publishToDiscovery,
+        publish_to_website:publishToWebsite,
+        approval_status:'approved',
+        flier_url:flierUrl,
       };
 
-      const eventData = {
-        organization_id: organizationId,
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        start_time: formatForPostgres(startDateTime),
-        end_time: endDateTime ? formatForPostgres(endDateTime) : null,
-        location: formData.eventType === 'virtual' ? 'Virtual Event' : formData.locationName.trim(),
-        full_address: (formData.eventType === 'in-person' || formData.eventType === 'hybrid') ? formData.locationName.trim() : null,
-        city: formData.city.trim() || null,
-        state: formData.state || null,
-        zip_code: formData.zipCode.trim() || null,
-        latitude: latitude,
-        longitude: longitude,
-        is_virtual: formData.eventType === 'virtual' || formData.eventType === 'hybrid',
-        virtual_link: (formData.eventType === 'virtual' || formData.eventType === 'hybrid') ? formData.virtualLink.trim() : null,
-        location_link: formData.locationLink.trim() || null,
-        max_attendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
-        visibility: formData.visibility,
-        require_rsvp: formData.requireRSVP,
-        created_by: user.id,
-        is_recurring: isRecurring,
-        recurrence_rule: isRecurring ? (
-          recurrenceType === 'monthly' ? { type: 'monthly', dayOfWeek: dayOfWeek, weekOfMonth: weekOfMonth, time: formData.schedule[0].startTime + ':00' } :
-          recurrenceType === 'weekly' ? { type: 'weekly', daysOfWeek: weeklyDays, time: formData.schedule[0].startTime + ':00' } :
-          recurrenceType === 'daily' ? { type: 'daily', interval: dailyInterval, weekdaysOnly: weekdaysOnly, time: formData.schedule[0].startTime + ':00' } : null
-        ) : null,
-        recurrence_end_date: isRecurring && recurrenceEndDate ? new Date(recurrenceEndDate).toISOString() : null,
-        parent_event_id: null,
-        event_timezone: showTimezoneSelector ? selectedTimezone : null
-      };
+      // Upload flier if attached
+      var flierUrl = null;
+      if (flierFile) {
+        if (flierFile.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
+        var fileExt = flierFile.name.split('.').pop();
+        var fileName = organizationId + '/' + Date.now() + '.' + fileExt;
+        var { error: uploadErr } = await supabase.storage.from('event-fliers').upload(fileName, flierFile, { upsert: true });
+        if (uploadErr) { toast.error('File upload failed — event not created'); setLoading(false); return; }
+        var { data: urlData } = supabase.storage.from('event-fliers').getPublicUrl(fileName);
+        flierUrl = urlData.publicUrl;
+      }
+      var {data:newEvent,error:eventErr}=await supabase.from('events').insert([eventData]).select().single();
+      if (eventErr) throw eventErr;
 
-      const { data: newEvent, error: eventError } = await supabase
-        .from('events')
-        .insert([eventData])
-        .select()
-        .single();
-
-      if (eventError) throw eventError;
-
-      // Build the full list of group IDs to link
-      // Always include the groupId prop (from group context) plus any selected from the UI
-      const groupIdsToLink = [
-        ...(groupId ? [groupId] : []),
-        ...(formData.visibility === 'groups' ? selectedGroupIds.filter(id => id !== groupId) : [])
-      ];
-
-      if (groupIdsToLink.length > 0) {
-        const groupRows = groupIdsToLink.map(gId => ({
-          event_id: newEvent.id,
-          group_id: gId
-        }));
-        const { error: groupError } = await supabase
-          .from('event_groups')
-          .insert(groupRows);
-        if (groupError) {
-          console.error('Warning: event created but group link failed:', groupError);
-          toast.error('Event created but group link could not be saved.');
-        }
+      var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
+      if (groupIdsToLink.length>0) {
+        var {error:grpErr}=await supabase.from('event_groups').insert(groupIdsToLink.map(function(gId){ return {event_id:newEvent.id,group_id:gId}; }));
+        if (grpErr) toast.error('Event created but group link failed.');
       }
 
-      const recurringMsg = isRecurring ? ' Recurring instances have been generated for the next 6 months!' : '';
-      toast.success('Event "' + newEvent.title + '" created successfully!' + recurringMsg);
-
+      toast.success('"'+newEvent.title+'" created!'+(isRecurring?' Recurring instances generated for 6 months.':''));
       if (onSuccess) onSuccess(newEvent);
 
-      // Send notifications
       try {
-        const notificationResult = await notifyOrganizationMembers({
-          organizationId: organizationId,
-          type: 'event',
-          title: 'New Event',
-          message: formData.title + ' - ' + new Date(formData.schedule[0].date).toLocaleDateString(),
-          link: '/organizations/' + organizationId + '/events',
-          excludeUserId: null
-        });
-        if (notificationResult.error) {
-          console.error('Notification error:', notificationResult.error);
-        } else {
-          window.dispatchEvent(new CustomEvent('notificationCreated'));
-        }
-      } catch (notifError) {
-        console.error('Failed to send event notifications (event still created):', notifError);
-      }
+        var notifRes=await notifyOrganizationMembers({organizationId,type:'event',title:'New Event',message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(),link:'/organizations/'+organizationId+'/events',excludeUserId:null});
+        if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
+      } catch(ne){ console.error('Notification failed:',ne); }
 
-      setFormData({
-        title: '', description: '', eventType: 'in-person', isMultiDay: false,
-        schedule: [{ date: '', startTime: '', endTime: '' }],
-        locationName: '', fullAddress: '', city: '', state: '', zipCode: '',
-        virtualLink: '', locationLink: '', maxAttendees: '', visibility: 'members', requireRSVP: false
-      });
-      setAddressInput('');
-      setSelectedGroupIds([]);
-      onClose();
-
-    } catch (err) {
-      console.error('Error creating event:', err);
-      toast.error('Failed to create event: ' + err.message);
+      resetAll(); onClose();
+    } catch(err) {
+      console.error('CreateEvent error:',err);
+      toast.error('Failed to create event: '+err.message);
       setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') onClose();
-  };
+    } finally { setLoading(false); }
+  }
 
   if (!isOpen) return null;
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const fullDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onKeyDown={handleKeyDown}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-event-title"
-    >
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="border-b border-gray-200 px-6 py-4">
-          <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">
-            Create New Event
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Create an event for {organizationName}
-            {groupId && <span className="ml-1 text-blue-600 font-medium">(will be linked to this group)</span>}
-          </p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      role="dialog" aria-modal="true" aria-labelledby="create-event-title"
+      onKeyDown={function(e){ if(e.key==='Escape') onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+
+        {/* Sticky header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+          <div>
+            <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">Create New Event</h2>
+            <p className="text-gray-500 text-sm mt-0.5">
+              {organizationName}
+              {groupId && <span className="ml-1 text-blue-600 font-medium">(linked to this group)</span>}
+            </p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            aria-label="Close create event dialog">
+            <Icon path="M6 18L18 6M6 6l12 12" className="h-5 w-5"/>
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-6 py-6 space-y-6">
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-              <p className="text-red-800 font-semibold">Error</p>
-              <p className="text-red-700">{error}</p>
+              <p className="text-red-800 font-semibold text-sm">{error}</p>
             </div>
           )}
 
           {/* Title */}
           <div>
-            <label htmlFor="event-title" className="block text-sm font-semibold text-gray-900 mb-2">
-              Event Title <span className="text-red-500" aria-hidden="true">*</span>
-            </label>
-            <input
-              id="event-title"
-              name="title"
-              type="text"
-              required
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="e.g., Community Cleanup Day"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              maxLength={200}
-            />
-            <p className="text-sm text-gray-500 mt-1">{formData.title.length}/200 characters</p>
+            <label htmlFor="event-title" className={labelCls}>Event Title <span className="text-red-500" aria-hidden="true">*</span></label>
+            <input id="event-title" name="title" type="text" required aria-required="true" value={form.title} onChange={handleChange}
+              placeholder="e.g. Community Cleanup Day" maxLength={200} className={inputCls}/>
+            <p className="text-xs text-gray-400 mt-1" aria-live="polite">{form.title.length}/200</p>
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="event-description" className="block text-sm font-semibold text-gray-900 mb-2">
-              Description
-            </label>
-            <textarea
-              id="event-description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Describe what this event is about..."
-              rows={4}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              maxLength={1000}
-            />
-            <p className="text-sm text-gray-500 mt-1">{formData.description.length}/1000 characters</p>
+            <label htmlFor="event-description" className={labelCls}>Description</label>
+            <textarea id="event-description" name="description" value={form.description} onChange={handleChange}
+              placeholder="Describe what this event is about..." rows={3} maxLength={1000}
+              className={inputCls+' resize-none'} aria-describedby="desc-count"/>
+            <p id="desc-count" className="text-xs text-gray-400 mt-1" aria-live="polite">{form.description.length}/1000</p>
           </div>
 
-          {/* Event Type */}
+          {/* Event Format */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Event Type <span className="text-red-500" aria-hidden="true">*</span></label>
-            <div className="space-y-3">
+            <label className={labelCls}>Event Format <span className="text-red-500" aria-hidden="true">*</span></label>
+            <div className="space-y-2" role="radiogroup" aria-label="Event format">
               {[
-                { value: 'in-person', label: 'In-Person Event', desc: 'Physical location only' },
-                { value: 'virtual', label: 'Virtual Event', desc: 'Online only (Zoom, Google Meet, etc.)' },
-                { value: 'hybrid', label: 'Hybrid Event', desc: 'Both in-person and virtual options' },
-              ].map(opt => (
-                <label key={opt.value} className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                  style={{ borderColor: formData.eventType === opt.value ? '#3b82f6' : '#d1d5db' }}>
-                  <input type="radio" name="eventType" value={opt.value}
-                    checked={formData.eventType === opt.value} onChange={handleChange}
-                    className="w-4 h-4 text-blue-600" />
-                  <div className="ml-3">
-                    <p className="font-semibold text-gray-900">{opt.label}</p>
-                    <p className="text-sm text-gray-600">{opt.desc}</p>
-                  </div>
-                </label>
-              ))}
+                {value:'in-person',label:'In-Person',desc:'Physical location only'},
+                {value:'virtual',  label:'Virtual',  desc:'Online only (Zoom, Google Meet, etc.)'},
+                {value:'hybrid',   label:'Hybrid',   desc:'Both in-person and virtual options'},
+              ].map(function(opt){
+                var checked=form.eventType===opt.value;
+                return (
+                  <label key={opt.value} className={'flex items-center p-3 border-2 rounded-xl cursor-pointer transition-colors '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 hover:bg-gray-50')}>
+                    <input type="radio" name="eventType" value={opt.value} checked={checked} onChange={handleChange} className="w-4 h-4 text-blue-600"/>
+                    <div className="ml-3">
+                      <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
+                      <p className="text-xs text-gray-500">{opt.desc}</p>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
           {/* Schedule */}
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Schedule <span className="text-red-500" aria-hidden="true">*</span></label>
-            <div className="space-y-4">
-              {formData.schedule.map((day, index) => (
-                <div key={index} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-semibold text-gray-900">
-                      {formData.isMultiDay ? 'Day ' + (index + 1) : 'Event Date & Time'}
-                    </p>
-                    {formData.isMultiDay && formData.schedule.length > 1 && (
-                      <button type="button" onClick={() => removeDay(index)}
-                        className="text-red-600 hover:text-red-700 text-sm font-semibold">
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label htmlFor={'date-' + index} className="block text-xs text-gray-600 mb-1">Date</label>
-                      <input id={'date-' + index} type="date" required value={day.date}
-                        onChange={(e) => handleScheduleChange(index, 'date', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className={labelCls}>Schedule <span className="text-red-500" aria-hidden="true">*</span></label>
+            <div className="space-y-3">
+              {form.schedule.map(function(day,index){
+                return (
+                  <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-semibold text-gray-900">{form.isMultiDay?'Day '+(index+1):'Event Date & Time'}</p>
+                      {form.isMultiDay&&form.schedule.length>1&&(
+                        <button type="button" onClick={function(){ removeDay(index); }}
+                          className="text-red-500 hover:text-red-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded">Remove</button>
+                      )}
                     </div>
-                    <div>
-                      <label htmlFor={'start-' + index} className="block text-xs text-gray-600 mb-1">Start Time</label>
-                      <input id={'start-' + index} type="time" required value={day.startTime}
-                        onChange={(e) => handleScheduleChange(index, 'startTime', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                      <label htmlFor={'end-' + index} className="block text-xs text-gray-600 mb-1">End Time</label>
-                      <input id={'end-' + index} type="time" value={day.endTime}
-                        onChange={(e) => handleScheduleChange(index, 'endTime', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        {id:'date-'+index,type:'date',label:'Date',field:'date',req:true},
+                        {id:'start-'+index,type:'time',label:'Start Time',field:'startTime',req:true},
+                        {id:'end-'+index,type:'time',label:'End Time',field:'endTime',req:false},
+                      ].map(function(f){
+                        return (
+                          <div key={f.id}>
+                            <label htmlFor={f.id} className="block text-xs text-gray-500 mb-1">{f.label}</label>
+                            <input id={f.id} type={f.type} required={f.req} value={day[f.field]}
+                              onChange={function(e){ handleScheduleChange(index,f.field,e.target.value); }}
+                              className={inputCls}/>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div className="flex items-center justify-between">
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input id="multi-day" name="isMultiDay" type="checkbox"
-                      checked={formData.isMultiDay} onChange={handleChange}
-                      className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500" />
-                  </div>
-                  <div className="ml-3">
-                    <label htmlFor="multi-day" className="font-semibold text-gray-900">Multiple Day Event</label>
-                    <p className="text-sm text-gray-600">Event spans across multiple days</p>
-                  </div>
-                </div>
-                {formData.isMultiDay && formData.schedule.length < 5 && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="isMultiDay" checked={form.isMultiDay} onChange={handleChange}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+                  <span className="text-sm font-semibold text-gray-900">Multi-Day Event</span>
+                </label>
+                {form.isMultiDay&&form.schedule.length<5&&(
                   <button type="button" onClick={addDay}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                    + Add Day
+                    className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    Add Day
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Virtual Link */}
-          {(formData.eventType === 'virtual' || formData.eventType === 'hybrid') && (
+          {/* Virtual link */}
+          {(form.eventType==='virtual'||form.eventType==='hybrid') && (
             <div>
-              <label htmlFor="virtual-link" className="block text-sm font-semibold text-gray-900 mb-2">
-                Meeting Link <span className="text-red-500" aria-hidden="true">*</span>
-              </label>
-              <input id="virtual-link" name="virtualLink" type="url" required
-                value={formData.virtualLink} onChange={handleChange}
-                placeholder="https://zoom.us/j/123456789"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-              <p className="text-sm text-gray-500 mt-1">Zoom, Google Meet, Microsoft Teams, etc.</p>
+              <label htmlFor="virtual-link" className={labelCls}>Meeting Link <span className="text-red-500" aria-hidden="true">*</span></label>
+              <input id="virtual-link" name="virtualLink" type="url" required value={form.virtualLink} onChange={handleChange}
+                placeholder="https://zoom.us/j/..." className={inputCls}/>
+              <p className="text-xs text-gray-400 mt-1">Zoom, Google Meet, Microsoft Teams, etc.</p>
             </div>
           )}
 
-          {/* Physical Location */}
-          {(formData.eventType === 'in-person' || formData.eventType === 'hybrid') && (
-            <>
+          {/* Physical location */}
+          {(form.eventType==='in-person'||form.eventType==='hybrid') && (
+            <div className="space-y-4">
               <div>
-                <label htmlFor="location-name" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Location <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <input id="location-name" name="locationName" type="text" required
-                  value={formData.locationName} onChange={handleChange}
-                  placeholder="123 Main St, Toledo, OH 43604"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                <p className="text-sm text-gray-500 mt-1">Full address including city, state, and ZIP</p>
+                <label htmlFor="location-name" className={labelCls}>Location <span className="text-red-500" aria-hidden="true">*</span></label>
+                <input id="location-name" name="locationName" type="text" required value={form.locationName} onChange={handleChange}
+                  placeholder="123 Main St, Toledo, OH 43604" className={inputCls}/>
               </div>
-
               <div className="relative">
-                <label htmlFor="address-search" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Address Search Helper
-                </label>
+                <label htmlFor="address-search" className={labelCls}>Address Search <span className="text-gray-400 font-normal">(optional helper)</span></label>
                 <div className="relative">
-                  <input id="address-search" type="text" value={addressInput}
-                    onChange={handleAddressInputChange}
-                    placeholder="Type to search for address..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoComplete="off" />
-                  {searchingAddress && (
-                    <div className="absolute right-3 top-3">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <input id="address-search" type="text" value={addressInput} onChange={handleAddressInputChange}
+                    placeholder="Type to search for an address..." className={inputCls} autoComplete="off"/>
+                  {searchingAddress&&(
+                    <div className="absolute right-3 top-3.5">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" aria-hidden="true"/>
                     </div>
                   )}
                 </div>
-                {showSuggestions && addressSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                    {addressSuggestions.map((suggestion, index) => (
-                      <button key={index} type="button"
-                        onMouseDown={(e) => { e.preventDefault(); selectAddress(suggestion); }}
-                        className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors">
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                            className="text-blue-500 flex-shrink-0" aria-hidden="true">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                            <circle cx="12" cy="10" r="3"/>
-                          </svg>
-                          <p className="text-sm font-medium text-gray-900">{suggestion.formatted}</p>
-                        </div>
-                      </button>
-                    ))}
+                {showSuggestions&&addressSuggestions.length>0&&(
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {addressSuggestions.map(function(s,i){
+                      return (
+                        <button key={i} type="button" onMouseDown={function(e){ e.preventDefault(); selectAddress(s); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none text-left border-b border-gray-100 last:border-0 transition-colors">
+                          <Icon path={['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z','M15 11a3 3 0 11-6 0 3 3 0 016 0z']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
+                          <p className="text-sm text-gray-900">{s.formatted}</p>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-                <p className="text-sm text-gray-500 mt-1">
-                  {searchingAddress ? 'Searching...' :
-                    addressSuggestions.length > 0 ? addressSuggestions.length + ' results found' :
-                    'Type at least 3 characters to search'}
-                </p>
               </div>
-
-              {(formData.city || formData.state || formData.zipCode) && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                      className="text-green-600 flex-shrink-0 mt-0.5" aria-hidden="true">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                      <polyline points="22 4 12 14.01 9 11.01"/>
-                    </svg>
-                    <div className="text-sm text-green-800">
-                      <p className="font-semibold mb-1">Auto-detected:</p>
-                      {formData.city && <p>City: {formData.city}</p>}
-                      {formData.state && <p>State: {formData.state}</p>}
-                      {formData.zipCode && <p>ZIP: {formData.zipCode}</p>}
-                    </div>
-                  </div>
+              {(form.city||form.state||form.zipCode)&&(
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                  <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-4 w-4 text-green-500 flex-shrink-0"/>
+                  <p className="text-xs text-green-700">Auto-detected: {[form.city,form.state,form.zipCode].filter(Boolean).join(', ')}</p>
                 </div>
               )}
 
-              <div>
-                <label htmlFor="location-link" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Location Link (Optional)
-                </label>
-                <input id="location-link" name="locationLink" type="url"
-                  value={formData.locationLink} onChange={handleChange}
-                  placeholder="https://maps.google.com/..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                <p className="text-sm text-gray-500 mt-1">Google Maps or directions URL</p>
+                <div className="flex items-center gap-3">
+                </div>
               </div>
-            </>
           )}
 
           {/* Max Attendees */}
           <div>
-            <label htmlFor="max-attendees" className="block text-sm font-semibold text-gray-900 mb-2">
-              Maximum Attendees (Optional)
-            </label>
-            <input id="max-attendees" name="maxAttendees" type="number" min="1"
-              value={formData.maxAttendees} onChange={handleChange}
-              placeholder="Leave empty for unlimited"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <label htmlFor="max-attendees" className={labelCls}>Max Attendees <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input id="max-attendees" name="maxAttendees" type="number" min="1" value={form.maxAttendees} onChange={handleChange}
+              placeholder="Leave blank for unlimited" className={inputCls}/>
           </div>
 
-          {/* Recurring Event Section */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-3 mb-4">
-              <input type="checkbox" id="isRecurring" checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                aria-describedby="recurring-description" />
-              <label htmlFor="isRecurring" className="text-base font-semibold text-gray-900 cursor-pointer">
-                Make this a recurring event
-              </label>
-            </div>
-            <p id="recurring-description" className="text-sm text-gray-600 mb-4">
-              Automatically create this event on a regular schedule
-            </p>
+          {/* Recurring */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+            <label className="flex items-center gap-3 cursor-pointer mb-1">
+              <input type="checkbox" checked={isRecurring} onChange={function(e){ setIsRecurring(e.target.checked); }}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+              <span className="font-semibold text-gray-900 text-sm">Recurring Event</span>
+            </label>
+            <p className="text-xs text-gray-500 mb-3 ml-7">Automatically create this event on a regular schedule.</p>
 
-            {isRecurring && (
-              <div className="space-y-4 pl-2 border-l-4 border-blue-400">
+            {isRecurring&&(
+              <div className="space-y-4 border-l-4 border-blue-400 pl-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Recurrence Type</label>
+                  <label className="block text-xs text-gray-600 mb-2">Recurrence Pattern</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {['daily', 'weekly', 'monthly'].map(type => (
-                      <button key={type} type="button" onClick={() => setRecurrenceType(type)}
-                        className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' +
-                          (recurrenceType === type ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </button>
-                    ))}
+                    {['daily','weekly','monthly'].map(function(t){
+                      return (
+                        <button key={t} type="button" onClick={function(){ setRecurrenceType(t); }}
+                          className={'px-3 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(recurrenceType===t?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
+                          {t.charAt(0).toUpperCase()+t.slice(1)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {recurrenceType === 'daily' && (
+                {recurrenceType==='daily'&&(
                   <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <label htmlFor="daily-interval" className="text-xs text-gray-600 whitespace-nowrap">Every</label>
+                      <input id="daily-interval" type="number" min="1" max="30" value={dailyInterval}
+                        onChange={function(e){ setDailyInterval(parseInt(e.target.value)||1); }} className={inputCls+' w-20'}/>
+                      <span className="text-xs text-gray-600">day(s)</span>
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={weekdaysOnly} onChange={function(e){ setWeekdaysOnly(e.target.checked); }}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+                      <span className="text-sm text-gray-700">Weekdays only (Mon–Fri)</span>
+                    </label>
+                  </div>
+                )}
+
+                {recurrenceType==='weekly'&&(
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-2">Days of the week</label>
+                    <div className="grid grid-cols-7 gap-1">
+                      {dayNames.map(function(d,i){
+                        var sel=weeklyDays.includes(i);
+                        return (
+                          <button key={i} type="button" onClick={function(){ toggleWeeklyDay(i); }}
+                            className={'py-2 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(sel?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {recurrenceType==='monthly'&&(
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="dailyInterval" className="block text-sm font-medium text-gray-700 mb-2">Repeat every</label>
-                      <div className="flex items-center gap-2">
-                        <input type="number" id="dailyInterval" min="1" max="30" value={dailyInterval}
-                          onChange={(e) => setDailyInterval(parseInt(e.target.value) || 1)}
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                        <span className="text-sm text-gray-700">day(s)</span>
-                      </div>
+                      <label htmlFor="week-of-month" className="block text-xs text-gray-600 mb-1">Which week?</label>
+                      <select id="week-of-month" value={weekOfMonth} onChange={function(e){ setWeekOfMonth(parseInt(e.target.value)); }} className={inputCls}>
+                        {[['1','First'],['2','Second'],['3','Third'],['4','Fourth'],['-1','Last']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
+                      </select>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" id="weekdaysOnly" checked={weekdaysOnly}
-                        onChange={(e) => setWeekdaysOnly(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                      <label htmlFor="weekdaysOnly" className="text-sm text-gray-700">Weekdays only (Monday - Friday)</label>
-                    </div>
-                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>Preview:</strong> Repeats every {dailyInterval} day{dailyInterval > 1 ? 's' : ''}
-                      {weekdaysOnly && ' (weekdays only)'} at <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
-                    </div>
-                  </div>
-                )}
-
-                {recurrenceType === 'weekly' && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">Select days of the week</label>
-                    <div className="grid grid-cols-7 gap-2">
-                      {dayNames.map((day, index) => (
-                        <button key={index} type="button" onClick={() => toggleWeeklyDay(index)}
-                          className={'px-2 py-2 rounded-lg font-medium text-sm transition-all ' +
-                            (weeklyDays.includes(index) ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
-                          {day}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>Preview:</strong> Repeats every {weeklyDays.map(d => fullDayNames[d]).join(', ')} at{' '}
-                      <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
-                    </div>
-                  </div>
-                )}
-
-                {recurrenceType === 'monthly' && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label htmlFor="weekOfMonth" className="block text-xs text-gray-600 mb-1">Which week?</label>
-                        <select id="weekOfMonth" value={weekOfMonth}
-                          onChange={(e) => setWeekOfMonth(parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                          <option value="1">First week</option>
-                          <option value="2">Second week</option>
-                          <option value="3">Third week</option>
-                          <option value="4">Fourth week</option>
-                          <option value="-1">Last week</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="dayOfWeek" className="block text-xs text-gray-600 mb-1">Which day?</label>
-                        <select id="dayOfWeek" value={dayOfWeek}
-                          onChange={(e) => setDayOfWeek(parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                          {fullDayNames.map((name, i) => <option key={i} value={i}>{name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="text-sm text-blue-700 bg-blue-100 p-3 rounded-lg">
-                      <strong>Preview:</strong> Repeats on the{' '}
-                      {weekOfMonth === -1 ? 'Last' : weekOfMonth === 1 ? 'First' : weekOfMonth === 2 ? 'Second' : weekOfMonth === 3 ? 'Third' : 'Fourth'}{' '}
-                      {fullDayNames[dayOfWeek]} of every month at{' '}
-                      <strong>{formData.schedule[0].startTime || '(time not set)'}</strong>
+                    <div>
+                      <label htmlFor="day-of-week" className="block text-xs text-gray-600 mb-1">Which day?</label>
+                      <select id="day-of-week" value={dayOfWeek} onChange={function(e){ setDayOfWeek(parseInt(e.target.value)); }} className={inputCls}>
+                        {fullDayNames.map(function(n,i){ return <option key={i} value={i}>{n}</option>; })}
+                      </select>
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label htmlFor="recurrenceEndDate" className="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
-                  <input type="date" id="recurrenceEndDate" value={recurrenceEndDate}
-                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                    min={formData.schedule[0].date}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Leave blank to continue indefinitely. Instances are generated 6 months in advance.
-                  </p>
+                  <label htmlFor="recurrence-end" className="block text-xs text-gray-600 mb-1">End Date <span className="text-gray-400">(optional)</span></label>
+                  <input id="recurrence-end" type="date" value={recurrenceEndDate} min={form.schedule[0].date}
+                    onChange={function(e){ setRecurrenceEndDate(e.target.value); }} className={inputCls}/>
+                  <p className="text-xs text-gray-400 mt-1">Leave blank — instances generated 6 months in advance.</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Timezone Selector */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">Event Timezone</span>
-                <span className="text-xs text-gray-500">(Optional)</span>
-              </div>
-              <button type="button" onClick={() => setShowTimezoneSelector(!showTimezoneSelector)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                {showTimezoneSelector ? 'Use Auto-Detect' : 'Specify Different Timezone'}
+          {/* Timezone */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-900">Event Timezone</span>
+              <button type="button" onClick={function(){ setShowTimezoneSelector(!showTimezoneSelector); }}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors">
+                {showTimezoneSelector?'Use auto-detect':'Specify timezone'}
               </button>
             </div>
-            {!showTimezoneSelector ? (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Auto-detected: <strong>{formatTimezone(userTimezone)}</strong></span>
-              </div>
-            ) : (
-              <div>
-                <label htmlFor="eventTimezone" className="block text-sm font-medium text-gray-700 mb-2">Select Event Timezone</label>
-                <select id="eventTimezone" value={selectedTimezone || userTimezone}
-                  onChange={(e) => setSelectedTimezone(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+            {!showTimezoneSelector?(
+              <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-4 w-4 text-green-500"/>
+                Auto-detected: <strong className="text-gray-700">{TZ_MAP[userTimezone]||userTimezone}</strong>
+              </p>
+            ):(
+              <div className="mt-3">
+                <label htmlFor="event-timezone" className="sr-only">Select event timezone</label>
+                <select id="event-timezone" value={selectedTimezone||userTimezone} onChange={function(e){ setSelectedTimezone(e.target.value); }} className={inputCls}>
                   <optgroup label="United States">
-                    <option value="America/New_York">Eastern Time (ET)</option>
-                    <option value="America/Chicago">Central Time (CT)</option>
-                    <option value="America/Denver">Mountain Time (MT)</option>
-                    <option value="America/Phoenix">Mountain Time - Arizona (No DST)</option>
-                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                    <option value="America/Anchorage">Alaska Time (AKT)</option>
-                    <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
-                  </optgroup>
-                  <optgroup label="Canada">
-                    <option value="America/Toronto">Eastern Time - Toronto</option>
-                    <option value="America/Winnipeg">Central Time - Winnipeg</option>
-                    <option value="America/Edmonton">Mountain Time - Edmonton</option>
-                    <option value="America/Vancouver">Pacific Time - Vancouver</option>
+                    {[['America/New_York','Eastern (ET)'],['America/Chicago','Central (CT)'],['America/Denver','Mountain (MT)'],['America/Phoenix','Mountain - AZ'],['America/Los_Angeles','Pacific (PT)'],['America/Anchorage','Alaska'],['Pacific/Honolulu','Hawaii']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
                   </optgroup>
                   <optgroup label="International">
-                    <option value="Europe/London">United Kingdom (GMT/BST)</option>
-                    <option value="Europe/Paris">Central Europe (CET/CEST)</option>
-                    <option value="Asia/Tokyo">Japan (JST)</option>
-                    <option value="Asia/Shanghai">China (CST)</option>
-                    <option value="Asia/Kolkata">India (IST)</option>
-                    <option value="Australia/Sydney">Australia East (AEST/AEDT)</option>
+                    {[['America/Toronto','Toronto'],['Europe/London','London'],['Europe/Paris','Central Europe'],['Asia/Tokyo','Japan'],['Asia/Kolkata','India'],['Australia/Sydney','Australia East']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
                   </optgroup>
                 </select>
-                {selectedTimezone && selectedTimezone !== userTimezone && (
-                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <div className="text-sm">
-                      <p className="font-medium text-yellow-800">Different Timezone Selected</p>
-                      <p className="text-yellow-700 mt-1">
-                        You are in <strong>{formatTimezone(userTimezone)}</strong> but creating event in{' '}
-                        <strong>{formatTimezone(selectedTimezone)}</strong>.
-                      </p>
+              </div>
+            )}
+          </div>
+<label htmlFor="event-flier" className={labelCls}>Flier or Image <span className="text-gray-400 font-normal">(optional)</span></label>
+              <div className="flex items-center gap-3">
+                <label htmlFor="event-flier"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 transition-colors">
+                  <Icon path="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" className="h-4 w-4 text-gray-500"/>
+                  <span>Choose file</span>
+                  <input id="event-flier" type="file" accept="image/*,.pdf" className="sr-only"
+                    onChange={function(e){ setFlierFile(e.target.files[0]||null); }}
+                    aria-label="Upload event flier or image"/>
+                </label>
+                {flierFile ? (
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm text-gray-700 truncate">{flierFile.name}</span>
+                    <button type="button" onClick={function(){ setFlierFile(null); }}
+                      className="text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded flex-shrink-0" aria-label="Remove file">
+                      <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4"/>
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">JPG, PNG, or PDF — max 5MB</span>
+                )}
+              </div>
+          {/* Visibility */}
+          <div>
+            <label className={labelCls}>Who can see this event?</label>
+            <div className="space-y-2" role="radiogroup" aria-label="Event visibility">
+              {[
+                {value:'public', label:'Public',         desc:'Anyone can see this event'},
+                {value:'members',label:'All Members',    desc:'All active members of this organization'},
+                {value:'groups', label:'Specific Groups',desc:'Only members of the groups you select'},
+                {value:'draft',  label:'Draft',          desc:'Only visible to admins'},
+              ].map(function(opt){
+                var checked=form.visibility===opt.value;
+                return (
+                  <label key={opt.value} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 hover:bg-gray-50')}>
+                    <input type="radio" name="visibility" value={opt.value} checked={checked} onChange={handleChange} className="w-4 h-4 text-blue-600 mt-0.5"/>
+                    <div className="ml-3">
+                      <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
+                      <p className="text-xs text-gray-500">{opt.desc}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Group selector */}
+          {form.visibility==='groups'&&(
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4" role="group" aria-labelledby="group-label">
+              <p id="group-label" className="text-sm font-semibold text-purple-900 mb-3">
+                Select groups <span className="text-red-500" aria-hidden="true">*</span>
+              </p>
+              {loadingGroups?(
+                <div className="space-y-2">
+                  {[1,2].map(function(i){ return <div key={i} className="h-10 bg-purple-100 rounded-lg animate-pulse"/>; })}
+                </div>
+              ):availableGroups.length===0?(
+                <p className="text-sm text-gray-500">No groups found. Create groups first in the Groups tab.</p>
+              ):(
+                <div className="space-y-2">
+                  {availableGroups.map(function(g){
+                    var sel=selectedGroupIds.includes(g.id);
+                    return (
+                      <label key={g.id} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(sel?'border-purple-500 bg-white':'border-gray-200 bg-white hover:border-purple-300')}>
+                        <input type="checkbox" checked={sel}
+                          onChange={function(){ setSelectedGroupIds(function(prev){ return prev.includes(g.id)?prev.filter(function(id){ return id!==g.id; }):prev.concat([g.id]); }); }}
+                          className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 mt-0.5" aria-label={'Select group '+g.name}/>
+                        <div className="ml-3">
+                          <p className="font-semibold text-gray-900 text-sm">{g.name}</p>
+                          {g.description&&<p className="text-xs text-gray-500">{g.description}</p>}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedGroupIds.length>0&&(
+                <p className="mt-3 text-xs text-purple-700 font-medium">{selectedGroupIds.length} group{selectedGroupIds.length!==1?'s':''} selected</p>
+              )}
+            </div>
+          )}
+
+          {/* Require RSVP */}
+          <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <input id="require-rsvp" name="requireRSVP" type="checkbox" checked={form.requireRSVP} onChange={handleChange}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"/>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Require RSVP</p>
+              <p className="text-xs text-gray-500">Members must RSVP to attend this event.</p>
+            </div>
+          </label>
+
+          {/* ── Advanced Settings ── */}
+          <div>
+            <button type="button" onClick={function(){ setShowAdvanced(!showAdvanced); }}
+              className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              aria-expanded={showAdvanced} aria-controls="advanced-panel">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center" aria-hidden="true">
+                  <Icon path="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" className="h-4 w-4 text-gray-500"/>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-gray-900">Advanced Settings</p>
+                  <p className="text-xs text-gray-500">Event types, audience, publishing — all optional</p>
+                </div>
+              </div>
+              <Icon path={showAdvanced?'M5 15l7-7 7 7':'M19 9l-7 7-7-7'} className="h-4 w-4 text-gray-400"/>
+            </button>
+
+            {showAdvanced&&(
+              <div id="advanced-panel" className="mt-3 border border-gray-200 rounded-xl overflow-hidden">
+                <div className="p-5 space-y-6">
+
+                  {/* Event Types */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Event Types</p>
+                    <p className="text-xs text-gray-500 mb-3">Select all categories that apply to this event.</p>
+                    <MultiCheckbox options={EVENT_TYPES} selected={eventTypes} onChange={setEventTypes} legend="Event types"/>
+                  </div>
+
+                  {/* Audience */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Audience</p>
+                    <p className="text-xs text-gray-500 mb-3">Who is this event intended for?</p>
+                    <MultiCheckbox options={AUDIENCE_OPTIONS} selected={audience} onChange={setAudience} legend="Audience"/>
+                  </div>
+
+                  {/* Languages */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Languages Supported</p>
+                    <p className="text-xs text-gray-500 mb-3">Which languages will this event be conducted in?</p>
+                    <MultiCheckbox options={LANGUAGE_OPTIONS} selected={languages} onChange={setLanguages} legend="Languages"/>
+                  </div>
+
+                  {/* Additional flags */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-3">Additional Options</p>
+                    <div className="space-y-3">
+                      {[
+                        {id:'volunteer',checked:volunteerSignup,onChange:function(){ setVolunteerSignup(!volunteerSignup); },label:'Volunteer Sign-Up Available',desc:'This event needs volunteers.'},
+                        {id:'donation', checked:donationDropoff,onChange:function(){ setDonationDropoff(!donationDropoff); },label:'Donation Drop-Off',           desc:'Physical donations can be dropped off at this event.'},
+                      ].map(function(item){
+                        return (
+                          <div key={item.id} className={'flex items-center justify-between p-4 rounded-xl border '+(item.checked?'border-blue-400 bg-blue-50':'border-gray-200 bg-white')}>
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+                            </div>
+                            <Toggle checked={item.checked} onChange={item.onChange} id={item.id} label={item.label}/>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                )}
+
+                  {/* Publishing */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Publishing</p>
+                    <p className="text-xs text-gray-500 mb-3">Choose where this event appears beyond your members.</p>
+                    <div className="space-y-3">
+                      {[
+                        {id:'pub-discovery',checked:publishToDiscovery,onChange:function(){ setPublishToDiscovery(!publishToDiscovery); },label:'Show on Discover Events page',    desc:'Visible to anyone browsing public events at /discover.'},
+                        {id:'pub-website',  checked:publishToWebsite,  onChange:function(){ setPublishToWebsite(!publishToWebsite); },   label:"Show on organization's website",desc:"Appears on your org's public website page."},
+                      ].map(function(item){
+                        return (
+                          <div key={item.id} className={'flex items-center justify-between p-4 rounded-xl border '+(item.checked?'border-green-400 bg-green-50':'border-gray-200 bg-white')}>
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+                            </div>
+                            <Toggle checked={item.checked} onChange={item.onChange} id={item.id} label={item.label}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
               </div>
             )}
           </div>
 
-          {/* Event Settings */}
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Event Settings</h3>
-            <div className="space-y-4">
+        </div>
 
-              {/* Visibility Selector */}
-              <fieldset>
-                <legend className="block text-sm font-semibold text-gray-900 mb-3">
-                  Who can see this event?
-                </legend>
-                <div className="space-y-2">
-                  {[
-                    { value: 'public', label: 'Public', desc: 'Anyone can see this event (appears in event discovery)' },
-                    { value: 'members', label: 'All Members', desc: 'All active members of this organization' },
-                    { value: 'groups', label: 'Specific Groups Only', desc: 'Only members of the groups you select below' },
-                    { value: 'draft', label: 'Draft', desc: 'Only visible to you and other admins' }
-                  ].map(option => (
-                    <label key={option.value}
-                      className={'flex items-start p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ' +
-                        (formData.visibility === option.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200')}>
-                      <input type="radio" name="visibility" value={option.value}
-                        checked={formData.visibility === option.value}
-                        onChange={handleChange}
-                        className="w-4 h-4 text-blue-600 mt-0.5" />
-                      <div className="ml-3">
-                        <p className="font-semibold text-gray-900 text-sm">{option.label}</p>
-                        <p className="text-xs text-gray-600">{option.desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+        {/* Sticky footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+          <button type="button" onClick={onClose} disabled={loading||geocoding}
+            className="px-6 py-3 bg-transparent border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="button" onClick={handleSubmit} disabled={loading||geocoding}
+            className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2">
+            {loading||geocoding?(
+              <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{geocoding?'Finding location...':'Creating event...'}</>
+            ):'Create Event'}
+          </button>
+        </div>
 
-              {/* Group Selector — shown only when visibility = groups */}
-              {formData.visibility === 'groups' && (
-                <div
-                  className="bg-purple-50 border border-purple-200 rounded-lg p-4"
-                  role="group"
-                  aria-labelledby="group-selector-label"
-                >
-                  <p id="group-selector-label" className="text-sm font-semibold text-purple-900 mb-3">
-                    Select which groups can see this event <span className="text-red-500" aria-hidden="true">*</span>
-                  </p>
-
-                  {loadingGroups ? (
-                    <div className="space-y-2 animate-pulse">
-                      {[1, 2].map(i => (
-                        <div key={i} className="h-10 bg-purple-100 rounded-lg" />
-                      ))}
-                    </div>
-                  ) : availableGroups.length === 0 ? (
-                    <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">
-                      <p className="font-semibold text-gray-800 mb-1">No groups found</p>
-                      <p>This organization has no groups yet. Create groups first in the Groups tab.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {availableGroups.map(group => (
-                        <label key={group.id}
-                          className={'flex items-start p-3 border-2 rounded-lg cursor-pointer transition-colors ' +
-                            (selectedGroupIds.includes(group.id)
-                              ? 'border-purple-500 bg-white'
-                              : 'border-gray-200 bg-white hover:border-purple-300')}>
-                          <input
-                            type="checkbox"
-                            checked={selectedGroupIds.includes(group.id)}
-                            onChange={() => toggleGroupSelection(group.id)}
-                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mt-0.5"
-                            aria-label={'Select group ' + group.name}
-                          />
-                          <div className="ml-3">
-                            <p className="font-semibold text-gray-900 text-sm">{group.name}</p>
-                            {group.description && (
-                              <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedGroupIds.length > 0 && (
-                    <p className="mt-3 text-xs text-purple-700 font-medium">
-                      {selectedGroupIds.length} group{selectedGroupIds.length > 1 ? 's' : ''} selected
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Require RSVP */}
-              <div className="flex items-start">
-                <div className="flex items-center h-5">
-                  <input id="require-rsvp" name="requireRSVP" type="checkbox"
-                    checked={formData.requireRSVP} onChange={handleChange}
-                    className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500" />
-                </div>
-                <div className="ml-3">
-                  <label htmlFor="require-rsvp" className="font-semibold text-gray-900">Require RSVP</label>
-                  <p className="text-sm text-gray-600">Members must RSVP to attend this event</p>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
-            <button type="button" onClick={onClose} disabled={loading || geocoding}
-              className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-              Cancel
-            </button>
-            <button type="submit" disabled={loading || geocoding}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-              {loading || geocoding ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" role="status">
-                    <span className="sr-only">{geocoding ? 'Finding location...' : 'Creating event...'}</span>
-                  </div>
-                  {geocoding ? 'Finding Location...' : 'Creating Event...'}
-                </>
-              ) : (
-                'Create Event'
-              )}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
