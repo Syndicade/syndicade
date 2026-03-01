@@ -284,14 +284,37 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         var [eh2,emin2]=first.endTime.split(':'); endDT=new Date(+yr,+mo-1,+dy,+eh2,+emin2,0);
       }
 
-      var {data:{user},error:userErr}=await supabase.auth.getUser();
+var {data:{user},error:userErr}=await supabase.auth.getUser();
       if (userErr) throw userErr;
       if (!user) throw new Error('You must be logged in');
+
+      // Check role to determine approval status
+      var memberResult = await supabase
+        .from('memberships')
+        .select('role')
+        .eq('organization_id', organizationId)
+        .eq('member_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      var userRole = memberResult.data ? memberResult.data.role : 'member';
+      var approvalStatus = userRole === 'admin' ? 'approved' : 'pending';
 
       var lat=null,lng=null;
       if ((form.eventType==='in-person'||form.eventType==='hybrid')&&form.locationName) {
         var coords=await geocodeAddress(form.locationName);
         if (coords) { lat=coords.latitude; lng=coords.longitude; }
+      }
+
+            // Upload flier if attached
+      var flierUrl = null;
+      if (flierFile) {
+        if (flierFile.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
+        var fileExt = flierFile.name.split('.').pop();
+        var fileName = organizationId + '/' + Date.now() + '.' + fileExt;
+        var { error: uploadErr } = await supabase.storage.from('event-fliers').upload(fileName, flierFile, { upsert: true });
+        if (uploadErr) { toast.error('File upload failed — event not created'); setLoading(false); return; }
+        var { data: urlData } = supabase.storage.from('event-fliers').getPublicUrl(fileName);
+        flierUrl = urlData.publicUrl;
       }
 
       var eventData={
@@ -322,21 +345,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         donation_dropoff:donationDropoff,
         publish_to_discovery:publishToDiscovery,
         publish_to_website:publishToWebsite,
-        approval_status:'approved',
-        flier_url:flierUrl,
+approval_status: approvalStatus,
+       flier_url: flierUrl,
       };
 
-      // Upload flier if attached
-      var flierUrl = null;
-      if (flierFile) {
-        if (flierFile.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
-        var fileExt = flierFile.name.split('.').pop();
-        var fileName = organizationId + '/' + Date.now() + '.' + fileExt;
-        var { error: uploadErr } = await supabase.storage.from('event-fliers').upload(fileName, flierFile, { upsert: true });
-        if (uploadErr) { toast.error('File upload failed — event not created'); setLoading(false); return; }
-        var { data: urlData } = supabase.storage.from('event-fliers').getPublicUrl(fileName);
-        flierUrl = urlData.publicUrl;
-      }
       var {data:newEvent,error:eventErr}=await supabase.from('events').insert([eventData]).select().single();
       if (eventErr) throw eventErr;
 
@@ -346,11 +358,20 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         if (grpErr) toast.error('Event created but group link failed.');
       }
 
-      toast.success('"'+newEvent.title+'" created!'+(isRecurring?' Recurring instances generated for 6 months.':''));
+if (approvalStatus === 'pending') {
+        toast.success('Event submitted for admin approval.');
+      } else {
+        toast.success('"' + newEvent.title + '" created!' + (isRecurring ? ' Recurring instances generated for 6 months.' : ''));
+      }
       if (onSuccess) onSuccess(newEvent);
 
       try {
-        var notifRes=await notifyOrganizationMembers({organizationId,type:'event',title:'New Event',message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(),link:'/organizations/'+organizationId+'/events',excludeUserId:null});
+if (approvalStatus === 'approved') {
+        try {
+          var notifRes=await notifyOrganizationMembers({organizationId,type:'event',title:'New Event',message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(),link:'/organizations/'+organizationId+'/events',excludeUserId:null});
+          if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
+        } catch(ne){ console.error('Notification failed:',ne); }
+      }
         if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
       } catch(ne){ console.error('Notification failed:',ne); }
 
