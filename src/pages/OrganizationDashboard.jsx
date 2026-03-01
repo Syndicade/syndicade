@@ -7,6 +7,7 @@ import CreateEvent from '../components/CreateEvent';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import AnnouncementCard from '../components/AnnouncementCard';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import Footer from '../components/Footer';
 
 // ── Icon primitive ────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -1396,18 +1397,7 @@ function OrganizationDashboard() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-8 mt-2" role="contentinfo">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-gray-900 font-extrabold text-xl">Syndi</span><span className="font-extrabold text-xl" style={{color:'#F5B731'}}>cade</span>
-              <span className="text-gray-400 text-sm hidden sm:inline">— Connecting communities.</span>
-            </div>
-            <p className="text-gray-400 text-xs">{'© ' + new Date().getFullYear() + ' Syndicade. All rights reserved.'}</p>
-          </div>
-        </div>
-      </footer>
+<Footer />
 
       {/* Modals */}
       <CreateEvent

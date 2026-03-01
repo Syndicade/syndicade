@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import Header from './components/Header';
+import LegalCenter from './pages/LegalCenter';
 import { Toaster } from 'react-hot-toast';
 
 import LandingPage from './pages/LandingPage';
@@ -103,6 +104,7 @@ function App() {
             <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
             <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
             <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/legal" element={<LegalCenter />} />
 
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
