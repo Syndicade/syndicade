@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import Header from './components/Header';
+import Footer from './components/Footer';
 import LegalCenter from './pages/LegalCenter';
 import { Toaster } from 'react-hot-toast';
 
@@ -36,6 +37,7 @@ import Signup from './pages/Signup';
 import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
+import WebsiteBuilder from './pages/WebsiteBuilder';
 
 
 function App() {
@@ -132,6 +134,7 @@ function App() {
 
             <Route path="/org/:slug" element={<PublicOrganizationPage />} />
             <Route path="/organizations/:organizationId/page-editor" element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/website" element={session ? <WebsiteBuilder /> : <Navigate to="/login" replace />} />
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
             <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/home" element={<LandingPage />} />
@@ -153,6 +156,12 @@ function App() {
             />
 
           </Routes>
+          {!window.location.pathname.startsWith('/org/') &&
+           !window.location.pathname.startsWith('/home') &&
+           window.location.pathname !== '/about' &&
+           window.location.pathname !== '/onboarding' &&
+           window.location.pathname !== '/welcome' &&
+           <Footer />}
         </div>
       </Router>
     </>

@@ -857,15 +857,24 @@ function OrganizationDashboard() {
                         <span className="font-semibold text-gray-800 text-sm">Sign-Up Forms</span>
                       </button>
 
-                      {effectiveRole === 'admin' && (
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
-                        </button>
-                      )}
+{effectiveRole === 'admin' && (
+  <>
+    <button
+      onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
+      className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+    >
+      <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
+      <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
+    </button>
+    <button
+      onClick={function() { navigate('/organizations/' + organizationId + '/website'); }}
+      className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+    >
+      <Icon path={ICONS.pencil} className="h-5 w-5 text-purple-500 flex-shrink-0" />
+      <span className="font-semibold text-gray-800 text-sm">Website Builder</span>
+    </button>
+  </>
+)}
                     </div>
                   </div>
 
@@ -1396,8 +1405,6 @@ function OrganizationDashboard() {
           </div>
         </div>
       </div>
-
-<Footer />
 
       {/* Modals */}
       <CreateEvent
