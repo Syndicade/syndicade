@@ -355,7 +355,7 @@ function BlockForm({ block, onChange, organizationId }) {
       {c.image_url && (
         <div>
           <label htmlFor={'block-img-alt-imgtext-' + block.id} className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
-          <input id={'block-img-alt-imgtext-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder={c.heading ? 'e.g. ' + c.heading : 'e.g. Community members gathered at the park'} className={inputCls} maxLength={200} />
+          <input id={'block-img-alt-imgtext-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder="e.g. Volunteers working together at our community garden event" className={inputCls} maxLength={200} />
           <p className="text-xs text-gray-400 mt-1">Describe what's in the image for screen readers. <a href="https://www.w3.org/WAI/tutorials/images/informative/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline hover:text-blue-700">Why this matters</a></p>
         </div>
       )}
@@ -390,7 +390,7 @@ function BlockForm({ block, onChange, organizationId }) {
       {c.image_url && (
         <div>
           <label htmlFor={'block-img-alt-fwimg-' + block.id} className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
-          <input id={'block-img-alt-fwimg-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder={c.caption ? 'e.g. ' + c.caption : 'e.g. Aerial view of our community garden'} className={inputCls} maxLength={200} />
+          <input id={'block-img-alt-fwimg-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder="e.g. Aerial view of our annual community cleanup event at Riverside Park"className={inputCls} maxLength={200} />
           <p className="text-xs text-gray-400 mt-1">Describe the image for screen readers. <a href="https://www.w3.org/WAI/tutorials/images/informative/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline hover:text-blue-700">Why this matters</a></p>
         </div>
       )}
