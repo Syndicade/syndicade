@@ -1,6 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import { BlockPreview } from '../components/BlockRenderer';
 
 // ── Icon ─────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -168,7 +188,86 @@ function ImageUploader({ value, onChange, organizationId, label, fieldKey }) {
     </div>
   );
 }
+// ── Rich Text Editor ──────────────────────────────────────────────────────────
+function RichTextEditor({ value, onChange }) {
+  var editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-blue-600 underline' } }),
+    ],
+    content: value || '',
+    onUpdate: function(ref) { onChange(ref.editor.getHTML()); },
+  });
 
+  if (!editor) return null;
+
+  function ToolbarButton({ onClick, active, label, children }) {
+    return (
+      <button type="button" onMouseDown={function(e) { e.preventDefault(); onClick(); }}
+        aria-label={label} aria-pressed={active}
+        className={'p-1.5 rounded text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (active ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900')}>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleBold().run(); }} active={editor.isActive('bold')} label="Bold">
+          <span className="font-extrabold">B</span>
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleItalic().run(); }} active={editor.isActive('italic')} label="Italic">
+          <span className="italic">I</span>
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleUnderline().run(); }} active={editor.isActive('underline')} label="Underline">
+          <span className="underline">U</span>
+        </ToolbarButton>
+        <div className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleHeading({ level: 2 }).run(); }} active={editor.isActive('heading', { level: 2 })} label="Heading 2">
+          <span className="text-xs">H2</span>
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleHeading({ level: 3 }).run(); }} active={editor.isActive('heading', { level: 3 })} label="Heading 3">
+          <span className="text-xs">H3</span>
+        </ToolbarButton>
+        <div className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleBulletList().run(); }} active={editor.isActive('bulletList')} label="Bullet list">
+          <Icon path="M4 6h16M4 12h10M4 18h12" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleOrderedList().run(); }} active={editor.isActive('orderedList')} label="Numbered list">
+          <Icon path="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().toggleBlockquote().run(); }} active={editor.isActive('blockquote')} label="Blockquote">
+          <Icon path="M8 10.5H6a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v1.5a4 4 0 01-4 4M18 10.5h-2a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v1.5a4 4 0 01-4 4" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <div className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+        <ToolbarButton onClick={function() {
+          var url = window.prompt('Enter URL:');
+          if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+        }} active={editor.isActive('link')} label="Add link">
+          <Icon path="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        {editor.isActive('link') && (
+          <ToolbarButton onClick={function() { editor.chain().focus().unsetLink().run(); }} active={false} label="Remove link">
+            <Icon path="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" className="h-3.5 w-3.5 text-red-400" />
+          </ToolbarButton>
+        )}
+        <div className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+        <ToolbarButton onClick={function() { editor.chain().focus().undo().run(); }} active={false} label="Undo">
+          <Icon path="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={function() { editor.chain().focus().redo().run(); }} active={false} label="Redo">
+          <Icon path="M21 10H11a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" className="h-3.5 w-3.5" />
+        </ToolbarButton>
+      </div>
+      {/* Editor area */}
+      <EditorContent editor={editor}
+        className="prose prose-sm max-w-none px-4 py-3 min-h-[160px] text-gray-800 focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[140px]" />
+    </div>
+  );
+}
 // ── Block edit forms ──────────────────────────────────────────────────────────
 function BlockForm({ block, onChange, organizationId }) {
   var c = block.content;
@@ -234,12 +333,11 @@ function BlockForm({ block, onChange, organizationId }) {
     </div>
   );
 
-  // RICH TEXT
+// RICH TEXT
   if (type === 'rich_text') return (
     <div>
-      <label htmlFor={'block-body-' + block.id} className={labelCls}>Content</label>
-      <textarea id={'block-body-' + block.id} value={c.body || ''} onChange={function(e) { set('body', e.target.value); }} rows={8} placeholder="Write your content here..." className={inputCls + ' resize-y'} />
-      <p className="text-xs text-gray-400 mt-1">Plain text for now. Rich text editor coming soon.</p>
+      <p className={labelCls}>Content</p>
+      <RichTextEditor value={c.body || ''} onChange={function(html) { set('body', html); }} />
     </div>
   );
 
@@ -850,7 +948,83 @@ function AddBlockModal({ onAdd, onClose }) {
     </div>
   );
 }
+// ── Sortable Block Wrapper ────────────────────────────────────────────────────
+function SortableBlock({ block, index, totalBlocks, expandedBlock, setExpandedBlock, saving, toggleVisible, setDeleteModal, handleContentChange, organizationId }) {
+  var { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
+  var [previewMode, setPreviewMode] = useState(false);
 
+  var style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  var isExpanded = expandedBlock === block.id;
+  var isSavingBlock = saving[block.id];
+
+  return (
+    <div ref={setNodeRef} style={style} role="listitem"
+      className={'rounded-xl border-2 transition-all ' + (isExpanded ? 'border-blue-400 shadow-sm' : 'border-gray-200') + ' ' + (!block.is_visible ? 'opacity-60' : '') + ' ' + (isDragging ? 'shadow-xl bg-white' : 'bg-white')}>
+      <div className="flex items-center gap-3 p-4">
+        {/* Drag handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          aria-label={'Drag to reorder ' + blockLabel(block.block_type)}
+          className="p-1.5 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors flex-shrink-0 touch-none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 12a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 18a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/>
+          </svg>
+        </button>
+        {/* Block info */}
+        <button onClick={function() { setExpandedBlock(isExpanded ? null : block.id); }}
+          className="flex-1 flex items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+          aria-expanded={isExpanded} aria-label={'Toggle ' + blockLabel(block.block_type) + ' block editor'}>
+          <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+            <Icon path={BLOCK_CATEGORIES.flatMap(function(cat) { return cat.blocks; }).find(function(b) { return b.type === block.block_type; })?.icon || 'M4 6h16M4 12h16M4 18h7'} className="h-4 w-4 text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-900">{blockLabel(block.block_type)}</p>
+            {!block.is_visible && <span className="text-xs text-gray-400">Hidden</span>}
+          </div>
+          {isSavingBlock && <span className="text-xs text-blue-400 font-medium">Saving...</span>}
+          <Icon path={isExpanded ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className="h-4 w-4 text-gray-400 flex-shrink-0" />
+        </button>
+        {/* Actions */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <Toggle checked={block.is_visible} onChange={function() { toggleVisible(block); }} label={(block.is_visible ? 'Hide' : 'Show') + ' ' + blockLabel(block.block_type) + ' block'} id={'block-vis-' + block.id} />
+          <button onClick={function() { setDeleteModal(block.id); }} aria-label={'Delete ' + blockLabel(block.block_type) + ' block'}
+            className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+            <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+{isExpanded && (
+        <div className="border-t border-gray-100">
+          <div className="flex border-b border-gray-100">
+            <button onClick={function() { setPreviewMode(false); }}
+              className={'flex-1 py-2.5 text-xs font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (!previewMode ? 'bg-white text-blue-600 border-b-2 border-blue-500' : 'bg-gray-50 text-gray-400 hover:text-gray-600')}
+              aria-pressed={!previewMode}>
+              Edit
+            </button>
+            <button onClick={function() { setPreviewMode(true); }}
+              className={'flex-1 py-2.5 text-xs font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (previewMode ? 'bg-white text-blue-600 border-b-2 border-blue-500' : 'bg-gray-50 text-gray-400 hover:text-gray-600')}
+              aria-pressed={previewMode}>
+              Preview
+            </button>
+          </div>
+          <div className="px-4 pb-4 pt-4">
+            {previewMode
+              ? <BlockPreview block={block} primary="#3B82F6" secondary="#1E40AF" borderRadius="8px" fontFamily="Inter, system-ui, sans-serif" org={{}} />
+              : <BlockForm block={block} onChange={function(content) { handleContentChange(block.id, content); }} organizationId={organizationId} />
+            }
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 // ── Main BlockEditor Export ───────────────────────────────────────────────────
 export default function BlockEditor({ organizationId, pages }) {
   var [selectedPageId, setSelectedPageId] = useState(null);
@@ -861,6 +1035,10 @@ export default function BlockEditor({ organizationId, pages }) {
   var [saving, setSaving] = useState({});
   var [deleteModal, setDeleteModal] = useState(null);
   var debounceTimers = useRef({});
+  var sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   var enabledPages = (pages || []).filter(function(p) { return p.is_enabled && p.page_key && !p.page_key.startsWith('external-'); });
 
@@ -931,11 +1109,16 @@ export default function BlockEditor({ organizationId, pages }) {
     await supabase.from('org_site_blocks').update({ is_visible: updated, updated_at: new Date().toISOString() }).eq('id', block.id);
   }
 
-  async function moveBlock(index, dir) {
+async function handleDragEnd(event) {
+    var active = event.active;
+    var over = event.over;
+    if (!over || active.id === over.id) return;
+    var oldIndex = blocks.findIndex(function(b) { return b.id === active.id; });
+    var newIndex = blocks.findIndex(function(b) { return b.id === over.id; });
+    if (oldIndex === -1 || newIndex === -1) return;
     var next = blocks.slice();
-    var t = index + dir;
-    if (t < 0 || t >= next.length) return;
-    var tmp = next[index]; next[index] = next[t]; next[t] = tmp;
+    var removed = next.splice(oldIndex, 1)[0];
+    next.splice(newIndex, 0, removed);
     next = next.map(function(b, i) { return Object.assign({}, b, { sort_order: i }); });
     setBlocks(next);
     await Promise.all(next.map(function(b) { return supabase.from('org_site_blocks').update({ sort_order: b.sort_order }).eq('id', b.id); }));
@@ -1017,59 +1200,29 @@ export default function BlockEditor({ organizationId, pages }) {
               </button>
             </div>
           ) : (
-            <div className="space-y-2" role="list" aria-label="Content blocks">
-              {blocks.map(function(block, index) {
-                var isExpanded = expandedBlock === block.id;
-                var isSavingBlock = saving[block.id];
-                return (
-                  <div key={block.id} role="listitem"
-                    className={'rounded-xl border-2 transition-all ' + (isExpanded ? 'border-blue-400 shadow-sm' : 'border-gray-200') + ' ' + (!block.is_visible ? 'opacity-60' : '')}>
-                    {/* Block header */}
-                    <div className="flex items-center gap-3 p-4">
-                      {/* Reorder */}
-                      <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        <button onClick={function() { moveBlock(index, -1); }} disabled={index === 0} aria-label={'Move ' + blockLabel(block.block_type) + ' up'}
-                          className="p-1 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                          <Icon path="M5 15l7-7 7 7" className="h-3 w-3" />
-                        </button>
-                        <button onClick={function() { moveBlock(index, 1); }} disabled={index === blocks.length - 1} aria-label={'Move ' + blockLabel(block.block_type) + ' down'}
-                          className="p-1 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                          <Icon path="M19 9l-7 7-7-7" className="h-3 w-3" />
-                        </button>
-                      </div>
-                      {/* Block info */}
-                      <button onClick={function() { setExpandedBlock(isExpanded ? null : block.id); }}
-                        className="flex-1 flex items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
-                        aria-expanded={isExpanded} aria-label={'Toggle ' + blockLabel(block.block_type) + ' block editor'}>
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
-                          <Icon path={BLOCK_CATEGORIES.flatMap(function(cat) { return cat.blocks; }).find(function(b) { return b.type === block.block_type; })?.icon || 'M4 6h16M4 12h16M4 18h7'} className="h-4 w-4 text-gray-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900">{blockLabel(block.block_type)}</p>
-                          {!block.is_visible && <span className="text-xs text-gray-400">Hidden</span>}
-                        </div>
-                        {isSavingBlock && <span className="text-xs text-blue-400 font-medium">Saving...</span>}
-                        <Icon path={isExpanded ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                      </button>
-                      {/* Actions */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <Toggle checked={block.is_visible} onChange={function() { toggleVisible(block); }} label={(block.is_visible ? 'Hide' : 'Show') + ' ' + blockLabel(block.block_type) + ' block'} id={'block-vis-' + block.id} />
-                        <button onClick={function() { setDeleteModal(block.id); }} aria-label={'Delete ' + blockLabel(block.block_type) + ' block'}
-                          className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
-                          <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {/* Block form */}
-                    {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-gray-100 pt-4">
-                        <BlockForm block={block} onChange={function(content) { handleContentChange(block.id, content); }} organizationId={organizationId} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={blocks.map(function(b) { return b.id; })} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2" role="list" aria-label="Content blocks">
+                  {blocks.map(function(block, index) {
+                    return (
+                      <SortableBlock
+                        key={block.id}
+                        block={block}
+                        index={index}
+                        totalBlocks={blocks.length}
+                        expandedBlock={expandedBlock}
+                        setExpandedBlock={setExpandedBlock}
+                        saving={saving}
+                        toggleVisible={toggleVisible}
+                        setDeleteModal={setDeleteModal}
+                        handleContentChange={handleContentChange}
+                        organizationId={organizationId}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
           {/* Add block button */}
           {blocks.length > 0 && (
