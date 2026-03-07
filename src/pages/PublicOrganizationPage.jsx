@@ -606,13 +606,23 @@ export default function PublicOrganizationPage() {
     );
   }
 
-  // ── Route: use new WebsiteBuilder render if published ─────────────────────
-  if (siteConfig && siteConfig.is_published && sitePages.length > 0) {
+// ── Route: use new WebsiteBuilder render if published ─────────────────────
+  var effectiveSiteConfig = siteConfig || (organization.settings ? {
+    primary_color: (organization.settings.theme && organization.settings.theme.customColors && organization.settings.theme.customColors[0]) || '#3B82F6',
+    secondary_color: '#1E40AF',
+    template_id: organization.settings.template || 'modern',
+    button_style: (organization.settings.theme && organization.settings.theme.buttonStyle) || 'rounded',
+    font_pairing: (organization.settings.theme && organization.settings.theme.fontPairing) || 'inter',
+    header_style: 'light',
+    is_published: organization.is_public,
+  } : null);
+
+  if (effectiveSiteConfig && organization.is_public && sitePages.length > 0) {
     return (
       <>
         <NewPublicPage
           org={organization}
-          siteConfig={siteConfig}
+          siteConfig={effectiveSiteConfig}
           pages={sitePages}
           navItems={siteNav}
           events={events}
