@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import BlockEditor from '../components/BlockEditor';
 import {
   getThemeVars,
   getNavLinks,
@@ -11,6 +12,7 @@ import {
   SidebarTemplate,
   FeaturedTemplate,
 } from '../components/OrgTemplates';
+
 
 var PREVIEW_WIDTH = 1280;
 
@@ -457,6 +459,7 @@ var navSections = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'theme',      label: 'Theme'      },
   { id: 'pages',      label: 'Pages'      },
+  { id: 'content',    label: 'Content'    },
   { id: 'info',       label: 'Info'       },
   { id: 'contact',    label: 'Contact'    },
   { id: 'social',     label: 'Social'     },
@@ -789,7 +792,13 @@ var navSections = [
                   </div>
                 </div>
               )}
-
+{/* CONTENT */}
+              {activeSection === 'content' && (
+                <BlockEditor
+                  organizationId={organizationId}
+                  pages={sitePages}
+                />
+              )}
 {/* PAGES */}
 {activeSection === 'pages' && (
   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
