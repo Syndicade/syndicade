@@ -117,6 +117,23 @@ const PAGE_SECTION_CONFIG = {
   join:          { label: 'Join Us Form',     desc: 'Contact form for new members'       },
 };
 
+function slugify(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page';
+}
+
+var DEFAULT_PAGES = [
+  { page_key: 'home',       title: 'Home',             nav_label: 'Home',         sort_order: 0 },
+  { page_key: 'about',      title: 'About',            nav_label: 'About',        sort_order: 1 },
+  { page_key: 'mission',    title: 'Mission & Values', nav_label: 'Mission',      sort_order: 2 },
+  { page_key: 'programs',   title: 'Programs',         nav_label: 'Programs',     sort_order: 3 },
+  { page_key: 'events',     title: 'Events',           nav_label: 'Events',       sort_order: 4 },
+  { page_key: 'news',       title: 'News & Updates',   nav_label: 'News',         sort_order: 5 },
+  { page_key: 'involved',   title: 'Get Involved',     nav_label: 'Get Involved', sort_order: 6 },
+  { page_key: 'membership', title: 'Membership',       nav_label: 'Membership',   sort_order: 7 },
+  { page_key: 'contact',    title: 'Contact',          nav_label: 'Contact',      sort_order: 8 },
+  { page_key: 'resources',  title: 'Resources',        nav_label: 'Resources',    sort_order: 9 },
+];
+
 var inputCls = 'w-full px-4 py-3 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm';
 var labelCls = 'block text-sm font-semibold text-gray-700 mb-2';
 
@@ -146,6 +163,47 @@ export default function OrgPageEditor() {
   var [showAddNav, setShowAddNav] = useState(false);
   var [previewOpen, setPreviewOpen] = useState(true);
   var [previewScale, setPreviewScale] = useState(0.5);
+  var [sitePages, setSitePages] = useState([]);
+var [savingPages, setSavingPages] = useState(false);
+var [deleteModal, setDeleteModal] = useState(null);
+var debounceTimers = useRef({});
+
+async function savePageField(pageId, fields) {
+  try {
+    var result = await supabase.from('org_site_pages').update(
+      Object.assign({}, fields, { updated_at: new Date().toISOString() })
+    ).eq('id', pageId);
+    if (result.error) throw result.error;
+  } catch (err) {
+    toast.error('Could not save: ' + err.message);
+  }
+}
+
+function savePageDebounced(pageId, fields) {
+  var key = pageId + '-' + Object.keys(fields).join(',');
+  if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
+  debounceTimers.current[key] = setTimeout(async function() {
+    await savePageField(pageId, fields);
+  }, 500);
+}
+
+async function deletePage(pageId) {
+  var updated = sitePages.filter(function(p) { return p.id !== pageId; });
+  setSitePages(updated);
+  await supabase.from('org_site_pages').delete().eq('id', pageId);
+  await saveNavInstant(updated);
+  toast.success('Page deleted');
+}
+
+async function saveNavInstant(pages) {
+  var navItems = pages
+    .filter(function(p) { return p.is_enabled && p.is_visible_in_nav; })
+    .map(function(p) { return { id: p.page_key, label: p.nav_label, type: 'page', page_key: p.page_key }; });
+  await supabase.from('org_site_nav').upsert(
+    { organization_id: organizationId, items: navItems, updated_at: new Date().toISOString() },
+    { onConflict: 'organization_id' }
+  );
+}
 
   var [form, setForm] = useState({
     name: '', tagline: '', description: '', contact_email: '', contact_phone: '',
@@ -227,6 +285,23 @@ export default function OrgPageEditor() {
         nav_links:        savedSettings.nav_links || DEFAULT_NAV_LINKS,
         publish_channels: savedSettings.publish_channels || { website: true, discovery: false },
       });
+      // Load or create site pages
+var pagesResult = await supabase
+  .from('org_site_pages')
+  .select('*')
+  .eq('organization_id', organizationId)
+  .order('sort_order', { ascending: true });
+if (pagesResult.error) throw pagesResult.error;
+var existingPages = pagesResult.data || [];
+if (existingPages.length === 0) {
+  var toInsert = DEFAULT_PAGES.map(function(p) {
+    return Object.assign({}, p, { organization_id: organizationId });
+  });
+  var insertPagesResult = await supabase.from('org_site_pages').insert(toInsert).select();
+  if (insertPagesResult.error) throw insertPagesResult.error;
+  existingPages = insertPagesResult.data;
+}
+setSitePages(existingPages);
     } catch (err) {
       toast.error('Failed to load organization');
     } finally {
@@ -377,23 +452,52 @@ export default function OrgPageEditor() {
     openLightbox: function() {}, navLinks: previewNavLinks, themeVars: previewThemeVars,
   };
 
-  var navSections = [
-    { id: 'template',   label: 'Template'   },
-    { id: 'appearance', label: 'Appearance' },
-    { id: 'theme',      label: 'Theme'      },
-    { id: 'navigation', label: 'Navigation' },
-    { id: 'info',       label: 'Info'       },
-    { id: 'contact',    label: 'Contact'    },
-    { id: 'social',     label: 'Social'     },
-    { id: 'sections',   label: 'Sections'   },
-    { id: 'publish',    label: 'Publish'    },
-  ];
+var navSections = [
+  { id: 'template',   label: 'Template'   },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'theme',      label: 'Theme'      },
+  { id: 'pages',      label: 'Pages'      },
+  { id: 'info',       label: 'Info'       },
+  { id: 'contact',    label: 'Contact'    },
+  { id: 'social',     label: 'Social'     },
+  { id: 'sections',   label: 'Sections'   },
+  { id: 'publish',    label: 'Publish'    },
+];
 
   if (loading) return <EditorSkeleton />;
 
   return (
     <div className={previewOpen ? 'h-screen overflow-hidden flex flex-col bg-gray-50' : 'min-h-screen bg-gray-50'}>
-
+{/* Delete Confirmation Modal */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setDeleteModal(null); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h2 id="delete-modal-title" className="text-xl font-bold text-gray-900 mb-2">Delete "{deleteModal.title}"?</h2>
+            <p className="text-gray-500 text-sm mb-8">This page will be permanently deleted and <span className="font-semibold text-red-500">cannot be recovered</span>. Any content saved to this page will be lost.</p>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={function() { setDeleteModal(null); }}
+                className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">
+                No, Keep Page
+              </button>
+              <button
+                onClick={async function() {
+                  await deletePage(deleteModal.id);
+                  setDeleteModal(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors">
+                Yes, Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <a href="#editor-main" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:font-semibold focus:outline-none">
         Skip to editor
       </a>
@@ -686,90 +790,293 @@ export default function OrgPageEditor() {
                 </div>
               )}
 
-              {/* NAVIGATION */}
-              {activeSection === 'navigation' && (
-                <div className="space-y-6">
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Navigation</p>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Manage Nav Links</h2>
-                    <p className="text-gray-500 text-sm mb-6">Control which links appear in your public page navigation</p>
-                    <ul className="space-y-2" aria-label="Navigation links">
-                      {form.nav_links.map(function(link, index) {
-                        return (
-                          <li key={link.id} className={'rounded-xl border p-4 transition-all ' + (link.visible ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-gray-100 opacity-60')}>
-                            <div className="flex items-center gap-3">
-                              <div className="flex flex-col gap-1 flex-shrink-0">
-                                <button onClick={function() { moveNavLink(index, -1); }} disabled={index === 0}
-                                  className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 rounded transition-colors"
-                                  aria-label={'Move ' + link.label + ' up'}>
-                                  <Icon path="M5 15l7-7 7 7" className="h-3.5 w-3.5" />
-                                </button>
-                                <button onClick={function() { moveNavLink(index, 1); }} disabled={index === form.nav_links.length - 1}
-                                  className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 rounded transition-colors"
-                                  aria-label={'Move ' + link.label + ' down'}>
-                                  <Icon path="M19 9l-7 7-7-7" className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <label htmlFor={'nav-label-' + index} className="sr-only">Navigation label for {link.label}</label>
-                                <input id={'nav-label-' + index} type="text" value={link.label} onChange={function(e) { renameNavLink(index, e.target.value); }}
-                                  className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  aria-label={'Label for navigation link ' + (index + 1)} />
-                                <p className="text-xs text-gray-400 mt-1 truncate">{link.type === 'external' ? 'External: ' : 'Anchor: '}{link.href}</p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                {link.system && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">System</span>}
-                                {link.type === 'external' && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">External</span>}
-                              </div>
-                              <Toggle checked={link.visible} onChange={function() { toggleNavLink(index); }} label={(link.visible ? 'Hide ' : 'Show ') + link.label + ' in navigation'} id={'nav-toggle-' + index} />
-                              {!link.system && (
-                                <button onClick={function() { removeNavLink(index); }}
-                                  className="p-1.5 text-gray-400 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors flex-shrink-0"
-                                  aria-label={'Remove ' + link.label + ' link'}>
-                                  <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <div className="mt-4">
-                      {!showAddNav ? (
-                        <button onClick={function() { setShowAddNav(true); }}
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
-                          <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />
-                          Add External Link
-                        </button>
-                      ) : (
-                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                          <p className="text-sm font-semibold text-gray-900">Add External Link</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label htmlFor="new-nav-label" className={labelCls}>Label</label>
-                              <input id="new-nav-label" type="text" placeholder="e.g. Donate" value={newNavLink.label}
-                                onChange={function(e) { setNewNavLink(function(p) { return Object.assign({}, p, { label: e.target.value }); }); }}
-                                className={inputCls} />
-                            </div>
-                            <div>
-                              <label htmlFor="new-nav-href" className={labelCls}>URL</label>
-                              <input id="new-nav-href" type="text" placeholder="https://donate.example.com" value={newNavLink.href}
-                                onChange={function(e) { setNewNavLink(function(p) { return Object.assign({}, p, { href: e.target.value }); }); }}
-                                className={inputCls} />
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={addExternalLink} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">Add Link</button>
-                            <button onClick={function() { setShowAddNav(false); setNewNavLink({ label: '', href: '' }); }}
-                              className="px-4 py-2 bg-transparent border border-gray-200 text-gray-500 text-sm font-semibold rounded-lg hover:text-gray-900 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all">Cancel</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+{/* PAGES */}
+{activeSection === 'pages' && (
+  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Pages</p>
+    <h2 className="text-2xl font-bold text-gray-900 mb-1">Site Pages</h2>
+    <p className="text-gray-500 text-sm mb-6">Customize page names, nav labels, order, and visibility.</p>
+<div className="grid grid-cols-12 gap-2 px-3 mb-2">
+  <div className="col-span-1" />
+  <div className="col-span-3"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Page Name</span></div>
+  <div className="col-span-3"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Nav Label</span></div>
+  <div className="col-span-2 text-center"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">In Nav</span></div>
+  <div className="col-span-2 text-center"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">On</span></div>
+  <div className="col-span-1" />
+</div>
+    <div className="space-y-2" role="list" aria-label="Site pages">
+{sitePages.map(function(page, index) {        return (
+          <div key={page.id} role="listitem"
+className={'grid grid-cols-12 gap-2 items-center p-3 rounded-xl border transition-colors ' +
+  (page.is_enabled ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60')}
+aria-label={page.title + ' page row'}>
+            <div className="col-span-1 flex flex-col gap-0.5 items-center">
+              <button
+                onClick={async function() {
+                  if (index === 0) return;
+                  var next = sitePages.slice();
+                  var temp = next[index - 1]; next[index - 1] = next[index]; next[index] = temp;
+                  next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
+                  setSitePages(next);
+                  await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
+                  await saveNavInstant(next);
+                }}
+                disabled={index === 0}
+                aria-label={'Move ' + page.title + ' up'}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <button
+                onClick={async function() {
+                  if (index === sitePages.length - 1) return;
+                  var next = sitePages.slice();
+                  var temp = next[index + 1]; next[index + 1] = next[index]; next[index] = temp;
+                  next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
+                  setSitePages(next);
+                  await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
+                  await saveNavInstant(next);
+                }}
+                disabled={index === sitePages.length - 1}
+                aria-label={'Move ' + page.title + ' down'}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+<div className="col-span-3">
+  <input
+    type="text"
+    value={page.title}
+                onChange={function(e) {
+                  var title = e.target.value;
+                  var newKey = slugify(title);
+                  setSitePages(function(prev) {
+                    return prev.map(function(p) {
+                      return p.id === page.id ? Object.assign({}, p, { title: title, page_key: newKey }) : p;
+                    });
+                  });
+                  savePageDebounced(page.id, { title: title, page_key: newKey });
+                }}
+                aria-label={'Page name for ' + page.title}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                maxLength={40}
+              />
+              <p className="text-xs text-gray-400 mt-0.5 px-1">/{page.page_key}</p>
+            </div>
+            <div className="col-span-3">
+              <input
+                type="text"
+                value={page.nav_label}
+                onChange={function(e) {
+                  var label = e.target.value;
+                  setSitePages(function(prev) {
+                    return prev.map(function(p) {
+                      return p.id === page.id ? Object.assign({}, p, { nav_label: label }) : p;
+                    });
+                  });
+                  savePageDebounced(page.id, { nav_label: label });
+                }}
+                aria-label={'Navigation label for ' + page.title}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                maxLength={30}
+              />
+            </div>
+            <div className="col-span-2 flex justify-center">
+              <Toggle
+                checked={!!(page.is_visible_in_nav && page.is_enabled)}
+                onChange={async function() {
+                  var updated = sitePages.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { is_visible_in_nav: !p.is_visible_in_nav }) : p;
+                  });
+                  setSitePages(updated);
+                  await savePageField(page.id, { is_visible_in_nav: !page.is_visible_in_nav });
+                  await saveNavInstant(updated);
+                }}
+                label={'Toggle navigation visibility for ' + page.title}
+                id={'nav-toggle-page-' + page.id}
+              />
+            </div>
+          <div className="col-span-2 flex justify-center">
+              <Toggle
+                checked={!!page.is_enabled}
+                onChange={async function() {
+                  var updated = sitePages.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { is_enabled: !p.is_enabled }) : p;
+                  });
+                  setSitePages(updated);
+                  await savePageField(page.id, { is_enabled: !page.is_enabled });
+                  await saveNavInstant(updated);
+                }}
+                label={'Toggle ' + page.title + ' page'}
+                id={'enabled-toggle-page-' + page.id}
+              />
+            </div>
+<div className="col-span-1 flex items-center justify-center gap-1">
+              <button
+                onClick={async function() {
+                  var updated = sitePages.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { is_enabled: false, is_visible_in_nav: false }) : p;
+                  });
+                  setSitePages(updated);
+                  await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false });
+                  await saveNavInstant(updated);
+                  toast.success(page.title + ' archived');
+                }}
+                aria-label={'Archive ' + page.title + ' page'}
+                className="p-1.5 text-gray-300 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              </button>
+              <button
+                onClick={function() { setDeleteModal(page); }}
+                aria-label={'Delete ' + page.title + ' page'}
+                className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {/* Archived Pages */}
+{sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith('external-'); }).length > 0 && (
+  <div className="mt-6 border-t border-gray-100 pt-6">
+    <p className="text-sm font-bold text-gray-700 mb-1">Archived Pages</p>
+    <p className="text-xs text-gray-400 mb-4">These pages are hidden from your site. Restore or permanently delete them.</p>
+    <div className="space-y-2">
+      {sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith('external-'); }).map(function(page) {
+        return (
+          <div key={page.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-400 truncate">{page.title}</p>
+              <p className="text-xs text-gray-300">/{page.page_key}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={async function() {
+                  var updated = sitePages.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { is_enabled: true }) : p;
+                  });
+                  setSitePages(updated);
+                  await savePageField(page.id, { is_enabled: true });
+                  await saveNavInstant(updated);
+                  toast.success(page.title + ' restored');
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                Restore
+              </button>
+              <button
+  onClick={async function() {
+    var updated = sitePages.map(function(p) {
+      return p.id === page.id ? Object.assign({}, p, { is_enabled: false, is_visible_in_nav: false }) : p;
+    });
+    setSitePages(updated);
+    await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false });
+    await saveNavInstant(updated);
+    toast.success(page.title + ' archived');
+  }}
 
+onClick={function() { setDeleteModal(page); }}
+                aria-label={'Permanently delete ' + page.title}
+                className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
+    </div>
+    {/* Add External Link */}
+    <div className="mt-6 border-t border-gray-100 pt-6">
+      <p className="text-sm font-bold text-gray-700 mb-3">External Links in Nav</p>
+      <p className="text-xs text-gray-400 mb-4">Add links to external sites (e.g. a donation page). These appear in your navigation bar.</p>
+      {sitePages.filter(function(p) { return p.page_key && p.page_key.startsWith('external-'); }).map(function(page, index) {
+        return (
+          <div key={page.id} className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              value={page.nav_label}
+              onChange={function(e) {
+                var label = e.target.value;
+                setSitePages(function(prev) {
+                  return prev.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { nav_label: label }) : p;
+                  });
+                });
+                savePageDebounced(page.id, { nav_label: label });
+              }}
+              placeholder="e.g. Donate"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            />
+            <input
+              type="text"
+              value={page.title}
+              onChange={function(e) {
+                var url = e.target.value;
+                setSitePages(function(prev) {
+                  return prev.map(function(p) {
+                    return p.id === page.id ? Object.assign({}, p, { title: url } ) : p;
+                  });
+                });
+                savePageDebounced(page.id, { title: url });
+              }}
+              placeholder="https://donate.example.com"
+              className="flex-2 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 w-48"
+            />
+            <button
+              onClick={async function() {
+                var updated = sitePages.filter(function(p) { return p.id !== page.id; });
+                setSitePages(updated);
+                await supabase.from('org_site_pages').delete().eq('id', page.id);
+                await saveNavInstant(updated);
+                toast.success('Link removed');
+              }}
+              aria-label={'Remove ' + page.nav_label + ' external link'}
+              className="p-2 text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        );
+      })}
+      <button
+        onClick={async function() {
+          var newPage = {
+            organization_id: organizationId,
+            page_key: 'external-' + Date.now(),
+            title: '',
+            nav_label: '',
+            sort_order: sitePages.length,
+            is_enabled: true,
+            is_visible_in_nav: true,
+          };
+          var result = await supabase.from('org_site_pages').insert([newPage]).select().single();
+          if (result.error) { toast.error('Could not add link'); return; }
+          var updated = sitePages.concat([result.data]);
+          setSitePages(updated);
+          await saveNavInstant(updated);
+          toast.success('External link added');
+        }}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Add External Link
+      </button>
+    </div>
+  </div>
+)}
               {/* INFO */}
               {activeSection === 'info' && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">

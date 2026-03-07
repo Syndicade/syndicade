@@ -1068,7 +1068,7 @@ function WebsiteBuilder() {
         </nav>
 
         {/* Content panel — fixed narrower width */}
-        <main id="main-content" className="flex-1 bg-white border-r border-gray-200 overflow-y-auto p-6">
+        <main id="main-content" className="w-[680px] flex-shrink-0 bg-white border-r border-gray-200 overflow-y-auto p-6">
           {activeTab === 'pages' && (
             <PagesTab
               pages={pages}
@@ -1097,7 +1097,7 @@ function WebsiteBuilder() {
         </main>
 
         {/* Preview panel — flex-1 so it fills available space  */}
-        <div className="w-96 flex-shrink-0 flex flex-col bg-gray-100 border-l border-gray-200 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-gray-100 border-l border-gray-200 overflow-hidden">
           <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Live Preview</span>
             {org.slug && (
