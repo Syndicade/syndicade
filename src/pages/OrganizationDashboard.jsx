@@ -55,9 +55,9 @@ var ICONS = {
   chevRight: 'M9 5l7 7-7 7',
   chevLeft:  'M15 19l-7-7 7-7',
   eye:       ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
-  pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+  programs:  ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
 };
-
 var ACTIVITY_PER_PAGE = 5;
 
 // ── Toast system ──────────────────────────────────────────────────────────────
@@ -121,6 +121,12 @@ function OrganizationDashboard() {
     totalGroups: 0,
   });
   var [activeTab, setActiveTab] = useState('overview');
+  var [programs, setPrograms] = useState([]);
+  var [programsLoading, setProgramsLoading] = useState(false);
+  var [showProgramModal, setShowProgramModal] = useState(false);
+  var [editingProgram, setEditingProgram] = useState(null);
+  var [programForm, setProgramForm] = useState({ name: '', description: '', audience: '', schedule: '', how_to_apply: '', contact_name: '', contact_email: '', status: 'active', is_public: true });
+  var [programSaving, setProgramSaving] = useState(false);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [viewMode, setViewMode] = useState('admin');
@@ -168,6 +174,7 @@ function OrganizationDashboard() {
     { id: 'overview',   label: 'Overview',   iconKey: 'chart',    roles: ['admin', 'member'] },
     { id: 'documents',  label: 'Documents',  iconKey: 'folder',   roles: ['admin', 'member'] },
     { id: 'photos',     label: 'Photos',     iconKey: 'photo',    roles: ['admin', 'member'] },
+    { id: 'programs',   label: 'Programs',   iconKey: 'programs', roles: ['admin', 'member'] },
     { id: 'approvals',  label: 'Approvals',  iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
     { id: 'inbox',      label: 'Inbox',      iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
     { id: 'invite',     label: 'Invite',     iconKey: 'mail',     roles: ['admin'] },
@@ -183,6 +190,7 @@ function OrganizationDashboard() {
   useEffect(function() { if (activeTab === 'overview' && organizationId) fetchRecentActivity(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'inbox' && organizationId) fetchInquiries(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'photos' && organizationId) fetchPhotos(); }, [activeTab, organizationId]);
+  useEffect(function() { if (activeTab === 'programs' && organizationId) fetchPrograms(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'approvals' && organizationId) fetchPendingApprovals(); }, [activeTab, organizationId]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────────
@@ -435,7 +443,51 @@ function OrganizationDashboard() {
       setPhotosLoading(false);
     }
   }
+async function fetchPrograms() {
+    setProgramsLoading(true);
+    var result = await supabase.from('org_programs').select('*').eq('organization_id', organizationId).order('sort_order').order('created_at');
+    if (!result.error) setPrograms(result.data || []);
+    setProgramsLoading(false);
+  }
 
+  function openNewProgram() {
+    setEditingProgram(null);
+    setProgramForm({ name: '', description: '', audience: '', schedule: '', how_to_apply: '', contact_name: '', contact_email: '', status: 'active', is_public: true });
+    setShowProgramModal(true);
+  }
+
+  function openEditProgram(program) {
+    setEditingProgram(program);
+    setProgramForm({ name: program.name || '', description: program.description || '', audience: program.audience || '', schedule: program.schedule || '', how_to_apply: program.how_to_apply || '', contact_name: program.contact_name || '', contact_email: program.contact_email || '', status: program.status || 'active', is_public: program.is_public !== false });
+    setShowProgramModal(true);
+  }
+
+  async function saveProgram() {
+    if (!programForm.name.trim()) { addToast('Program name is required', 'error'); return; }
+    setProgramSaving(true);
+    var payload = Object.assign({}, programForm, { organization_id: organizationId, updated_at: new Date().toISOString() });
+    var result = editingProgram
+      ? await supabase.from('org_programs').update(payload).eq('id', editingProgram.id)
+      : await supabase.from('org_programs').insert(payload);
+    setProgramSaving(false);
+    if (result.error) { addToast('Failed to save program', 'error'); return; }
+    addToast(editingProgram ? 'Program updated' : 'Program created', 'success');
+    setShowProgramModal(false);
+    fetchPrograms();
+  }
+
+  async function deleteProgram(id) {
+    var result = await supabase.from('org_programs').delete().eq('id', id);
+    if (result.error) { addToast('Failed to delete program', 'error'); return; }
+    addToast('Program deleted', 'success');
+    fetchPrograms();
+  }
+
+  async function toggleProgramPublic(program) {
+    var result = await supabase.from('org_programs').update({ is_public: !program.is_public }).eq('id', program.id);
+    if (result.error) { addToast('Failed to update program', 'error'); return; }
+    fetchPrograms();
+  }
   // ── Approval actions ──────────────────────────────────────────────────────────
   async function handleApprove(item) {
     try {
@@ -1256,7 +1308,144 @@ function OrganizationDashboard() {
                   )}
                 </div>
               )}
-
+{activeTab === 'programs' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Programs</h2>
+                      <p className="text-sm text-gray-500 mt-0.5">Manage your organization's programs and services</p>
+                    </div>
+                    {effectiveRole === 'admin' && (
+                      <button onClick={openNewProgram} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label="Add new program">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        Add Program
+                      </button>
+                    )}
+                  </div>
+                  {programsLoading ? (
+                    <div className="space-y-3">
+                      {[1,2,3].map(function(i) { return <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />; })}
+                    </div>
+                  ) : programs.length === 0 ? (
+                    <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                      <Icon path={ICONS.programs} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1} />
+                      <p className="text-gray-600 font-semibold text-lg">No programs yet</p>
+                      <p className="text-gray-400 text-sm mt-1 mb-4">Add your organization's programs and services to share with your community.</p>
+                      {effectiveRole === 'admin' && (
+                        <button onClick={openNewProgram} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          Add Your First Program
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {programs.map(function(program) {
+                        return (
+                          <div key={program.id} className={'rounded-xl border p-5 transition-all ' + (program.is_public ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50')}>
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <h3 className="font-bold text-gray-900">{program.name}</h3>
+                                  <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + (program.status === 'active' ? 'bg-green-100 text-green-700' : program.status === 'upcoming' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500')}>
+                                    {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
+                                  </span>
+                                  {!program.is_public && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Hidden from public</span>}
+                                </div>
+                                {program.description && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{program.description}</p>}
+                                <div className="flex flex-wrap gap-3 mt-2">
+                                  {program.audience && <span className="text-xs text-gray-400">For: {program.audience}</span>}
+                                  {program.schedule && <span className="text-xs text-gray-400">Schedule: {program.schedule}</span>}
+                                  {program.contact_name && <span className="text-xs text-gray-400">Contact: {program.contact_name}</span>}
+                                </div>
+                              </div>
+                              {effectiveRole === 'admin' && (
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <button onClick={function() { toggleProgramPublic(program); }} className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (program.is_public ? 'bg-blue-600' : 'bg-gray-200')} role="switch" aria-checked={program.is_public} aria-label={'Toggle ' + program.name + ' public visibility'}>
+                                    <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (program.is_public ? 'translate-x-6' : 'translate-x-1')} />
+                                  </button>
+                                  <button onClick={function() { openEditProgram(program); }} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'Edit ' + program.name}>
+                                    <Icon path={ICONS.pencil} className="h-4 w-4" />
+                                  </button>
+                                  <button onClick={function() { if (window.confirm('Delete this program?')) deleteProgram(program.id); }} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Delete ' + program.name}>
+                                    <Icon path={ICONS.trash} className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {showProgramModal && (
+                <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="program-modal-title">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                      <h3 id="program-modal-title" className="text-lg font-bold text-gray-900">{editingProgram ? 'Edit Program' : 'Add Program'}</h3>
+                      <button onClick={function() { setShowProgramModal(false); }} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300" aria-label="Close modal">
+                        <Icon path={ICONS.x} className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <div>
+                        <label htmlFor="prog-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Program Name <span className="text-red-500">*</span></label>
+                        <input id="prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { name: e.target.value }); }); }} placeholder="e.g. After School Tutoring" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="prog-desc" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Description</label>
+                        <textarea id="prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { description: e.target.value }); }); }} rows={3} placeholder="What does this program do?" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                      </div>
+                      <div>
+                        <label htmlFor="prog-audience" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Who Is It For?</label>
+                        <input id="prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { audience: e.target.value }); }); }} placeholder="e.g. Youth ages 6-18" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="prog-schedule" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Schedule</label>
+                        <input id="prog-schedule" type="text" value={programForm.schedule} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { schedule: e.target.value }); }); }} placeholder="e.g. Every Monday 3-5pm" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="prog-apply" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">How To Apply / Sign Up</label>
+                        <textarea id="prog-apply" value={programForm.how_to_apply} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { how_to_apply: e.target.value }); }); }} rows={2} placeholder="e.g. Fill out form at front desk or call us" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label htmlFor="prog-contact-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Name</label>
+                          <input id="prog-contact-name" type="text" value={programForm.contact_name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_name: e.target.value }); }); }} placeholder="Jane Smith" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="prog-contact-email" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Email</label>
+                          <input id="prog-contact-email" type="email" value={programForm.contact_email} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_email: e.target.value }); }); }} placeholder="jane@org.org" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="prog-status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
+                        <select id="prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="active">Active</option>
+                          <option value="upcoming">Upcoming</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <button onClick={function() { setProgramForm(function(p) { return Object.assign({}, p, { is_public: !p.is_public }); }); }} className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (programForm.is_public ? 'bg-blue-600' : 'bg-gray-200')} role="switch" aria-checked={programForm.is_public} aria-label="Toggle public visibility">
+                          <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (programForm.is_public ? 'translate-x-6' : 'translate-x-1')} />
+                        </button>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700">Show on public website</p>
+                          <p className="text-xs text-gray-400">Visitors to your page will see this program</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 p-6 border-t border-gray-100">
+                      <button onClick={function() { setShowProgramModal(false); }} className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300">Cancel</button>
+                      <button onClick={saveProgram} disabled={programSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {programSaving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* ── INBOX TAB ── */}
               {activeTab === 'inbox' && (
                 <div>
