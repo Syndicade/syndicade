@@ -83,7 +83,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
       ? { backgroundImage: 'url(' + c.image_url + ')', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }
       : { background: 'linear-gradient(135deg, ' + primary + '15 0%, ' + secondary + '08 100%)' };
     return (
-      <div key={key} className={'py-20 px-8 rounded-2xl flex flex-col gap-6 ' + heroAlign} style={heroBg}>
+      <div key={key} className={'py-20 px-8 rounded-2xl flex flex-col gap-6 ' + heroAlign} style={heroBg} role={c.image_url ? 'img' : undefined} aria-label={c.image_url ? (c.image_alt || 'Hero banner image') : undefined}>
         {c.image_url && <div className="absolute inset-0 bg-black bg-opacity-30 rounded-2xl" aria-hidden="true" />}
         <div className={'relative z-10 flex flex-col gap-6 ' + heroAlign}>
           {c.headline && <h1 className={'text-4xl md:text-5xl font-extrabold leading-tight max-w-3xl ' + (c.image_url ? 'text-white' : 'text-gray-900')}>{c.headline}</h1>}
@@ -111,7 +111,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     var isLeft = c.image_position !== 'right';
     return (
       <div key={key} className={'flex flex-col md:flex-row gap-10 items-center ' + (isLeft ? '' : 'md:flex-row-reverse')}>
-        {c.image_url && <img src={c.image_url} alt={c.heading || ''} className="w-full md:w-1/2 rounded-xl object-cover shadow-md" style={{ maxHeight: '380px' }} />}
+       {c.image_url && <img src={c.image_url} alt={c.image_alt || c.heading || 'Section image'} className="w-full md:w-1/2 rounded-xl object-cover shadow-md" style={{ maxHeight: '380px' }} />}
         <div className={'flex-1 ' + (!c.image_url ? 'w-full' : '')}>
           {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-4">{c.heading}</h2>}
           {c.body && <p className="text-gray-600 leading-relaxed">{c.body}</p>}
@@ -126,7 +126,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     return (
       <div key={key} className="rounded-xl overflow-hidden shadow-md">
         {c.image_url
-          ? <img src={c.image_url} alt={c.caption || ''} className="w-full object-cover" style={{ height: heightMap[c.height] || '380px' }} />
+          ? <img src={c.image_url} alt={c.image_alt || c.caption || 'Section image'} className="w-full object-cover" style={{ height: heightMap[c.height] || '380px' }} />
           : <div className="w-full bg-gray-100 flex items-center justify-center" style={{ height: heightMap[c.height] || '380px' }}>
               <p className="text-gray-400 text-sm">No image uploaded</p>
             </div>
@@ -334,7 +334,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
             return (
               <div key={i} className="text-center">
                 {member.photo_url
-                  ? <img src={member.photo_url} alt={member.name || 'Team member'} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
+                  ? <img src={member.photo_url} alt={member.photo_alt || (member.name ? 'Photo of ' + member.name + (member.title ? ', ' + member.title : '') : 'Team member photo')} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
                   : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>
                       {(member.name || 'T').charAt(0)}
                     </div>
@@ -425,7 +425,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
         <div className="flex flex-wrap items-center justify-center gap-8">
           {(c.partners || []).map(function(partner, i) {
             var inner = partner.logo_url
-              ? <img src={partner.logo_url} alt={partner.name || 'Partner'} className="h-12 object-contain grayscale hover:grayscale-0 transition-all" />
+              ? <img src={partner.logo_url} alt={partner.logo_alt || (partner.name ? partner.name + ' logo' : 'Partner logo')} className="h-12 object-contain grayscale hover:grayscale-0 transition-all" />
               : <span className="text-gray-400 font-semibold text-sm">{partner.name}</span>;
             return partner.url
               ? <a key={i} href={partner.url} target="_blank" rel="noopener noreferrer" aria-label={partner.name}>{inner}</a>

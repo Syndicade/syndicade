@@ -93,10 +93,10 @@ var BLOCK_CATEGORIES = [
 // ── Default content per block type ───────────────────────────────────────────
 function defaultContent(type) {
   var defaults = {
-    hero:             { headline: '', subtext: '', cta_label: '', cta_url: '', image_url: '', align: 'center' },
+    hero:             { headline: '', subtext: '', cta_label: '', cta_url: '', image_url: '', image_alt: '', align: 'center' },
     rich_text:        { body: '' },
-    image_text:       { image_url: '', heading: '', body: '', image_position: 'left' },
-    full_width_image: { image_url: '', caption: '', height: 'medium' },
+    image_text:       { image_url: '', image_alt: '', heading: '', body: '', image_position: 'left' },
+    full_width_image: { image_url: '', image_alt: '', caption: '', height: 'medium' },
     video:            { url: '', caption: '' },
     quote:            { quote: '', attribution: '', role: '' },
     stats:            { heading: '', items: [{ label: 'Members', value: '0', prefix: '', suffix: '' }] },
@@ -317,6 +317,13 @@ function BlockForm({ block, onChange, organizationId }) {
         </div>
       </div>
       <ImageUploader value={c.image_url || ''} onChange={function(v) { set('image_url', v); }} organizationId={organizationId} label="Background / Hero Image (optional)" fieldKey={'hero-' + block.id} />
+      {c.image_url && (
+        <div>
+          <label htmlFor={'block-img-alt-' + block.id} className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+          <input id={'block-img-alt-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder={'e.g. Volunteers at our annual fundraiser event'} className={inputCls} maxLength={200} />
+          <p className="text-xs text-gray-400 mt-1">Describe the image for screen readers and search engines. Leave blank to use a default description. <a href="https://www.w3.org/WAI/tutorials/images/informative/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline hover:text-blue-700">Why this matters</a></p>
+        </div>
+      )}
       <div>
         <p className={labelCls}>Text Alignment</p>
         <div className="flex gap-2">
@@ -345,6 +352,13 @@ function BlockForm({ block, onChange, organizationId }) {
   if (type === 'image_text') return (
     <div className="space-y-4">
       <ImageUploader value={c.image_url || ''} onChange={function(v) { set('image_url', v); }} organizationId={organizationId} label="Image" fieldKey={'imgtext-' + block.id} />
+      {c.image_url && (
+        <div>
+          <label htmlFor={'block-img-alt-imgtext-' + block.id} className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+          <input id={'block-img-alt-imgtext-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder={c.heading ? 'e.g. ' + c.heading : 'e.g. Community members gathered at the park'} className={inputCls} maxLength={200} />
+          <p className="text-xs text-gray-400 mt-1">Describe what's in the image for screen readers. <a href="https://www.w3.org/WAI/tutorials/images/informative/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline hover:text-blue-700">Why this matters</a></p>
+        </div>
+      )}
       <div>
         <label htmlFor={'block-heading-' + block.id} className={labelCls}>Heading</label>
         <input id={'block-heading-' + block.id} type="text" value={c.heading || ''} onChange={function(e) { set('heading', e.target.value); }} placeholder="Section Heading" className={inputCls} />
@@ -373,6 +387,13 @@ function BlockForm({ block, onChange, organizationId }) {
   if (type === 'full_width_image') return (
     <div className="space-y-4">
       <ImageUploader value={c.image_url || ''} onChange={function(v) { set('image_url', v); }} organizationId={organizationId} label="Image" fieldKey={'fwimg-' + block.id} />
+      {c.image_url && (
+        <div>
+          <label htmlFor={'block-img-alt-fwimg-' + block.id} className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+          <input id={'block-img-alt-fwimg-' + block.id} type="text" value={c.image_alt || ''} onChange={function(e) { set('image_alt', e.target.value); }} placeholder={c.caption ? 'e.g. ' + c.caption : 'e.g. Aerial view of our community garden'} className={inputCls} maxLength={200} />
+          <p className="text-xs text-gray-400 mt-1">Describe the image for screen readers. <a href="https://www.w3.org/WAI/tutorials/images/informative/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline hover:text-blue-700">Why this matters</a></p>
+        </div>
+      )}
       <div>
         <label htmlFor={'block-caption-' + block.id} className={labelCls}>Caption (optional)</label>
         <input id={'block-caption-' + block.id} type="text" value={c.caption || ''} onChange={function(e) { set('caption', e.target.value); }} placeholder="Image caption..." className={inputCls} />
@@ -711,6 +732,13 @@ function BlockForm({ block, onChange, organizationId }) {
                 </div>
                 <textarea value={member.bio || ''} onChange={function(e) { setNested('members', i, 'bio', e.target.value); }} rows={2} placeholder="Short bio..." className={inputCls + ' resize-none'} />
                 <ImageUploader value={member.photo_url || ''} onChange={function(v) { setNested('members', i, 'photo_url', v); }} organizationId={organizationId} label="Photo" fieldKey={'team-member-' + block.id + '-' + i} />
+                {member.photo_url && (
+                <div>
+                  <label className={labelCls}>Photo Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+                  <input type="text" value={member.photo_alt || ''} onChange={function(e) { setNested('members', i, 'photo_alt', e.target.value); }} placeholder={member.name ? 'Photo of ' + member.name + (member.title ? ', ' + member.title : '') : 'e.g. Photo of Jane Smith, Executive Director'} className={inputCls} maxLength={200} />
+                  <p className="text-xs text-gray-400 mt-1">Describe the photo for screen readers.</p>
+                </div>
+              )}
               </div>
             );
           })}
@@ -823,6 +851,13 @@ function BlockForm({ block, onChange, organizationId }) {
                   <input type="url" value={partner.url || ''} onChange={function(e) { setNested('partners', i, 'url', e.target.value); }} placeholder="https://partner.org" className={inputCls} />
                 </div>
                 <ImageUploader value={partner.logo_url || ''} onChange={function(v) { setNested('partners', i, 'logo_url', v); }} organizationId={organizationId} label="Logo" fieldKey={'partner-' + block.id + '-' + i} />
+                {partner.logo_url && (
+                <div>
+                  <label className={labelCls}>Logo Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+                  <input type="text" value={partner.logo_alt || ''} onChange={function(e) { setNested('partners', i, 'logo_alt', e.target.value); }} placeholder={partner.name ? partner.name + ' logo' : 'e.g. United Way logo'} className={inputCls} maxLength={200} />
+                  <p className="text-xs text-gray-400 mt-1">Describe the logo for screen readers.</p>
+                </div>
+              )}
               </div>
             );
           })}
@@ -1026,7 +1061,7 @@ function SortableBlock({ block, index, totalBlocks, expandedBlock, setExpandedBl
   );
 }
 // ── Main BlockEditor Export ───────────────────────────────────────────────────
-export default function BlockEditor({ organizationId, pages }) {
+export default function BlockEditor({ organizationId, pages, onBlocksChange }) {
   var [selectedPageId, setSelectedPageId] = useState(null);
   var [blocks, setBlocks] = useState([]);
   var [loading, setLoading] = useState(false);
@@ -1058,6 +1093,7 @@ export default function BlockEditor({ organizationId, pages }) {
       var result = await supabase.from('org_site_blocks').select('*').eq('page_id', pageId).order('sort_order', { ascending: true });
       if (result.error) throw result.error;
       setBlocks(result.data || []);
+      if (onBlocksChange) onBlocksChange(result.data || []);
     } catch (err) {
       toast.error('Could not load blocks');
     } finally {
@@ -1079,6 +1115,7 @@ export default function BlockEditor({ organizationId, pages }) {
       if (result.error) throw result.error;
       setBlocks(function(prev) { return prev.concat([result.data]); });
       setExpandedBlock(result.data.id);
+      if (onBlocksChange) onBlocksChange(blocks.concat([result.data]));
       toast.success(blockLabel(type) + ' block added');
     } catch (err) {
       toast.error('Could not add block: ' + err.message);
@@ -1106,6 +1143,7 @@ export default function BlockEditor({ organizationId, pages }) {
   async function toggleVisible(block) {
     var updated = !block.is_visible;
     setBlocks(function(prev) { return prev.map(function(b) { return b.id === block.id ? Object.assign({}, b, { is_visible: updated }) : b; }); });
+if (onBlocksChange) onBlocksChange(blocks.map(function(b) { return b.id === block.id ? Object.assign({}, b, { is_visible: !block.is_visible }) : b; }));
     await supabase.from('org_site_blocks').update({ is_visible: updated, updated_at: new Date().toISOString() }).eq('id', block.id);
   }
 
@@ -1121,11 +1159,13 @@ async function handleDragEnd(event) {
     next.splice(newIndex, 0, removed);
     next = next.map(function(b, i) { return Object.assign({}, b, { sort_order: i }); });
     setBlocks(next);
+    if (onBlocksChange) onBlocksChange(next);
     await Promise.all(next.map(function(b) { return supabase.from('org_site_blocks').update({ sort_order: b.sort_order }).eq('id', b.id); }));
   }
 
   async function deleteBlock(blockId) {
     setBlocks(function(prev) { return prev.filter(function(b) { return b.id !== blockId; }); });
+    if (onBlocksChange) onBlocksChange(blocks.filter(function(b) { return b.id !== blockId; }));
     await supabase.from('org_site_blocks').delete().eq('id', blockId);
     toast.success('Block deleted');
   }

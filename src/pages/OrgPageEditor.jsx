@@ -12,6 +12,7 @@ import {
   SidebarTemplate,
   FeaturedTemplate,
 } from '../components/OrgTemplates';
+import { renderBlock } from '../components/BlockRenderer';
 
 
 var PREVIEW_WIDTH = 1280;
@@ -147,7 +148,48 @@ function Toggle({ checked, onChange, label, id }) {
     </button>
   );
 }
+function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, fontFamily }) {
+  var enabledPages = (pages || []).filter(function(p) { return p.is_enabled && p.page_key && !p.page_key.startsWith('external-'); });
+  var firstPageWithBlocks = enabledPages.find(function(p) { return blocks.some(function(b) { return b.page_id === p.id; }); });
+  var [activePage, setActivePage] = useState(firstPageWithBlocks ? firstPageWithBlocks.id : (enabledPages.length > 0 ? enabledPages[0].id : null));
+  var activePageBlocks = blocks.filter(function(b) { return b.page_id === activePage; });
 
+  return (
+    <div className="min-h-full bg-white" style={{ fontFamily: fontFamily || 'Inter, system-ui, sans-serif' }}>
+      {/* Page tabs */}
+      {enabledPages.length > 1 && (
+        <div className="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b border-gray-200 overflow-x-auto">
+          {enabledPages.map(function(page) {
+            var isActive = activePage === page.id;
+            return (
+              <button key={page.id} onClick={function() { setActivePage(page.id); }}
+                className={'px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all focus:outline-none ' + (isActive ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-200')}>
+                {page.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {/* Blocks */}
+      <div className="px-6 py-10 space-y-10 max-w-4xl mx-auto">
+        {activePageBlocks.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <p className="text-sm font-medium">No blocks on this page yet.</p>
+            <p className="text-xs mt-1">Add blocks in the Content tab.</p>
+          </div>
+        ) : (
+          activePageBlocks.map(function(block) {
+            return (
+              <div key={block.id}>
+                {renderBlock(block, primary || '#3B82F6', secondary || '#1E40AF', borderRadius || '8px', fontFamily || 'Inter, system-ui, sans-serif', org)}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
 export default function OrgPageEditor() {
   var { organizationId } = useParams();
   var navigate = useNavigate();
@@ -166,6 +208,7 @@ export default function OrgPageEditor() {
   var [previewOpen, setPreviewOpen] = useState(true);
   var [previewScale, setPreviewScale] = useState(0.5);
   var [sitePages, setSitePages] = useState([]);
+  var [siteBlocks, setSiteBlocks] = useState([]);
 var [savingPages, setSavingPages] = useState(false);
 var [deleteModal, setDeleteModal] = useState(null);
 var debounceTimers = useRef({});
@@ -304,6 +347,8 @@ if (existingPages.length === 0) {
   existingPages = insertPagesResult.data;
 }
 setSitePages(existingPages);
+var blocksResult = await supabase.from('org_site_blocks').select('*').eq('organization_id', organizationId).eq('is_visible', true).order('sort_order', { ascending: true });
+      if (!blocksResult.error) setSiteBlocks(blocksResult.data || []);
     } catch (err) {
       toast.error('Failed to load organization');
     } finally {
@@ -794,9 +839,10 @@ var navSections = [
               )}
 {/* CONTENT */}
               {activeSection === 'content' && (
-                <BlockEditor
+<BlockEditor
                   organizationId={organizationId}
                   pages={sitePages}
+                  onBlocksChange={function(updated) { setSiteBlocks(updated); }}
                 />
               )}
 {/* PAGES */}
@@ -1307,12 +1353,25 @@ onClick={function() { setDeleteModal(page); }}
                   pointerEvents: 'none',
                   userSelect: 'none',
                 }}>
-                  {form.template === 'classic'  && <ClassicTemplate  {...previewTemplateProps} />}
-                  {form.template === 'modern'   && <ModernTemplate   {...previewTemplateProps} />}
-                  {form.template === 'banner'   && <BannerTemplate   {...previewTemplateProps} />}
-                  {form.template === 'sidebar'  && <SidebarTemplate  {...previewTemplateProps} />}
-                  {form.template === 'featured' && <FeaturedTemplate {...previewTemplateProps} />}
-                  {form.template !== 'classic' && form.template !== 'modern' && form.template !== 'banner' && form.template !== 'sidebar' && form.template !== 'featured' && <ClassicTemplate {...previewTemplateProps} />}
+                  {siteBlocks.length > 0 ? (
+                    <PreviewNewPage
+                      org={previewOrg}
+                      pages={sitePages}
+                      blocks={siteBlocks}
+                      primary={form.theme.customColors[0] || form.theme.primaryColor || '#3B82F6'}
+                      borderRadius={form.theme.buttonStyle === 'pill' ? '9999px' : form.theme.buttonStyle === 'sharp' ? '0px' : '8px'}
+                      fontFamily={form.theme.fontPairing === 'serif' ? 'Georgia, serif' : form.theme.fontPairing === 'mono' ? '"Roboto Slab", Georgia, serif' : 'Inter, system-ui, sans-serif'}
+                    />
+                  ) : (
+                    <>
+                      {form.template === 'classic'  && <ClassicTemplate  {...previewTemplateProps} />}
+                      {form.template === 'modern'   && <ModernTemplate   {...previewTemplateProps} />}
+                      {form.template === 'banner'   && <BannerTemplate   {...previewTemplateProps} />}
+                      {form.template === 'sidebar'  && <SidebarTemplate  {...previewTemplateProps} />}
+                      {form.template === 'featured' && <FeaturedTemplate {...previewTemplateProps} />}
+                      {form.template !== 'classic' && form.template !== 'modern' && form.template !== 'banner' && form.template !== 'sidebar' && form.template !== 'featured' && <ClassicTemplate {...previewTemplateProps} />}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
