@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import {
@@ -707,7 +707,7 @@ function BlockForm({ block, onChange, organizationId }) {
     </div>
   );
 
-  // TEAM GRID
+// TEAM GRID
   if (type === 'team_grid') return (
     <div className="space-y-4">
       <div>
@@ -715,6 +715,22 @@ function BlockForm({ block, onChange, organizationId }) {
         <input id={'block-heading-' + block.id} type="text" value={c.heading || ''} onChange={function(e) { set('heading', e.target.value); }} placeholder="Our Team" className={inputCls} />
       </div>
       <div>
+        <p className={labelCls}>Data Source</p>
+        <div className="flex gap-2">
+          {[{id: 'auto', label: 'Auto (from members)'}, {id: 'manual', label: 'Manual entry'}].map(function(m) {
+            return (
+              <button key={m.id} onClick={function() { set('mode', m.id); }}
+                className={'flex-1 py-2 text-xs font-semibold rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + ((c.mode || 'auto') === m.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300')}>
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        {(c.mode || 'auto') === 'auto' && (
+          <p className="text-xs text-gray-400 mt-1.5">Pulls members with public profiles and "show in profile" enabled in their membership settings.</p>
+        )}
+      </div>
+      {(c.mode || 'auto') === 'manual' && <div>
         <p className={labelCls}>Team Members</p>
         <div className="space-y-3">
           {(c.members || []).map(function(member, i) {
@@ -748,6 +764,7 @@ function BlockForm({ block, onChange, organizationId }) {
           + Add Team Member
         </button>
       </div>
+    }
     </div>
   );
 

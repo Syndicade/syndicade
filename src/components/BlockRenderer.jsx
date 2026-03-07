@@ -69,7 +69,177 @@ function BlockContactForm({ org, primary, borderRadius }) {
     </div>
   );
 }
+// ── Smart Events List Block ───────────────────────────────────────────────────
+function EventsListBlock({ block, primary, borderRadius }) {
+  var c = block.content || {};
+  var [events, setEvents] = useState([]);
+  var [loading, setLoading] = useState(true);
 
+  useEffect(function() {
+    async function fetch() {
+      setLoading(true);
+      try {
+        var now = new Date().toISOString();
+        var result = await supabase
+          .from('events')
+          .select('id, title, description, start_time, end_time, location, event_type, is_virtual, virtual_link, flier_url')
+          .eq('organization_id', block.organization_id)
+          .eq('is_public', true)
+          .eq('is_cancelled', false)
+          .gte('start_time', now)
+          .order('start_time', { ascending: true })
+          .limit(c.limit || 3);
+        if (!result.error) setEvents(result.data || []);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+  }, [block.organization_id, c.limit]);
+
+  function formatDate(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function formatTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  return (
+    <div>
+      {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading || 'Upcoming Events'}</h2>}
+      {loading ? (
+        <div className="space-y-3">
+          {[1,2,3].map(function(i) { return <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />; })}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+          <p className="text-gray-500 font-medium">No upcoming events</p>
+          <p className="text-gray-400 text-sm mt-1">Check back soon for new events.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {events.map(function(event) {
+            return (
+              <div key={event.id} className="flex gap-4 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center text-white text-center" style={{ backgroundColor: primary }}>
+                  <p className="text-xs font-bold leading-tight uppercase">{new Date(event.start_time).toLocaleDateString('en-US', { month: 'short' })}</p>
+                  <p className="text-xl font-extrabold leading-tight">{new Date(event.start_time).getDate()}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-sm leading-tight mb-1">{event.title}</p>
+                  <p className="text-xs text-gray-500 mb-1">{formatDate(event.start_time)} at {formatTime(event.start_time)}</p>
+                  {event.is_virtual
+                    ? <span className="inline-block text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Virtual</span>
+                    : event.location && <p className="text-xs text-gray-400 truncate">{event.location}</p>
+                  }
+                </div>
+                {event.virtual_link && event.is_virtual && (
+                  <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
+                    className="flex-shrink-0 self-center px-3 py-1.5 text-xs font-bold text-white rounded-lg hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1"
+                    style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+                    Join
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Smart Team Grid Block ─────────────────────────────────────────────────────
+function TeamGridBlock({ block, primary, org }) {
+  var c = block.content || {};
+  var [members, setMembers] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var mode = c.mode || 'auto';
+
+  useEffect(function() {
+    if (mode !== 'auto') { setLoading(false); return; }
+    async function fetch() {
+      setLoading(true);
+      try {
+        var result = await supabase
+          .from('memberships')
+          .select('role, custom_title, member_id, members(first_name, last_name, display_name, bio, profile_photo_url, avatar_url, is_public_profile)')
+          .eq('organization_id', block.organization_id)
+          .eq('show_in_profile', true)
+          .eq('status', 'active');
+        if (!result.error) {
+          var data = (result.data || []).filter(function(m) {
+            return m.members && m.members.is_public_profile !== false;
+          });
+          setMembers(data);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+  }, [block.organization_id, mode]);
+
+  var manualMembers = c.members || [];
+
+  return (
+    <div>
+      {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">{c.heading}</h2>}
+      {mode === 'auto' ? (
+        loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[1,2,3,4].map(function(i) { return <div key={i} className="text-center"><div className="w-24 h-24 rounded-full bg-gray-100 animate-pulse mx-auto mb-3" /><div className="h-3 bg-gray-100 rounded animate-pulse w-20 mx-auto mb-1" /><div className="h-2 bg-gray-100 rounded animate-pulse w-16 mx-auto" /></div>; })}
+          </div>
+        ) : members.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+            <p className="text-gray-500 font-medium">No public team members yet</p>
+            <p className="text-gray-400 text-sm mt-1">Members can enable public profiles in their settings.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {members.map(function(m, i) {
+              var member = m.members;
+              var name = member.display_name || (member.first_name + ' ' + member.last_name).trim();
+              var title = m.custom_title || m.role;
+              var photo = member.profile_photo_url || member.avatar_url;
+              return (
+                <div key={i} className="text-center">
+                  {photo
+                    ? <img src={photo} alt={'Photo of ' + name} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
+                    : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>{(name || 'T').charAt(0)}</div>
+                  }
+                  {name && <p className="font-bold text-gray-900 text-sm">{name}</p>}
+                  {title && <p className="text-xs text-gray-500 mt-0.5 capitalize">{title}</p>}
+                  {member.bio && <p className="text-xs text-gray-400 mt-2 leading-relaxed">{member.bio}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {manualMembers.map(function(member, i) {
+            return (
+              <div key={i} className="text-center">
+                {member.photo_url
+                  ? <img src={member.photo_url} alt={member.photo_alt || (member.name ? 'Photo of ' + member.name : 'Team member')} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
+                  : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>{(member.name || 'T').charAt(0)}</div>
+                }
+                {member.name && <p className="font-bold text-gray-900 text-sm">{member.name}</p>}
+                {member.title && <p className="text-xs text-gray-500 mt-0.5">{member.title}</p>}
+                {member.bio && <p className="text-xs text-gray-400 mt-2 leading-relaxed">{member.bio}</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 // ── Main renderer ─────────────────────────────────────────────────────────────
 export function renderBlock(block, primary, secondary, borderRadius, fontFamily, org) {
   var c = block.content || {};
@@ -295,14 +465,9 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-  // EVENTS LIST
+// EVENTS LIST
   if (type === 'events_list') {
-    return (
-      <div key={key}>
-        {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading}</h2>}
-        <p className="text-gray-400 text-sm italic">Events are pulled from your Syndicade events.</p>
-      </div>
-    );
+    return <EventsListBlock key={key} block={block} primary={primary} borderRadius={borderRadius} />;
   }
 
   // PROGRAMS LIST
@@ -324,30 +489,9 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-  // TEAM GRID
+// TEAM GRID
   if (type === 'team_grid') {
-    return (
-      <div key={key}>
-        {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">{c.heading}</h2>}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {(c.members || []).map(function(member, i) {
-            return (
-              <div key={i} className="text-center">
-                {member.photo_url
-                  ? <img src={member.photo_url} alt={member.photo_alt || (member.name ? 'Photo of ' + member.name + (member.title ? ', ' + member.title : '') : 'Team member photo')} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
-                  : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>
-                      {(member.name || 'T').charAt(0)}
-                    </div>
-                }
-                {member.name && <p className="font-bold text-gray-900 text-sm">{member.name}</p>}
-                {member.title && <p className="text-xs text-gray-500 mt-0.5">{member.title}</p>}
-                {member.bio && <p className="text-xs text-gray-400 mt-2 leading-relaxed">{member.bio}</p>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return <TeamGridBlock key={key} block={block} primary={primary} org={org} />;
   }
 
   // MEMBERSHIP TIERS
