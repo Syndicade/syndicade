@@ -13,6 +13,7 @@ import {
   FeaturedTemplate,
 } from '../components/OrgTemplates';
 import { renderBlock } from '../components/BlockRenderer';
+import WebsiteSetupWizard from '../components/WebsiteSetupWizard';
 
 
 var PREVIEW_WIDTH = 1280;
@@ -212,6 +213,8 @@ export default function OrgPageEditor() {
 var [savingPages, setSavingPages] = useState(false);
 var [deleteModal, setDeleteModal] = useState(null);
 var debounceTimers = useRef({});
+var [siteBlocks, setSiteBlocks] = useState([]);
+var [showWizard, setShowWizard] = useState(false);
 
 async function savePageField(pageId, fields) {
   try {
@@ -349,6 +352,14 @@ if (existingPages.length === 0) {
 setSitePages(existingPages);
 var blocksResult = await supabase.from('org_site_blocks').select('*').eq('organization_id', organizationId).eq('is_visible', true).order('sort_order', { ascending: true });
       if (!blocksResult.error) setSiteBlocks(blocksResult.data || []);
+      var configResult = await supabase
+  .from('org_site_config')
+  .select('setup_wizard_dismissed')
+  .eq('organization_id', organizationId)
+  .maybeSingle();
+if (!configResult.data || !configResult.data.setup_wizard_dismissed) {
+  setShowWizard(true);
+}
     } catch (err) {
       toast.error('Failed to load organization');
     } finally {
@@ -517,6 +528,17 @@ var navSections = [
   return (
     <div className={previewOpen ? 'h-screen overflow-hidden flex flex-col bg-gray-50' : 'min-h-screen bg-gray-50'}>
 {/* Delete Confirmation Modal */}
+{showWizard && (
+  <WebsiteSetupWizard
+    organizationId={organizationId}
+    orgData={form}
+    onComplete={function(data) {
+      setShowWizard(false);
+      setForm(function(prev) { return Object.assign({}, prev, data); });
+    }}
+    onDismiss={function() { setShowWizard(false); }}
+  />
+)}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setDeleteModal(null); }} />
