@@ -224,6 +224,7 @@ export default function OrgPageEditor() {
   var [deleteModal, setDeleteModal] = useState(null);
   var [showWizard, setShowWizard] = useState(false);
   var [footerPage, setFooterPage] = useState(null);
+  var [showLayoutModal, setShowLayoutModal] = useState(false);
 
   var [form, setForm] = useState({
     name: '', tagline: '', description: '', contact_email: '', contact_phone: '',
@@ -498,9 +499,10 @@ export default function OrgPageEditor() {
     openLightbox: function() {}, navLinks: previewNavLinks, themeVars: previewThemeVars,
   };
 
-  // ── 4-tab sidebar ──
+  // ── 5-tab sidebar ──
   var navSections = [
     { id: 'overview',      label: 'Overview',        icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { id: 'org-info',      label: 'Org Info',        icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
     { id: 'appearance',    label: 'Appearance',      icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
     { id: 'pages-content', label: 'Pages & Content', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
     { id: 'publish',       label: 'Publish',         icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064' },
@@ -529,6 +531,64 @@ export default function OrgPageEditor() {
           }}
           onDismiss={function() { setShowWizard(false); }}
         />
+      )}
+
+      {/* Change Layout modal */}
+      {showLayoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="layout-modal-title">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setShowLayoutModal(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-0.5">Layout</p>
+                <h2 id="layout-modal-title" className="text-xl font-bold text-gray-900">Change Layout</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Choose how your public organization page is displayed.</p>
+              </div>
+              <button
+                onClick={function() { setShowLayoutModal(false); }}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors flex-shrink-0"
+                aria-label="Close layout picker">
+                <Icon path="M6 18L18 6M6 6l12 12" className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Template grid */}
+            <div className="overflow-y-auto p-6 flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Page templates">
+                {TEMPLATES.map(function(t) {
+                  var isSel = form.template === t.id;
+                  return (
+                    <button key={t.id}
+                      onClick={function() {
+                        setForm(function(prev) { return Object.assign({}, prev, { template: t.id }); });
+                        setShowLayoutModal(false);
+                        toast.success(t.name + ' layout selected');
+                      }}
+                      className={'rounded-xl border-2 p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (isSel ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-blue-300')}
+                      role="radio" aria-checked={isSel} aria-label={'Select ' + t.name + ' template: ' + t.description}>
+                      <div className="aspect-video bg-white rounded-lg overflow-hidden mb-3 border border-gray-200">{t.preview}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900 text-sm">{t.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 leading-snug">{t.description}</p>
+                        </div>
+                        {isSel && <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex-shrink-0">
+              <p className="text-xs text-gray-400 text-center">
+                Layout changes are reflected instantly in the preview. Save to make them permanent.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete confirmation modal */}
@@ -716,10 +776,9 @@ export default function OrgPageEditor() {
                         {form.is_public ? 'Published' : 'Unpublished'}
                       </span>
                     </div>
-
                     {org && org.slug && (
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 mb-2">Public URL</p>
+                        <p className="text-xs font-semibold text-gray-500 mb-2">Syndicade Page URL</p>
                         <div className="flex items-center gap-2">
                           <code className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-blue-600 text-xs font-mono truncate">
                             {window.location.origin + '/org/' + org.slug}
@@ -730,46 +789,76 @@ export default function OrgPageEditor() {
                             <Icon path="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" className="h-4 w-4" />
                           </a>
                         </div>
+                        <p className="text-xs text-gray-400 mt-2">This is your Syndicade-hosted page. It's different from your organization's own website.</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Quick navigation cards */}
-                  <div className="grid grid-cols-1 gap-3">
-                    {[
-                      { label: 'Customize Appearance', desc: 'Logo, colors, fonts, and layout', tab: 'appearance', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
-                      { label: 'Edit Pages & Content', desc: 'Manage pages, blocks, and footer', tab: 'pages-content', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-                      { label: 'Publish Settings', desc: 'Control visibility and discovery', tab: 'publish', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064' },
-                    ].map(function(item) {
-                      return (
-                        <button key={item.tab} onClick={function() { setActiveSection(item.tab); }}
-                          className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-left group">
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 group-hover:bg-blue-100 flex items-center justify-center flex-shrink-0 transition-colors" aria-hidden="true">
-                            <Icon path={item.icon} className="h-5 w-5 text-gray-500 group-hover:text-blue-600 transition-colors" />
+                  {/* Analytics */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div className="flex items-start justify-between gap-4 mb-5">
+                      <div>
+                        <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Analytics</p>
+                        <h3 className="text-lg font-bold text-gray-900">Page Performance</h3>
+                        <p className="text-gray-500 text-sm mt-0.5">Traffic and engagement for your public page.</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200 flex-shrink-0">
+                        Coming Soon
+                      </span>
+                    </div>
+
+                    {/* Placeholder stat cards */}
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      {[
+                        { label: 'Page Views', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z', color: 'text-blue-500', bg: 'bg-blue-50 border-blue-100' },
+                        { label: 'Unique Visitors', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', color: 'text-purple-500', bg: 'bg-purple-50 border-purple-100' },
+                        { label: 'Avg. Time on Page', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-green-500', bg: 'bg-green-50 border-green-100' },
+                        { label: 'Top Traffic Source', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1', color: 'text-amber-500', bg: 'bg-amber-50 border-amber-100' },
+                      ].map(function(stat) {
+                        return (
+                          <div key={stat.label} className={'rounded-xl border p-4 ' + stat.bg} aria-hidden="true">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Icon path={stat.icon} className={'h-4 w-4 ' + stat.color} />
+                              <span className="text-xs font-semibold text-gray-500">{stat.label}</span>
+                            </div>
+                            <div className="h-6 w-20 bg-gray-200 animate-pulse rounded" />
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                          </div>
-                          <Icon path="M9 5l7 7-7 7" className="h-4 w-4 text-gray-300 group-hover:text-blue-400 ml-auto flex-shrink-0 transition-colors" />
-                        </button>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 flex items-start gap-3">
+                      <Icon path="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-gray-500">
+                        Analytics will track page views, visitor counts, traffic sources, and engagement once your page is published. Data will appear here automatically.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* ════════════════════════════════════════
-                  TAB 2 — PAGES & CONTENT
+                  TAB 4 — PAGES & CONTENT
               ════════════════════════════════════════ */}
               {activeSection === 'pages-content' && (
                 <div className="space-y-6">
 
                   {/* Pages list */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Pages</p>
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">Site Pages</h2>
-                    <p className="text-gray-500 text-sm mb-5">Manage page names, nav labels, order, and visibility.</p>
+                    <div className="flex items-start justify-between gap-4 mb-5">
+                      <div>
+                        <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Pages</p>
+                        <h2 className="text-xl font-bold text-gray-900 mb-0.5">Site Pages</h2>
+                        <p className="text-gray-500 text-sm">Manage page names, nav labels, order, and visibility.</p>
+                      </div>
+                      <button
+                        onClick={function() { setShowLayoutModal(true); }}
+                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        aria-label="Change page layout template">
+                        <Icon path="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" className="h-4 w-4" />
+                        Change Layout
+                      </button>
+                    </div>
 
                     <div className="grid grid-cols-12 gap-2 px-3 mb-2">
                       <div className="col-span-1" />
@@ -1039,6 +1128,29 @@ export default function OrgPageEditor() {
                     </div>
                   </div>
 
+                  {/* Page sections toggle */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Sections</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Page Sections</h2>
+                    <p className="text-gray-500 text-sm mb-5">Choose which sections appear on your public page.</p>
+                    <ul className="space-y-3" aria-label="Toggle page sections">
+                      {Object.entries(PAGE_SECTION_CONFIG).map(function(entry) {
+                        var key = entry[0]; var val = entry[1]; var isOn = form.page_sections[key];
+                        return (
+                          <li key={key}>
+                            <div className={'flex items-center justify-between p-4 rounded-xl border-2 transition-all ' + (isOn ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 opacity-60')}>
+                              <div>
+                                <p className="font-semibold text-gray-900 text-sm">{val.label}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{val.desc}</p>
+                              </div>
+                              <Toggle checked={isOn} onChange={function() { toggleSection(key); }} label={(isOn ? 'Hide ' : 'Show ') + val.label + ' section'} id={'section-toggle-' + key} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+
                   {/* Block editor */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
@@ -1117,6 +1229,156 @@ export default function OrgPageEditor() {
               )}
 
               {/* ════════════════════════════════════════
+                  TAB 2 — ORG INFO
+              ════════════════════════════════════════ */}
+              {activeSection === 'org-info' && (
+                <div className="space-y-6">
+
+                  {/* Logo */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Logo</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Organization Logo</h2>
+                    <p className="text-gray-500 text-sm mb-5">Displayed as a circle on your public page. Recommended: 200×200px, max 5MB.</p>
+                    <div className="flex items-center gap-6">
+                      <div className="relative w-28 h-28 rounded-full border-2 border-dashed border-gray-200 hover:border-blue-500 flex items-center justify-center cursor-pointer group overflow-hidden flex-shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onClick={function() { logoInputRef.current && logoInputRef.current.click(); }}
+                        onKeyDown={function(e) { e.key === 'Enter' && logoInputRef.current && logoInputRef.current.click(); }}
+                        tabIndex={0} role="button" aria-label="Upload organization logo">
+                        {form.logo_url ? (
+                          <div className="w-full h-full">
+                            <img src={form.logo_url} alt="Organization logo" className="w-full h-full object-contain bg-gray-50 p-1 rounded-full" />
+                            <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 group-focus:opacity-100 flex items-center justify-center rounded-full transition-opacity">
+                              <span className="text-white text-xs font-semibold">Change</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-400 group-hover:text-blue-400 transition-colors gap-1.5">
+                            {uploadingLogo ? (
+                              <svg className="animate-spin h-7 w-7" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                              </svg>
+                            ) : (
+                              <>
+                                <Icon path="M12 4v16m8-8H4" className="h-7 w-7" strokeWidth={1.5} />
+                                <p className="text-xs font-medium text-center px-2">Add Logo</p>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <button onClick={function() { logoInputRef.current && logoInputRef.current.click(); }}
+                          className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                          {form.logo_url ? 'Change Logo' : 'Upload Logo'}
+                        </button>
+                        {form.logo_url && (
+                          <div>
+                            <button onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { logo_url: '' }); }); }}
+                              className="text-sm text-red-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors" aria-label="Remove logo">
+                              Remove logo
+                            </button>
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-400">PNG, JPG, WebP — max 5MB</p>
+                      </div>
+                    </div>
+                    <input ref={logoInputRef} type="file" accept="image/*" className="sr-only" aria-label="Upload logo image"
+                      onChange={function(e) { e.target.files && e.target.files[0] && uploadImage(e.target.files[0], 'logo'); }} />
+                  </div>
+
+                  {/* Basic Info */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">About</p>
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">Basic Info</h2>
+                      <p className="text-gray-500 text-sm">Core details shown on your public page.</p>
+                    </div>
+                    <div>
+                      <label htmlFor="oi-name" className={labelCls}>Organization Name <span className="text-red-400" aria-hidden="true">*</span></label>
+                      <input id="oi-name" name="name" type="text" required aria-required="true" value={form.name} onChange={handleField} maxLength={100} className={inputCls} />
+                    </div>
+                    <div>
+                      <label htmlFor="oi-tagline" className={labelCls}>Tagline <span className="ml-2 text-xs font-normal text-gray-400">Shown under your name</span></label>
+                      <input id="oi-tagline" name="tagline" type="text" value={form.tagline} onChange={handleField}
+                        placeholder="e.g. Building a stronger community since 2010" maxLength={120} className={inputCls} aria-describedby="oi-tagline-count" />
+                      <p id="oi-tagline-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.tagline.length}/120</p>
+                    </div>
+                    <div>
+                      <label htmlFor="oi-description" className={labelCls}>About / Mission Statement</label>
+                      <textarea id="oi-description" name="description" value={form.description} onChange={handleField} rows={5} maxLength={1000}
+                        placeholder="Tell visitors who you are, what you do, and why it matters..." className={inputCls + ' resize-none'} aria-describedby="oi-desc-count" />
+                      <p id="oi-desc-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.description.length}/1000</p>
+                    </div>
+                    <div>
+                      <label htmlFor="oi-website" className={labelCls}>Organization Website <span className="ml-2 text-xs font-normal text-gray-400">Your own site, not your Syndicade page</span></label>
+                      <input id="oi-website" name="website" type="url" value={form.website} onChange={handleField} placeholder="https://yourorg.org" className={inputCls} />
+                    </div>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Contact</p>
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">Contact Information</h2>
+                      <p className="text-gray-500 text-sm">How people can reach your organization.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="oi-email" className={labelCls}>Email Address</label>
+                        <input id="oi-email" name="contact_email" type="email" value={form.contact_email} onChange={handleField} placeholder="info@yourorg.org" className={inputCls} />
+                      </div>
+                      <div>
+                        <label htmlFor="oi-phone" className={labelCls}>Phone Number</label>
+                        <input id="oi-phone" name="contact_phone" type="tel" value={form.contact_phone} onChange={handleField} placeholder="(555) 123-4567" className={inputCls} />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="oi-address" className={labelCls}>Street Address</label>
+                      <input id="oi-address" name="address" type="text" value={form.address} onChange={handleField} placeholder="123 Main St" className={inputCls} />
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="col-span-2">
+                        <label htmlFor="oi-city" className={labelCls}>City</label>
+                        <input id="oi-city" name="city" type="text" value={form.city} onChange={handleField} className={inputCls} />
+                      </div>
+                      <div>
+                        <label htmlFor="oi-state" className={labelCls}>State</label>
+                        <input id="oi-state" name="state" type="text" value={form.state} onChange={handleField} maxLength={2} placeholder="OH" className={inputCls + ' uppercase'} />
+                      </div>
+                      <div>
+                        <label htmlFor="oi-zip" className={labelCls}>ZIP</label>
+                        <input id="oi-zip" name="zip_code" type="text" value={form.zip_code} onChange={handleField} maxLength={10} className={inputCls} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Social Media */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Social</p>
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">Social Media Links</h2>
+                      <p className="text-gray-500 text-sm">Add links to your social profiles (leave blank to hide).</p>
+                    </div>
+                    {[
+                      { key: 'facebook',  label: 'Facebook',    placeholder: 'https://facebook.com/yourorg'         },
+                      { key: 'instagram', label: 'Instagram',   placeholder: 'https://instagram.com/yourorg'        },
+                      { key: 'twitter',   label: 'X / Twitter', placeholder: 'https://twitter.com/yourorg'          },
+                      { key: 'linkedin',  label: 'LinkedIn',    placeholder: 'https://linkedin.com/company/yourorg' },
+                      { key: 'youtube',   label: 'YouTube',     placeholder: 'https://youtube.com/@yourorg'         },
+                    ].map(function(item) {
+                      return (
+                        <div key={item.key}>
+                          <label htmlFor={'oi-social-' + item.key} className={labelCls}>{item.label}</label>
+                          <input id={'oi-social-' + item.key} name={item.key} type="url" value={form.social_links[item.key] || ''} onChange={handleSocial} placeholder={item.placeholder} className={inputCls} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ════════════════════════════════════════
                   TAB 3 — APPEARANCE
               ════════════════════════════════════════ */}
               {activeSection === 'appearance' && (
@@ -1147,108 +1409,6 @@ export default function OrgPageEditor() {
                         );
                       })}
                     </div>
-                  </AppearanceSection>
-
-                  {/* ── Logo & Banner ── */}
-                  <AppearanceSection label="Logo & Banner">
-                    {/* Banner */}
-                    <div className="mb-6">
-                      <p className="block text-sm font-semibold text-gray-500 mb-1" id="banner-label">
-                        Banner Image <span className="ml-2 text-xs font-normal text-gray-400">Recommended: 1200x300px, max 5MB</span>
-                      </p>
-                      <div className="relative rounded-xl overflow-hidden border-2 border-dashed border-gray-200 hover:border-blue-500 transition-colors cursor-pointer group" style={{ minHeight: '140px' }}
-                        onClick={function() { bannerInputRef.current && bannerInputRef.current.click(); }}
-                        onKeyDown={function(e) { e.key === 'Enter' && bannerInputRef.current && bannerInputRef.current.click(); }}
-                        tabIndex={0} role="button" aria-labelledby="banner-label">
-                        {form.banner_url ? (
-                          <div>
-                            <img src={form.banner_url} alt="Organization banner" className="w-full h-36 object-cover" />
-                            <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 group-focus:opacity-100 flex items-center justify-center transition-opacity">
-                              <span className="text-white font-semibold text-sm">Change Banner</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-36 text-gray-400 group-hover:text-blue-400 transition-colors gap-2">
-                            {uploadingBanner ? (
-                              <svg className="animate-spin h-8 w-8" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                              </svg>
-                            ) : (
-                              <>
-                                <Icon path="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" className="h-8 w-8" strokeWidth={1.5} />
-                                <p className="text-sm font-medium">Click to upload banner</p>
-                                <p className="text-xs">PNG, JPG, WebP — max 5MB</p>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <input ref={bannerInputRef} type="file" accept="image/*" className="sr-only" aria-label="Upload banner image"
-                        onChange={function(e) { e.target.files && e.target.files[0] && uploadImage(e.target.files[0], 'banner'); }} />
-                      {form.banner_url && (
-                        <button onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { banner_url: '' }); }); }}
-                          className="mt-2 text-sm text-red-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors" aria-label="Remove banner image">
-                          Remove banner
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Logo */}
-                    <div>
-                      <p className="block text-sm font-semibold text-gray-500 mb-3" id="logo-label">
-                        Logo <span className="ml-2 text-xs font-normal text-gray-400">Recommended: 200x200px, max 5MB</span>
-                      </p>
-                      <div className="flex items-center gap-5">
-                        <div className="relative w-24 h-24 rounded-full border-2 border-dashed border-gray-200 hover:border-blue-500 flex items-center justify-center cursor-pointer group overflow-hidden flex-shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          onClick={function() { logoInputRef.current && logoInputRef.current.click(); }}
-                          onKeyDown={function(e) { e.key === 'Enter' && logoInputRef.current && logoInputRef.current.click(); }}
-                          tabIndex={0} role="button" aria-labelledby="logo-label">
-                          {form.logo_url ? (
-                            <div>
-                              <img src={form.logo_url} alt="Organization logo" className="w-full h-full object-contain bg-gray-100 p-1 rounded-full" />
-                              <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 group-focus:opacity-100 flex items-center justify-center rounded-full transition-opacity">
-                                <span className="text-white text-xs font-semibold">Change</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center text-gray-400 group-hover:text-blue-400 transition-colors gap-1">
-                              {uploadingLogo ? (
-                                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                </svg>
-                              ) : (
-                                <>
-                                  <Icon path="M12 4v16m8-8H4" className="h-6 w-6" strokeWidth={1.5} />
-                                  <p className="text-xs text-center leading-tight px-1">Add Logo</p>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-sm space-y-1">
-                          <p className="font-medium text-gray-900">Organization Logo</p>
-                          <p className="text-gray-500 text-xs">Displayed as a circle on your public page.</p>
-                          {form.logo_url && (
-                            <button onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { logo_url: '' }); }); }}
-                              className="text-red-400 hover:text-red-500 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors" aria-label="Remove logo">
-                              Remove logo
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <input ref={logoInputRef} type="file" accept="image/*" className="sr-only" aria-label="Upload logo image"
-                        onChange={function(e) { e.target.files && e.target.files[0] && uploadImage(e.target.files[0], 'logo'); }} />
-                    </div>
-                  </AppearanceSection>
-
-                  {/* ── Tagline ── */}
-                  <AppearanceSection label="Tagline">
-                    <label htmlFor="tagline" className={labelCls}>Short Tagline <span className="ml-2 text-xs font-normal text-gray-400">Shown under your organization name</span></label>
-                    <input id="tagline" name="tagline" type="text" value={form.tagline} onChange={handleField}
-                      placeholder="e.g. Building a stronger community since 2010" maxLength={120} className={inputCls} aria-describedby="tagline-count" />
-                    <p id="tagline-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.tagline.length}/120</p>
                   </AppearanceSection>
 
                   {/* ── Theme colors ── */}
@@ -1325,108 +1485,11 @@ export default function OrgPageEditor() {
                     </div>
                   </AppearanceSection>
 
-                  {/* ── Org info ── */}
-                  <AppearanceSection label="Organization Info">
-                    <p className="text-gray-500 text-sm mb-4">Basic information shown on your public page.</p>
-                    <div className="space-y-4">
-                      <div>
-                        <label htmlFor="name" className={labelCls}>Organization Name <span className="text-red-400" aria-hidden="true">*</span></label>
-                        <input id="name" name="name" type="text" required aria-required="true" value={form.name} onChange={handleField} maxLength={100} className={inputCls} />
-                      </div>
-                      <div>
-                        <label htmlFor="description" className={labelCls}>About / Mission Statement</label>
-                        <textarea id="description" name="description" value={form.description} onChange={handleField} rows={4} maxLength={1000}
-                          placeholder="Tell visitors who you are, what you do, and why it matters..." className={inputCls + ' resize-none'} aria-describedby="desc-count" />
-                        <p id="desc-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.description.length}/1000</p>
-                      </div>
-                      <div>
-                        <label htmlFor="website" className={labelCls}>Website URL</label>
-                        <input id="website" name="website" type="url" value={form.website} onChange={handleField} placeholder="https://yourorg.org" className={inputCls} />
-                      </div>
-                    </div>
-                  </AppearanceSection>
-
-                  {/* ── Contact ── */}
-                  <AppearanceSection label="Contact Information">
-                    <p className="text-gray-500 text-sm mb-4">How people can reach your organization.</p>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label htmlFor="contact_email" className={labelCls}>Email Address</label>
-                          <input id="contact_email" name="contact_email" type="email" value={form.contact_email} onChange={handleField} placeholder="info@yourorg.org" className={inputCls} />
-                        </div>
-                        <div>
-                          <label htmlFor="contact_phone" className={labelCls}>Phone Number</label>
-                          <input id="contact_phone" name="contact_phone" type="tel" value={form.contact_phone} onChange={handleField} placeholder="(555) 123-4567" className={inputCls} />
-                        </div>
-                      </div>
-                      <div>
-                        <label htmlFor="address" className={labelCls}>Street Address</label>
-                        <input id="address" name="address" type="text" value={form.address} onChange={handleField} placeholder="123 Main St" className={inputCls} />
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="col-span-2">
-                          <label htmlFor="city" className={labelCls}>City</label>
-                          <input id="city" name="city" type="text" value={form.city} onChange={handleField} className={inputCls} />
-                        </div>
-                        <div>
-                          <label htmlFor="state" className={labelCls}>State</label>
-                          <input id="state" name="state" type="text" value={form.state} onChange={handleField} maxLength={2} placeholder="OH" className={inputCls + ' uppercase'} />
-                        </div>
-                        <div>
-                          <label htmlFor="zip_code" className={labelCls}>ZIP</label>
-                          <input id="zip_code" name="zip_code" type="text" value={form.zip_code} onChange={handleField} maxLength={10} className={inputCls} />
-                        </div>
-                      </div>
-                    </div>
-                  </AppearanceSection>
-
-                  {/* ── Social ── */}
-                  <AppearanceSection label="Social Media">
-                    <p className="text-gray-500 text-sm mb-4">Add links to your social profiles (leave blank to hide).</p>
-                    <div className="space-y-4">
-                      {[
-                        { key: 'facebook',  label: 'Facebook',    placeholder: 'https://facebook.com/yourorg'         },
-                        { key: 'instagram', label: 'Instagram',   placeholder: 'https://instagram.com/yourorg'        },
-                        { key: 'twitter',   label: 'X / Twitter', placeholder: 'https://twitter.com/yourorg'          },
-                        { key: 'linkedin',  label: 'LinkedIn',    placeholder: 'https://linkedin.com/company/yourorg' },
-                        { key: 'youtube',   label: 'YouTube',     placeholder: 'https://youtube.com/@yourorg'         },
-                      ].map(function(item) {
-                        return (
-                          <div key={item.key}>
-                            <label htmlFor={'social-' + item.key} className={labelCls}>{item.label}</label>
-                            <input id={'social-' + item.key} name={item.key} type="url" value={form.social_links[item.key] || ''} onChange={handleSocial} placeholder={item.placeholder} className={inputCls} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </AppearanceSection>
-
-                  {/* ── Page sections ── */}
-                  <AppearanceSection label="Page Sections">
-                    <p className="text-gray-500 text-sm mb-4">Choose which sections appear on your public page.</p>
-                    <ul className="space-y-3" aria-label="Toggle page sections">
-                      {Object.entries(PAGE_SECTION_CONFIG).map(function(entry) {
-                        var key = entry[0]; var val = entry[1]; var isOn = form.page_sections[key];
-                        return (
-                          <li key={key}>
-                            <div className={'flex items-center justify-between p-4 rounded-xl border-2 transition-all ' + (isOn ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 opacity-60')}>
-                              <div>
-                                <p className="font-semibold text-gray-900 text-sm">{val.label}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">{val.desc}</p>
-                              </div>
-                              <Toggle checked={isOn} onChange={function() { toggleSection(key); }} label={(isOn ? 'Hide ' : 'Show ') + val.label + ' section'} id={'section-toggle-' + key} />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </AppearanceSection>
                 </div>
               )}
 
               {/* ════════════════════════════════════════
-                  TAB 4 — PUBLISH
+                  TAB 4 — PAGES & CONTENT
               ════════════════════════════════════════ */}
               {activeSection === 'publish' && (
                 <div className="space-y-6">
