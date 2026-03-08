@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import OrganizationSettings from '../components/OrganizationSettings';
@@ -55,9 +55,11 @@ var ICONS = {
   chevRight: 'M9 5l7 7-7 7',
   chevLeft:  'M15 19l-7-7 7-7',
   eye:       ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
-pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+  pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
   programs:  ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
+  plus:      'M12 4v16m8-8H4',
 };
+
 var ACTIVITY_PER_PAGE = 5;
 
 // ── Toast system ──────────────────────────────────────────────────────────────
@@ -121,15 +123,19 @@ function OrganizationDashboard() {
     totalGroups: 0,
   });
   var [activeTab, setActiveTab] = useState('overview');
-  var [programs, setPrograms] = useState([]);
-  var [programsLoading, setProgramsLoading] = useState(false);
-  var [showProgramModal, setShowProgramModal] = useState(false);
-  var [editingProgram, setEditingProgram] = useState(null);
-  var [programForm, setProgramForm] = useState({ name: '', description: '', audience: '', schedule: '', how_to_apply: '', contact_name: '', contact_email: '', status: 'active', is_public: true });
-  var [programSaving, setProgramSaving] = useState(false);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [viewMode, setViewMode] = useState('admin');
+
+  // Programs state — modal for create/edit only (list lives at /programs route)
+  var [showProgramModal, setShowProgramModal] = useState(false);
+  var [editingProgram, setEditingProgram] = useState(null);
+  var [programForm, setProgramForm] = useState({
+    name: '', description: '', audience: '', schedule: '',
+    how_to_apply: '', contact_name: '', contact_email: '',
+    status: 'active', is_public: true,
+  });
+  var [programSaving, setProgramSaving] = useState(false);
 
   // Toast
   var [toasts, setToasts] = useState([]);
@@ -174,7 +180,6 @@ function OrganizationDashboard() {
     { id: 'overview',   label: 'Overview',   iconKey: 'chart',    roles: ['admin', 'member'] },
     { id: 'documents',  label: 'Documents',  iconKey: 'folder',   roles: ['admin', 'member'] },
     { id: 'photos',     label: 'Photos',     iconKey: 'photo',    roles: ['admin', 'member'] },
-    { id: 'programs',   label: 'Programs',   iconKey: 'programs', roles: ['admin', 'member'] },
     { id: 'approvals',  label: 'Approvals',  iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
     { id: 'inbox',      label: 'Inbox',      iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
     { id: 'invite',     label: 'Invite',     iconKey: 'mail',     roles: ['admin'] },
@@ -190,7 +195,6 @@ function OrganizationDashboard() {
   useEffect(function() { if (activeTab === 'overview' && organizationId) fetchRecentActivity(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'inbox' && organizationId) fetchInquiries(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'photos' && organizationId) fetchPhotos(); }, [activeTab, organizationId]);
-  useEffect(function() { if (activeTab === 'programs' && organizationId) fetchPrograms(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'approvals' && organizationId) fetchPendingApprovals(); }, [activeTab, organizationId]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────────
@@ -231,9 +235,8 @@ function OrganizationDashboard() {
           .eq('is_read', false);
         setUnreadInquiriesCount(inboxResult.count || 0);
 
-        // Load pending approvals count for badge
         var pendingCountItems = [];
-        var tables = ['events','announcements','polls','surveys','signup_forms'];
+        var tables = ['events', 'announcements', 'polls', 'surveys', 'signup_forms'];
         for (var i = 0; i < tables.length; i++) {
           var countResult = await supabase
             .from(tables[i])
@@ -443,10 +446,17 @@ function OrganizationDashboard() {
       setPhotosLoading(false);
     }
   }
-async function fetchPrograms() {
+
+  async function fetchPrograms() {
     setProgramsLoading(true);
-    var result = await supabase.from('org_programs').select('*').eq('organization_id', organizationId).order('sort_order').order('created_at');
-    if (!result.error) setPrograms(result.data || []);
+    var result = await supabase
+      .from('org_programs')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('sort_order')
+      .order('created_at');
+    if (result.error) { addToast('Failed to load programs', 'error'); }
+    else { setPrograms(result.data || []); }
     setProgramsLoading(false);
   }
 
@@ -458,7 +468,17 @@ async function fetchPrograms() {
 
   function openEditProgram(program) {
     setEditingProgram(program);
-    setProgramForm({ name: program.name || '', description: program.description || '', audience: program.audience || '', schedule: program.schedule || '', how_to_apply: program.how_to_apply || '', contact_name: program.contact_name || '', contact_email: program.contact_email || '', status: program.status || 'active', is_public: program.is_public !== false });
+    setProgramForm({
+      name: program.name || '',
+      description: program.description || '',
+      audience: program.audience || '',
+      schedule: program.schedule || '',
+      how_to_apply: program.how_to_apply || '',
+      contact_name: program.contact_name || '',
+      contact_email: program.contact_email || '',
+      status: program.status || 'active',
+      is_public: program.is_public !== false,
+    });
     setShowProgramModal(true);
   }
 
@@ -488,6 +508,7 @@ async function fetchPrograms() {
     if (result.error) { addToast('Failed to update program', 'error'); return; }
     fetchPrograms();
   }
+
   // ── Approval actions ──────────────────────────────────────────────────────────
   async function handleApprove(item) {
     try {
@@ -522,10 +543,6 @@ async function fetchPrograms() {
   function handleMarkAllActivityRead() {
     setReadActivityIds(new Set(recentActivity.map(function(a) { return a.id; })));
     addToast('All activity marked as read.');
-  }
-
-  function handleDismissActivity(activityId) {
-    setRecentActivity(function(prev) { return prev.filter(function(a) { return a.id !== activityId; }); });
   }
 
   function handleDismissAllActivity() {
@@ -640,7 +657,7 @@ async function fetchPrograms() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[1,2,3,4,5].map(function(i) { return <StatCardSkeleton key={i} />; })}
+            {[1, 2, 3, 4, 5].map(function(i) { return <StatCardSkeleton key={i} />; })}
           </div>
         </div>
       </div>
@@ -672,923 +689,794 @@ async function fetchPrograms() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <>
+      <div className="min-h-screen bg-gray-50">
+        <div className="py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-          {/* Org Header */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
-                {organization.logo_url ? (
-                  <img
-                    src={organization.logo_url}
-                    alt={organization.name + ' logo'}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 border-2 border-blue-200">
-                    <span className="text-blue-600 font-extrabold text-xl">{(organization.name || 'O').charAt(0)}</span>
+            {/* ── Org Header ── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  {organization.logo_url ? (
+                    <img
+                      src={organization.logo_url}
+                      alt={organization.name + ' logo'}
+                      className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 border-2 border-blue-200"
+                      aria-hidden="true"
+                    >
+                      <span className="text-blue-600 font-extrabold text-xl">{(organization.name || 'O').charAt(0)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
+                    <p className="text-gray-500 mt-1">{organization.description}</p>
+                    <div className="flex items-center gap-3 mt-3 flex-wrap">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 capitalize">
+                        {organization.type}
+                      </span>
+                      <span className={'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ' +
+                        (membership.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600')}>
+                        {membership.role === 'admin' ? 'Admin' : 'Member'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {membership && membership.role === 'admin' && (
+                  <div className="flex items-center gap-3">
+                    <span className={'text-sm font-semibold ' + (viewMode === 'admin' ? 'text-purple-600' : 'text-gray-400')}>
+                      Admin View
+                    </span>
+                    <button
+                      onClick={function() { setViewMode(viewMode === 'admin' ? 'member' : 'admin'); }}
+                      className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ' +
+                        (viewMode === 'member' ? 'bg-blue-500 focus:ring-blue-500' : 'bg-purple-500 focus:ring-purple-500')}
+                      role="switch"
+                      aria-checked={viewMode === 'admin'}
+                      aria-label="Toggle between admin and member view"
+                    >
+                      <span className={'inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ' +
+                        (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
+                    </button>
+                    <span className={'text-sm font-semibold ' + (viewMode === 'member' ? 'text-blue-600' : 'text-gray-400')}>
+                      Member View
+                    </span>
                   </div>
                 )}
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-                  <p className="text-gray-500 mt-1">{organization.description}</p>
-                  <div className="flex items-center gap-3 mt-3 flex-wrap">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 capitalize">
-                      {organization.type}
-                    </span>
-                    <span className={'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ' +
-                      (membership.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600')}>
-                      {membership.role === 'admin' ? 'Admin' : 'Member'}
-                    </span>
-                  </div>
-                </div>
+              </div>
+            </div>
+
+            {/* ── Tabs ── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+              <div className="border-b border-gray-200">
+                <nav
+                  className="flex px-4 overflow-x-auto"
+                  aria-label="Organization tabs"
+                  style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
+                >
+                  {tabs.map(function(tab) {
+                    var isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={function() { setActiveTab(tab.id); }}
+                        className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 ' +
+                          (isActive
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />
+                        <span className="whitespace-nowrap">{tab.label}</span>
+                        {tab.badge > 0 && (
+                          <span
+                            className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-yellow-500 rounded-full"
+                            aria-label={tab.badge + ' pending'}
+                          >
+                            {tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
               </div>
 
-              {membership && membership.role === 'admin' && (
-                <div className="flex items-center gap-3">
-                  <span className={'text-sm font-semibold ' + (viewMode === 'admin' ? 'text-purple-600' : 'text-gray-400')}>
-                    Admin View
-                  </span>
-                  <button
-                    onClick={function() { setViewMode(viewMode === 'admin' ? 'member' : 'admin'); }}
-                    className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ' +
-                      (viewMode === 'member' ? 'bg-blue-500 focus:ring-blue-500' : 'bg-purple-500 focus:ring-purple-500')}
-                    role="switch"
-                    aria-checked={viewMode === 'admin'}
-                    aria-label="Toggle between admin and member view"
-                  >
-                    <span className={'inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ' +
-                      (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
-                  </button>
-                  <span className={'text-sm font-semibold ' + (viewMode === 'member' ? 'text-blue-600' : 'text-gray-400')}>
-                    Member View
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+              <div className="p-6">
 
-          {/* Tabs */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-            <div className="border-b border-gray-200">
-              <nav
-                className="flex px-4 overflow-x-auto"
-                aria-label="Organization tabs"
-                style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
-              >
-                {tabs.map(function(tab) {
-                  var isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={function() { setActiveTab(tab.id); }}
-                      className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 ' +
-                        (isActive
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
-                      aria-current={isActive ? 'page' : undefined}
-                    >
-                      <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />
-                      <span className="whitespace-nowrap">{tab.label}</span>
-                      {tab.badge > 0 && (
-                        <span
-                          className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-yellow-500 rounded-full"
-                          aria-label={tab.badge + ' pending'}
-                        >
-                          {tab.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
+                {/* ── OVERVIEW TAB ── */}
+                {activeTab === 'overview' && (
+                  <div className="space-y-6">
 
-            <div className="p-6">
-
-              {/* ── OVERVIEW TAB ── */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-
-                  {/* Stat cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <button
-                      onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
-                      className="bg-blue-50 rounded-xl p-6 border-2 border-blue-100 hover:border-blue-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-600 text-xs font-bold uppercase tracking-widest">Members</p>
-                          <p className="text-3xl font-extrabold text-blue-700 mt-2">{stats.totalMembers}</p>
-                          <p className="text-xs text-blue-500 mt-1">View directory</p>
-                        </div>
-                        <Icon path={ICONS.members} className="h-9 w-9 text-blue-300" strokeWidth={1.5} />
-                      </div>
-                    </button>
-
-                    {effectiveRole === 'admin' && (
+                    {/* Stat cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                       <button
-                        onClick={function() { setActiveTab('invite'); }}
-                        className="bg-yellow-50 rounded-xl p-6 border-2 border-yellow-100 hover:border-yellow-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                        onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
+                        className="bg-blue-50 rounded-xl p-6 border-2 border-blue-100 hover:border-blue-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-yellow-600 text-xs font-bold uppercase tracking-widest">Pending Invites</p>
-                            <p className="text-3xl font-extrabold text-yellow-700 mt-2">{stats.pendingInvites}</p>
-                            <p className="text-xs text-yellow-500 mt-1">{stats.pendingInvites === 0 ? 'All caught up' : 'Manage'}</p>
+                            <p className="text-blue-600 text-xs font-bold uppercase tracking-widest">Members</p>
+                            <p className="text-3xl font-extrabold text-blue-700 mt-2">{stats.totalMembers}</p>
+                            <p className="text-xs text-blue-500 mt-1">View directory</p>
                           </div>
-                          <Icon path={ICONS.mail} className="h-9 w-9 text-yellow-300" strokeWidth={1.5} />
+                          <Icon path={ICONS.members} className="h-9 w-9 text-blue-300" strokeWidth={1.5} />
                         </div>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={function() { navigate('/organizations/' + organizationId + '/events'); }}
-                      className="bg-green-50 rounded-xl p-6 border-2 border-green-100 hover:border-green-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-600 text-xs font-bold uppercase tracking-widest">Upcoming Events</p>
-                          <p className="text-3xl font-extrabold text-green-700 mt-2">{stats.activeEvents}</p>
-                          <p className="text-xs text-green-500 mt-1">View calendar</p>
-                        </div>
-                        <Icon path={ICONS.calendar} className="h-9 w-9 text-green-300" strokeWidth={1.5} />
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }}
-                      className="bg-orange-50 rounded-xl p-6 border-2 border-orange-100 hover:border-orange-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Unread News</p>
-                          <p className="text-3xl font-extrabold text-orange-700 mt-2">{stats.unreadAnnouncements}</p>
-                          <p className="text-xs text-orange-500 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up' : 'Read now'}</p>
-                        </div>
-                        <Icon path={ICONS.megaphone} className="h-9 w-9 text-orange-300" strokeWidth={1.5} />
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
-                      className="bg-purple-50 rounded-xl p-6 border-2 border-purple-100 hover:border-purple-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-600 text-xs font-bold uppercase tracking-widest">Groups</p>
-                          <p className="text-3xl font-extrabold text-purple-700 mt-2">{stats.totalGroups}</p>
-                          <p className="text-xs text-purple-500 mt-1">View all</p>
-                        </div>
-                        <Icon path={ICONS.building} className="h-9 w-9 text-purple-300" strokeWidth={1.5} />
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                    <h3 className="text-base font-bold text-gray-900 mb-4 uppercase tracking-wide text-xs" style={{color:'#F5B731'}}>Quick Actions</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <button
-                        onClick={function() { setShowCreateEvent(true); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                      >
-                        <Icon path={ICONS.calendar} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Create Event</span>
                       </button>
 
                       {effectiveRole === 'admin' && (
                         <button
-                          onClick={function() { setShowCreateAnnouncement(true); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                          onClick={function() { setActiveTab('invite'); }}
+                          className="bg-yellow-50 rounded-xl p-6 border-2 border-yellow-100 hover:border-yellow-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
                         >
-                          <Icon path={ICONS.megaphone} className="h-5 w-5 text-orange-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Create Announcement</span>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-yellow-600 text-xs font-bold uppercase tracking-widest">Pending Invites</p>
+                              <p className="text-3xl font-extrabold text-yellow-700 mt-2">{stats.pendingInvites}</p>
+                              <p className="text-xs text-yellow-500 mt-1">{stats.pendingInvites === 0 ? 'All caught up' : 'Manage'}</p>
+                            </div>
+                            <Icon path={ICONS.mail} className="h-9 w-9 text-yellow-300" strokeWidth={1.5} />
+                          </div>
                         </button>
                       )}
 
                       <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        onClick={function() { navigate('/organizations/' + organizationId + '/events'); }}
+                        className="bg-green-50 rounded-xl p-6 border-2 border-green-100 hover:border-green-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                       >
-                        <Icon path={ICONS.members} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Member Directory</span>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-green-600 text-xs font-bold uppercase tracking-widest">Upcoming Events</p>
+                            <p className="text-3xl font-extrabold text-green-700 mt-2">{stats.activeEvents}</p>
+                            <p className="text-xs text-green-500 mt-1">View calendar</p>
+                          </div>
+                          <Icon path={ICONS.calendar} className="h-9 w-9 text-green-300" strokeWidth={1.5} />
+                        </div>
                       </button>
 
                       <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/scheduling'); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                        onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }}
+                        className="bg-orange-50 rounded-xl p-6 border-2 border-orange-100 hover:border-orange-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                       >
-                        <Icon path={ICONS.clock} className="h-5 w-5 text-teal-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Group Scheduling</span>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Unread News</p>
+                            <p className="text-3xl font-extrabold text-orange-700 mt-2">{stats.unreadAnnouncements}</p>
+                            <p className="text-xs text-orange-500 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up' : 'Read now'}</p>
+                          </div>
+                          <Icon path={ICONS.megaphone} className="h-9 w-9 text-orange-300" strokeWidth={1.5} />
+                        </div>
                       </button>
 
                       <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/polls'); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
+                        className="bg-purple-50 rounded-xl p-6 border-2 border-purple-100 hover:border-purple-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                       >
-                        <Icon path={ICONS.chart} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Polls</span>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-purple-600 text-xs font-bold uppercase tracking-widest">Groups</p>
+                            <p className="text-3xl font-extrabold text-purple-700 mt-2">{stats.totalGroups}</p>
+                            <p className="text-xs text-purple-500 mt-1">View all</p>
+                          </div>
+                          <Icon path={ICONS.building} className="h-9 w-9 text-purple-300" strokeWidth={1.5} />
+                        </div>
                       </button>
-
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/surveys'); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                      >
-                        <Icon path={ICONS.clipboard} className="h-5 w-5 text-green-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Surveys</span>
-                      </button>
-
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/signup-forms'); }}
-                        className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                      >
-                        <Icon path={ICONS.pencil} className="h-5 w-5 text-indigo-500 flex-shrink-0" />
-                        <span className="font-semibold text-gray-800 text-sm">Sign-Up Forms</span>
-                      </button>
-
-{effectiveRole === 'admin' && (
-  <>
-    <button
-      onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
-      className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-    >
-      <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
-      <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
-    </button>
-  </>
-)}
                     </div>
-                  </div>
 
-                  {/* Recent Activity */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                      <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {recentActivity.length > 0 && (
-                          <>
-                            <button
-                              onClick={handleMarkAllActivityRead}
-                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-1.5 border border-blue-200 hover:bg-blue-50 transition-colors"
-                            >
-                              Mark All Read
-                            </button>
-                            <button
-                              onClick={handleDismissAllActivity}
-                              className="text-xs text-gray-500 hover:text-red-600 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-red-50 transition-colors"
-                            >
-                              Clear
-                            </button>
-                          </>
-                        )}
+                    {/* Quick Actions */}
+                    <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                      <h3 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: '#F5B731' }}>
+                        Quick Actions
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <button
-                          onClick={fetchRecentActivity}
-                          className="text-xs text-gray-500 hover:text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-gray-50 transition-colors"
+                          onClick={function() { setShowCreateEvent(true); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
-                          Refresh
+                          <Icon path={ICONS.calendar} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Create Event</span>
                         </button>
+
+                        {effectiveRole === 'admin' && (
+                          <button
+                            onClick={function() { setShowCreateAnnouncement(true); }}
+                            className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                          >
+                            <Icon path={ICONS.megaphone} className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                            <span className="font-semibold text-gray-800 text-sm">Create Announcement</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.members} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Member Directory</span>
+                        </button>
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/scheduling'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.clock} className="h-5 w-5 text-teal-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Group Scheduling</span>
+                        </button>
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/polls'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.chart} className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Polls</span>
+                        </button>
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/surveys'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.clipboard} className="h-5 w-5 text-green-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Surveys</span>
+                        </button>
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/signup-forms'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.pencil} className="h-5 w-5 text-indigo-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Sign-Up Forms</span>
+                        </button>
+
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/programs'); }}
+                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                        >
+                          <Icon path={ICONS.programs} className="h-5 w-5 text-purple-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm">Programs</span>
+                        </button>
+
+                        {effectiveRole === 'admin' && (
+                          <button
+                            onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
+                            className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                          >
+                            <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                            <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {activityLoading ? (
-                      <div className="space-y-3">
-                        {[1,2,3,4,5].map(function(i) {
+                    {/* Recent Activity */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {recentActivity.length > 0 && (
+                            <>
+                              <button
+                                onClick={handleMarkAllActivityRead}
+                                className="text-xs text-blue-600 hover:text-blue-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-1.5 border border-blue-200 hover:bg-blue-50 transition-colors"
+                              >
+                                Mark All Read
+                              </button>
+                              <button
+                                onClick={handleDismissAllActivity}
+                                className="text-xs text-gray-500 hover:text-red-600 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-red-50 transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={fetchRecentActivity}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            Refresh
+                          </button>
+                        </div>
+                      </div>
+
+                      {activityLoading ? (
+                        <div className="space-y-3">
+                          {[1, 2, 3, 4, 5].map(function(i) {
+                            return (
+                              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
+                                <div className="w-5 h-5 bg-gray-200 rounded mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 space-y-2">
+                                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                                  <div className="h-3 bg-gray-200 rounded w-1/3" />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : recentActivity.length === 0 ? (
+                        <div className="text-center py-10">
+                          <Icon path={ICONS.clock} className="h-10 w-10 text-gray-300 mx-auto mb-2" strokeWidth={1.5} />
+                          <p className="text-gray-600 text-sm font-semibold">No recent activity</p>
+                          <p className="text-gray-400 text-xs mt-1">Events, announcements, and new members will appear here.</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="space-y-2" role="list" aria-label="Recent activity">
+                            {recentActivity
+                              .slice((activityPage - 1) * ACTIVITY_PER_PAGE, activityPage * ACTIVITY_PER_PAGE)
+                              .map(function(activity) {
+                                var isRead = readActivityIds.has(activity.id);
+                                return (
+                                  <div
+                                    key={activity.id}
+                                    role="listitem"
+                                    className={'rounded-xl border transition-colors group ' +
+                                      (isRead ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200')}
+                                  >
+                                    <button
+                                      onClick={function() { if (activity.link) navigate(activity.link); handleMarkActivityRead(activity.id); }}
+                                      className="w-full flex items-center gap-3 p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded-xl"
+                                      aria-label={'View ' + activity.title}
+                                    >
+                                      <div className={'mt-0.5 flex-shrink-0 ' + (isRead ? 'text-gray-400' : 'text-blue-500')}>
+                                        <Icon path={ICONS[activity.iconKey] || ICONS.clock} className="h-5 w-5" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={'text-sm font-semibold truncate ' + (isRead ? 'text-gray-500' : 'text-gray-900')}>
+                                          {activity.title}
+                                        </p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                          {new Date(activity.timestamp).toLocaleDateString('en-US', {
+                                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                                          })}
+                                        </p>
+                                      </div>
+                                      <Icon path={ICONS.chevRight} className={'h-4 w-4 flex-shrink-0 ' + (isRead ? 'text-gray-300' : 'text-blue-400')} />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                          </div>
+
+                          {/* Pagination */}
+                          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={function() { setActivityPage(function(p) { return Math.max(1, p - 1); }); }}
+                                disabled={activityPage === 1}
+                                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                aria-label="Previous page"
+                              >
+                                <Icon path={ICONS.chevLeft} className="h-4 w-4" />
+                              </button>
+                              <span className="text-xs text-gray-500 font-semibold min-w-12 text-center">
+                                {activityPage} / {Math.max(1, totalActivityPages)}
+                              </span>
+                              <button
+                                onClick={function() { setActivityPage(function(p) { return Math.min(totalActivityPages, p + 1); }); }}
+                                disabled={activityPage >= totalActivityPages}
+                                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                aria-label="Next page"
+                              >
+                                <Icon path={ICONS.chevRight} className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <button
+                              onClick={function() { setActivityPage(1); addToast('Showing ' + recentActivity.length + ' recent activities.'); }}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            >
+                              View All Activity
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── DOCUMENTS TAB ── */}
+                {activeTab === 'documents' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-xl border border-gray-200 p-6">
+                      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
+                          <p className="text-gray-500 mt-1">Access organization documents, files, and resources</p>
+                        </div>
+                        {effectiveRole === 'admin' && (
+                          <button
+                            onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-semibold text-sm"
+                          >
+                            Manage Documents
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-6 text-center">
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
+                          className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                        >
+                          View All Documents
+                          <Icon path={ICONS.chevRight} className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── PHOTOS TAB ── */}
+                {activeTab === 'photos' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Photo Gallery</h2>
+                        <p className="text-gray-500 mt-1">{photos.length + ' photo' + (photos.length !== 1 ? 's' : '')}</p>
+                      </div>
+                    </div>
+
+                    {effectiveRole === 'admin' && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
+                        <h3 className="text-base font-bold text-blue-900 mb-4">Upload Photo</h3>
+                        {photoError && (
+                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
+                            {photoError}
+                          </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <div className="flex-1">
+                            <label htmlFor="photo-caption" className="sr-only">Photo caption</label>
+                            <input
+                              id="photo-caption"
+                              type="text"
+                              placeholder="Caption (optional)"
+                              value={photoCaption}
+                              onChange={function(e) { setPhotoCaption(e.target.value); }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                              maxLength={200}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="photo-upload"
+                              className={'cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ' +
+                                (photoUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600')}
+                            >
+                              {photoUploading ? 'Uploading...' : 'Upload Photo'}
+                              <input
+                                id="photo-upload"
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                onChange={handlePhotoUpload}
+                                disabled={photoUploading}
+                                className="sr-only"
+                                aria-label="Choose a photo to upload"
+                              />
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP · Max 5MB</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {photosLoading ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(function(i) {
+                          return <div key={i} className="rounded-xl bg-gray-200 animate-pulse h-40" />;
+                        })}
+                      </div>
+                    ) : photos.length === 0 ? (
+                      <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                        <Icon path={ICONS.photo} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-1">No photos yet</h3>
+                        <p className="text-gray-500 text-sm">
+                          {effectiveRole === 'admin' ? 'Upload your first photo using the panel above.' : 'No photos have been uploaded yet.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
+                        {photos.map(function(photo) {
                           return (
-                            <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
-                              <div className="w-5 h-5 bg-gray-200 rounded mt-0.5 flex-shrink-0" />
-                              <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                                <div className="h-3 bg-gray-200 rounded w-1/3" />
+                            <div
+                              key={photo.id}
+                              role="listitem"
+                              className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                            >
+                              <button
+                                onClick={function() { setLightboxPhoto(photo); }}
+                                className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                                aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}
+                              >
+                                <img
+                                  src={photo.photo_url}
+                                  alt={photo.caption || 'Organization photo'}
+                                  className="w-full h-40 object-cover"
+                                  loading="lazy"
+                                />
+                              </button>
+                              {photo.caption && (
+                                <div className="px-2 py-1.5 bg-white">
+                                  <p className="text-xs text-gray-600 truncate">{photo.caption}</p>
+                                </div>
+                              )}
+                              {effectiveRole === 'admin' && (
+                                <button
+                                  onClick={function() { handleDeletePhoto(photo); }}
+                                  disabled={deletingPhotoId === photo.id}
+                                  className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+                                  aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}
+                                >
+                                  <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {lightboxPhoto && (
+                      <div
+                        className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Photo viewer"
+                        onClick={function() { setLightboxPhoto(null); }}
+                      >
+                        <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
+                          <button
+                            onClick={function() { setLightboxPhoto(null); }}
+                            className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded"
+                            aria-label="Close photo viewer"
+                          >
+                            <Icon path={ICONS.x} className="h-7 w-7" strokeWidth={2.5} />
+                          </button>
+                          <img
+                            src={lightboxPhoto.photo_url}
+                            alt={lightboxPhoto.caption || 'Organization photo'}
+                            className="w-full max-h-screen object-contain rounded-xl"
+                          />
+                          {lightboxPhoto.caption && (
+                            <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── APPROVALS TAB ── */}
+                {activeTab === 'approvals' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Pending Approvals</h2>
+                        <p className="text-gray-500 mt-1">Review and approve content submitted by editors.</p>
+                      </div>
+                      {pendingApprovals.length > 0 && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                          {pendingApprovals.length} pending
+                        </span>
+                      )}
+                    </div>
+
+                    {pendingApprovalsLoading ? (
+                      <div className="space-y-3">
+                        {[1, 2, 3].map(function(i) {
+                          return (
+                            <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
+                              <div className="flex justify-between gap-4">
+                                <div className="flex-1 space-y-2">
+                                  <div className="h-4 bg-gray-200 rounded w-1/4" />
+                                  <div className="h-5 bg-gray-200 rounded w-1/2" />
+                                  <div className="h-3 bg-gray-200 rounded w-1/3" />
+                                </div>
+                                <div className="flex gap-2">
+                                  <div className="h-9 w-20 bg-gray-200 rounded-lg" />
+                                  <div className="h-9 w-20 bg-gray-200 rounded-lg" />
+                                </div>
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                    ) : recentActivity.length === 0 ? (
-                      <div className="text-center py-10">
-                        <Icon path={ICONS.clock} className="h-10 w-10 text-gray-300 mx-auto mb-2" strokeWidth={1.5} />
-                        <p className="text-gray-600 text-sm font-semibold">No recent activity</p>
-                        <p className="text-gray-400 text-xs mt-1">Events, announcements, and new members will appear here.</p>
+                    ) : pendingApprovals.length === 0 ? (
+                      <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                        <Icon path={ICONS.check} className="h-12 w-12 text-green-400 mx-auto mb-3" strokeWidth={1.5} />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-1">All caught up!</h3>
+                        <p className="text-gray-500 text-sm">No content waiting for approval.</p>
                       </div>
                     ) : (
-                      <div>
-                        <div className="space-y-2" role="list" aria-label="Recent activity">
-                          {recentActivity
-                            .slice((activityPage - 1) * ACTIVITY_PER_PAGE, activityPage * ACTIVITY_PER_PAGE)
-                            .map(function(activity) {
-                              var isRead = readActivityIds.has(activity.id);
-                              return (
-                                <div
-                                  key={activity.id}
-                                  role="listitem"
-                                  className={'rounded-xl border transition-colors group ' +
-                                    (isRead ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200')}
-                                >
-                                  <button
-                                    onClick={function() { if (activity.link) navigate(activity.link); handleMarkActivityRead(activity.id); }}
-                                    className="w-full flex items-center gap-3 p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded-xl"
-                                    aria-label={'View ' + activity.title}
-                                  >
-                                    <div className={'mt-0.5 flex-shrink-0 ' + (isRead ? 'text-gray-400' : 'text-blue-500')}>
-                                      <Icon path={ICONS[activity.iconKey] || ICONS.clock} className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className={'text-sm font-semibold truncate ' + (isRead ? 'text-gray-500' : 'text-gray-900')}>
-                                        {activity.title}
-                                      </p>
-                                      <p className="text-xs text-gray-400 mt-0.5">
-                                        {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                                        })}
-                                      </p>
-                                    </div>
-                                    <Icon path={ICONS.chevRight} className={'h-4 w-4 flex-shrink-0 ' + (isRead ? 'text-gray-300' : 'text-blue-400')} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                        </div>
-
-                        {/* Pagination + View All */}
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={function() { setActivityPage(function(p) { return Math.max(1, p - 1); }); }}
-                              disabled={activityPage === 1}
-                              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                              aria-label="Previous page"
+                      <div className="space-y-3" role="list" aria-label="Pending approvals">
+                        {pendingApprovals.map(function(item) {
+                          return (
+                            <div
+                              key={item.type + '-' + item.id}
+                              role="listitem"
+                              className="flex items-center justify-between gap-4 p-5 bg-white border border-yellow-200 rounded-xl hover:border-yellow-300 transition-colors"
                             >
-                              <Icon path={ICONS.chevLeft} className="h-4 w-4" />
-                            </button>
-                            <span className="text-xs text-gray-500 font-semibold min-w-12 text-center">
-                              {activityPage} / {Math.max(1, totalActivityPages)}
-                            </span>
-                            <button
-                              onClick={function() { setActivityPage(function(p) { return Math.min(totalActivityPages, p + 1); }); }}
-                              disabled={activityPage >= totalActivityPages}
-                              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                              aria-label="Next page"
-                            >
-                              <Icon path={ICONS.chevRight} className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <button
-                            onClick={function() {
-                              setActivityPage(1);
-                              addToast('Showing ' + recentActivity.length + ' recent activities.');
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-semibold border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                          >
-                            View All Activity
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── APPROVALS TAB ── */}
-              {activeTab === 'approvals' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Pending Approvals</h2>
-                      <p className="text-gray-500 mt-1">Review and approve content submitted by editors.</p>
-                    </div>
-                    {pendingApprovals.length > 0 && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
-                        {pendingApprovals.length} pending
-                      </span>
-                    )}
-                  </div>
-
-                  {pendingApprovalsLoading ? (
-                    <div className="space-y-3">
-                      {[1,2,3].map(function(i) {
-                        return (
-                          <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
-                            <div className="flex justify-between gap-4">
-                              <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-1/4" />
-                                <div className="h-5 bg-gray-200 rounded w-1/2" />
-                                <div className="h-3 bg-gray-200 rounded w-1/3" />
-                              </div>
-                              <div className="flex gap-2">
-                                <div className="h-9 w-20 bg-gray-200 rounded-lg" />
-                                <div className="h-9 w-20 bg-gray-200 rounded-lg" />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : pendingApprovals.length === 0 ? (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="flex justify-center mb-3">
-                        <Icon path={ICONS.check} className="h-12 w-12 text-green-400" strokeWidth={1.5} />
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-700 mb-1">All caught up!</h3>
-                      <p className="text-gray-500 text-sm">No content waiting for approval.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3" role="list" aria-label="Pending approvals">
-                      {pendingApprovals.map(function(item) {
-                        return (
-                          <div
-                            key={item.type + '-' + item.id}
-                            role="listitem"
-                            className="flex items-center justify-between gap-4 p-5 bg-white border border-yellow-200 rounded-xl hover:border-yellow-300 transition-colors"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
-                                {item.type}
-                              </span>
-                              <p className="font-semibold text-gray-900 truncate">{item.title}</p>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {'Submitted ' + new Date(item.created_at).toLocaleDateString('en-US', {
-                                  month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-                                })}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button
-                                onClick={function() { handleApprove(item); }}
-                                className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors"
-                                aria-label={'Approve ' + item.title}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={function() { handleReject(item); }}
-                                className="px-4 py-2 bg-white text-red-600 border border-red-300 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
-                                aria-label={'Reject ' + item.title}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── DOCUMENTS TAB ── */}
-              {activeTab === 'documents' && (
-                <div className="space-y-6">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                      <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
-                        <p className="text-gray-500 mt-1">Access organization documents, files, and resources</p>
-                      </div>
-                      {effectiveRole === 'admin' && (
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-semibold text-sm"
-                        >
-                          Manage Documents
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-6 text-center">
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/documents'); }}
-                        className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                      >
-                        View All Documents
-                        <Icon path={ICONS.chevRight} className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── PHOTOS TAB ── */}
-              {activeTab === 'photos' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Photo Gallery</h2>
-                      <p className="text-gray-500 mt-1">{photos.length + ' photo' + (photos.length !== 1 ? 's' : '')}</p>
-                    </div>
-                  </div>
-
-                  {effectiveRole === 'admin' && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
-                      <h3 className="text-base font-bold text-blue-900 mb-4">Upload Photo</h3>
-                      {photoError && (
-                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-                          {photoError}
-                        </div>
-                      )}
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1">
-                          <label htmlFor="photo-caption" className="sr-only">Photo caption</label>
-                          <input
-                            id="photo-caption"
-                            type="text"
-                            placeholder="Caption (optional)"
-                            value={photoCaption}
-                            onChange={function(e) { setPhotoCaption(e.target.value); }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                            maxLength={200}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor="photo-upload"
-                            className={'cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500 ' +
-                              (photoUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600')}
-                          >
-                            {photoUploading ? 'Uploading...' : 'Upload Photo'}
-                            <input
-                              id="photo-upload"
-                              type="file"
-                              accept="image/jpeg,image/png,image/gif,image/webp"
-                              onChange={handlePhotoUpload}
-                              disabled={photoUploading}
-                              className="sr-only"
-                              aria-label="Choose a photo to upload"
-                            />
-                          </label>
-                          <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP · Max 5MB</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {photosLoading ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {[1,2,3,4,5,6,7,8].map(function(i) {
-                        return <div key={i} className="rounded-xl bg-gray-200 animate-pulse h-40" />;
-                      })}
-                    </div>
-                  ) : photos.length === 0 ? (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                      <Icon path={ICONS.photo} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-1">No photos yet</h3>
-                      <p className="text-gray-500 text-sm">
-                        {effectiveRole === 'admin' ? 'Upload your first photo using the panel above.' : 'No photos have been uploaded yet.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
-                      {photos.map(function(photo) {
-                        return (
-                          <div
-                            key={photo.id}
-                            role="listitem"
-                            className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                          >
-                            <button
-                              onClick={function() { setLightboxPhoto(photo); }}
-                              className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                              aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}
-                            >
-                              <img
-                                src={photo.photo_url}
-                                alt={photo.caption || 'Organization photo'}
-                                className="w-full h-40 object-cover"
-                                loading="lazy"
-                              />
-                            </button>
-                            {photo.caption && (
-                              <div className="px-2 py-1.5 bg-white">
-                                <p className="text-xs text-gray-600 truncate">{photo.caption}</p>
-                              </div>
-                            )}
-                            {effectiveRole === 'admin' && (
-                              <button
-                                onClick={function() { handleDeletePhoto(photo); }}
-                                disabled={deletingPhotoId === photo.id}
-                                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-                                aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}
-                              >
-                                <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {lightboxPhoto && (
-                    <div
-                      className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="Photo viewer"
-                      onClick={function() { setLightboxPhoto(null); }}
-                    >
-                      <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
-                        <button
-                          onClick={function() { setLightboxPhoto(null); }}
-                          className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded"
-                          aria-label="Close photo viewer"
-                        >
-                          <Icon path={ICONS.x} className="h-7 w-7" strokeWidth={2.5} />
-                        </button>
-                        <img
-                          src={lightboxPhoto.photo_url}
-                          alt={lightboxPhoto.caption || 'Organization photo'}
-                          className="w-full max-h-screen object-contain rounded-xl"
-                        />
-                        {lightboxPhoto.caption && (
-                          <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-{activeTab === 'programs' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Programs</h2>
-                      <p className="text-sm text-gray-500 mt-0.5">Manage your organization's programs and services</p>
-                    </div>
-                    {effectiveRole === 'admin' && (
-                      <button onClick={openNewProgram} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label="Add new program">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        Add Program
-                      </button>
-                    )}
-                  </div>
-                  {programsLoading ? (
-                    <div className="space-y-3">
-                      {[1,2,3].map(function(i) { return <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />; })}
-                    </div>
-                  ) : programs.length === 0 ? (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                      <Icon path={ICONS.programs} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1} />
-                      <p className="text-gray-600 font-semibold text-lg">No programs yet</p>
-                      <p className="text-gray-400 text-sm mt-1 mb-4">Add your organization's programs and services to share with your community.</p>
-                      {effectiveRole === 'admin' && (
-                        <button onClick={openNewProgram} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                          Add Your First Program
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {programs.map(function(program) {
-                        return (
-                          <div key={program.id} className={'rounded-xl border p-5 transition-all ' + (program.is_public ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50')}>
-                            <div className="flex items-start justify-between gap-4">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap mb-1">
-                                  <h3 className="font-bold text-gray-900">{program.name}</h3>
-                                  <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + (program.status === 'active' ? 'bg-green-100 text-green-700' : program.status === 'upcoming' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500')}>
-                                    {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
-                                  </span>
-                                  {!program.is_public && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Hidden from public</span>}
-                                </div>
-                                {program.description && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{program.description}</p>}
-                                <div className="flex flex-wrap gap-3 mt-2">
-                                  {program.audience && <span className="text-xs text-gray-400">For: {program.audience}</span>}
-                                  {program.schedule && <span className="text-xs text-gray-400">Schedule: {program.schedule}</span>}
-                                  {program.contact_name && <span className="text-xs text-gray-400">Contact: {program.contact_name}</span>}
-                                </div>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
+                                  {item.type}
+                                </span>
+                                <p className="font-semibold text-gray-900 truncate">{item.title}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {'Submitted ' + new Date(item.created_at).toLocaleDateString('en-US', {
+                                    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+                                  })}
+                                </p>
                               </div>
-                              {effectiveRole === 'admin' && (
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <button onClick={function() { toggleProgramPublic(program); }} className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (program.is_public ? 'bg-blue-600' : 'bg-gray-200')} role="switch" aria-checked={program.is_public} aria-label={'Toggle ' + program.name + ' public visibility'}>
-                                    <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (program.is_public ? 'translate-x-6' : 'translate-x-1')} />
-                                  </button>
-                                  <button onClick={function() { openEditProgram(program); }} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'Edit ' + program.name}>
-                                    <Icon path={ICONS.pencil} className="h-4 w-4" />
-                                  </button>
-                                  <button onClick={function() { if (window.confirm('Delete this program?')) deleteProgram(program.id); }} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Delete ' + program.name}>
-                                    <Icon path={ICONS.trash} className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              {showProgramModal && (
-                <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="program-modal-title">
-                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                    <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                      <h3 id="program-modal-title" className="text-lg font-bold text-gray-900">{editingProgram ? 'Edit Program' : 'Add Program'}</h3>
-                      <button onClick={function() { setShowProgramModal(false); }} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300" aria-label="Close modal">
-                        <Icon path={ICONS.x} className="h-5 w-5" />
-                      </button>
-                    </div>
-                    <div className="p-6 space-y-4">
-                      <div>
-                        <label htmlFor="prog-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Program Name <span className="text-red-500">*</span></label>
-                        <input id="prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { name: e.target.value }); }); }} placeholder="e.g. After School Tutoring" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
-                      <div>
-                        <label htmlFor="prog-desc" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Description</label>
-                        <textarea id="prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { description: e.target.value }); }); }} rows={3} placeholder="What does this program do?" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                      </div>
-                      <div>
-                        <label htmlFor="prog-audience" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Who Is It For?</label>
-                        <input id="prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { audience: e.target.value }); }); }} placeholder="e.g. Youth ages 6-18" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
-                      <div>
-                        <label htmlFor="prog-schedule" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Schedule</label>
-                        <input id="prog-schedule" type="text" value={programForm.schedule} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { schedule: e.target.value }); }); }} placeholder="e.g. Every Monday 3-5pm" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
-                      <div>
-                        <label htmlFor="prog-apply" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">How To Apply / Sign Up</label>
-                        <textarea id="prog-apply" value={programForm.how_to_apply} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { how_to_apply: e.target.value }); }); }} rows={2} placeholder="e.g. Fill out form at front desk or call us" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label htmlFor="prog-contact-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Name</label>
-                          <input id="prog-contact-name" type="text" value={programForm.contact_name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_name: e.target.value }); }); }} placeholder="Jane Smith" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                        <div>
-                          <label htmlFor="prog-contact-email" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Email</label>
-                          <input id="prog-contact-email" type="email" value={programForm.contact_email} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_email: e.target.value }); }); }} placeholder="jane@org.org" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                      </div>
-                      <div>
-                        <label htmlFor="prog-status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
-                        <select id="prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                          <option value="active">Active</option>
-                          <option value="upcoming">Upcoming</option>
-                          <option value="closed">Closed</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <button onClick={function() { setProgramForm(function(p) { return Object.assign({}, p, { is_public: !p.is_public }); }); }} className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (programForm.is_public ? 'bg-blue-600' : 'bg-gray-200')} role="switch" aria-checked={programForm.is_public} aria-label="Toggle public visibility">
-                          <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (programForm.is_public ? 'translate-x-6' : 'translate-x-1')} />
-                        </button>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700">Show on public website</p>
-                          <p className="text-xs text-gray-400">Visitors to your page will see this program</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 p-6 border-t border-gray-100">
-                      <button onClick={function() { setShowProgramModal(false); }} className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300">Cancel</button>
-                      <button onClick={saveProgram} disabled={programSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        {programSaving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* ── INBOX TAB ── */}
-              {activeTab === 'inbox' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Inbox</h2>
-                      <p className="text-gray-500 mt-1">Messages submitted via the public Join Us form</p>
-                    </div>
-                    {inquiries.length > 0 && (
-                      <span className="text-sm text-gray-500">
-                        {inquiries.filter(function(i) { return !i.is_read; }).length + ' unread · ' + inquiries.length + ' total'}
-                      </span>
-                    )}
-                  </div>
-
-                  {inquiriesLoading ? (
-                    <div className="space-y-4">
-                      {[1,2,3].map(function(i) {
-                        return (
-                          <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
-                            <div className="flex justify-between gap-4">
-                              <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-1/3" />
-                                <div className="h-3 bg-gray-200 rounded w-1/4" />
-                                <div className="h-3 bg-gray-200 rounded w-full mt-3" />
-                                <div className="h-3 bg-gray-200 rounded w-3/4" />
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                <div className="h-8 w-24 bg-gray-200 rounded" />
-                                <div className="h-8 w-24 bg-gray-200 rounded" />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : inquiries.length === 0 ? (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                      <Icon path={ICONS.inbox} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-1">No messages yet</h3>
-                      <p className="text-gray-500 text-sm">Messages submitted via your public page will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4" role="list" aria-label="Contact inquiries">
-                      {inquiries.map(function(inquiry) {
-                        return (
-                          <div
-                            key={inquiry.id}
-                            role="listitem"
-                            className={'rounded-xl border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200')}
-                          >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className="font-bold text-gray-900">{inquiry.name}</span>
-                                  {!inquiry.is_read && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>
-                                  )}
-                                  <span className="text-sm text-gray-400">
-                                    {new Date(inquiry.created_at).toLocaleDateString('en-US', {
-                                      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                                    })}
-                                  </span>
-                                </div>
-                                <a
-                                  href={'mailto:' + inquiry.email}
-                                  className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                                >
-                                  {inquiry.email}
-                                </a>
-                                <p className="text-gray-700 mt-3 leading-relaxed text-sm">{inquiry.message}</p>
-                              </div>
-                              <div className="flex flex-col gap-2 flex-shrink-0">
-                                {!inquiry.is_read && (
-                                  <button
-                                    onClick={function() { handleMarkInquiryRead(inquiry.id); }}
-                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
-                                  >
-                                    Mark Read
-                                  </button>
-                                )}
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <button
-                                  onClick={function() { handleDeleteInquiry(inquiry.id); }}
-                                  className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
+                                  onClick={function() { handleApprove(item); }}
+                                  className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors"
+                                  aria-label={'Approve ' + item.title}
                                 >
-                                  Delete
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={function() { handleReject(item); }}
+                                  className="px-4 py-2 bg-white text-red-600 border border-red-300 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+                                  aria-label={'Reject ' + item.title}
+                                >
+                                  Reject
                                 </button>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── INBOX TAB ── */}
+                {activeTab === 'inbox' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Inbox</h2>
+                        <p className="text-gray-500 mt-1">Messages submitted via the public Join Us form</p>
+                      </div>
+                      {inquiries.length > 0 && (
+                        <span className="text-sm text-gray-500">
+                          {inquiries.filter(function(i) { return !i.is_read; }).length + ' unread · ' + inquiries.length + ' total'}
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
 
-              {/* ── INVITE TAB ── */}
-              {activeTab === 'invite' && (
-                <div>
-                  {membership.role === 'admin' || (organization.settings && organization.settings.allowMemberInvites) ? (
-                    <InviteMember
-                      organizationId={organizationId}
-                      organizationName={organization.name}
-                      onInviteSent={function() { fetchStats(currentUserId); }}
-                    />
-                  ) : (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                      <Icon path={ICONS.mail} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-1">Permission Required</h3>
-                      <p className="text-gray-500 text-sm">Member invitations are disabled. Contact an admin to enable this feature.</p>
-                    </div>
-                  )}
-                </div>
-              )}
+                    {inquiriesLoading ? (
+                      <div className="space-y-4">
+                        {[1, 2, 3].map(function(i) {
+                          return (
+                            <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
+                              <div className="flex justify-between gap-4">
+                                <div className="flex-1 space-y-2">
+                                  <div className="h-4 bg-gray-200 rounded w-1/3" />
+                                  <div className="h-3 bg-gray-200 rounded w-1/4" />
+                                  <div className="h-3 bg-gray-200 rounded w-full mt-3" />
+                                  <div className="h-3 bg-gray-200 rounded w-3/4" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <div className="h-8 w-24 bg-gray-200 rounded" />
+                                  <div className="h-8 w-24 bg-gray-200 rounded" />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : inquiries.length === 0 ? (
+                      <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                        <Icon path={ICONS.inbox} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-1">No messages yet</h3>
+                        <p className="text-gray-500 text-sm">Messages submitted via your public page will appear here.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4" role="list" aria-label="Contact inquiries">
+                        {inquiries.map(function(inquiry) {
+                          return (
+                            <div
+                              key={inquiry.id}
+                              role="listitem"
+                              className={'rounded-xl border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200')}
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <span className="font-bold text-gray-900">{inquiry.name}</span>
+                                    {!inquiry.is_read && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>
+                                    )}
+                                    <span className="text-sm text-gray-400">
+                                      {new Date(inquiry.created_at).toLocaleDateString('en-US', {
+                                        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                                      })}
+                                    </span>
+                                  </div>
+                                  <a
+                                    href={'mailto:' + inquiry.email}
+                                    className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                                  >
+                                    {inquiry.email}
+                                  </a>
+                                  <p className="text-gray-700 mt-3 leading-relaxed text-sm">{inquiry.message}</p>
+                                </div>
+                                <div className="flex flex-col gap-2 flex-shrink-0">
+                                  {!inquiry.is_read && (
+                                    <button
+                                      onClick={function() { handleMarkInquiryRead(inquiry.id); }}
+                                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
+                                    >
+                                      Mark Read
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={function() { handleDeleteInquiry(inquiry.id); }}
+                                    className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* ── ANALYTICS TAB ── */}
-              {activeTab === 'analytics' && <AnalyticsDashboard organizationId={organizationId} />}
+                {/* ── INVITE TAB ── */}
+                {activeTab === 'invite' && (
+                  <div>
+                    {membership.role === 'admin' || (organization.settings && organization.settings.allowMemberInvites) ? (
+                      <InviteMember
+                        organizationId={organizationId}
+                        organizationName={organization.name}
+                        onInviteSent={function() { fetchStats(currentUserId); }}
+                      />
+                    ) : (
+                      <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                        <Icon path={ICONS.mail} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Permission Required</h3>
+                        <p className="text-gray-500 text-sm">Member invitations are disabled. Contact an admin to enable this feature.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* ── SETTINGS TAB ── */}
-              {activeTab === 'settings' && (
-                <div>
-                  {membership.role === 'admin' ? (
-                    <OrganizationSettings
-                      organizationId={organizationId}
-                      onUpdate={function(updatedData) { setOrganization(function(prev) { return Object.assign({}, prev, updatedData); }); }}
-                    />
-                  ) : (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
-                      <Icon path={ICONS.settings} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-1">Admin Access Required</h3>
-                      <p className="text-gray-500 text-sm">Only organization admins can modify settings.</p>
-                    </div>
-                  )}
-                </div>
-              )}
+                {/* ── ANALYTICS TAB ── */}
+                {activeTab === 'analytics' && <AnalyticsDashboard organizationId={organizationId} />}
 
+                {/* ── SETTINGS TAB ── */}
+                {activeTab === 'settings' && (
+                  <div>
+                    {membership.role === 'admin' ? (
+                      <OrganizationSettings
+                        organizationId={organizationId}
+                        onUpdate={function(updatedData) { setOrganization(function(prev) { return Object.assign({}, prev, updatedData); }); }}
+                      />
+                    ) : (
+                      <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                        <Icon path={ICONS.settings} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Admin Access Required</h3>
+                        <p className="text-gray-500 text-sm">Only organization admins can modify settings.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       <CreateEvent
         isOpen={showCreateEvent}
         onClose={function() { setShowCreateEvent(false); }}
@@ -1604,9 +1492,163 @@ async function fetchPrograms() {
         organizationName={organization ? organization.name : 'Your Organization'}
       />
 
-      {/* Toast notifications */}
+      {/* ── Program modal (single instance) ── */}
+      {showProgramModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="program-modal-title"
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h3 id="program-modal-title" className="text-lg font-bold text-gray-900">
+                {editingProgram ? 'Edit Program' : 'Add Program'}
+              </h3>
+              <button
+                onClick={function() { setShowProgramModal(false); }}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                aria-label="Close modal"
+              >
+                <Icon path={ICONS.x} className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label htmlFor="prog-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Program Name <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="prog-name"
+                  type="text"
+                  value={programForm.name}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { name: e.target.value }); }); }}
+                  placeholder="e.g. After School Tutoring"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-required="true"
+                />
+              </div>
+              <div>
+                <label htmlFor="prog-desc" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Description</label>
+                <textarea
+                  id="prog-desc"
+                  value={programForm.description}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { description: e.target.value }); }); }}
+                  rows={3}
+                  placeholder="What does this program do?"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="prog-audience" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Who Is It For?</label>
+                <input
+                  id="prog-audience"
+                  type="text"
+                  value={programForm.audience}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { audience: e.target.value }); }); }}
+                  placeholder="e.g. Youth ages 6-18"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="prog-schedule" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Schedule</label>
+                <input
+                  id="prog-schedule"
+                  type="text"
+                  value={programForm.schedule}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { schedule: e.target.value }); }); }}
+                  placeholder="e.g. Every Monday 3-5pm"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="prog-apply" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">How To Apply / Sign Up</label>
+                <textarea
+                  id="prog-apply"
+                  value={programForm.how_to_apply}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { how_to_apply: e.target.value }); }); }}
+                  rows={2}
+                  placeholder="e.g. Fill out form at front desk or call us"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="prog-contact-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Name</label>
+                  <input
+                    id="prog-contact-name"
+                    type="text"
+                    value={programForm.contact_name}
+                    onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_name: e.target.value }); }); }}
+                    placeholder="Jane Smith"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="prog-contact-email" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Email</label>
+                  <input
+                    id="prog-contact-email"
+                    type="email"
+                    value={programForm.contact_email}
+                    onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_email: e.target.value }); }); }}
+                    placeholder="jane@org.org"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="prog-status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
+                <select
+                  id="prog-status"
+                  value={programForm.status}
+                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <button
+                  onClick={function() { setProgramForm(function(p) { return Object.assign({}, p, { is_public: !p.is_public }); }); }}
+                  className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' +
+                    (programForm.is_public ? 'bg-blue-600' : 'bg-gray-200')}
+                  role="switch"
+                  aria-checked={programForm.is_public}
+                  aria-label="Toggle public visibility"
+                >
+                  <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' +
+                    (programForm.is_public ? 'translate-x-6' : 'translate-x-1')} />
+                </button>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Show on public website</p>
+                  <p className="text-xs text-gray-400">Visitors to your page will see this program</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-gray-100">
+              <button
+                onClick={function() { setShowProgramModal(false); }}
+                className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveProgram}
+                disabled={programSaving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {programSaving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast notifications ── */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-    </div>
+    </>
   );
 }
 

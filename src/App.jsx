@@ -27,6 +27,7 @@ import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
 import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
+import OrgPrograms from './pages/OrgPrograms';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
@@ -119,6 +120,7 @@ function App() {
             <Route path="/organizations/:organizationId" element={session ? <OrganizationDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/announcements" element={session ? <AnnouncementFeed /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/members" element={session ? <MemberDirectory /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/programs" element={session ? <OrgPrograms /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/documents" element={session ? <DocumentLibrary /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/polls" element={session ? <PollsList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/signup-forms" element={session ? <SignupFormsList /> : <Navigate to="/login" replace />} />
