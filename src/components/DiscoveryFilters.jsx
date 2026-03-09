@@ -7,7 +7,7 @@ const CATEGORIES = [
   'veteran', 'women', 'youth',
 ];
 
-const ORG_TYPES = ['association', 'community_group', 'nonprofit', 'religious'];
+const ORG_TYPES = ['nonprofit', 'community_group', 'association', 'religious'];
 
 const LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },

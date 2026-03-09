@@ -57,6 +57,7 @@ var BLOCK_CATEGORIES = [
       { type: 'video',           label: 'Video Embed',       icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z',                                                                             desc: 'YouTube or Vimeo embed'              },
       { type: 'quote',           label: 'Quote/Testimonial', icon: 'M8 10.5H6a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v1.5a4 4 0 01-4 4M18 10.5h-2a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v1.5a4 4 0 01-4 4',                                                                       desc: 'Pull quote with attribution'         },
       { type: 'stats',           label: 'Stats/Impact',      icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',        desc: 'Impact numbers and metrics'         },
+      { type: 'column_container', label: 'Column Container', icon: 'M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2', desc: '2 or 3 column layout' },
     ],
   },
   {
@@ -100,6 +101,10 @@ function defaultContent(type) {
     video:            { url: '', caption: '' },
     quote:            { quote: '', attribution: '', role: '' },
     stats:            { heading: '', items: [{ label: 'Members', value: '0', prefix: '', suffix: '' }] },
+    column_container: { heading: '', columns: 2, align: 'left', items: [
+  { heading: '', body: '', image_url: '', image_alt: '', button_label: '', button_url: '' },
+  { heading: '', body: '', image_url: '', image_alt: '', button_label: '', button_url: '' },
+] },
     cta_banner:       { heading: '', subtext: '', cta_label: '', cta_url: '', bg_color: '#3B82F6' },
     email_signup:     { heading: 'Stay in the Loop', subtext: '', button_label: 'Subscribe', placeholder: 'Enter your email' },
     contact_form:     { heading: 'Get in Touch', subtext: '' },
@@ -886,7 +891,94 @@ function BlockForm({ block, onChange, organizationId }) {
       </div>
     </div>
   );
-
+// COLUMN CONTAINER
+if (type === 'column_container') return (
+  <div className="space-y-4">
+    <div>
+      <label htmlFor={'block-heading-' + block.id} className={labelCls}>Section Heading (optional)</label>
+      <input id={'block-heading-' + block.id} type="text" value={c.heading || ''} onChange={function(e) { set('heading', e.target.value); }} placeholder="Our Approach" className={inputCls} />
+    </div>
+    <div>
+      <p className={labelCls}>Number of Columns</p>
+      <div className="flex gap-2">
+        {[2, 3].map(function(n) {
+          return (
+            <button key={n} onClick={function() {
+              var current = c.items || [];
+              var next = current.slice(0, n);
+              while (next.length < n) next.push({ heading: '', body: '', image_url: '', image_alt: '', button_label: '', button_url: '' });
+              onChange(Object.assign({}, c, { columns: n, items: next }));
+            }}
+              className={'flex-1 py-2 text-xs font-semibold rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + ((c.columns || 2) === n ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300')}>
+              {n} Columns
+            </button>
+          );
+        })}
+      </div>
+    </div>
+    <div>
+      <p className={labelCls}>Text Alignment</p>
+      <div className="flex gap-2">
+        {['left', 'center'].map(function(a) {
+          return (
+            <button key={a} onClick={function() { set('align', a); }}
+              className={'flex-1 py-2 text-xs font-semibold rounded-lg border-2 capitalize transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (c.align === a ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300')}>
+              {a}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+    <div>
+      <p className={labelCls}>Columns</p>
+      <div className="space-y-4">
+        {(c.items || []).slice(0, c.columns || 2).map(function(col, i) {
+          return (
+            <div key={i} className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+              <p className="text-xs font-bold text-gray-500">Column {i + 1}</p>
+              <ImageUploader
+                value={col.image_url || ''}
+                onChange={function(v) { setNested('items', i, 'image_url', v); }}
+                organizationId={organizationId}
+                label="Image (optional)"
+                fieldKey={'col-img-' + block.id + '-' + i}
+              />
+              {col.image_url && (
+                <div>
+                  <label className={labelCls}>Image Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
+                  <input type="text" value={col.image_alt || ''} onChange={function(e) { setNested('items', i, 'image_alt', e.target.value); }}
+                    placeholder="Describe the image for screen readers" className={inputCls} maxLength={200} />
+                </div>
+              )}
+              <div>
+                <label className={labelCls}>Heading</label>
+                <input type="text" value={col.heading || ''} onChange={function(e) { setNested('items', i, 'heading', e.target.value); }}
+                  placeholder={'Column ' + (i + 1) + ' heading'} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Body Text</label>
+                <textarea value={col.body || ''} onChange={function(e) { setNested('items', i, 'body', e.target.value); }}
+                  rows={3} placeholder="Supporting text..." className={inputCls + ' resize-none'} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>Button Label</label>
+                  <input type="text" value={col.button_label || ''} onChange={function(e) { setNested('items', i, 'button_label', e.target.value); }}
+                    placeholder="Learn More" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Button URL</label>
+                  <input type="url" value={col.button_url || ''} onChange={function(e) { setNested('items', i, 'button_url', e.target.value); }}
+                    placeholder="https://..." className={inputCls} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+);
   // DIVIDER
   if (type === 'divider') return (
     <div className="space-y-4">

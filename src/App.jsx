@@ -133,6 +133,8 @@ function App() {
             <Route path="/guest-check-in/:eventId" element={<GuestCheckInPage />} />
 
             <Route path="/org/:slug" element={<PublicOrganizationPage />} />
+            <Route path="/org/:slug" element={<PublicOrganizationPage />} />
+<Route path="/org/:slug/:pageSlug" element={<PublicOrganizationPage />} />  {/* ADD THIS */}
             <Route path="/organizations/:organizationId/page-editor" element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />} />
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
             <Route path="/profile/settings" element={<MemberProfileSettings />} />

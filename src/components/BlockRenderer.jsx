@@ -69,6 +69,7 @@ function BlockContactForm({ org, primary, borderRadius }) {
     </div>
   );
 }
+
 // ── Smart Events List Block ───────────────────────────────────────────────────
 function EventsListBlock({ block, primary, borderRadius }) {
   var c = block.content || {};
@@ -240,6 +241,7 @@ function TeamGridBlock({ block, primary, org }) {
     </div>
   );
 }
+
 // ── Main renderer ─────────────────────────────────────────────────────────────
 export function renderBlock(block, primary, secondary, borderRadius, fontFamily, org) {
   var c = block.content || {};
@@ -281,7 +283,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     var isLeft = c.image_position !== 'right';
     return (
       <div key={key} className={'flex flex-col md:flex-row gap-10 items-center ' + (isLeft ? '' : 'md:flex-row-reverse')}>
-       {c.image_url && <img src={c.image_url} alt={c.image_alt || c.heading || 'Section image'} className="w-full md:w-1/2 rounded-xl object-cover shadow-md" style={{ maxHeight: '380px' }} />}
+        {c.image_url && <img src={c.image_url} alt={c.image_alt || c.heading || 'Section image'} className="w-full md:w-1/2 rounded-xl object-cover shadow-md" style={{ maxHeight: '380px' }} />}
         <div className={'flex-1 ' + (!c.image_url ? 'w-full' : '')}>
           {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-4">{c.heading}</h2>}
           {c.body && <p className="text-gray-600 leading-relaxed">{c.body}</p>}
@@ -349,7 +351,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
 
   // STATS
   if (type === 'stats') {
-    var cols = (c.items || []).length <= 2 ? 'grid-cols-2' : (c.items || []).length === 3 ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4';
+    var statCount = (c.items || []).length;
+    var cols = statCount <= 2 ? 'grid-cols-2' : statCount === 3 ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4';
     return (
       <div key={key} className="text-center">
         {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-10">{c.heading}</h2>}
@@ -465,7 +468,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-// EVENTS LIST
+  // EVENTS LIST
   if (type === 'events_list') {
     return <EventsListBlock key={key} block={block} primary={primary} borderRadius={borderRadius} />;
   }
@@ -489,14 +492,15 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-// TEAM GRID
+  // TEAM GRID
   if (type === 'team_grid') {
     return <TeamGridBlock key={key} block={block} primary={primary} org={org} />;
   }
 
   // MEMBERSHIP TIERS
   if (type === 'membership_tiers') {
-    var tierCols = (c.tiers || []).length === 2 ? 'grid-cols-2' : (c.tiers || []).length >= 3 ? 'grid-cols-3' : 'grid-cols-1';
+    var tierCount = (c.tiers || []).length;
+    var tierCols = tierCount === 2 ? 'grid-cols-2' : tierCount >= 3 ? 'grid-cols-3' : 'grid-cols-1';
     return (
       <div key={key}>
         {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">{c.heading}</h2>}
@@ -574,6 +578,54 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
             return partner.url
               ? <a key={i} href={partner.url} target="_blank" rel="noopener noreferrer" aria-label={partner.name}>{inner}</a>
               : <div key={i}>{inner}</div>;
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // COLUMN CONTAINER
+  if (type === 'column_container') {
+    var colCount = c.columns || 2;
+    var colGrid = colCount === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2';
+    var items = c.items || [];
+    // Ensure we always have the right number of column items
+    while (items.length < colCount) { items = items.concat([{ heading: '', body: '', image_url: '', image_alt: '', button_label: '', button_url: '' }]); }
+    items = items.slice(0, colCount);
+
+    return (
+      <div key={key}>
+        {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">{c.heading}</h2>}
+        <div className={'grid gap-8 ' + colGrid}>
+          {items.map(function(col, i) {
+            var align = c.align === 'center' ? 'text-center items-center' : c.align === 'right' ? 'text-right items-end' : 'text-left items-start';
+            return (
+              <div key={i} className={'flex flex-col gap-4 ' + align}>
+                {col.image_url && (
+                  <img
+                    src={col.image_url}
+                    alt={col.image_alt || col.heading || ('Column ' + (i + 1) + ' image')}
+                    className="w-full rounded-xl object-cover shadow-sm"
+                    style={{ maxHeight: '240px' }}
+                  />
+                )}
+                {col.heading && (
+                  <h3 className="text-xl font-bold text-gray-900">{col.heading}</h3>
+                )}
+                {col.body && (
+                  <p className="text-gray-600 leading-relaxed text-sm">{col.body}</p>
+                )}
+                {col.button_label && (
+                  <a
+                    href={col.button_url || '#'}
+                    className="inline-block font-bold px-6 py-2.5 text-white text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+                    style={{ backgroundColor: primary, borderRadius: borderRadius }}
+                  >
+                    {col.button_label}
+                  </a>
+                )}
+              </div>
+            );
           })}
         </div>
       </div>
