@@ -4,6 +4,21 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import BlockEditor from '../components/BlockEditor';
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   getThemeVars,
   getNavLinks,
   ClassicTemplate,
@@ -17,6 +32,7 @@ import WebsiteSetupWizard from '../components/WebsiteSetupWizard';
 
 var PREVIEW_WIDTH = 1280;
 
+// ── Icon ─────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
   var cls = className || 'h-5 w-5';
   var sw = strokeWidth || 2;
@@ -29,6 +45,7 @@ function Icon({ path, className, strokeWidth }) {
   );
 }
 
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton({ className }) {
   return <div className={'animate-pulse rounded-lg bg-gray-200 ' + (className || '')} aria-hidden="true" />;
 }
@@ -67,6 +84,7 @@ function EditorSkeleton() {
   );
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
 var TEMPLATES = [
   {
     id: 'classic', name: 'Classic', description: 'Simple hero, events list, footer navigation',
@@ -140,7 +158,34 @@ var DEFAULT_PAGES = [
 var inputCls = 'w-full px-4 py-3 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm';
 var labelCls = 'block text-sm font-semibold text-gray-700 mb-2';
 
-// ── Section divider used inside Appearance tab ──
+// ── Section data helpers ──────────────────────────────────────────────────────
+function normalizeSections(pageSections, savedSectionsV2) {
+  if (savedSectionsV2 && Array.isArray(savedSectionsV2) && savedSectionsV2.length > 0) {
+    return savedSectionsV2;
+  }
+  var raw = pageSections || {};
+  return Object.keys(PAGE_SECTION_CONFIG).map(function(key, i) {
+    return {
+      id: key,
+      key: key,
+      label: PAGE_SECTION_CONFIG[key].label,
+      visible: raw[key] !== false,
+      archived: false,
+      order: i,
+      isCustom: false,
+    };
+  });
+}
+
+function sectionsToLegacy(secs) {
+  var result = {};
+  (secs || []).forEach(function(s) {
+    result[s.key] = !!(s.visible && !s.archived);
+  });
+  return result;
+}
+
+// ── AppearanceSection divider ─────────────────────────────────────────────────
 function AppearanceSection({ label, children }) {
   return (
     <div className="border-t border-gray-100 pt-6 mt-2">
@@ -150,6 +195,7 @@ function AppearanceSection({ label, children }) {
   );
 }
 
+// ── Toggle ────────────────────────────────────────────────────────────────────
 function Toggle({ checked, onChange, label, id }) {
   return (
     <button
@@ -162,6 +208,7 @@ function Toggle({ checked, onChange, label, id }) {
   );
 }
 
+// ── PreviewNewPage ────────────────────────────────────────────────────────────
 function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, fontFamily }) {
   var enabledPages = (pages || []).filter(function(p) { return p.is_enabled && p.page_key && !p.page_key.startsWith('external-'); });
   var firstPageWithBlocks = enabledPages.find(function(p) { return blocks.some(function(b) { return b.page_id === p.id; }); });
@@ -187,7 +234,7 @@ function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, 
         {activePageBlocks.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <p className="text-sm font-medium">No blocks on this page yet.</p>
-            <p className="text-xs mt-1">Add blocks in the Pages & Content tab.</p>
+            <p className="text-xs mt-1">Add blocks in the Pages &amp; Content tab.</p>
           </div>
         ) : (
           activePageBlocks.map(function(block) {
@@ -203,6 +250,254 @@ function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, 
   );
 }
 
+// ── SortablePageItem ──────────────────────────────────────────────────────────
+function SortablePageItem({
+  page, index, isExpanded, onToggleExpand,
+  navCount, NAV_LIMIT,
+  onNavToggle, onEnabledToggle, onArchive, onDelete,
+  onTitleChange, onNavLabelChange,
+  children,
+}) {
+  var sortable = useSortable({ id: page.id });
+  var style = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+    opacity: sortable.isDragging ? 0.5 : 1,
+    zIndex: sortable.isDragging ? 10 : undefined,
+  };
+  var navAtLimit = navCount >= NAV_LIMIT && !page.is_visible_in_nav;
+
+  return (
+    <div ref={sortable.setNodeRef} style={style} role="listitem">
+      <div className={'rounded-xl border-2 transition-all bg-white ' + (sortable.isDragging ? 'shadow-xl border-blue-300' : 'border-gray-200')}>
+        {/* Row */}
+        <div className="flex items-center gap-2 p-3">
+          {/* Drag handle */}
+          <button
+            {...sortable.attributes}
+            {...sortable.listeners}
+            aria-label={'Drag to reorder ' + page.title}
+            className="p-1.5 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors flex-shrink-0 touch-none">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 12a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 18a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+            </svg>
+          </button>
+
+          {/* Page name + slug */}
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              value={page.title}
+              onChange={function(e) { onTitleChange(page.id, e.target.value); }}
+              aria-label={'Page name for ' + page.title}
+              className="w-full px-2 py-1 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 mb-0.5"
+              maxLength={40}
+            />
+            <p className="text-xs text-gray-400 px-1">/{page.page_key}</p>
+          </div>
+
+          {/* Nav label */}
+          <div className="w-24 flex-shrink-0">
+            <input
+              type="text"
+              value={page.nav_label}
+              onChange={function(e) { onNavLabelChange(page.id, e.target.value); }}
+              placeholder="Nav label"
+              aria-label={'Navigation label for ' + page.title}
+              className="w-full px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+              maxLength={30}
+            />
+          </div>
+
+          {/* IN NAV toggle */}
+          <div className="flex flex-col items-center flex-shrink-0">
+            <div className={'relative ' + (navAtLimit ? 'group' : '')}>
+              <Toggle
+                checked={!!(page.is_visible_in_nav && page.is_enabled)}
+                onChange={navAtLimit ? function() { return null; } : onNavToggle}
+                label={(page.is_visible_in_nav ? 'Remove ' : 'Add ') + page.title + ' from navigation'}
+                id={'nav-toggle-page-' + page.id}
+                disabled={navAtLimit}
+              />
+              {navAtLimit && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10" role="tooltip">
+                  Nav limit reached (3/3)
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ON toggle */}
+          <Toggle
+            checked={!!page.is_enabled}
+            onChange={onEnabledToggle}
+            label={'Toggle ' + page.title + ' page on/off'}
+            id={'enabled-toggle-page-' + page.id}
+          />
+
+          {/* Archive + Delete */}
+          <button
+            onClick={onArchive}
+            aria-label={'Archive ' + page.title + ' page'}
+            className="p-1.5 text-gray-300 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg transition-colors flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </button>
+          <button
+            onClick={onDelete}
+            aria-label={'Delete ' + page.title + ' page'}
+            className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors flex-shrink-0">
+            <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Expand chevron */}
+          <button
+            onClick={onToggleExpand}
+            aria-label={(isExpanded ? 'Collapse ' : 'Expand ') + page.title + ' sections'}
+            aria-expanded={isExpanded}
+            className="p-1.5 text-gray-300 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg transition-colors flex-shrink-0">
+            <Icon path={isExpanded ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Expanded: sections */}
+        {isExpanded && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3 bg-gray-50 rounded-b-xl">
+            {children}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── SortableSectionItem ───────────────────────────────────────────────────────
+function SortableSectionItem({
+  section,
+  isEditing,
+  editingLabel,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onEditChange,
+  onToggleVisible,
+  onArchive,
+  onDelete,
+}) {
+  var sortable = useSortable({ id: section.id });
+  var style = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+    opacity: sortable.isDragging ? 0.5 : 1,
+    zIndex: sortable.isDragging ? 10 : undefined,
+  };
+  var sectionDesc = PAGE_SECTION_CONFIG[section.key] ? PAGE_SECTION_CONFIG[section.key].desc : 'Custom section';
+
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      style={style}
+      role="listitem"
+      className={'rounded-xl border-2 transition-all bg-white ' +
+        (sortable.isDragging ? 'shadow-xl border-blue-300 ' : 'border-gray-200 ') +
+        (!section.visible ? 'opacity-60' : '')}>
+      <div className="flex items-center gap-3 p-3">
+
+        {/* Drag handle */}
+        <button
+          {...sortable.attributes}
+          {...sortable.listeners}
+          aria-label={'Drag to reorder ' + section.label + ' section'}
+          className="p-1.5 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors flex-shrink-0 touch-none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 12a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 18a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+          </svg>
+        </button>
+
+        {/* Label / inline edit */}
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editingLabel}
+                onChange={onEditChange}
+                onKeyDown={function(e) {
+                  if (e.key === 'Enter') onSaveEdit();
+                  if (e.key === 'Escape') onCancelEdit();
+                }}
+                className="flex-1 px-2 py-1 border-2 border-blue-500 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none"
+                autoFocus
+                maxLength={50}
+                aria-label="Section name"
+              />
+              <button
+                onClick={onSaveEdit}
+                aria-label="Save section name"
+                className="p-1 text-green-500 hover:text-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 rounded transition-colors">
+                <Icon path="M5 13l4 4L19 7" className="h-4 w-4" />
+              </button>
+              <button
+                onClick={onCancelEdit}
+                aria-label="Cancel rename"
+                className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded transition-colors">
+                <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-900">{section.label}</span>
+                {section.isCustom && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-semibold">Custom</span>
+                )}
+                {!section.visible && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 font-semibold">Hidden</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">{sectionDesc}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        {!isEditing && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={onStartEdit}
+              aria-label={'Rename ' + section.label + ' section'}
+              className="p-1.5 text-gray-300 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg transition-colors">
+              <Icon path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" className="h-3.5 w-3.5" />
+            </button>
+            <Toggle
+              checked={section.visible}
+              onChange={onToggleVisible}
+              label={(section.visible ? 'Hide ' : 'Show ') + section.label + ' section'}
+              id={'section-vis-' + section.id}
+            />
+            <button
+              onClick={onArchive}
+              aria-label={'Archive ' + section.label + ' section'}
+              className="p-1.5 text-gray-300 hover:text-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+            </button>
+            <button
+              onClick={onDelete}
+              aria-label={'Delete ' + section.label + ' section'}
+              className="p-1.5 text-gray-300 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+              <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Export ───────────────────────────────────────────────────────────────
 export default function OrgPageEditor() {
   var { organizationId } = useParams();
   var navigate = useNavigate();
@@ -211,6 +506,7 @@ export default function OrgPageEditor() {
   var previewPanelRef = useRef(null);
   var debounceTimers = useRef({});
 
+  // ── Core state ──
   var [org, setOrg] = useState(null);
   var [loading, setLoading] = useState(true);
   var [saving, setSaving] = useState(false);
@@ -226,6 +522,30 @@ export default function OrgPageEditor() {
   var [footerPage, setFooterPage] = useState(null);
   var [showLayoutModal, setShowLayoutModal] = useState(false);
 
+  // ── Section manager state ──
+  var [sections, setSections] = useState([]);
+  var [sectionDeleteModal, setSectionDeleteModal] = useState(null);
+  var [editingSectionId, setEditingSectionId] = useState(null);
+  var [editingSectionLabel, setEditingSectionLabel] = useState('');
+  var [showAddSection, setShowAddSection] = useState(false);
+  var [newSectionLabel, setNewSectionLabel] = useState('');
+  var [showArchivedSections, setShowArchivedSections] = useState(false);
+
+  var [expandedPageId, setExpandedPageId] = useState(null);
+  var [footerOpen, setFooterOpen] = useState(false);
+  var NAV_LIMIT = 3;
+
+  // ── dnd-kit sensors ──
+  var sectionSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  var pageSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // ── Form state ──
   var [form, setForm] = useState({
     name: '', tagline: '', description: '', contact_email: '', contact_phone: '',
     address: '', city: '', state: '', zip_code: '', website: '',
@@ -237,6 +557,7 @@ export default function OrgPageEditor() {
     theme: { primaryColor: '#3B82F6', fontPairing: 'inter', buttonStyle: 'rounded', customColors: ['#3B82F6', '', ''] },
     nav_links: DEFAULT_NAV_LINKS,
     publish_channels: { website: true, discovery: false },
+    footerColumns: 2,
   });
 
   // ── Scale preview to fit panel width ──
@@ -294,6 +615,179 @@ export default function OrgPageEditor() {
     );
   }
 
+  // ── Section management handlers ───────────────────────────────────────────
+
+  async function handlePageDragEnd(event) {
+    var active = event.active;
+    var over = event.over;
+    if (!over || active.id === over.id) return;
+    var activePgs = sitePages.filter(function(p) { return p.is_enabled; });
+    var oldIndex = activePgs.findIndex(function(p) { return p.id === active.id; });
+    var newIndex = activePgs.findIndex(function(p) { return p.id === over.id; });
+    if (oldIndex === -1 || newIndex === -1) return;
+    var next = activePgs.slice();
+    var moved = next.splice(oldIndex, 1)[0];
+    next.splice(newIndex, 0, moved);
+    next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
+    // Merge back disabled pages
+    var disabled = sitePages.filter(function(p) { return !p.is_enabled; });
+    var merged = next.concat(disabled);
+    setSitePages(merged);
+    await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
+    await saveNavInstant(merged);
+  }
+
+  function handlePageNavToggle(page) {
+    var navCount = sitePages.filter(function(p) { return p.is_visible_in_nav && p.is_enabled; }).length;
+    if (!page.is_visible_in_nav && navCount >= NAV_LIMIT) {
+      toast.error('Nav limit reached. Remove a page from nav first.');
+      return;
+    }
+    var updated = sitePages.map(function(p) {
+      return p.id === page.id ? Object.assign({}, p, { is_visible_in_nav: !p.is_visible_in_nav }) : p;
+    });
+    setSitePages(updated);
+    savePageField(page.id, { is_visible_in_nav: !page.is_visible_in_nav });
+    saveNavInstant(updated);
+  }
+
+  function handlePageEnabledToggle(page) {
+    var updated = sitePages.map(function(p) {
+      return p.id === page.id ? Object.assign({}, p, { is_enabled: !p.is_enabled }) : p;
+    });
+    setSitePages(updated);
+    savePageField(page.id, { is_enabled: !page.is_enabled });
+    saveNavInstant(updated);
+  }
+
+  function handlePageTitleChange(pageId, title) {
+    var newKey = slugify(title);
+    setSitePages(function(prev) {
+      return prev.map(function(p) {
+        return p.id === pageId ? Object.assign({}, p, { title: title, page_key: newKey }) : p;
+      });
+    });
+    savePageDebounced(pageId, { title: title, page_key: newKey });
+  }
+
+  function handlePageNavLabelChange(pageId, label) {
+    setSitePages(function(prev) {
+      return prev.map(function(p) {
+        return p.id === pageId ? Object.assign({}, p, { nav_label: label }) : p;
+      });
+    });
+    savePageDebounced(pageId, { nav_label: label });
+  }
+
+  // Active (non-archived) sections sorted by order
+  function getActiveSections() {
+    return sections.filter(function(s) { return !s.archived; }).sort(function(a, b) { return a.order - b.order; });
+  }
+
+  function getArchivedSections() {
+    return sections.filter(function(s) { return s.archived; });
+  }
+
+  function handleSectionDragEnd(event) {
+    var active = event.active;
+    var over = event.over;
+    if (!over || active.id === over.id) return;
+    var active_sections = getActiveSections();
+    var oldIndex = active_sections.findIndex(function(s) { return s.id === active.id; });
+    var newIndex = active_sections.findIndex(function(s) { return s.id === over.id; });
+    if (oldIndex === -1 || newIndex === -1) return;
+    var next = active_sections.slice();
+    var removed = next.splice(oldIndex, 1)[0];
+    next.splice(newIndex, 0, removed);
+    var reindexed = next.map(function(s, i) { return Object.assign({}, s, { order: i }); });
+    var archived = getArchivedSections();
+    setSections(reindexed.concat(archived));
+    toast.success('Section order updated');
+  }
+
+  function toggleSectionVisible(sectionId) {
+    setSections(function(prev) {
+      return prev.map(function(s) {
+        return s.id === sectionId ? Object.assign({}, s, { visible: !s.visible }) : s;
+      });
+    });
+  }
+
+  function archiveSection(sectionId) {
+    setSections(function(prev) {
+      return prev.map(function(s) {
+        return s.id === sectionId ? Object.assign({}, s, { archived: true, visible: false }) : s;
+      });
+    });
+    toast.success('Section archived');
+  }
+
+  function restoreSection(sectionId) {
+    var active_sections = getActiveSections();
+    setSections(function(prev) {
+      return prev.map(function(s) {
+        return s.id === sectionId ? Object.assign({}, s, { archived: false, visible: true, order: active_sections.length }) : s;
+      });
+    });
+    toast.success('Section restored');
+  }
+
+  function confirmDeleteSection(sectionId) {
+    var sec = sections.find(function(s) { return s.id === sectionId; });
+    setSectionDeleteModal(sec || null);
+  }
+
+  function executeDeleteSection(sectionId) {
+    setSections(function(prev) { return prev.filter(function(s) { return s.id !== sectionId; }); });
+    setSectionDeleteModal(null);
+    toast.success('Section deleted');
+  }
+
+  function startEditSection(sectionId) {
+    var sec = sections.find(function(s) { return s.id === sectionId; });
+    if (sec) {
+      setEditingSectionId(sectionId);
+      setEditingSectionLabel(sec.label);
+    }
+  }
+
+  function saveEditSection() {
+    if (!editingSectionLabel.trim()) { toast.error('Section name cannot be empty'); return; }
+    setSections(function(prev) {
+      return prev.map(function(s) {
+        return s.id === editingSectionId ? Object.assign({}, s, { label: editingSectionLabel.trim() }) : s;
+      });
+    });
+    setEditingSectionId(null);
+    setEditingSectionLabel('');
+    toast.success('Section renamed');
+  }
+
+  function cancelEditSection() {
+    setEditingSectionId(null);
+    setEditingSectionLabel('');
+  }
+
+  function addCustomSection() {
+    var label = newSectionLabel.trim();
+    if (!label) { toast.error('Please enter a section name'); return; }
+    var key = 'custom-' + Date.now();
+    var active_sections = getActiveSections();
+    var newSec = {
+      id: key,
+      key: key,
+      label: label,
+      visible: true,
+      archived: false,
+      order: active_sections.length,
+      isCustom: true,
+    };
+    setSections(function(prev) { return prev.concat([newSec]); });
+    setNewSectionLabel('');
+    setShowAddSection(false);
+    toast.success(label + ' section added');
+  }
+
   // ── Fetch org data ──
   async function fetchOrg() {
     try {
@@ -318,6 +812,10 @@ export default function OrgPageEditor() {
       var savedSections = data.page_sections || {};
       var savedSettings = data.settings || {};
       var savedTheme = savedSettings.theme || {};
+
+      // Load sections (v2 format if available, else migrate from legacy)
+      var loadedSections = normalizeSections(savedSections, savedSettings.sections_v2 || null);
+      setSections(loadedSections);
 
       setForm({
         name: data.name || '', tagline: data.tagline || '', description: data.description || '',
@@ -345,6 +843,7 @@ export default function OrgPageEditor() {
         },
         nav_links:        savedSettings.nav_links || DEFAULT_NAV_LINKS,
         publish_channels: savedSettings.publish_channels || { website: true, discovery: false },
+        footerColumns:    savedSettings.footerColumns || 2,
       });
 
       // Load or seed site pages
@@ -361,7 +860,7 @@ export default function OrgPageEditor() {
         existingPages = insertResult.data;
       }
 
-      // Ensure footer page exists (hidden from nav, never shown in page list)
+      // Ensure footer page exists
       var existingFooter = existingPages.find(function(p) { return p.page_key === '__footer__'; });
       if (!existingFooter) {
         var footerInsert = await supabase.from('org_site_pages').insert([{
@@ -376,8 +875,6 @@ export default function OrgPageEditor() {
         if (!footerInsert.error) existingFooter = footerInsert.data;
       }
       setFooterPage(existingFooter || null);
-
-      // Exclude footer from the normal page list
       setSitePages(existingPages.filter(function(p) { return p.page_key !== '__footer__'; }));
 
       var blocksResult = await supabase.from('org_site_blocks').select('*')
@@ -430,17 +927,24 @@ export default function OrgPageEditor() {
       var existingResult = await supabase.from('organizations').select('settings').eq('id', organizationId).single();
       var existingSettings = existingResult.data ? (existingResult.data.settings || {}) : {};
       var updatedSettings = Object.assign({}, existingSettings, {
-        template: form.template, theme: form.theme,
-        nav_links: form.nav_links, publish_channels: form.publish_channels,
+        template: form.template,
+        theme: form.theme,
+        nav_links: form.nav_links,
+        publish_channels: form.publish_channels,
+        sections_v2: sections,
+        footerColumns: form.footerColumns,
       });
+      var legacySections = sectionsToLegacy(sections);
       var updateResult = await supabase.from('organizations').update({
         name: form.name.trim(), tagline: form.tagline.trim(), description: form.description.trim(),
         contact_email: form.contact_email.trim(), contact_phone: form.contact_phone.trim(),
         address: form.address.trim(), city: form.city.trim(), state: form.state.trim(),
         zip_code: form.zip_code.trim(), website: form.website.trim(),
         logo_url: form.logo_url, banner_url: form.banner_url,
-        social_links: form.social_links, page_sections: form.page_sections,
-        is_public: form.is_public, settings: updatedSettings,
+        social_links: form.social_links,
+        page_sections: legacySections,
+        is_public: form.is_public,
+        settings: updatedSettings,
       }).eq('id', organizationId);
       if (updateResult.error) throw updateResult.error;
       toast.success('Changes saved!');
@@ -461,9 +965,6 @@ export default function OrgPageEditor() {
     var name = e.target.name; var value = e.target.value;
     setForm(function(prev) { return Object.assign({}, prev, { social_links: Object.assign({}, prev.social_links, { [name]: value }) }); });
   }
-  function toggleSection(key) {
-    setForm(function(prev) { var u = Object.assign({}, prev.page_sections); u[key] = !u[key]; return Object.assign({}, prev, { page_sections: u }); });
-  }
   function setTheme(key, value) {
     setForm(function(prev) { return Object.assign({}, prev, { theme: Object.assign({}, prev.theme, { [key]: value }) }); });
   }
@@ -471,7 +972,8 @@ export default function OrgPageEditor() {
     setForm(function(prev) { return Object.assign({}, prev, { publish_channels: Object.assign({}, prev.publish_channels, { [key]: value }) }); });
   }
 
-  // ── Preview org object ──
+  // ── Derived preview org (sections derived from sections state) ──
+  var currentPageSections = sectionsToLegacy(sections);
   var previewOrg = {
     id: organizationId,
     name: form.name || 'Your Organization',
@@ -482,7 +984,8 @@ export default function OrgPageEditor() {
     logo_url: form.logo_url, banner_url: form.banner_url,
     social_links: form.social_links, slug: org ? org.slug : '',
     settings: { template: form.template, theme: form.theme, nav_links: form.nav_links, publish_channels: form.publish_channels },
-    page_sections: form.page_sections, is_public: form.is_public,
+    page_sections: currentPageSections,
+    is_public: form.is_public,
   };
 
   var previewThemeVars = getThemeVars(previewOrg);
@@ -495,7 +998,7 @@ export default function OrgPageEditor() {
   };
   var previewTemplateProps = {
     org: previewOrg, events: [], announcements: [], photos: [],
-    sections: form.page_sections, joinProps: previewJoinProps,
+    sections: currentPageSections, joinProps: previewJoinProps,
     openLightbox: function() {}, navLinks: previewNavLinks, themeVars: previewThemeVars,
   };
 
@@ -510,12 +1013,14 @@ export default function OrgPageEditor() {
 
   if (loading) return <EditorSkeleton />;
 
-  // Derived stats for Overview
   var enabledPageCount = sitePages.filter(function(p) { return p.is_enabled; }).length;
   var blockCount = siteBlocks.length;
   var lastUpdated = org && org.updated_at
     ? new Date(org.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Never';
+
+  var activeSections = getActiveSections();
+  var archivedSections = getArchivedSections();
 
   return (
     <div className={previewOpen ? 'h-screen overflow-hidden flex flex-col bg-gray-50' : 'min-h-screen bg-gray-50'}>
@@ -533,27 +1038,23 @@ export default function OrgPageEditor() {
         />
       )}
 
-      {/* Change Layout modal */}
+      {/* ── Change Layout modal ── */}
       {showLayoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="layout-modal-title">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setShowLayoutModal(false); }} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
               <div>
                 <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-0.5">Layout</p>
                 <h2 id="layout-modal-title" className="text-xl font-bold text-gray-900">Change Layout</h2>
                 <p className="text-sm text-gray-500 mt-0.5">Choose how your public organization page is displayed.</p>
               </div>
-              <button
-                onClick={function() { setShowLayoutModal(false); }}
+              <button onClick={function() { setShowLayoutModal(false); }}
                 className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors flex-shrink-0"
                 aria-label="Close layout picker">
                 <Icon path="M6 18L18 6M6 6l12 12" className="h-5 w-5" />
               </button>
             </div>
-
-            {/* Template grid */}
             <div className="overflow-y-auto p-6 flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Page templates">
                 {TEMPLATES.map(function(t) {
@@ -580,18 +1081,14 @@ export default function OrgPageEditor() {
                 })}
               </div>
             </div>
-
-            {/* Modal footer */}
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex-shrink-0">
-              <p className="text-xs text-gray-400 text-center">
-                Layout changes are reflected instantly in the preview. Save to make them permanent.
-              </p>
+              <p className="text-xs text-gray-400 text-center">Layout changes are reflected instantly in the preview. Save to make them permanent.</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* ── Page delete confirmation modal ── */}
       {deleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setDeleteModal(null); }} />
@@ -609,6 +1106,31 @@ export default function OrgPageEditor() {
               <button onClick={async function() { await deletePage(deleteModal.id); setDeleteModal(null); }}
                 className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors">
                 Yes, Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Section delete confirmation modal ── */}
+      {sectionDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="section-delete-modal-title">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setSectionDeleteModal(null); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-5">
+              <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-8 w-8 text-red-500" />
+            </div>
+            <h2 id="section-delete-modal-title" className="text-xl font-bold text-gray-900 mb-2">Delete "{sectionDeleteModal.label}"?</h2>
+            <p className="text-gray-500 text-sm mb-2">This section will be permanently removed from your page and <span className="font-semibold text-red-500">cannot be restored</span>.</p>
+            <p className="text-xs text-gray-400 mb-8">Tip: Use Archive instead if you might want it back later.</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={function() { setSectionDeleteModal(null); }}
+                className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">
+                No, Keep Section
+              </button>
+              <button onClick={function() { executeDeleteSection(sectionDeleteModal.id); }}
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors">
+                Yes, Delete
               </button>
             </div>
           </div>
@@ -635,9 +1157,7 @@ export default function OrgPageEditor() {
               <p className="text-xs text-gray-500 truncate">{org && org.name}</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Preview toggle */}
             <button
               onClick={function() { setPreviewOpen(!previewOpen); }}
               className={'hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg border transition-all focus:outline-none focus:ring-2 focus:ring-gray-400 ' + (previewOpen ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')}
@@ -646,8 +1166,6 @@ export default function OrgPageEditor() {
               <Icon path={previewOpen ? 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21' : 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'} className="h-4 w-4" />
               {previewOpen ? 'Hide Preview' : 'Preview'}
             </button>
-
-            {/* Open public page */}
             {org && org.slug && (
               <a href={'/org/' + org.slug} target="_blank" rel="noopener noreferrer"
                 className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
@@ -656,8 +1174,6 @@ export default function OrgPageEditor() {
                 Open Page
               </a>
             )}
-
-            {/* Save */}
             <button onClick={handleSave} disabled={saving}
               className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
               aria-label={saving ? 'Saving changes' : 'Save changes'} aria-busy={saving}>
@@ -686,7 +1202,7 @@ export default function OrgPageEditor() {
           style={previewOpen ? { width: '42%', flexShrink: 0, padding: '24px' } : {}}>
           <div className="flex flex-col lg:flex-row gap-6">
 
-            {/* ── 4-tab sidebar ── */}
+            {/* ── 5-tab sidebar ── */}
             <aside className="lg:w-48 flex-shrink-0">
               <nav aria-label="Website editor sections">
                 <ul className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
@@ -721,8 +1237,6 @@ export default function OrgPageEditor() {
                     <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Overview</p>
                     <h2 className="text-2xl font-bold text-gray-900 mb-1">Site Status</h2>
                     <p className="text-gray-500 text-sm mb-6">A quick look at your website and publish state.</p>
-
-                    {/* Status row */}
                     <div className={'flex items-center justify-between p-5 rounded-xl border-2 transition-all ' + (form.is_public ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
                       <div className="flex items-center gap-4">
                         <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ' + (form.is_public ? 'bg-green-100' : 'bg-gray-200')} aria-hidden="true">
@@ -764,7 +1278,7 @@ export default function OrgPageEditor() {
                     </div>
                   </div>
 
-                  {/* Last edited + public URL */}
+                  {/* Last edited + URL */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-gray-500">
@@ -789,12 +1303,12 @@ export default function OrgPageEditor() {
                             <Icon path="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" className="h-4 w-4" />
                           </a>
                         </div>
-                        <p className="text-xs text-gray-400 mt-2">This is your Syndicade-hosted page. It's different from your organization's own website.</p>
+                        <p className="text-xs text-gray-400 mt-2">This is your Syndicade-hosted page. Different from your organization's own website.</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Analytics */}
+                  {/* Analytics placeholder */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                     <div className="flex items-start justify-between gap-4 mb-5">
                       <div>
@@ -806,8 +1320,6 @@ export default function OrgPageEditor() {
                         Coming Soon
                       </span>
                     </div>
-
-                    {/* Placeholder stat cards */}
                     <div className="grid grid-cols-2 gap-3 mb-5">
                       {[
                         { label: 'Page Views', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z', color: 'text-blue-500', bg: 'bg-blue-50 border-blue-100' },
@@ -826,403 +1338,9 @@ export default function OrgPageEditor() {
                         );
                       })}
                     </div>
-
                     <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 flex items-start gap-3">
                       <Icon path="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-gray-500">
-                        Analytics will track page views, visitor counts, traffic sources, and engagement once your page is published. Data will appear here automatically.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ════════════════════════════════════════
-                  TAB 4 — PAGES & CONTENT
-              ════════════════════════════════════════ */}
-              {activeSection === 'pages-content' && (
-                <div className="space-y-6">
-
-                  {/* Pages list */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <div className="flex items-start justify-between gap-4 mb-5">
-                      <div>
-                        <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Pages</p>
-                        <h2 className="text-xl font-bold text-gray-900 mb-0.5">Site Pages</h2>
-                        <p className="text-gray-500 text-sm">Manage page names, nav labels, order, and visibility.</p>
-                      </div>
-                      <button
-                        onClick={function() { setShowLayoutModal(true); }}
-                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                        aria-label="Change page layout template">
-                        <Icon path="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" className="h-4 w-4" />
-                        Change Layout
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-12 gap-2 px-3 mb-2">
-                      <div className="col-span-1" />
-                      <div className="col-span-3"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Page Name</span></div>
-                      <div className="col-span-3"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Nav Label</span></div>
-                      <div className="col-span-2 text-center"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">In Nav</span></div>
-                      <div className="col-span-2 text-center"><span className="text-xs font-bold text-gray-400 uppercase tracking-wide">On</span></div>
-                      <div className="col-span-1" />
-                    </div>
-
-                    <div className="space-y-2" role="list" aria-label="Site pages">
-                      {sitePages.map(function(page, index) {
-                        return (
-                          <div key={page.id} role="listitem"
-                            className={'grid grid-cols-12 gap-2 items-center p-3 rounded-xl border transition-colors ' + (page.is_enabled ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60')}
-                            aria-label={page.title + ' page row'}>
-
-                            {/* Sort arrows */}
-                            <div className="col-span-1 flex flex-col gap-0.5 items-center">
-                              <button
-                                onClick={async function() {
-                                  if (index === 0) return;
-                                  var next = sitePages.slice();
-                                  var temp = next[index - 1]; next[index - 1] = next[index]; next[index] = temp;
-                                  next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
-                                  setSitePages(next);
-                                  await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
-                                  await saveNavInstant(next);
-                                }}
-                                disabled={index === 0}
-                                aria-label={'Move ' + page.title + ' up'}
-                                className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={async function() {
-                                  if (index === sitePages.length - 1) return;
-                                  var next = sitePages.slice();
-                                  var temp = next[index + 1]; next[index + 1] = next[index]; next[index] = temp;
-                                  next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
-                                  setSitePages(next);
-                                  await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
-                                  await saveNavInstant(next);
-                                }}
-                                disabled={index === sitePages.length - 1}
-                                aria-label={'Move ' + page.title + ' down'}
-                                className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
-
-                            {/* Page title */}
-                            <div className="col-span-3">
-                              <input type="text" value={page.title}
-                                onChange={function(e) {
-                                  var title = e.target.value;
-                                  var newKey = slugify(title);
-                                  setSitePages(function(prev) {
-                                    return prev.map(function(p) {
-                                      return p.id === page.id ? Object.assign({}, p, { title: title, page_key: newKey }) : p;
-                                    });
-                                  });
-                                  savePageDebounced(page.id, { title: title, page_key: newKey });
-                                }}
-                                aria-label={'Page name for ' + page.title}
-                                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                                maxLength={40}
-                              />
-                              <p className="text-xs text-gray-400 mt-0.5 px-1">/{page.page_key}</p>
-                            </div>
-
-                            {/* Nav label */}
-                            <div className="col-span-3">
-                              <input type="text" value={page.nav_label}
-                                onChange={function(e) {
-                                  var label = e.target.value;
-                                  setSitePages(function(prev) {
-                                    return prev.map(function(p) {
-                                      return p.id === page.id ? Object.assign({}, p, { nav_label: label }) : p;
-                                    });
-                                  });
-                                  savePageDebounced(page.id, { nav_label: label });
-                                }}
-                                aria-label={'Navigation label for ' + page.title}
-                                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                                maxLength={30}
-                              />
-                            </div>
-
-                            {/* In nav toggle */}
-                            <div className="col-span-2 flex justify-center">
-                              <Toggle
-                                checked={!!(page.is_visible_in_nav && page.is_enabled)}
-                                onChange={async function() {
-                                  var updated = sitePages.map(function(p) {
-                                    return p.id === page.id ? Object.assign({}, p, { is_visible_in_nav: !p.is_visible_in_nav }) : p;
-                                  });
-                                  setSitePages(updated);
-                                  await savePageField(page.id, { is_visible_in_nav: !page.is_visible_in_nav });
-                                  await saveNavInstant(updated);
-                                }}
-                                label={'Toggle navigation visibility for ' + page.title}
-                                id={'nav-toggle-page-' + page.id}
-                              />
-                            </div>
-
-                            {/* Enabled toggle */}
-                            <div className="col-span-2 flex justify-center">
-                              <Toggle
-                                checked={!!page.is_enabled}
-                                onChange={async function() {
-                                  var updated = sitePages.map(function(p) {
-                                    return p.id === page.id ? Object.assign({}, p, { is_enabled: !p.is_enabled }) : p;
-                                  });
-                                  setSitePages(updated);
-                                  await savePageField(page.id, { is_enabled: !page.is_enabled });
-                                  await saveNavInstant(updated);
-                                }}
-                                label={'Toggle ' + page.title + ' page'}
-                                id={'enabled-toggle-page-' + page.id}
-                              />
-                            </div>
-
-                            {/* Actions */}
-                            <div className="col-span-1 flex items-center justify-center gap-1">
-                              <button
-                                onClick={async function() {
-                                  var updated = sitePages.map(function(p) {
-                                    return p.id === page.id ? Object.assign({}, p, { is_enabled: false, is_visible_in_nav: false }) : p;
-                                  });
-                                  setSitePages(updated);
-                                  await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false });
-                                  await saveNavInstant(updated);
-                                  toast.success(page.title + ' archived');
-                                }}
-                                aria-label={'Archive ' + page.title + ' page'}
-                                className="p-1.5 text-gray-300 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={function() { setDeleteModal(page); }}
-                                aria-label={'Delete ' + page.title + ' page'}
-                                className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Archived pages */}
-                    {sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith('external-'); }).length > 0 && (
-                      <div className="mt-6 border-t border-gray-100 pt-6">
-                        <p className="text-sm font-bold text-gray-700 mb-1">Archived Pages</p>
-                        <p className="text-xs text-gray-400 mb-4">These pages are hidden from your site.</p>
-                        <div className="space-y-2">
-                          {sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith('external-'); }).map(function(page) {
-                            return (
-                              <div key={page.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-gray-400 truncate">{page.title}</p>
-                                  <p className="text-xs text-gray-300">/{page.page_key}</p>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <button
-                                    onClick={async function() {
-                                      var updated = sitePages.map(function(p) {
-                                        return p.id === page.id ? Object.assign({}, p, { is_enabled: true }) : p;
-                                      });
-                                      setSitePages(updated);
-                                      await savePageField(page.id, { is_enabled: true });
-                                      await saveNavInstant(updated);
-                                      toast.success(page.title + ' restored');
-                                    }}
-                                    className="px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                                    Restore
-                                  </button>
-                                  <button
-                                    onClick={function() { setDeleteModal(page); }}
-                                    aria-label={'Permanently delete ' + page.title}
-                                    className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* External nav links */}
-                    <div className="mt-6 border-t border-gray-100 pt-6">
-                      <p className="text-sm font-bold text-gray-700 mb-1">External Links in Nav</p>
-                      <p className="text-xs text-gray-400 mb-4">Add links to external sites (e.g. a donation page).</p>
-                      {sitePages.filter(function(p) { return p.page_key && p.page_key.startsWith('external-'); }).map(function(page) {
-                        return (
-                          <div key={page.id} className="flex items-center gap-2 mb-2">
-                            <input type="text" value={page.nav_label}
-                              onChange={function(e) {
-                                var label = e.target.value;
-                                setSitePages(function(prev) {
-                                  return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { nav_label: label }) : p; });
-                                });
-                                savePageDebounced(page.id, { nav_label: label });
-                              }}
-                              placeholder="e.g. Donate"
-                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                            />
-                            <input type="text" value={page.title}
-                              onChange={function(e) {
-                                var url = e.target.value;
-                                setSitePages(function(prev) {
-                                  return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { title: url }) : p; });
-                                });
-                                savePageDebounced(page.id, { title: url });
-                              }}
-                              placeholder="https://donate.example.com"
-                              className="flex-2 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 w-48"
-                            />
-                            <button
-                              onClick={async function() {
-                                var updated = sitePages.filter(function(p) { return p.id !== page.id; });
-                                setSitePages(updated);
-                                await supabase.from('org_site_pages').delete().eq('id', page.id);
-                                await saveNavInstant(updated);
-                                toast.success('Link removed');
-                              }}
-                              aria-label={'Remove ' + page.nav_label + ' external link'}
-                              className="p-2 text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
-                              <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                      <button
-                        onClick={async function() {
-                          var newPage = {
-                            organization_id: organizationId,
-                            page_key: 'external-' + Date.now(),
-                            title: '', nav_label: '',
-                            sort_order: sitePages.length,
-                            is_enabled: true, is_visible_in_nav: true,
-                          };
-                          var result = await supabase.from('org_site_pages').insert([newPage]).select().single();
-                          if (result.error) { toast.error('Could not add link'); return; }
-                          var updated = sitePages.concat([result.data]);
-                          setSitePages(updated);
-                          await saveNavInstant(updated);
-                          toast.success('External link added');
-                        }}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />
-                        Add External Link
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Page sections toggle */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Sections</p>
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">Page Sections</h2>
-                    <p className="text-gray-500 text-sm mb-5">Choose which sections appear on your public page.</p>
-                    <ul className="space-y-3" aria-label="Toggle page sections">
-                      {Object.entries(PAGE_SECTION_CONFIG).map(function(entry) {
-                        var key = entry[0]; var val = entry[1]; var isOn = form.page_sections[key];
-                        return (
-                          <li key={key}>
-                            <div className={'flex items-center justify-between p-4 rounded-xl border-2 transition-all ' + (isOn ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 opacity-60')}>
-                              <div>
-                                <p className="font-semibold text-gray-900 text-sm">{val.label}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">{val.desc}</p>
-                              </div>
-                              <Toggle checked={isOn} onChange={function() { toggleSection(key); }} label={(isOn ? 'Hide ' : 'Show ') + val.label + ' section'} id={'section-toggle-' + key} />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-
-                  {/* Block editor */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100">
-                      <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-0.5">Content</p>
-                      <h2 className="text-xl font-bold text-gray-900">Page Blocks</h2>
-                      <p className="text-gray-500 text-sm mt-0.5">Select a page above then add and arrange content blocks.</p>
-                    </div>
-                    <div className="p-4">
-                      <BlockEditor
-                        organizationId={organizationId}
-                        pages={sitePages}
-                        onBlocksChange={function(updated) { setSiteBlocks(updated); }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Footer block editor */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-5 border-b border-gray-100">
-                      <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5" aria-hidden="true">
-                          <Icon path="M4 6h16M4 12h16M4 18h7" className="h-5 w-5 text-gray-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-0.5">Footer</p>
-                          <h2 className="text-xl font-bold text-gray-900">Footer Blocks</h2>
-                          <p className="text-gray-500 text-sm mt-0.5">
-                            These blocks appear at the bottom of every page on your site. Add contact info, social links, a donate button, and more.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Footer block type hints */}
-                      <div className="mt-4 flex flex-wrap gap-2" aria-label="Suggested footer block types">
-                        {[
-                          { label: 'Contact Info', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-                          { label: 'Social Links', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
-                          { label: 'Donate Button', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-                          { label: 'Newsletter', icon: 'M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76' },
-                          { label: 'Copyright',   icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-                        ].map(function(hint) {
-                          return (
-                            <span key={hint.label}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                              <Icon path={hint.icon} className="h-3.5 w-3.5 text-gray-400" />
-                              {hint.label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="p-4">
-                      {footerPage ? (
-                        <BlockEditor
-                          organizationId={organizationId}
-                          pages={[footerPage]}
-                          onBlocksChange={function(updated) { setSiteBlocks(function(prev) { return prev.filter(function(b) { return b.page_id !== footerPage.id; }).concat(updated.filter(function(b) { return b.page_id === footerPage.id; })); }); }}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3" aria-hidden="true">
-                            <Icon path="M4 6h16M4 12h16M4 18h7" className="h-6 w-6 text-gray-400" />
-                          </div>
-                          <p className="text-sm font-semibold text-gray-700 mb-1">Footer not available</p>
-                          <p className="text-xs text-gray-400">Reload the page to initialize your footer.</p>
-                          <button onClick={function() { window.location.reload(); }}
-                            className="mt-4 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-                            Reload
-                          </button>
-                        </div>
-                      )}
+                      <p className="text-sm text-gray-500">Analytics will track page views, visitor counts, traffic sources, and engagement once your page is published.</p>
                     </div>
                   </div>
                 </div>
@@ -1233,12 +1351,11 @@ export default function OrgPageEditor() {
               ════════════════════════════════════════ */}
               {activeSection === 'org-info' && (
                 <div className="space-y-6">
-
                   {/* Logo */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                     <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Logo</p>
                     <h2 className="text-xl font-bold text-gray-900 mb-1">Organization Logo</h2>
-                    <p className="text-gray-500 text-sm mb-5">Displayed as a circle on your public page. Recommended: 200×200px, max 5MB.</p>
+                    <p className="text-gray-500 text-sm mb-5">Displayed as a circle on your public page. Recommended: 200x200px, max 5MB.</p>
                     <div className="flex items-center gap-6">
                       <div className="relative w-28 h-28 rounded-full border-2 border-dashed border-gray-200 hover:border-blue-500 flex items-center justify-center cursor-pointer group overflow-hidden flex-shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                         onClick={function() { logoInputRef.current && logoInputRef.current.click(); }}
@@ -1387,7 +1504,6 @@ export default function OrgPageEditor() {
                   <h2 className="text-2xl font-bold text-gray-900 mb-1">Customize Your Site</h2>
                   <p className="text-gray-500 text-sm mb-2">Everything that controls how your public page looks.</p>
 
-                  {/* ── Template ── */}
                   <AppearanceSection label="Layout Template">
                     <p className="text-gray-500 text-sm mb-4">Choose how your public organization page is displayed.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Page templates">
@@ -1411,7 +1527,6 @@ export default function OrgPageEditor() {
                     </div>
                   </AppearanceSection>
 
-                  {/* ── Theme colors ── */}
                   <AppearanceSection label="Brand Colors">
                     <p className="text-gray-500 text-sm mb-5">Enter up to 3 hex color codes for buttons and accents.</p>
                     <div className="space-y-4">
@@ -1443,7 +1558,6 @@ export default function OrgPageEditor() {
                     </div>
                   </AppearanceSection>
 
-                  {/* ── Fonts ── */}
                   <AppearanceSection label="Typography">
                     <p className="text-gray-500 text-sm mb-4">Choose the typography style for your public page.</p>
                     <div className="space-y-3" role="radiogroup" aria-label="Font pairing options">
@@ -1465,7 +1579,6 @@ export default function OrgPageEditor() {
                     </div>
                   </AppearanceSection>
 
-                  {/* ── Button style ── */}
                   <AppearanceSection label="Button Style">
                     <p className="text-gray-500 text-sm mb-4">Choose how buttons look on your public page.</p>
                     <div className="grid grid-cols-3 gap-4" role="radiogroup" aria-label="Button style options">
@@ -1484,21 +1597,462 @@ export default function OrgPageEditor() {
                       })}
                     </div>
                   </AppearanceSection>
-
                 </div>
               )}
 
               {/* ════════════════════════════════════════
                   TAB 4 — PAGES & CONTENT
               ════════════════════════════════════════ */}
+              {activeSection === 'pages-content' && (
+                <div className="space-y-6">
+
+                  {/* ── Unified Pages & Sections ── */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div className="flex items-start justify-between gap-4 mb-1">
+                      <div>
+                        <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Pages</p>
+                        <h2 className="text-xl font-bold text-gray-900 mb-0.5">Site Pages &amp; Sections</h2>
+                        <p className="text-gray-500 text-sm">Manage pages, nav labels, order, and visibility. Expand a page to manage its sections.</p>
+                      </div>
+                      <button
+                        onClick={function() { setShowLayoutModal(true); }}
+                        aria-label="Change site layout"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex-shrink-0">
+                        <Icon path="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-.293.707L13 15.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-5.586L4.293 7.707A1 1 0 014 7V5z" className="h-4 w-4" />
+                        Change Layout
+                      </button>
+                    </div>
+
+                    {/* Nav counter */}
+                    {(function() {
+                      var navCount = sitePages.filter(function(p) { return p.is_visible_in_nav && p.is_enabled; }).length;
+                      return (
+                        <div className="flex items-center gap-2 mb-5 mt-3">
+                          <div className={"flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold " + (navCount >= NAV_LIMIT ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-gray-100 text-gray-600")}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                            {navCount}/{NAV_LIMIT} pages in nav
+                          </div>
+                          {navCount >= NAV_LIMIT && (
+                            <p className="text-xs text-amber-600">Nav is full. Turn off a page&#39;s nav toggle to add another.</p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Column headers */}
+                    <div className="grid grid-cols-12 gap-2 px-2 mb-2">
+                      <div className="col-span-1" />
+                      <div className="col-span-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Page Name</div>
+                      <div className="col-span-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Nav Label</div>
+                      <div className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">In Nav</div>
+                      <div className="col-span-1 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">On</div>
+                      <div className="col-span-1" />
+                    </div>
+
+                    {/* Home page row (always-first, not in sitePages) */}
+                    {(function() {
+                      var homeExpanded = expandedPageId === '__home__';
+                      var activeSections = getActiveSections();
+                      var archivedSections = getArchivedSections();
+                      return (
+                        <div className="mb-2">
+                          <div className={"rounded-xl border-2 transition-all bg-white " + (homeExpanded ? "border-blue-300" : "border-gray-200")}>
+                            <div className="flex items-center gap-2 p-3">
+                              {/* Fixed placeholder for drag handle */}
+                              <div className="w-7 flex-shrink-0" aria-hidden="true" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-gray-900 px-2 py-1">Home Page</p>
+                                <p className="text-xs text-gray-400 px-1">/</p>
+                              </div>
+                              <div className="w-24 flex-shrink-0">
+                                <p className="text-xs text-gray-400 px-2">Always in nav</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <span className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-semibold">Always On</span>
+                              </div>
+                              <div className="flex-shrink-0 w-16" />
+                              <button
+                                onClick={function() { setExpandedPageId(homeExpanded ? null : '__home__'); }}
+                                aria-label={homeExpanded ? "Collapse home page sections" : "Expand home page sections"}
+                                aria-expanded={homeExpanded}
+                                className="p-1.5 text-gray-300 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg transition-colors flex-shrink-0">
+                                <Icon path={homeExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            {homeExpanded && (
+                              <div className="border-t border-blue-100 px-4 pb-4 pt-3 bg-blue-50 rounded-b-xl">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-[3px] mb-3">Home Page Sections</p>
+                                <div className="flex items-center gap-2 p-3 bg-white border border-blue-100 rounded-xl mb-4">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <p className="text-xs text-blue-700">Drag to reorder. Changes save when you click Save.</p>
+                                </div>
+
+                                {activeSections.length === 0 ? (
+                                  <div className="text-center py-6">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                    </svg>
+                                    <p className="text-sm font-semibold text-gray-500 mb-1">No active sections</p>
+                                    <p className="text-xs text-gray-400">Add a custom section or restore an archived one.</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2" role="list" aria-label="Page sections">
+                                    <DndContext sensors={sectionSensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
+                                      <SortableContext items={activeSections.map(function(s) { return s.id; })} strategy={verticalListSortingStrategy}>
+                                        {activeSections.map(function(section) {
+                                          return (
+                                            <SortableSectionItem
+                                              key={section.id}
+                                              section={section}
+                                              isEditing={editingSectionId === section.id}
+                                              editingLabel={editingSectionLabel}
+                                              onStartEdit={function() { setEditingSectionId(section.id); setEditingSectionLabel(section.label); }}
+                                              onSaveEdit={function() {
+                                                if (!editingSectionLabel.trim()) return;
+                                                setSections(function(prev) { return prev.map(function(s) { return s.id === section.id ? Object.assign({}, s, { label: editingSectionLabel.trim() }) : s; }); });
+                                                setEditingSectionId(null); setEditingSectionLabel('');
+                                              }}
+                                              onCancelEdit={function() { setEditingSectionId(null); setEditingSectionLabel(''); }}
+                                              onEditChange={function(e) { setEditingSectionLabel(e.target.value); }}
+                                              onToggleVisible={function() {
+                                                setSections(function(prev) { return prev.map(function(s) { return s.id === section.id ? Object.assign({}, s, { visible: !s.visible }) : s; }); });
+                                              }}
+                                              onArchive={function() {
+                                                setSections(function(prev) { return prev.map(function(s) { return s.id === section.id ? Object.assign({}, s, { archived: true, visible: false }) : s; }); });
+                                                toast.success(section.label + ' archived');
+                                              }}
+                                              onDelete={function() { setSectionDeleteModal(section); }}
+                                            />
+                                          );
+                                        })}
+                                      </SortableContext>
+                                    </DndContext>
+                                  </div>
+                                )}
+
+                                {/* Add custom section */}
+                                {showAddSection ? (
+                                  <div className="flex items-center gap-2 mt-3 p-3 bg-white border border-gray-200 rounded-xl">
+                                    <input
+                                      type="text" value={newSectionLabel}
+                                      onChange={function(e) { setNewSectionLabel(e.target.value); }}
+                                      onKeyDown={function(e) { if (e.key === 'Enter') { if (!newSectionLabel.trim()) return; var active_s = getActiveSections(); setSections(function(prev) { return prev.concat([{ id: 'custom-' + Date.now(), key: 'custom-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: active_s.length, isCustom: true }]); }); setNewSectionLabel(''); setShowAddSection(false); toast.success('Section added'); } if (e.key === 'Escape') { setShowAddSection(false); setNewSectionLabel(''); } }}
+                                      placeholder="Section name"
+                                      className="flex-1 px-3 py-2 border-2 border-blue-400 rounded-lg text-sm focus:outline-none"
+                                      autoFocus maxLength={50} aria-label="New section name"
+                                    />
+                                    <button onClick={function() { if (!newSectionLabel.trim()) return; var active_s = getActiveSections(); setSections(function(prev) { return prev.concat([{ id: 'custom-' + Date.now(), key: 'custom-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: active_s.length, isCustom: true }]); }); setNewSectionLabel(''); setShowAddSection(false); toast.success('Section added'); }}
+                                      className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">Add</button>
+                                    <button onClick={function() { setShowAddSection(false); setNewSectionLabel(''); }}
+                                      aria-label="Cancel adding section"
+                                      className="p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg transition-colors">
+                                      <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={function() { setShowAddSection(true); }}
+                                    className="w-full flex items-center justify-center gap-2 py-3 mt-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />
+                                    Add Custom Section
+                                  </button>
+                                )}
+
+                                {/* Archived sections */}
+                                {archivedSections.length > 0 && (
+                                  <div className="mt-4 border-t border-blue-100 pt-4">
+                                    <button
+                                      onClick={function() { setShowArchivedSections(!showArchivedSections); }}
+                                      className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-[3px] hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded transition-colors w-full text-left"
+                                      aria-expanded={showArchivedSections}>
+                                      <span>Archived Sections ({archivedSections.length})</span>
+                                      <Icon path={showArchivedSections ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                    </button>
+                                    {showArchivedSections && (
+                                      <div className="space-y-2 mt-3">
+                                        {archivedSections.map(function(section) {
+                                          return (
+                                            <div key={section.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-dashed border-gray-200 bg-white">
+                                              <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-400 truncate">{section.label}</p>
+                                                {section.isCustom && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-semibold">Custom</span>}
+                                              </div>
+                                              <div className="flex items-center gap-2 flex-shrink-0">
+                                                <button onClick={function() { restoreSection(section.id); }}
+                                                  className="px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">Restore</button>
+                                                <button onClick={function() { setSectionDeleteModal(section); }}
+                                                  aria-label={"Permanently delete " + section.label}
+                                                  className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+                                                  <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Additional pages — draggable */}
+                    {(function() {
+                      var activePgs = sitePages.filter(function(p) { return p.is_enabled; });
+                      var navCount = sitePages.filter(function(p) { return p.is_visible_in_nav && p.is_enabled; }).length;
+                      return (
+                        <DndContext sensors={pageSensors} collisionDetection={closestCenter} onDragEnd={handlePageDragEnd}>
+                          <SortableContext items={activePgs.map(function(p) { return p.id; })} strategy={verticalListSortingStrategy}>
+                            <div className="space-y-2" role="list" aria-label="Site pages">
+                              {activePgs.map(function(page, index) {
+                                var isExpanded = expandedPageId === page.id;
+                                return (
+                                  <SortablePageItem
+                                    key={page.id}
+                                    page={page}
+                                    index={index}
+                                    isExpanded={isExpanded}
+                                    onToggleExpand={function() { setExpandedPageId(isExpanded ? null : page.id); }}
+                                    navCount={navCount}
+                                    NAV_LIMIT={NAV_LIMIT}
+                                    onNavToggle={function() { handlePageNavToggle(page); }}
+                                    onEnabledToggle={function() { handlePageEnabledToggle(page); }}
+                                    onArchive={async function() {
+                                      var updated = sitePages.map(function(p) { return p.id === page.id ? Object.assign({}, p, { is_enabled: false, is_visible_in_nav: false }) : p; });
+                                      setSitePages(updated);
+                                      await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false });
+                                      await saveNavInstant(updated);
+                                      toast.success(page.title + " archived");
+                                    }}
+                                    onDelete={function() { setDeleteModal(page); }}
+                                    onTitleChange={handlePageTitleChange}
+                                    onNavLabelChange={handlePageNavLabelChange}>
+                                    {/* Embedded block editor for this page */}
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-[3px] mb-3">Page Blocks</p>
+                                    <BlockEditor
+                                      organizationId={organizationId}
+                                      pages={[page]}
+                                      onBlocksChange={function(updated) { setSiteBlocks(updated); }}
+                                    />
+                                  </SortablePageItem>
+                                );
+                              })}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      );
+                    })()}
+
+                    {/* Archived pages */}
+                    {sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith("external-"); }).length > 0 && (
+                      <div className="mt-6 border-t border-gray-100 pt-6">
+                        <p className="text-sm font-bold text-gray-700 mb-1">Archived Pages</p>
+                        <p className="text-xs text-gray-400 mb-4">These pages are hidden from your site.</p>
+                        <div className="space-y-2">
+                          {sitePages.filter(function(p) { return !p.is_enabled && !p.page_key.startsWith("external-"); }).map(function(page) {
+                            return (
+                              <div key={page.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-gray-400 truncate">{page.title}</p>
+                                  <p className="text-xs text-gray-300">/{page.page_key}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <button
+                                    onClick={async function() {
+                                      var updated = sitePages.map(function(p) { return p.id === page.id ? Object.assign({}, p, { is_enabled: true }) : p; });
+                                      setSitePages(updated);
+                                      await savePageField(page.id, { is_enabled: true });
+                                      await saveNavInstant(updated);
+                                      toast.success(page.title + " restored");
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                                    Restore
+                                  </button>
+                                  <button
+                                    onClick={function() { setDeleteModal(page); }}
+                                    aria-label={"Permanently delete " + page.title}
+                                    className="p-1.5 text-gray-300 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* External links */}
+                    <div className="mt-6 border-t border-gray-100 pt-6">
+                      <p className="text-sm font-bold text-gray-700 mb-1">External Links in Nav</p>
+                      <p className="text-xs text-gray-400 mb-4">Add links to external sites (e.g. a donation page).</p>
+                      {sitePages.filter(function(p) { return p.page_key && p.page_key.startsWith("external-"); }).map(function(page) {
+                        return (
+                          <div key={page.id} className="flex items-center gap-2 mb-2">
+                            <input type="text" value={page.nav_label}
+                              onChange={function(e) { var label = e.target.value; setSitePages(function(prev) { return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { nav_label: label }) : p; }); }); savePageDebounced(page.id, { nav_label: label }); }}
+                              placeholder="e.g. Donate"
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                            />
+                            <input type="text" value={page.title}
+                              onChange={function(e) { var url = e.target.value; setSitePages(function(prev) { return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { title: url }) : p; }); }); savePageDebounced(page.id, { title: url }); }}
+                              placeholder="https://donate.example.com"
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 w-48"
+                            />
+                            <button
+                              onClick={async function() {
+                                var updated = sitePages.filter(function(p) { return p.id !== page.id; });
+                                setSitePages(updated);
+                                await supabase.from("org_site_pages").delete().eq("id", page.id);
+                                await saveNavInstant(updated);
+                                toast.success("Link removed");
+                              }}
+                              aria-label={"Remove " + page.nav_label + " external link"}
+                              className="p-2 text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg transition-colors">
+                              <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      <button
+                        onClick={async function() {
+                          var newPage = { organization_id: organizationId, page_key: "external-" + Date.now(), title: "", nav_label: "", sort_order: sitePages.length, is_enabled: true, is_visible_in_nav: true };
+                          var result = await supabase.from("org_site_pages").insert([newPage]).select().single();
+                          if (result.error) { toast.error("Could not add link"); return; }
+                          var updated = sitePages.concat([result.data]);
+                          setSitePages(updated);
+                          await saveNavInstant(updated);
+                          toast.success("External link added");
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />
+                        Add External Link
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ── Footer block editor ── */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <button
+                      onClick={function() { setFooterOpen(!footerOpen); }}
+                      aria-expanded={footerOpen}
+                      aria-controls="footer-editor-panel"
+                      className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5" aria-hidden="true">
+                          <Icon path="M4 6h16M4 12h16M4 18h7" className="h-5 w-5 text-gray-500" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-0.5">Footer</p>
+                          <h2 className="text-xl font-bold text-gray-900">Footer Blocks</h2>
+                          <p className="text-gray-500 text-sm mt-0.5">Appears at the bottom of every page.</p>
+                        </div>
+                      </div>
+                      <Icon path={footerOpen ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} className="h-5 w-5 text-gray-400 flex-shrink-0 ml-4" />
+                    </button>
+
+                    {footerOpen && (
+                    <div id="footer-editor-panel" className="px-6 pb-5 border-t border-gray-100">
+
+                      {/* Footer column layout picker */}
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[3px] mb-3">Footer Layout</p>
+                        <div className="flex gap-3 mb-3" role="radiogroup" aria-label="Footer column layout">
+                          {[2, 3].map(function(n) {
+                            var isSel = form.footerColumns === n;
+                            return (
+                              <button
+                                key={n}
+                                onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { footerColumns: n }); }); }}
+                                className={'flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-2 ' + (isSel ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-300')}
+                                role="radio"
+                                aria-checked={isSel}
+                                aria-label={n + ' column footer layout'}>
+                                {/* Mini column preview */}
+                                <svg viewBox={'0 0 ' + (n * 14 + (n - 1) * 3) + ' 18'} className="h-4" aria-hidden="true">
+                                  {Array.from({ length: n }).map(function(_, i) {
+                                    return <rect key={i} x={i * 17} y="0" width="14" height="18" rx="2" fill={isSel ? '#3B82F6' : '#D1D5DB'} />;
+                                  })}
+                                </svg>
+                                {n} Columns
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-400">Suggested blocks: contact info, social links, donate button, email signup, copyright text.</p>
+                      </div>
+
+                      {/* Block type hints */}
+                      <div className="mt-4 flex flex-wrap gap-2" aria-label="Suggested footer block types">
+                        {[
+                          { label: 'Contact Info', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+                          { label: 'Social Links', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
+                          { label: 'Donate Button', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+                          { label: 'Newsletter', icon: 'M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76' },
+                          { label: 'Copyright', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+                        ].map(function(hint) {
+                          return (
+                            <span key={hint.label}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                              <Icon path={hint.icon} className="h-3.5 w-3.5 text-gray-400" />
+                              {hint.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4">
+                      {footerPage ? (
+                        <BlockEditor
+                          organizationId={organizationId}
+                          pages={[footerPage]}
+                          onBlocksChange={function(updated) {
+                            setSiteBlocks(function(prev) {
+                              return prev.filter(function(b) { return b.page_id !== footerPage.id; })
+                                .concat(updated.filter(function(b) { return b.page_id === footerPage.id; }));
+                            });
+                          }}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-10 text-center">
+                          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3" aria-hidden="true">
+                            <Icon path="M4 6h16M4 12h16M4 18h7" className="h-6 w-6 text-gray-400" />
+                          </div>
+                          <p className="text-sm font-semibold text-gray-700 mb-1">Footer not available</p>
+                          <p className="text-xs text-gray-400">Reload the page to initialize your footer.</p>
+                          <button onClick={function() { window.location.reload(); }}
+                            className="mt-4 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                            Reload
+                          </button>
+                        </div>
+                      )}
+                      </div>
+                    </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ════════════════════════════════════════
+                  TAB 5 — PUBLISH
+              ════════════════════════════════════════ */}
               {activeSection === 'publish' && (
                 <div className="space-y-6">
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                     <p className="text-xs font-bold text-amber-500 uppercase tracking-[4px] mb-1">Publish</p>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Visibility & Channels</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Visibility &amp; Channels</h2>
                     <p className="text-gray-500 text-sm mb-6">Control where your organization and events appear.</p>
 
-                    {/* Public page toggle */}
                     <div className="mb-6">
                       <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Organization Page</h3>
                       <div className={'flex items-center justify-between p-5 rounded-xl border-2 transition-all ' + (form.is_public ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
@@ -1525,12 +2079,10 @@ export default function OrgPageEditor() {
                       </div>
                     </div>
 
-                    {/* Event channels */}
                     <div>
                       <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Event Publish Channels</h3>
                       <p className="text-xs text-gray-400 mb-4">Org-level defaults — individual events can override these.</p>
                       <div className="space-y-3">
-                        {/* Website channel */}
                         <div className={'flex items-center justify-between p-4 rounded-xl border transition-all ' + (form.publish_channels.website ? 'border-blue-500/50 bg-gray-100' : 'border-gray-200 bg-gray-50')}>
                           <div className="flex items-center gap-3">
                             <div className={'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ' + (form.publish_channels.website ? 'bg-blue-100' : 'bg-gray-200')} aria-hidden="true">
@@ -1544,8 +2096,6 @@ export default function OrgPageEditor() {
                           <Toggle checked={form.publish_channels.website} onChange={function() { setPublishChannel('website', !form.publish_channels.website); }}
                             label={form.publish_channels.website ? 'Disable org website channel' : 'Enable org website channel'} id="channel-website-toggle" />
                         </div>
-
-                        {/* Discovery channel */}
                         <div className={'flex items-center justify-between p-4 rounded-xl border transition-all ' + (form.publish_channels.discovery ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-gray-50')}>
                           <div className="flex items-center gap-3">
                             <div className={'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ' + (form.publish_channels.discovery ? 'bg-purple-100' : 'bg-gray-200')} aria-hidden="true">
@@ -1563,7 +2113,6 @@ export default function OrgPageEditor() {
                     </div>
                   </div>
 
-                  {/* Public URL card */}
                   {org && org.slug && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                       <p className="text-sm font-semibold text-blue-900 mb-2">Your Public URL</p>
