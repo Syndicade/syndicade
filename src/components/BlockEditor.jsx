@@ -137,6 +137,32 @@ function blockLabel(type) {
 function ImageUploader({ value, onChange, organizationId, label, fieldKey }) {
   var inputRef = useRef(null);
   var [uploading, setUploading] = useState(false);
+  var [tab, setTab] = useState('upload');
+  var [library, setLibrary] = useState([]);
+  var [loadingLibrary, setLoadingLibrary] = useState(false);
+  var [libraryLoaded, setLibraryLoaded] = useState(false);
+
+  async function loadLibrary() {
+    if (libraryLoaded) return;
+    setLoadingLibrary(true);
+    try {
+      var result = await supabase.from('org_photos').select('id, photo_url, caption')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(40);
+      if (!result.error) setLibrary(result.data || []);
+      setLibraryLoaded(true);
+    } catch (err) {
+      toast.error('Could not load photo library');
+    } finally {
+      setLoadingLibrary(false);
+    }
+  }
+
+  function handleTabChange(newTab) {
+    setTab(newTab);
+    if (newTab === 'library') loadLibrary();
+  }
 
   async function handleFile(file) {
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return; }
@@ -160,36 +186,111 @@ function ImageUploader({ value, onChange, organizationId, label, fieldKey }) {
   return (
     <div>
       <p className={labelCls}>{label || 'Image'}</p>
-      <div
-        className="relative rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-400 transition-colors cursor-pointer group overflow-hidden"
-        style={{ minHeight: '100px' }}
-        onClick={function() { inputRef.current && inputRef.current.click(); }}
-        onKeyDown={function(e) { if (e.key === 'Enter') inputRef.current && inputRef.current.click(); }}
-        tabIndex={0}
-        role="button"
-        aria-label={'Upload ' + (label || 'image')}>
-        {value ? (
-          <div>
-            <img src={value} alt="Uploaded" className="w-full h-32 object-cover" />
-            <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <span className="text-white font-semibold text-sm">Change Image</span>
+
+      {/* Current image preview */}
+      {value && (
+        <div className="relative mb-3 rounded-lg overflow-hidden border border-gray-200 group">
+          <img src={value} alt="Selected" className="w-full h-28 object-cover" />
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
+            <button
+              onClick={function() { onChange(''); }}
+              className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
+              aria-label="Remove image">
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab switcher */}
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-3" role="tablist" aria-label="Image source">
+        <button
+          role="tab"
+          aria-selected={tab === 'upload'}
+          onClick={function() { handleTabChange('upload'); }}
+          className={'flex-1 py-2 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (tab === 'upload' ? 'bg-blue-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+          Upload New
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'library'}
+          onClick={function() { handleTabChange('library'); }}
+          className={'flex-1 py-2 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (tab === 'library' ? 'bg-blue-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+          Photo Library
+        </button>
+      </div>
+
+      {/* Upload tab */}
+      {tab === 'upload' && (
+        <div>
+          <div
+            className="relative rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-400 transition-colors cursor-pointer group overflow-hidden"
+            style={{ minHeight: '80px' }}
+            onClick={function() { inputRef.current && inputRef.current.click(); }}
+            onKeyDown={function(e) { if (e.key === 'Enter') inputRef.current && inputRef.current.click(); }}
+            tabIndex={0}
+            role="button"
+            aria-label={'Upload ' + (label || 'image')}>
+            <div className="flex flex-col items-center justify-center h-20 text-gray-400 group-hover:text-blue-400 transition-colors gap-1">
+              {uploading
+                ? <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                : <>
+                    <Icon path="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" className="h-6 w-6" strokeWidth={1.5} />
+                    <p className="text-xs font-medium">Click to upload</p>
+                    <p className="text-xs text-gray-300">JPG, PNG, WebP — max 5MB</p>
+                  </>
+              }
             </div>
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-24 text-gray-400 group-hover:text-blue-400 transition-colors gap-1">
-            {uploading
-              ? <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-              : <><Icon path="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" className="h-6 w-6" strokeWidth={1.5} /><p className="text-xs font-medium">Click to upload</p></>
-            }
-          </div>
-        )}
-      </div>
-      {value && (
-        <button onClick={function() { onChange(''); }} className="mt-1 text-xs text-red-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded" aria-label="Remove image">
-          Remove image
-        </button>
+          <input ref={inputRef} type="file" accept="image/*" className="sr-only"
+            onChange={function(e) { e.target.files && e.target.files[0] && handleFile(e.target.files[0]); }} />
+        </div>
       )}
-      <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={function(e) { e.target.files && e.target.files[0] && handleFile(e.target.files[0]); }} />
+
+      {/* Library tab */}
+      {tab === 'library' && (
+        <div>
+          {loadingLibrary ? (
+            <div className="grid grid-cols-4 gap-2">
+              {[1,2,3,4,5,6,7,8].map(function(i) {
+                return <div key={i} className="aspect-square bg-gray-100 rounded-lg animate-pulse" />;
+              })}
+            </div>
+          ) : library.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-xs font-semibold text-gray-500 mb-1">No photos yet</p>
+              <p className="text-xs text-gray-400">Upload photos via the org photo gallery first.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1" role="listbox" aria-label="Photo library">
+              {library.map(function(photo) {
+                var isSelected = value === photo.photo_url;
+                return (
+                  <button
+                    key={photo.id}
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={function() { onChange(photo.photo_url); }}
+                    className={'relative aspect-square rounded-lg overflow-hidden border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isSelected ? 'border-blue-500 ring-2 ring-blue-300' : 'border-gray-200 hover:border-blue-300')}
+                    aria-label={'Select photo' + (photo.caption ? ': ' + photo.caption : '')}>
+                    <img src={photo.photo_url} alt={photo.caption || 'Library photo'} className="w-full h-full object-cover" />
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-blue-500 bg-opacity-30 flex items-center justify-center" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white drop-shadow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

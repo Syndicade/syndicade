@@ -12,6 +12,20 @@ import {
   FeaturedTemplate,
 } from '../components/OrgTemplates';
 
+function getContrastColor(hex) {
+  if (!hex) return '#ffffff';
+  var clean = hex.replace('#', '');
+  if (clean.length === 3) clean = clean[0]+clean[0]+clean[1]+clean[1]+clean[2]+clean[2];
+  var r = parseInt(clean.substring(0,2), 16);
+  var g = parseInt(clean.substring(2,4), 16);
+  var b = parseInt(clean.substring(4,6), 16);
+  var toLinear = function(c) {
+    var s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  var L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.179 ? '#111827' : '#ffffff';
+}
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function PublicPageSkeleton() {
   return (
@@ -271,8 +285,8 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           </Link>
           <Link to={contactHref}
             className="text-white text-sm font-bold px-4 py-2 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity hover:opacity-90"
-            style={{ backgroundColor: primary, borderRadius: borderRadius }}>
-            Join Us
+            style={{ backgroundColor: primary, borderRadius: borderRadius, color: getContrastColor(primary) }}>
+  Join Us
           </Link>
         </div>
       </div>
@@ -511,7 +525,7 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
             <h1 className="text-5xl md:text-6xl font-black text-white mb-4 leading-tight uppercase tracking-tight">{org.name}</h1>
             {org.tagline && <p className="text-xl text-white opacity-70 mb-10 max-w-xl mx-auto">{org.tagline}</p>}
             <div className="flex items-center justify-center gap-4 flex-wrap">
-              <Link to={contactHref} className="text-white font-black px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+              <Link to={contactHref} className="text-white font-black px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ backgroundColor: primary, borderRadius: borderRadius, color: getContrastColor(primary) }}>
                 Take Action
               </Link>
               <Link to={'/org/' + slug + '/about'} className="text-white font-black px-8 py-3 text-sm border-2 border-white border-opacity-40 focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ borderRadius: borderRadius }}>
@@ -531,7 +545,7 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 leading-tight">{org.name}</h1>
           {org.tagline && <p className="text-xl text-gray-500 mb-8 max-w-xl mx-auto">{org.tagline}</p>}
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Link to={contactHref} className="text-white font-bold px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+            <Link to={contactHref} className="text-white font-bold px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ backgroundColor: primary, borderRadius: borderRadius, color: getContrastColor(primary) }}>
               Get Involved
             </Link>
             <Link to={'/org/' + slug + '/about'} className="font-bold px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity" style={{ color: primary, border: '2px solid ' + primary, borderRadius: borderRadius }}>

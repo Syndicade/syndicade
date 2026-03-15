@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
+// ── WCAG contrast helper ──────────────────────────────────────────────────────
+function getContrastColor(hex) {
+  if (!hex) return '#ffffff';
+  var clean = hex.replace('#', '');
+  if (clean.length === 3) clean = clean[0]+clean[0]+clean[1]+clean[1]+clean[2]+clean[2];
+  var r = parseInt(clean.substring(0,2), 16);
+  var g = parseInt(clean.substring(2,4), 16);
+  var b = parseInt(clean.substring(4,6), 16);
+  var toLinear = function(c) {
+    var s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  var L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.179 ? '#111827' : '#ffffff';
+}
+
 // ── Contact form (self-contained) ─────────────────────────────────────────────
 function BlockContactForm({ org, primary, borderRadius }) {
   var [form, setForm] = useState({ name: '', email: '', message: '' });
@@ -62,8 +78,8 @@ function BlockContactForm({ org, primary, borderRadius }) {
           rows={4} placeholder="How can we help?" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
       </div>
       <button onClick={handleSubmit} disabled={submitting}
-        className="w-full py-3 text-white font-bold text-sm rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 transition-opacity"
-        style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+        className="w-full py-3 font-bold text-sm rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 transition-opacity"
+        style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
         {submitting ? 'Sending...' : 'Send Message'}
       </button>
     </div>
@@ -85,7 +101,7 @@ function EventsListBlock({ block, primary, borderRadius }) {
           .from('events')
           .select('id, title, description, start_time, end_time, location, event_type, is_virtual, virtual_link, flier_url')
           .eq('organization_id', block.organization_id)
-          .eq('is_public', true)
+          .eq('publish_to_website', true)
           .eq('is_cancelled', false)
           .gte('start_time', now)
           .order('start_time', { ascending: true })
@@ -126,7 +142,8 @@ function EventsListBlock({ block, primary, borderRadius }) {
           {events.map(function(event) {
             return (
               <div key={event.id} className="flex gap-4 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex-shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center text-white text-center" style={{ backgroundColor: primary }}>
+                <div className="flex-shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center text-center"
+                  style={{ backgroundColor: primary, color: getContrastColor(primary) }}>
                   <p className="text-xs font-bold leading-tight uppercase">{new Date(event.start_time).toLocaleDateString('en-US', { month: 'short' })}</p>
                   <p className="text-xl font-extrabold leading-tight">{new Date(event.start_time).getDate()}</p>
                 </div>
@@ -140,8 +157,8 @@ function EventsListBlock({ block, primary, borderRadius }) {
                 </div>
                 {event.virtual_link && event.is_virtual && (
                   <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
-                    className="flex-shrink-0 self-center px-3 py-1.5 text-xs font-bold text-white rounded-lg hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1"
-                    style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+                    className="flex-shrink-0 self-center px-3 py-1.5 text-xs font-bold rounded-lg hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1"
+                    style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
                     Join
                   </a>
                 )}
@@ -211,7 +228,10 @@ function TeamGridBlock({ block, primary, org }) {
                 <div key={i} className="text-center">
                   {photo
                     ? <img src={photo} alt={'Photo of ' + name} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
-                    : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>{(name || 'T').charAt(0)}</div>
+                    : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold shadow-md"
+                        style={{ backgroundColor: primary, color: getContrastColor(primary) }}>
+                        {(name || 'T').charAt(0)}
+                      </div>
                   }
                   {name && <p className="font-bold text-gray-900 text-sm">{name}</p>}
                   {title && <p className="text-xs text-gray-500 mt-0.5 capitalize">{title}</p>}
@@ -228,7 +248,10 @@ function TeamGridBlock({ block, primary, org }) {
               <div key={i} className="text-center">
                 {member.photo_url
                   ? <img src={member.photo_url} alt={member.photo_alt || (member.name ? 'Photo of ' + member.name : 'Team member')} className="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-md" />
-                  : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-md" style={{ backgroundColor: primary }}>{(member.name || 'T').charAt(0)}</div>
+                  : <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-bold shadow-md"
+                      style={{ backgroundColor: primary, color: getContrastColor(primary) }}>
+                      {(member.name || 'T').charAt(0)}
+                    </div>
                 }
                 {member.name && <p className="font-bold text-gray-900 text-sm">{member.name}</p>}
                 {member.title && <p className="text-xs text-gray-500 mt-0.5">{member.title}</p>}
@@ -261,8 +284,9 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
           {c.headline && <h1 className={'text-4xl md:text-5xl font-extrabold leading-tight max-w-3xl ' + (c.image_url ? 'text-white' : 'text-gray-900')}>{c.headline}</h1>}
           {c.subtext && <p className={'text-lg max-w-2xl ' + (c.image_url ? 'text-white text-opacity-90' : 'text-gray-600')}>{c.subtext}</p>}
           {c.cta_label && (
-            <a href={c.cta_url || '#'} className="inline-block font-bold px-8 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+            <a href={c.cta_url || '#'}
+              className="inline-block font-bold px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
               {c.cta_label}
             </a>
           )}
@@ -375,7 +399,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
   // CTA BANNER
   if (type === 'cta_banner') {
     return (
-      <div key={key} className="rounded-2xl px-10 py-12 text-center text-white" style={{ backgroundColor: c.bg_color || primary }}>
+      <div key={key} className="rounded-2xl px-10 py-12 text-center" style={{ backgroundColor: c.bg_color || primary, color: getContrastColor(c.bg_color || primary) }}>
         {c.heading && <h2 className="text-3xl font-extrabold mb-3">{c.heading}</h2>}
         {c.subtext && <p className="text-lg opacity-90 mb-8">{c.subtext}</p>}
         {c.cta_label && (
@@ -398,8 +422,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
         <div className="flex gap-3 max-w-md mx-auto">
           <input type="email" placeholder={c.placeholder || 'Enter your email'}
             className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <button className="px-6 py-3 text-white font-bold text-sm rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-            style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+          <button className="px-6 py-3 font-bold text-sm rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+            style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
             {c.button_label || 'Subscribe'}
           </button>
         </div>
@@ -428,8 +452,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
         {c.heading && <h2 className="text-2xl font-bold text-gray-900 mb-2">{c.heading}</h2>}
         {c.subtext && <p className="text-gray-500 mb-6">{c.subtext}</p>}
         <a href={c.url || '#'}
-          className="inline-block text-white font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-          style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+          className="inline-block font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+          style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
           {c.button_label || 'Donate Now'}
         </a>
         <p className="text-xs text-gray-400 mt-3">Donation integration coming soon.</p>
@@ -443,8 +467,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
       <div key={key} className="text-center py-8 bg-gray-50 rounded-2xl border border-gray-200">
         {c.heading && <h2 className="text-2xl font-bold text-gray-900 mb-2">{c.heading}</h2>}
         {c.subtext && <p className="text-gray-500 mb-6">{c.subtext}</p>}
-        <button className="text-white font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-          style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+        <button className="font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+          style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
           {c.button_label || 'Sign Up to Volunteer'}
         </button>
         <p className="text-xs text-gray-400 mt-3">Volunteer signup integration coming soon.</p>
@@ -459,8 +483,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
         {c.heading && <h2 className="text-2xl font-bold text-gray-900 mb-2">{c.heading}</h2>}
         {c.subtext && <p className="text-gray-500 mb-6">{c.subtext}</p>}
         {c.goal && <p className="text-sm text-gray-500 mb-4">Goal: {c.goal} signatures</p>}
-        <button className="text-white font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-          style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+        <button className="font-bold px-10 py-4 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+          style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
           {c.button_label || 'Sign the Petition'}
         </button>
         <p className="text-xs text-gray-400 mt-3">Petition integration coming soon.</p>
@@ -528,8 +552,9 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
                   </ul>
                 )}
                 {tier.cta_label && (
-                  <a href="#contact" className="block w-full text-center text-white font-bold py-3 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-                    style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+                  <a href="#contact"
+                    className="block w-full text-center font-bold py-3 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+                    style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
                     {tier.cta_label}
                   </a>
                 )}
@@ -589,7 +614,6 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     var colCount = c.columns || 2;
     var colGrid = colCount === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2';
     var items = c.items || [];
-    // Ensure we always have the right number of column items
     while (items.length < colCount) { items = items.concat([{ heading: '', body: '', image_url: '', image_alt: '', button_label: '', button_url: '' }]); }
     items = items.slice(0, colCount);
 
@@ -618,9 +642,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
                 {col.button_label && (
                   <a
                     href={col.button_url || '#'}
-                    className="inline-block font-bold px-6 py-2.5 text-white text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
-                    style={{ backgroundColor: primary, borderRadius: borderRadius }}
-                  >
+                    className="inline-block font-bold px-6 py-2.5 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity"
+                    style={{ backgroundColor: primary, color: getContrastColor(primary), borderRadius: borderRadius }}>
                     {col.button_label}
                   </a>
                 )}
