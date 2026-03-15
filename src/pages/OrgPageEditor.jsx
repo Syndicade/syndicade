@@ -205,27 +205,15 @@ function Toggle({ checked, onChange, label, id }) {
 }
 
 // ── PreviewNewPage ────────────────────────────────────────────────────────────
-function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, fontFamily }) {
+function PreviewNewPage({ org, pages, blocks, primary, secondary, borderRadius, fontFamily, activePageId }) {
   var enabledPages = (pages || []).filter(function(p) { return p.is_enabled && p.page_key && !p.page_key.startsWith('external-'); });
-  var firstPageWithBlocks = enabledPages.find(function(p) { return blocks.some(function(b) { return b.page_id === p.id; }); });
-  var [activePage, setActivePage] = useState(firstPageWithBlocks ? firstPageWithBlocks.id : (enabledPages.length > 0 ? enabledPages[0].id : null));
-  var activePageBlocks = blocks.filter(function(b) { return b.page_id === activePage; });
+  var activePage = activePageId
+    ? enabledPages.find(function(p) { return p.id === activePageId; })
+    : enabledPages[0];
+  var activePageBlocks = activePage ? blocks.filter(function(b) { return b.page_id === activePage.id; }) : [];
 
   return (
     <div className="min-h-full bg-white" style={{ fontFamily: fontFamily || 'Inter, system-ui, sans-serif' }}>
-      {enabledPages.length > 1 && (
-        <div className="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b border-gray-200 overflow-x-auto">
-          {enabledPages.map(function(page) {
-            var isActive = activePage === page.id;
-            return (
-              <button key={page.id} onClick={function() { setActivePage(page.id); }}
-                className={'px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all focus:outline-none ' + (isActive ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-200')}>
-                {page.title}
-              </button>
-            );
-          })}
-        </div>
-      )}
       <div className="px-6 py-10 space-y-10 max-w-4xl mx-auto">
         {activePageBlocks.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
@@ -512,6 +500,7 @@ export default function OrgPageEditor() {
   var [previewOpen, setPreviewOpen] = useState(true);
   var [previewScale, setPreviewScale] = useState(0.5);
   var [sitePages, setSitePages] = useState([]);
+  var [previewPageId, setPreviewPageId] = useState(null);
   var [siteBlocks, setSiteBlocks] = useState([]);
   var [deleteModal, setDeleteModal] = useState(null);
   var [showWizard, setShowWizard] = useState(false);
@@ -2146,24 +2135,50 @@ export default function OrgPageEditor() {
               <span className="text-xs text-gray-400">Updates instantly as you edit</span>
             </div>
 
-            <div className="flex-1 overflow-hidden p-3" style={{ position: 'relative' }}>
-              <div className="w-full h-full bg-white rounded-lg overflow-hidden shadow-lg" style={{ position: 'relative' }}>
-                <div style={{
-                  width: PREVIEW_WIDTH + 'px',
-                  transform: 'scale(' + previewScale + ')',
-                  transformOrigin: 'top left',
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                }}>
+<div className="flex-1 overflow-hidden p-3" style={{ position: 'relative' }}>
+  <div className="w-full h-full bg-white rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ position: 'relative' }}>
+
+    {/* Page tab switcher — outside the scaled/pointer-blocked div */}
+    {siteBlocks.length > 0 && (function() {
+      var previewPages = sitePages.filter(function(p) { return p.is_enabled && p.page_key && !p.page_key.startsWith('external-'); });
+      var activeId = previewPageId || (previewPages.length > 0 ? previewPages[0].id : null);
+      if (previewPages.length <= 1) return null;
+      return (
+        <div className="flex items-center gap-1 px-3 py-2 bg-gray-50 border-b border-gray-200 overflow-x-auto flex-shrink-0" role="tablist" aria-label="Preview pages">
+          {previewPages.map(function(page) {
+            var isActive = activeId === page.id;
+            return (
+              <button key={page.id}
+                role="tab"
+                aria-selected={isActive}
+                onClick={function() { setPreviewPageId(page.id); }}
+                className={'px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isActive ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-200')}>
+                {page.title}
+              </button>
+            );
+          })}
+        </div>
+      );
+    })()}
+
+    <div className="flex-1 overflow-hidden" style={{ position: 'relative' }}>
+      <div style={{
+        width: PREVIEW_WIDTH + 'px',
+        transform: 'scale(' + previewScale + ')',
+        transformOrigin: 'top left',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}>
                   {siteBlocks.length > 0 ? (
-                    <PreviewNewPage
-                      org={previewOrg}
-                      pages={sitePages}
-                      blocks={siteBlocks}
-                      primary={form.theme.customColors[0] || form.theme.primaryColor || '#3B82F6'}
-                      borderRadius={form.theme.buttonStyle === 'pill' ? '9999px' : form.theme.buttonStyle === 'sharp' ? '0px' : '8px'}
-                      fontFamily={form.theme.fontPairing === 'serif' ? 'Georgia, serif' : form.theme.fontPairing === 'mono' ? '"Roboto Slab", Georgia, serif' : 'Inter, system-ui, sans-serif'}
-                    />
+  <PreviewNewPage
+    org={previewOrg}
+    pages={sitePages}
+    blocks={siteBlocks}
+    primary={form.theme.customColors[0] || form.theme.primaryColor || '#3B82F6'}
+    borderRadius={form.theme.buttonStyle === 'pill' ? '9999px' : form.theme.buttonStyle === 'sharp' ? '0px' : '8px'}
+    fontFamily={form.theme.fontPairing === 'serif' ? 'Georgia, serif' : form.theme.fontPairing === 'mono' ? '"Roboto Slab", Georgia, serif' : 'Inter, system-ui, sans-serif'}
+    activePageId={previewPageId}
+  />
                   ) : (
                     <>
                       {form.template === 'classic'  && <ClassicTemplate  {...previewTemplateProps} />}
@@ -2177,6 +2192,7 @@ export default function OrgPageEditor() {
                 </div>
               </div>
             </div>
+          </div>
           </div>
         )}
       </div>
