@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, CalendarX, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { et } from '../lib/eventDiscoveryTranslations';
 import EventDiscoveryCard from '../components/EventDiscoveryCard';
 import EventDiscoveryFilters from '../components/EventDiscoveryFilters';
+import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 
-const PAGE_SIZE = 20;
+var PAGE_SIZE = 20;
 
-const SORT_OPTIONS = [
+var SORT_OPTIONS = [
   { value: 'start_time', labelKey: 'soonest' },
   { value: 'ending_soon', labelKey: 'endingSoon' },
   { value: 'recently_added', labelKey: 'recentlyAdded' },
 ];
 
-const DEFAULT_FILTERS = {
+var DEFAULT_FILTERS = {
   eventTypes: [],
   audience: [],
   languages: [],
@@ -32,53 +32,142 @@ const DEFAULT_FILTERS = {
   uiLang: 'en',
 };
 
-function EventCardSkeleton() {
+function SearchIcon() {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3 animate-pulse" aria-hidden="true">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-200 rounded w-3/4" />
-          <div className="h-3 bg-gray-100 rounded w-1/3" />
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+    </svg>
+  );
+}
+
+function XIcon({ size }) {
+  var cls = size === 14 ? 'h-3.5 w-3.5' : 'h-4.5 w-4.5';
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function CalendarXIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function AlertCircleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function EventCardSkeleton({ isDark }) {
+  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor = isDark ? '#2A3550' : '#E2E8F0';
+  var shimmer1 = isDark ? '#1E2845' : '#F1F5F9';
+  var shimmer2 = isDark ? '#2A3550' : '#E2E8F0';
+  return (
+    <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }} aria-hidden="true" className="animate-pulse">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ height: '16px', background: shimmer2, borderRadius: '4px', width: '75%' }} />
+          <div style={{ height: '12px', background: shimmer1, borderRadius: '4px', width: '33%' }} />
         </div>
-        <div className="flex gap-1">
-          <div className="w-7 h-7 bg-gray-100 rounded-lg" />
-          <div className="w-7 h-7 bg-gray-100 rounded-lg" />
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ width: '28px', height: '28px', background: shimmer1, borderRadius: '8px' }} />
+          <div style={{ width: '28px', height: '28px', background: shimmer1, borderRadius: '8px' }} />
         </div>
       </div>
-      <div className="space-y-1.5">
-        <div className="h-3 bg-gray-100 rounded w-2/3" />
-        <div className="h-3 bg-gray-100 rounded w-1/2" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ height: '12px', background: shimmer1, borderRadius: '4px', width: '66%' }} />
+        <div style={{ height: '12px', background: shimmer1, borderRadius: '4px', width: '50%' }} />
       </div>
-      <div className="h-3 bg-gray-100 rounded w-full" />
-      <div className="h-3 bg-gray-100 rounded w-4/5" />
-      <div className="flex gap-2">
-        <div className="h-5 w-20 bg-gray-100 rounded-full" />
-        <div className="h-5 w-20 bg-gray-100 rounded-full" />
+      <div style={{ height: '12px', background: shimmer1, borderRadius: '4px', width: '100%' }} />
+      <div style={{ height: '12px', background: shimmer1, borderRadius: '4px', width: '80%' }} />
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ height: '20px', width: '80px', background: shimmer1, borderRadius: '99px' }} />
+        <div style={{ height: '20px', width: '80px', background: shimmer1, borderRadius: '99px' }} />
       </div>
-      <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-        <div className="h-3 w-24 bg-gray-100 rounded" />
-        <div className="h-7 w-24 bg-gray-200 rounded-lg" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid ' + borderColor }}>
+        <div style={{ height: '12px', width: '96px', background: shimmer1, borderRadius: '4px' }} />
+        <div style={{ height: '28px', width: '96px', background: shimmer2, borderRadius: '8px' }} />
       </div>
     </div>
   );
 }
 
 export default function EventDiscovery() {
-  const [session, setSession] = useState(null);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [keyword, setKeyword] = useState('');
-  const [debouncedKeyword, setDebouncedKeyword] = useState('');
-  const [sortBy, setSortBy] = useState('start_time');
-  const [events, setEvents] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [savedEvents, setSavedEvents] = useState(new Set());
-  const [adminOrgs, setAdminOrgs] = useState([]);
+  var { isDark } = useTheme();
 
-  useEffect(() => {
+  // Theme tokens
+  var pageBg        = isDark ? '#0E1523' : '#FFFFFF';
+  var sectionBg     = isDark ? '#151B2D' : '#F8FAFC';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF' : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1' : '#475569';
+  var textMuted     = isDark ? '#94A3B8' : '#64748B';
+  var inputBg       = isDark ? '#151B2D' : '#F8FAFC';
+  var hoverBg       = isDark ? '#1E2845' : '#F1F5F9';
+
+  var [session, setSession] = useState(null);
+  var [filters, setFilters] = useState(DEFAULT_FILTERS);
+  var [keyword, setKeyword] = useState('');
+  var [debouncedKeyword, setDebouncedKeyword] = useState('');
+  var [sortBy, setSortBy] = useState('start_time');
+  var [events, setEvents] = useState([]);
+  var [totalCount, setTotalCount] = useState(0);
+  var [page, setPage] = useState(1);
+  var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
+  var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  var [savedEvents, setSavedEvents] = useState(new Set());
+  var [adminOrgs, setAdminOrgs] = useState([]);
+
+  var [selectedEvent, setSelectedEvent] = useState(null);
+  var [guestRSVPModal, setGuestRSVPModal] = useState(false);
+  var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
+  var [rsvpLoading, setRsvpLoading] = useState(false);
+  var [rsvpSuccess, setRsvpSuccess] = useState(false);
+
+  var searchRef = useRef(null);
+  var lang = filters.uiLang || 'en';
+
+  useEffect(function() {
+    supabase.auth.getSession().then(function(res) { setSession(res.data.session); });
+    var sub = supabase.auth.onAuthStateChange(function(_e, s) { setSession(s); });
+    return function() { sub.data.subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(function() {
     if (!session) return;
     supabase
       .from('memberships')
@@ -86,51 +175,35 @@ export default function EventDiscovery() {
       .eq('member_id', session.user.id)
       .eq('role', 'admin')
       .eq('status', 'active')
-      .then(({ data }) => {
-        if (data) setAdminOrgs(data.map((m) => ({ id: m.organization_id, name: m.organizations?.name })));
+      .then(function(res) {
+        if (res.data) setAdminOrgs(res.data.map(function(m) { return { id: m.organization_id, name: m.organizations && m.organizations.name }; }));
       });
   }, [session]);
 
-  // Guest RSVP modal state (preserved from original)
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [guestRSVPModal, setGuestRSVPModal] = useState(false);
-  const [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
-  const [rsvpLoading, setRsvpLoading] = useState(false);
-  const [rsvpSuccess, setRsvpSuccess] = useState(false);
-
-  const searchRef = useRef(null);
-  const lang = filters.uiLang || 'en';
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
+  useEffect(function() {
     if (!session) return;
     supabase
       .from('event_saves')
       .select('event_id')
       .eq('user_id', session.user.id)
-      .then(({ data }) => {
-        if (data) setSavedEvents(new Set(data.map((r) => r.event_id)));
+      .then(function(res) {
+        if (res.data) setSavedEvents(new Set(res.data.map(function(r) { return r.event_id; })));
       });
   }, [session]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedKeyword(keyword), 300);
-    return () => clearTimeout(timer);
+  useEffect(function() {
+    var timer = setTimeout(function() { setDebouncedKeyword(keyword); }, 300);
+    return function() { clearTimeout(timer); };
   }, [keyword]);
 
-  useEffect(() => { setPage(1); }, [debouncedKeyword, filters, sortBy]);
+  useEffect(function() { setPage(1); }, [debouncedKeyword, filters, sortBy]);
 
-  const fetchEvents = useCallback(async () => {
+  var fetchEvents = useCallback(async function() {
     setLoading(true);
     setError(null);
     try {
-      const offset = (page - 1) * PAGE_SIZE;
-      const { data, error: rpcError } = await supabase.rpc('get_public_events', {
+      var offset = (page - 1) * PAGE_SIZE;
+      var res = await supabase.rpc('get_public_events', {
         search_keyword: debouncedKeyword || null,
         filter_event_types: filters.eventTypes.length > 0 ? filters.eventTypes : null,
         filter_audience: filters.audience.length > 0 ? filters.audience : null,
@@ -154,9 +227,9 @@ export default function EventDiscovery() {
         page_limit: PAGE_SIZE,
         page_offset: offset,
       });
-      if (rpcError) throw rpcError;
-      setEvents(data || []);
-      setTotalCount(data?.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (data?.length || 0));
+      if (res.error) throw res.error;
+      setEvents(res.data || []);
+      setTotalCount(res.data && res.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (res.data ? res.data.length : 0));
     } catch (err) {
       console.error('Event discovery fetch error:', err);
       setError(err.message || 'Failed to load events');
@@ -166,24 +239,19 @@ export default function EventDiscovery() {
     }
   }, [page, debouncedKeyword, filters, sortBy, lang]);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(function() { fetchEvents(); }, [fetchEvents]);
 
   function handleFilterChange(key, value) {
-    if (key === 'uiLang') {
-      setFilters((prev) => ({ ...prev, uiLang: value }));
-      return;
-    }
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters(function(prev) { var u = {}; u[key] = value; return Object.assign({}, prev, u); });
   }
 
   function handleReset() {
     setFilters(DEFAULT_FILTERS);
     setKeyword('');
     setSortBy('start_time');
-    searchRef.current?.focus();
+    if (searchRef.current) searchRef.current.focus();
   }
 
-  // Guest RSVP handlers (preserved from original)
   function handleGuestRSVP(event) {
     setSelectedEvent(event);
     setGuestRSVPModal(true);
@@ -195,26 +263,24 @@ export default function EventDiscovery() {
     setRsvpLoading(true);
     try {
       if (!guestInfo.name.trim() || !guestInfo.email.trim()) throw new Error('Please provide your name and email');
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(guestInfo.email)) throw new Error('Please enter a valid email address');
-      const { error: rsvpError } = await supabase
-        .from('guest_rsvps')
-        .insert([{
-          event_id: selectedEvent.id,
-          guest_email: guestInfo.email.toLowerCase().trim(),
-          guest_name: guestInfo.name.trim(),
-          guest_phone: guestInfo.phone.trim() || null,
-          status: guestInfo.status,
-          guest_count: parseInt(guestInfo.guestCount) || 1,
-        }]);
-      if (rsvpError) {
-        if (rsvpError.code === '23505') throw new Error('You have already RSVP\'d to this event');
-        throw rsvpError;
+      var rsvpRes = await supabase.from('guest_rsvps').insert([{
+        event_id: selectedEvent.id,
+        guest_email: guestInfo.email.toLowerCase().trim(),
+        guest_name: guestInfo.name.trim(),
+        guest_phone: guestInfo.phone.trim() || null,
+        status: guestInfo.status,
+        guest_count: parseInt(guestInfo.guestCount) || 1,
+      }]);
+      if (rsvpRes.error) {
+        if (rsvpRes.error.code === '23505') throw new Error("You have already RSVP'd to this event");
+        throw rsvpRes.error;
       }
       setRsvpSuccess(true);
       setGuestInfo({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
       toast.success('RSVP submitted successfully!');
-      setTimeout(() => { setGuestRSVPModal(false); setRsvpSuccess(false); }, 3000);
+      setTimeout(function() { setGuestRSVPModal(false); setRsvpSuccess(false); }, 3000);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -222,8 +288,8 @@ export default function EventDiscovery() {
     }
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const isRTL = lang === 'ar';
+  var totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  var isRTL = lang === 'ar';
 
   return (
     <>
@@ -234,51 +300,61 @@ export default function EventDiscovery() {
         <link rel="canonical" href="https://syndicade.com/discover" />
       </Helmet>
 
-      <div className="min-h-screen bg-gray-50" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div style={{ minHeight: '100vh', background: pageBg, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }} dir={isRTL ? 'rtl' : 'ltr'}>
 
-        {/* Top Search Bar */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true" />
+        {/* Sticky Search Bar */}
+        <div style={{ background: sectionBg, borderBottom: '1px solid ' + borderColor, position: 'sticky', top: 0, zIndex: 30 }}>
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none', display: 'flex' }}>
+                <SearchIcon />
+              </span>
               <input
                 ref={searchRef}
                 type="search"
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={function(e) { setKeyword(e.target.value); }}
                 placeholder={et(lang, 'searchPlaceholder')}
                 aria-label={et(lang, 'searchPlaceholder')}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none' }}
+                className="focus:ring-2 focus:ring-blue-500"
               />
               {keyword && (
-                <button onClick={() => setKeyword('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none" aria-label="Clear search">
-                  <X size={14} aria-hidden="true" />
+                <button
+                  onClick={function() { setKeyword(''); }}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMuted, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }}
+                  aria-label="Clear search"
+                  className="hover:text-white focus:outline-none"
+                >
+                  <XIcon size={14} />
                 </button>
               )}
             </div>
             <button
-              onClick={() => setMobileFiltersOpen(true)}
-              className="lg:hidden flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={function() { setMobileFiltersOpen(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Open filters"
               aria-expanded={mobileFiltersOpen}
             >
-              <SlidersHorizontal size={15} aria-hidden="true" />
+              <FilterIcon />
               {et(lang, 'filtersHeading')}
             </button>
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex gap-6">
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', gap: '24px' }}>
 
             {/* Desktop Sidebar */}
-            <div className="hidden lg:block w-64 flex-shrink-0">
-              <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-20">
+            <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
+              <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px', position: 'sticky', top: '80px' }}>
                 <EventDiscoveryFilters
                   lang={lang}
                   filters={filters}
                   onFilterChange={handleFilterChange}
                   onReset={handleReset}
+                  isDark={isDark}
                 />
               </div>
             </div>
@@ -286,12 +362,17 @@ export default function EventDiscovery() {
             {/* Mobile Filter Drawer */}
             {mobileFiltersOpen && (
               <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={et(lang, 'filtersHeading')}>
-                <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />
-                <div className="absolute left-0 top-0 bottom-0 w-80 max-w-full bg-white shadow-xl overflow-y-auto p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-semibold text-gray-900">{et(lang, 'filtersHeading')}</h2>
-                    <button onClick={() => setMobileFiltersOpen(false)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Close filters">
-                      <X size={18} aria-hidden="true" />
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={function() { setMobileFiltersOpen(false); }} aria-hidden="true" />
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '320px', maxWidth: '100%', background: cardBg, boxShadow: '4px 0 24px rgba(0,0,0,0.4)', overflowY: 'auto', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary }}>{et(lang, 'filtersHeading')}</h2>
+                    <button
+                      onClick={function() { setMobileFiltersOpen(false); }}
+                      style={{ padding: '6px', borderRadius: '8px', color: textMuted, background: 'none', border: 'none', cursor: 'pointer' }}
+                      aria-label="Close filters"
+                      className="hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <XIcon size={18} />
                     </button>
                   </div>
                   <EventDiscoveryFilters
@@ -299,8 +380,13 @@ export default function EventDiscovery() {
                     filters={filters}
                     onFilterChange={handleFilterChange}
                     onReset={handleReset}
+                    isDark={isDark}
                   />
-                  <button onClick={() => setMobileFiltersOpen(false)} className="mt-6 w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <button
+                    onClick={function() { setMobileFiltersOpen(false); }}
+                    style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
                     {et(lang, 'results')}
                   </button>
                 </div>
@@ -308,30 +394,31 @@ export default function EventDiscovery() {
             )}
 
             {/* Main Content */}
-            <main className="flex-1 min-w-0" aria-label="Event results">
-              <div className="mb-5">
-                <h1 className="text-2xl font-bold text-gray-900">{et(lang, 'pageTitle')}</h1>
-                <p className="text-gray-500 text-sm mt-1">{et(lang, 'pageSubtitle')}</p>
+            <main style={{ flex: 1, minWidth: 0 }} aria-label="Event results">
+              <div style={{ marginBottom: '20px' }}>
+                <h1 style={{ fontSize: '24px', fontWeight: 800, color: textPrimary }}>{et(lang, 'pageTitle')}</h1>
+                <p style={{ color: textMuted, fontSize: '14px', marginTop: '4px' }}>{et(lang, 'pageSubtitle')}</p>
               </div>
 
               {/* Results Bar */}
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <p className="text-sm text-gray-600" aria-live="polite" aria-atomic="true">
-                  {!loading && !error && <>{totalCount} {et(lang, 'results')}</>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <p style={{ fontSize: '14px', color: textMuted }} aria-live="polite" aria-atomic="true">
+                  {!loading && !error && (totalCount + ' ' + et(lang, 'results'))}
                 </p>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="event-sort-select" className="text-sm text-gray-600 whitespace-nowrap">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: textSecondary, whiteSpace: 'nowrap' }}>
                     {et(lang, 'sortBy')}:
                   </label>
                   <select
                     id="event-sort-select"
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={function(e) { setSortBy(e.target.value); }}
+                    style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: textPrimary, outline: 'none' }}
+                    className="focus:ring-2 focus:ring-blue-500"
                   >
-                    {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>
-                    ))}
+                    {SORT_OPTIONS.map(function(opt) {
+                      return <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>;
+                    })}
                   </select>
                 </div>
               </div>
@@ -339,17 +426,21 @@ export default function EventDiscovery() {
               {/* Skeletons */}
               {loading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Loading events">
-                  {Array.from({ length: 6 }).map((_, i) => <EventCardSkeleton key={i} />)}
+                  {[1,2,3,4,5,6].map(function(i) { return <EventCardSkeleton key={i} isDark={isDark} />; })}
                 </div>
               )}
 
               {/* Error */}
               {!loading && error && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <AlertCircle size={48} className="text-red-400 mb-4" aria-hidden="true" />
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">{et(lang, 'errorTitle')}</h2>
-                  <p className="text-gray-500 text-sm mb-6 max-w-sm">{et(lang, 'errorDesc')}</p>
-                  <button onClick={fetchEvents} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                  <span style={{ color: '#EF4444', marginBottom: '16px' }}><AlertCircleIcon /></span>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
+                  <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
+                  <button
+                    onClick={fetchEvents}
+                    style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
                     {et(lang, 'tryAgain')}
                   </button>
                 </div>
@@ -357,11 +448,15 @@ export default function EventDiscovery() {
 
               {/* Empty State */}
               {!loading && !error && events.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <CalendarX size={48} className="text-gray-300 mb-4" aria-hidden="true" />
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">{et(lang, 'noResults')}</h2>
-                  <p className="text-gray-500 text-sm mb-6 max-w-sm">{et(lang, 'noResultsDesc')}</p>
-                  <button onClick={handleReset} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                  <span style={{ color: textMuted, marginBottom: '16px' }}><CalendarXIcon /></span>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>{et(lang, 'noResults')}</h2>
+                  <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'noResultsDesc')}</p>
+                  <button
+                    onClick={handleReset}
+                    style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
                     {et(lang, 'resetFilters')}
                   </button>
                 </div>
@@ -371,59 +466,72 @@ export default function EventDiscovery() {
               {!loading && !error && events.length > 0 && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {events.map((event) => (
-                      <EventDiscoveryCard
-                        key={event.id}
-                        event={event}
-                        lang={lang}
-                        session={session}
-                        initialSaved={savedEvents.has(event.id)}
-                        onRSVP={handleGuestRSVP}
-                        adminOrgs={adminOrgs}
-                      />
-                    ))}
+                    {events.map(function(event) {
+                      return (
+                        <EventDiscoveryCard
+                          key={event.id}
+                          event={event}
+                          lang={lang}
+                          session={session}
+                          initialSaved={savedEvents.has(event.id)}
+                          onRSVP={handleGuestRSVP}
+                          adminOrgs={adminOrgs}
+                        />
+                      );
+                    })}
                   </div>
+
+                  {/* Featured footnote */}
+                  <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
+                    Featured events are promoted by their organizations for 7 days.
+                  </p>
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <nav className="flex items-center justify-center gap-2 mt-8" aria-label="Pagination">
+                    <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
                       <button
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        onClick={function() { setPage(function(p) { return Math.max(1, p - 1); }); }}
                         disabled={page === 1}
-                        className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1 }}
                         aria-label={et(lang, 'previous')}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <ChevronLeft size={15} aria-hidden="true" />
+                        <ChevronLeftIcon />
                         {et(lang, 'previous')}
                       </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {Array.from({ length: Math.min(5, totalPages) }, function(_, i) {
+                          var pageNum;
                           if (totalPages <= 5) pageNum = i + 1;
                           else if (page <= 3) pageNum = i + 1;
                           else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
                           else pageNum = page - 2 + i;
+                          var isActive = pageNum === page;
                           return (
                             <button
                               key={pageNum}
-                              onClick={() => setPage(pageNum)}
-                              className={`w-9 h-9 text-sm rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${pageNum === page ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                              aria-label={`${et(lang, 'page')} ${pageNum}`}
-                              aria-current={pageNum === page ? 'page' : undefined}
+                              onClick={function() { setPage(pageNum); }}
+                              style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : ('1px solid ' + borderColor), background: isActive ? '#3B82F6' : cardBg, color: isActive ? '#FFFFFF' : textSecondary, cursor: 'pointer' }}
+                              aria-label={(et(lang, 'page') + ' ' + pageNum)}
+                              aria-current={isActive ? 'page' : undefined}
+                              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                               {pageNum}
                             </button>
                           );
                         })}
                       </div>
+
                       <button
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        onClick={function() { setPage(function(p) { return Math.min(totalPages, p + 1); }); }}
                         disabled={page === totalPages}
-                        className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.4 : 1 }}
                         aria-label={et(lang, 'next')}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {et(lang, 'next')}
-                        <ChevronRight size={15} aria-hidden="true" />
+                        <ChevronRightIcon />
                       </button>
                     </nav>
                   )}
@@ -437,53 +545,99 @@ export default function EventDiscovery() {
       {/* Guest RSVP Modal */}
       {guestRSVPModal && selectedEvent && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          onClick={() => !rsvpSuccess && setGuestRSVPModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          onClick={function() { if (!rsvpSuccess) setGuestRSVPModal(false); }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="rsvp-modal-title"
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h2 id="rsvp-modal-title" className="text-xl font-bold text-gray-900">RSVP to Event</h2>
-              <p className="text-gray-600 text-sm mt-1">{selectedEvent.title}</p>
+          <div
+            style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: '448px', width: '100%' }}
+            onClick={function(e) { e.stopPropagation(); }}
+          >
+            <div style={{ borderBottom: '1px solid ' + borderColor, padding: '16px 24px' }}>
+              <h2 id="rsvp-modal-title" style={{ fontSize: '20px', fontWeight: 800, color: textPrimary }}>RSVP to Event</h2>
+              <p style={{ color: textMuted, fontSize: '14px', marginTop: '4px' }}>{selectedEvent.title}</p>
             </div>
 
             {rsvpSuccess ? (
-              <div className="px-6 py-10 text-center">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">You're All Set!</h3>
-                <p className="text-gray-600 text-sm">We've received your RSVP.</p>
+              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, color: textPrimary, marginBottom: '8px' }}>You're All Set!</h3>
+                <p style={{ color: textMuted, fontSize: '14px' }}>We've received your RSVP.</p>
               </div>
             ) : (
-              <form onSubmit={submitGuestRSVP} className="px-6 py-4 space-y-4">
-                <div>
-                  <label htmlFor="guest-name" className="block text-sm font-semibold text-gray-900 mb-1.5">Your Name *</label>
-                  <input id="guest-name" type="text" required value={guestInfo.name} onChange={(e) => setGuestInfo(p => ({ ...p, name: e.target.value }))} placeholder="Jane Doe" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <form onSubmit={submitGuestRSVP} style={{ padding: '16px 24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {[
+                    { id: 'guest-name', label: 'Your Name', type: 'text', required: true, value: guestInfo.name, key: 'name', placeholder: 'Jane Doe' },
+                    { id: 'guest-email', label: 'Your Email', type: 'email', required: true, value: guestInfo.email, key: 'email', placeholder: 'jane@example.com' },
+                    { id: 'guest-phone', label: 'Phone (Optional)', type: 'tel', required: false, value: guestInfo.phone, key: 'phone', placeholder: '(555) 123-4567' },
+                  ].map(function(f) {
+                    return (
+                      <div key={f.id}>
+                        <label htmlFor={f.id} style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
+                          {f.label}{f.required && <span style={{ color: '#EF4444' }} aria-hidden="true"> *</span>}
+                        </label>
+                        <input
+                          id={f.id}
+                          type={f.type}
+                          required={f.required}
+                          value={f.value}
+                          placeholder={f.placeholder}
+                          onChange={function(e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function(p) { return Object.assign({}, p, u); }); }}
+                          style={{ width: '100%', padding: '8px 12px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                          className="focus:ring-2 focus:ring-blue-500"
+                          aria-required={f.required}
+                        />
+                      </div>
+                    );
+                  })}
+
+                  <div>
+                    <label htmlFor="guest-status" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>RSVP Status</label>
+                    <select
+                      id="guest-status"
+                      value={guestInfo.status}
+                      onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }}
+                      style={{ width: '100%', padding: '8px 12px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none' }}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="interested">Interested</option>
+                      <option value="going">Going</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="guest-count" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>Number of Guests</label>
+                    <input
+                      id="guest-count"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={guestInfo.guestCount}
+                      onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { guestCount: e.target.value }); }); }}
+                      style={{ width: '100%', padding: '8px 12px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="guest-email" className="block text-sm font-semibold text-gray-900 mb-1.5">Your Email *</label>
-                  <input id="guest-email" type="email" required value={guestInfo.email} onChange={(e) => setGuestInfo(p => ({ ...p, email: e.target.value }))} placeholder="jane@example.com" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label htmlFor="guest-phone" className="block text-sm font-semibold text-gray-900 mb-1.5">Phone (Optional)</label>
-                  <input id="guest-phone" type="tel" value={guestInfo.phone} onChange={(e) => setGuestInfo(p => ({ ...p, phone: e.target.value }))} placeholder="(555) 123-4567" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label htmlFor="guest-status" className="block text-sm font-semibold text-gray-900 mb-1.5">RSVP Status</label>
-                  <select id="guest-status" value={guestInfo.status} onChange={(e) => setGuestInfo(p => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="interested">Interested</option>
-                    <option value="going">Going</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="guest-count" className="block text-sm font-semibold text-gray-900 mb-1.5">Number of Guests</label>
-                  <input id="guest-count" type="number" min="1" max="10" value={guestInfo.guestCount} onChange={(e) => setGuestInfo(p => ({ ...p, guestCount: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200">
-                  <button type="button" onClick={() => setGuestRSVPModal(false)} disabled={rsvpLoading} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500">
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid ' + borderColor }}>
+                  <button
+                    type="button"
+                    onClick={function() { setGuestRSVPModal(false); }}
+                    disabled={rsvpLoading}
+                    style={{ padding: '8px 16px', border: '1px solid ' + borderColor, color: textSecondary, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
+                    className="hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
                     Cancel
                   </button>
-                  <button type="submit" disabled={rsvpLoading} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50">
+                  <button
+                    type="submit"
+                    disabled={rsvpLoading}
+                    style={{ padding: '8px 16px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: rsvpLoading ? 'not-allowed' : 'pointer', opacity: rsvpLoading ? 0.6 : 1 }}
+                    className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
                     {rsvpLoading ? 'Submitting...' : 'Submit RSVP'}
                   </button>
                 </div>

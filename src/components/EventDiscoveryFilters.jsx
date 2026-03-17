@@ -1,21 +1,21 @@
 import { useState } from 'react';
-import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import { et, EVENT_SUPPORTED_LANGUAGES } from '../lib/eventDiscoveryTranslations';
+import { useTheme } from '../context/ThemeContext';
 
-const EVENT_TYPES = [
+var EVENT_TYPES = [
   'advocacy-event', 'blood-drive', 'clothing-drive', 'community-meeting',
   'cultural-event', 'education-workshop', 'faith-based-event', 'food-drive',
   'fundraiser', 'health-wellness', 'volunteer-opportunity', 'youth-event',
 ];
 
-const AUDIENCE = [
+var AUDIENCE = [
   'black', 'families', 'general-public', 'lgbtq', 'latino',
   'seniors', 'veterans', 'women', 'youth',
 ];
 
-const ORG_TYPES = ['association', 'community_group', 'nonprofit', 'religious'];
+var ORG_TYPES = ['association', 'community_group', 'nonprofit', 'religious'];
 
-const LANGUAGE_OPTIONS = [
+var LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
   { code: 'es', label: 'Español' },
   { code: 'zh', label: '中文' },
@@ -24,16 +24,68 @@ const LANGUAGE_OPTIONS = [
   { code: 'ar', label: 'العربية' },
 ];
 
-const DATE_OPTIONS = ['today', 'thisWeek', 'thisMonth', 'customRange'];
+function ResetIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '12px', height: '12px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+  );
+}
 
 export default function EventDiscoveryFilters({ lang, filters, onFilterChange, onReset }) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  var { isDark } = useTheme();
+  var [advancedOpen, setAdvancedOpen] = useState(false);
+
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF' : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1' : '#475569';
+  var textMuted     = isDark ? '#94A3B8' : '#64748B';
+  var inputBg       = isDark ? '#0E1523' : '#F8FAFC';
+  var labelColor    = isDark ? '#F5B731' : '#64748B';
+
+  var inputStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    background: inputBg,
+    border: '1px solid ' + borderColor,
+    borderRadius: '8px',
+    fontSize: '14px',
+    color: textPrimary,
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  var sectionLabelStyle = {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: labelColor,
+    textTransform: 'uppercase',
+    letterSpacing: '4px',
+    marginBottom: '8px',
+  };
 
   function handleMultiSelect(filterKey, value) {
-    const current = filters[filterKey] || [];
-    const updated = current.includes(value)
-      ? current.filter((v) => v !== value)
-      : [...current, value];
+    var current = filters[filterKey] || [];
+    var updated = current.includes(value)
+      ? current.filter(function(v) { return v !== value; })
+      : current.concat([value]);
     onFilterChange(filterKey, updated);
   }
 
@@ -41,143 +93,124 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
     onFilterChange(filterKey, filters[filterKey] === value ? '' : value);
   }
 
+  function CheckItem({ checked, onChange, label }) {
+    return (
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          style={{ width: '16px', height: '16px', flexShrink: 0, accentColor: '#3B82F6' }}
+          aria-label={label}
+          className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+        />
+        <span style={{ fontSize: '14px', color: textSecondary }}>{label}</span>
+      </label>
+    );
+  }
+
   return (
-    <aside className="w-full" aria-label={et(lang, 'filtersHeading')}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-gray-900">
+    <aside style={{ width: '100%' }} aria-label={et(lang, 'filtersHeading')}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary }}>
           {et(lang, 'filtersHeading')}
         </h2>
         <button
           onClick={onReset}
-          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
           aria-label={et(lang, 'resetFilters')}
+          className="hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
         >
-          <RotateCcw size={12} aria-hidden="true" />
+          <ResetIcon />
           {et(lang, 'resetFilters')}
         </button>
       </div>
 
-      <div className="space-y-5">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
         {/* Display Language */}
         <div>
-          <label htmlFor="event-ui-language" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Display Language
-          </label>
-          <div className="relative">
+          <label htmlFor="event-ui-language" style={sectionLabelStyle}>Display Language</label>
+          <div style={{ position: 'relative' }}>
             <select
               id="event-ui-language"
               value={lang}
-              onChange={(e) => onFilterChange('uiLang', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={function(e) { onFilterChange('uiLang', e.target.value); }}
+              style={Object.assign({}, inputStyle, { paddingRight: '32px', appearance: 'none' })}
+              className="focus:ring-2 focus:ring-blue-500"
             >
-              {EVENT_SUPPORTED_LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
-              ))}
+              {EVENT_SUPPORTED_LANGUAGES.map(function(l) {
+                return <option key={l.code} value={l.code}>{l.label}</option>;
+              })}
             </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true" />
+            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }}>
+              <ChevronDownIcon />
+            </span>
           </div>
         </div>
 
-                      {/* Location */}
-              <div>
-                <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {et(lang, 'locationLabel')}
-                </p>
-                <div className="space-y-2">
-                  <div>
-                    <label htmlFor="event-filter-state" className="block text-xs text-gray-500 mb-1">{et(lang, 'stateLabel')}</label>
-                    <input
-                      id="event-filter-state"
-                      type="text"
-                      value={filters.state || ''}
-                      onChange={(e) => onFilterChange('state', e.target.value)}
-                      placeholder="e.g. OH"
-                      maxLength={2}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="event-filter-city" className="block text-xs text-gray-500 mb-1">{et(lang, 'cityLabel')}</label>
-                    <input
-                      id="event-filter-city"
-                      type="text"
-                      value={filters.city || ''}
-                      onChange={(e) => onFilterChange('city', e.target.value)}
-                      placeholder="e.g. Toledo"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="event-filter-zip" className="block text-xs text-gray-500 mb-1">{et(lang, 'zipLabel')}</label>
-                    <input
-                      id="event-filter-zip"
-                      type="text"
-                      value={filters.zip || ''}
-                      onChange={(e) => onFilterChange('zip', e.target.value)}
-                      placeholder="e.g. 43623"
-                      maxLength={10}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-        {/* Date Filter */}
+        {/* Location */}
         <div>
-          <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            {et(lang, 'dateLabel')}
-          </p>
-          <div className="space-y-1.5" role="group" aria-label={et(lang, 'dateLabel')}>
-            {DATE_OPTIONS.filter(d => d !== 'customRange').map((opt) => (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
+          <p style={sectionLabelStyle}>{et(lang, 'locationLabel')}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[
+              { id: 'event-filter-state', key: 'state', label: et(lang, 'stateLabel'), placeholder: 'E.G. OH', maxLength: 2 },
+              { id: 'event-filter-city',  key: 'city',  label: et(lang, 'cityLabel'),  placeholder: 'e.g. Toledo' },
+              { id: 'event-filter-zip',   key: 'zip',   label: et(lang, 'zipLabel'),   placeholder: 'e.g. 43623', maxLength: 10 },
+            ].map(function(f) {
+              return (
+                <div key={f.id}>
+                  <label htmlFor={f.id} style={{ display: 'block', fontSize: '12px', color: textMuted, marginBottom: '4px' }}>{f.label}</label>
+                  <input
+                    id={f.id}
+                    type="text"
+                    value={filters[f.key] || ''}
+                    onChange={function(e) { onFilterChange(f.key, e.target.value); }}
+                    placeholder={f.placeholder}
+                    maxLength={f.maxLength}
+                    style={inputStyle}
+                    className="focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Date */}
+        <div>
+          <p style={sectionLabelStyle}>{et(lang, 'dateLabel')}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'dateLabel')}>
+            {['today', 'thisWeek', 'thisMonth', 'customRange'].map(function(opt) {
+              return (
+                <CheckItem
+                  key={opt}
                   checked={filters.dateRange === opt}
-                  onChange={() => handleSingleSelect('dateRange', opt)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                  aria-label={et(lang, opt)}
+                  onChange={function() { handleSingleSelect('dateRange', opt); }}
+                  label={et(lang, opt)}
                 />
-                <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                  {et(lang, opt)}
-                </span>
-              </label>
-            ))}
-            {/* Custom Range */}
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={filters.dateRange === 'customRange'}
-                onChange={() => handleSingleSelect('dateRange', 'customRange')}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                aria-label={et(lang, 'customRange')}
-              />
-              <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                {et(lang, 'customRange')}
-              </span>
-            </label>
+              );
+            })}
             {filters.dateRange === 'customRange' && (
-              <div className="pl-6 space-y-2 pt-1">
-                <div>
-                  <label htmlFor="date-from" className="block text-xs text-gray-500 mb-1">{et(lang, 'dateFrom')}</label>
-                  <input
-                    id="date-from"
-                    type="date"
-                    value={filters.dateFrom || ''}
-                    onChange={(e) => onFilterChange('dateFrom', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="date-to" className="block text-xs text-gray-500 mb-1">{et(lang, 'dateTo')}</label>
-                  <input
-                    id="date-to"
-                    type="date"
-                    value={filters.dateTo || ''}
-                    onChange={(e) => onFilterChange('dateTo', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div style={{ paddingLeft: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { id: 'date-from', key: 'dateFrom', label: et(lang, 'dateFrom') },
+                  { id: 'date-to',   key: 'dateTo',   label: et(lang, 'dateTo') },
+                ].map(function(f) {
+                  return (
+                    <div key={f.id}>
+                      <label htmlFor={f.id} style={{ display: 'block', fontSize: '12px', color: textMuted, marginBottom: '4px' }}>{f.label}</label>
+                      <input
+                        id={f.id}
+                        type="date"
+                        value={filters[f.key] || ''}
+                        onChange={function(e) { onFilterChange(f.key, e.target.value); }}
+                        style={inputStyle}
+                        className="focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -185,139 +218,106 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
 
         {/* Event Type */}
         <div>
-          <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            {et(lang, 'eventTypeLabel')}
-          </p>
-          <div className="space-y-1.5" role="group" aria-label={et(lang, 'eventTypeLabel')}>
-            {EVENT_TYPES.map((type) => (
-              <label key={type} className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
+          <p style={sectionLabelStyle}>{et(lang, 'eventTypeLabel')}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'eventTypeLabel')}>
+            {EVENT_TYPES.map(function(type) {
+              return (
+                <CheckItem
+                  key={type}
                   checked={(filters.eventTypes || []).includes(type)}
-                  onChange={() => handleMultiSelect('eventTypes', type)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                  aria-label={et(lang, type)}
+                  onChange={function() { handleMultiSelect('eventTypes', type); }}
+                  label={et(lang, type)}
                 />
-                <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                  {et(lang, type)}
-                </span>
-              </label>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-
-        {/* Advanced Filters Toggle */}
-        <div className="border-t border-gray-100 pt-4">
+        {/* Advanced Filters */}
+        <div style={{ borderTop: '1px solid ' + borderColor, paddingTop: '16px' }}>
           <button
-            onClick={() => setAdvancedOpen((v) => !v)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            onClick={function() { setAdvancedOpen(function(v) { return !v; }); }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '14px', fontWeight: 700, color: textPrimary, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
             aria-expanded={advancedOpen}
             aria-controls="advanced-filters"
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           >
             {et(lang, 'advancedFilters')}
-            {advancedOpen
-              ? <ChevronUp size={15} aria-hidden="true" />
-              : <ChevronDown size={15} aria-hidden="true" />
-            }
+            {advancedOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
           </button>
 
           {advancedOpen && (
-            <div id="advanced-filters" className="space-y-5 mt-4">
+            <div id="advanced-filters" style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '16px' }}>
 
-              {/* Organization Type */}
+              {/* Org Type */}
               <div>
-                <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {et(lang, 'orgTypeLabel')}
-                </p>
-                <div className="space-y-1.5" role="group" aria-label={et(lang, 'orgTypeLabel')}>
-                  {ORG_TYPES.map((type) => (
-                    <label key={type} className="flex items-center gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
+                <p style={sectionLabelStyle}>{et(lang, 'orgTypeLabel')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'orgTypeLabel')}>
+                  {ORG_TYPES.map(function(type) {
+                    return (
+                      <CheckItem
+                        key={type}
                         checked={filters.orgType === type}
-                        onChange={() => handleSingleSelect('orgType', type)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                        aria-label={et(lang, type)}
+                        onChange={function() { handleSingleSelect('orgType', type); }}
+                        label={et(lang, type)}
                       />
-                      <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                        {et(lang, type)}
-                      </span>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Languages Supported */}
+              {/* Languages */}
               <div>
-                <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {et(lang, 'languageLabel')}
-                </p>
-                <div className="space-y-1.5" role="group" aria-label={et(lang, 'Languages Supported')}>
-                  {LANGUAGE_OPTIONS.map((l) => (
-                    <label key={l.code} className="flex items-center gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
+                <p style={sectionLabelStyle}>{et(lang, 'languageLabel')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label="Languages Supported">
+                  {LANGUAGE_OPTIONS.map(function(l) {
+                    return (
+                      <CheckItem
+                        key={l.code}
                         checked={(filters.languages || []).includes(l.code)}
-                        onChange={() => handleMultiSelect('languages', l.code)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                        aria-label={l.label}
+                        onChange={function() { handleMultiSelect('languages', l.code); }}
+                        label={l.label}
                       />
-                      <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                        {l.label}
-                      </span>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Audience */}
-        <div>
-          <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            {et(lang, 'audienceLabel')}
-          </p>
-          <div className="space-y-1.5" role="group" aria-label={et(lang, 'audienceLabel')}>
-            {AUDIENCE.map((a) => (
-              <label key={a} className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={(filters.audience || []).includes(a)}
-                  onChange={() => handleMultiSelect('audience', a)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                  aria-label={et(lang, a)}
-                />
-                <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                  {et(lang, a)}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
+              <div>
+                <p style={sectionLabelStyle}>{et(lang, 'audienceLabel')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'audienceLabel')}>
+                  {AUDIENCE.map(function(a) {
+                    return (
+                      <CheckItem
+                        key={a}
+                        checked={(filters.audience || []).includes(a)}
+                        onChange={function() { handleMultiSelect('audience', a); }}
+                        label={et(lang, a)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Additional Flags */}
               <div>
-                <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {et(lang, 'additionalFilters')}
-                </p>
-                <div className="space-y-1.5" role="group" aria-label={et(lang, 'additionalFilters')}>
+                <p style={sectionLabelStyle}>{et(lang, 'additionalFilters')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'additionalFilters')}>
                   {[
-                    { key: 'requiresRsvp', labelKey: 'rsvpRequired' },
+                    { key: 'requiresRsvp',    labelKey: 'rsvpRequired' },
                     { key: 'volunteerSignup', labelKey: 'volunteerSignup' },
                     { key: 'donationDropoff', labelKey: 'donationDropoff' },
-                  ].map(({ key, labelKey }) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={filters[key] === true}
-                        onChange={() => onFilterChange(key, filters[key] === true ? null : true)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                        aria-label={et(lang, labelKey)}
+                  ].map(function(item) {
+                    return (
+                      <CheckItem
+                        key={item.key}
+                        checked={filters[item.key] === true}
+                        onChange={function() { onFilterChange(item.key, filters[item.key] === true ? null : true); }}
+                        label={et(lang, item.labelKey)}
                       />
-                      <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                        {et(lang, labelKey)}
-                      </span>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
