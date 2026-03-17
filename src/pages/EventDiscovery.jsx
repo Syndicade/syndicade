@@ -481,11 +481,6 @@ export default function EventDiscovery() {
                     })}
                   </div>
 
-                  {/* Featured footnote */}
-                  <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
-                    Featured events are promoted by their organizations for 7 days.
-                  </p>
-
                   {/* Pagination */}
                   {totalPages > 1 && (
                     <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">

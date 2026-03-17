@@ -1,158 +1,196 @@
 import { Link } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
 
-/**
- * EventCard Component
- * 
- * Displays a summary card for an event with key information.
- * Uses start_time and end_time as full timestamps (not separate date/time fields).
- * 
- * Props:
- * - event: object - Event data from database
- * - showOrganization: boolean - Whether to display org name (default: false)
- * - compact: boolean - Smaller version for sidebars (default: false)
- * 
- * ADA Compliance:
- * - Semantic HTML with proper heading hierarchy
- * - ARIA labels for all interactive elements
- * - Keyboard accessible (can tab to link)
- * - Focus indicators visible
- * - Color contrast meets WCAG AA standards
- */
-function EventCard({ event, showOrganization = false, compact = false }) {
-  // Safety check: ensure event object exists
-  if (!event || !event.id) {
-    console.error('EventCard: Invalid event object', event);
-    return null;
-  }
+// ── Icons ─────────────────────────────────────────────────────────────────────
+function IconClock() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
 
-  // Helper function to determine event type
-  const getEventType = () => {
-    // Check if it's a hybrid event (has both location and virtual_link)
-    if (event.is_virtual && event.location && event.location !== 'Virtual Event') {
-      return 'hybrid';
-    }
-    // Virtual only
-    if (event.is_virtual || event.location === 'Virtual Event') {
-      return 'virtual';
-    }
-    // In-person
-    return 'in-person';
+function IconPin() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function IconVirtual() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function IconHybrid() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconRecurring() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
+function IconUsers() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function IconGlobe() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconLock() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  );
+}
+
+function IconDraft() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '13px', height: '13px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getEventType(event) {
+  if (event.is_virtual && event.location && event.location !== 'Virtual Event') return 'hybrid';
+  if (event.is_virtual || event.location === 'Virtual Event') return 'virtual';
+  return 'in-person';
+}
+
+function formatTime(timestamp, eventTimezone) {
+  if (!timestamp) return '';
+  try {
+    var date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '';
+    var tz = eventTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+    var tzAbbr = date.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz }).split(' ').pop();
+    return timeStr + ' ' + tzAbbr;
+  } catch (e) { return ''; }
+}
+
+function formatDateShort(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+function EventCard({ event, showOrganization, compact }) {
+  var { isDark } = useTheme();
+
+  if (!event || !event.id) return null;
+
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var footerBg      = isDark ? '#151B2D' : '#F8FAFC';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+
+  var eventType = getEventType(event);
+  var startDate = event.start_time ? new Date(event.start_time) : new Date();
+  var orgName   = event.organizations ? event.organizations.name : null;
+
+  // Visibility config
+  var visibilityMap = {
+    public:  { icon: <IconGlobe />,    label: 'Public',       bg: isDark ? 'rgba(34,197,94,0.15)'  : '#DCFCE7', color: '#22C55E' },
+    members: { icon: <IconUsers />,    label: 'Members Only', bg: isDark ? 'rgba(59,130,246,0.15)' : '#DBEAFE', color: '#3B82F6' },
+    groups:  { icon: <IconLock />,     label: 'Groups Only',  bg: isDark ? 'rgba(139,92,246,0.15)' : '#EDE9FE', color: '#8B5CF6' },
+    draft:   { icon: <IconDraft />,    label: 'Draft',        bg: isDark ? 'rgba(100,116,139,0.15)': '#F1F5F9', color: '#64748B' },
   };
+  var vis = visibilityMap[event.visibility] || visibilityMap.members;
 
-  // Get event type icon and label
-  const getEventTypeDisplay = () => {
-    const eventType = getEventType();
-    const displays = {
-      'hybrid': { icon: '🌐', label: 'Hybrid Event' },
-      'virtual': { icon: '💻', label: 'Virtual Event' },
-      'in-person': { icon: '📍', label: event.location || 'In-Person Event' }
-    };
-    return displays[eventType];
+  // Event type config
+  var typeMap = {
+    'in-person': { icon: <IconPin />,     label: event.location || 'In-Person' },
+    'virtual':   { icon: <IconVirtual />, label: 'Virtual Event'               },
+    'hybrid':    { icon: <IconHybrid />,  label: event.location || 'Hybrid'    },
   };
+  var typeDisplay = typeMap[eventType];
 
-  // Parse start_time timestamp
-  const getStartDate = () => {
-    if (!event.start_time) {
-      console.warn('EventCard: No start_time for event', event.id);
-      return new Date();
-    }
-    return new Date(event.start_time);
-  };
-
-// Format time from timestamp with timezone indicator
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    try {
-      const date = new Date(timestamp);
-      
-      // Verify it's a valid date
-      if (isNaN(date.getTime())) {
-        console.error('EventCard: Invalid date', timestamp);
-        return '';
-      }
-      
-      // Use event timezone if specified, otherwise user's timezone
-      const displayTimezone = event.event_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      
-      // Get time in specified timezone
-      const timeString = date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true,
-        timeZone: displayTimezone
-      });
-      
-      // Get timezone abbreviation (EST, PST, etc.)
-      const timezone = date.toLocaleTimeString('en-US', {
-        timeZoneName: 'short',
-        timeZone: displayTimezone
-      }).split(' ').pop();
-      
-      return `${timeString} ${timezone}`;
-    } catch (error) {
-      console.error('EventCard: Error formatting time', error, timestamp);
-      return '';
-    }
-  };
-
-  // Get visibility badge
-  const getVisibilityBadge = () => {
-    const badges = {
-      public: { text: '🌍 Public', color: 'bg-green-100 text-green-800' },
-      members: { text: '👥 Members Only', color: 'bg-blue-100 text-blue-800' },
-      groups: { text: '🔒 Groups Only', color: 'bg-purple-100 text-purple-800' },
-      draft: { text: '📝 Draft', color: 'bg-gray-100 text-gray-800' }
-    };
-    return badges[event.visibility] || badges.members;
-  };
-
-  const visibilityBadge = getVisibilityBadge();
-  const eventTypeDisplay = getEventTypeDisplay();
-  const startDate = getStartDate();
-
-  // Get organization name from event.organizations (already included in query)
-  const organizationName = event.organizations?.name || null;
-
-  // Compact version for sidebars
+  // ── Compact version ──────────────────────────────────────────────────────────
   if (compact) {
     return (
       <Link
-        to={`/events/${event.id}`}
-        className="block bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-blue-500"
-        aria-label={`View details for ${event.title}`}
+        to={'/events/' + event.id}
+        style={{
+          display: 'block', textDecoration: 'none',
+          background: cardBg, border: '1px solid ' + borderColor,
+          borderRadius: '10px', padding: '12px',
+        }}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 hover:shadow-md transition-shadow"
+        aria-label={'View details for ' + event.title}
       >
-        <div className="flex items-start justify-between gap-2">
-          {/* Date Badge with Recurring Icon */}
-          <div className="flex-shrink-0">
-            <div className="bg-blue-600 text-white rounded-lg p-2 text-center w-14">
-              <div className="text-xs font-semibold">
-                {startDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          {/* Date badge */}
+          <div style={{ flexShrink: 0 }}>
+            <div style={{ background: '#3B82F6', color: '#fff', borderRadius: '8px', padding: '6px 8px', textAlign: 'center', minWidth: '48px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>
+                {startDate.toLocaleDateString('en-US', { month: 'short' })}
               </div>
-              <div className="text-xl font-bold">
+              <div style={{ fontSize: '20px', fontWeight: 800, lineHeight: 1 }}>
                 {startDate.getDate()}
               </div>
             </div>
             {event.is_recurring && (
-              <div className="text-center mt-1" title="Recurring Event">
-                <span className="text-xs">🔄</span>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '4px', color: textMuted }} title="Recurring">
+                <IconRecurring />
               </div>
             )}
           </div>
-
-          {/* Event Info */}
-          <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-gray-900 text-sm truncate">
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontWeight: 700, color: textPrimary, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {event.title}
-            </h4>
+            </p>
             {event.start_time && (
-              <p className="text-xs text-gray-600 mt-1">
-                {formatTime(event.start_time)}
+              <p style={{ fontSize: '12px', color: textSecondary, marginTop: '2px' }}>
+                {formatTime(event.start_time, event.event_timezone)}
               </p>
             )}
-            {showOrganization && organizationName && (
-              <p className="text-xs text-gray-500 mt-1">
-                {organizationName}
-              </p>
+            {showOrganization && orgName && (
+              <p style={{ fontSize: '11px', color: textMuted, marginTop: '2px' }}>{orgName}</p>
+            )}
+            {event.is_rescheduled && (
+              <span style={{
+                display: 'inline-block', marginTop: '4px',
+                padding: '1px 6px', borderRadius: '99px', fontSize: '10px', fontWeight: 700,
+                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#F5B731',
+              }}>Rescheduled</span>
             )}
           </div>
         </div>
@@ -160,96 +198,138 @@ function EventCard({ event, showOrganization = false, compact = false }) {
     );
   }
 
-  // Full card version
+  // ── Full card version ────────────────────────────────────────────────────────
   return (
     <Link
-      to={`/events/${event.id}`}
-      className="block bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-      aria-label={`View details for ${event.title}`}
+      to={'/events/' + event.id}
+      style={{
+        display: 'block', textDecoration: 'none',
+        background: cardBg,
+        border: event.is_featured ? '2px solid #F5B731' : ('1px solid ' + borderColor),
+        borderRadius: '12px', overflow: 'hidden',
+      }}
+      className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:shadow-lg transition-shadow"
+      aria-label={'View details for ' + event.title}
     >
-      {/* Card Header with Date Badge */}
-      <div className="flex items-start p-4 gap-4">
-        {/* Date Badge with Recurring Icon Below */}
-        <div className="flex-shrink-0">
-          <div className="bg-blue-600 text-white rounded-lg p-3 text-center w-16">
-            <div className="text-xs font-semibold">
-              {startDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', padding: '16px', gap: '14px' }}>
+        {/* Date badge */}
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ background: '#3B82F6', color: '#fff', borderRadius: '10px', padding: '8px 10px', textAlign: 'center', minWidth: '56px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {startDate.toLocaleDateString('en-US', { month: 'short' })}
             </div>
-            <div className="text-2xl font-bold">
+            <div style={{ fontSize: '24px', fontWeight: 800, lineHeight: 1.1 }}>
               {startDate.getDate()}
             </div>
-            <div className="text-xs">
+            <div style={{ fontSize: '10px', opacity: 0.85 }}>
               {startDate.getFullYear()}
             </div>
           </div>
-          {/* Recurring Icon */}
           {event.is_recurring && (
-            <div className="text-center mt-2" title="Recurring Event">
-              <span className="text-lg">🔄</span>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '6px', color: textMuted }} title="Recurring event">
+              <IconRecurring />
             </div>
           )}
         </div>
 
-        {/* Event Details */}
-        <div className="flex-1 min-w-0">
+        {/* Details */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Org + Featured pill row */}
+          {(showOrganization && orgName) || event.is_featured ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              {showOrganization && orgName && (
+                <span style={{ fontSize: '12px', color: textMuted, fontWeight: 600 }}>{orgName}</span>
+              )}
+              {event.is_featured && (
+                <span style={{
+                  marginLeft: 'auto', flexShrink: 0,
+                  background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)',
+                  color: '#F5B731', fontSize: '10px', fontWeight: 700,
+                  padding: '2px 8px', borderRadius: '99px',
+                  textTransform: 'uppercase', letterSpacing: '1px',
+                }}>Featured</span>
+              )}
+            </div>
+          ) : null}
+
           {/* Title */}
-          <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-1">
+          <h3 style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, marginBottom: '8px', lineHeight: 1.3 }}>
             {event.title}
           </h3>
 
-          {/* Organization Name */}
-          {showOrganization && organizationName && (
-            <p className="text-sm text-gray-600 mb-2">
-              {organizationName}
-            </p>
+          {/* Rescheduled */}
+          {event.is_rescheduled && (
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700,
+                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#F5B731',
+              }}>Rescheduled</span>
+              {event.original_start_time && (
+                <span style={{ fontSize: '12px', color: textMuted, textDecoration: 'line-through' }}>
+                  Was: {formatDateShort(event.original_start_time)}
+                </span>
+              )}
+            </div>
           )}
 
-          {/* Time with Timezone */}
+          {/* Time */}
           {event.start_time && (
-            <div className="flex items-center text-sm text-gray-600 mb-2">
-              <span className="mr-2">🕐</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textSecondary, marginBottom: '5px' }}>
+              <IconClock />
               <span>
-                {formatTime(event.start_time)}
-                {event.end_time && ` - ${formatTime(event.end_time)}`}
+                {formatTime(event.start_time, event.event_timezone)}
+                {event.end_time ? ' – ' + formatTime(event.end_time, event.event_timezone) : ''}
               </span>
             </div>
           )}
 
-          {/* Location with event type icon */}
-          <div className="flex items-center text-sm text-gray-600 mb-2">
-            <span className="mr-2">{eventTypeDisplay.icon}</span>
-            <span className="line-clamp-1">{eventTypeDisplay.label}</span>
+          {/* Location / type */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textSecondary, marginBottom: '5px' }}>
+            {typeDisplay.icon}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{typeDisplay.label}</span>
           </div>
 
-          {/* Description Preview */}
+          {/* Description */}
           {event.description && (
-            <p className="text-sm text-gray-700 mt-2 line-clamp-2">
+            <p style={{ fontSize: '13px', color: textMuted, marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
               {event.description}
             </p>
           )}
         </div>
       </div>
 
-      {/* Card Footer with Badges */}
-      <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between flex-wrap gap-2">
-        {/* Badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Visibility Badge */}
-          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${visibilityBadge.color}`}>
-            {visibilityBadge.text}
+      {/* Footer */}
+      <div style={{
+        padding: '10px 16px', background: footerBg,
+        borderTop: '1px solid ' + borderColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Visibility badge */}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            padding: '3px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+            background: vis.bg, color: vis.color,
+          }}>
+            {vis.icon}
+            {vis.label}
           </span>
-
-          {/* Max Attendees Badge */}
+          {/* Max attendees */}
           {event.max_attendees && (
-            <span className="text-xs text-gray-600 px-2 py-1 bg-white border border-gray-300 rounded-full">
-              👥 Max {event.max_attendees}
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              padding: '3px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+              background: isDark ? 'rgba(100,116,139,0.15)' : '#F1F5F9',
+              border: '1px solid ' + borderColor, color: textMuted,
+            }}>
+              <IconUsers />
+              Max {event.max_attendees}
             </span>
           )}
         </div>
-
-        {/* Click for details */}
-        <span className="text-xs text-gray-500">
-          Click for details →
+        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: textMuted, fontWeight: 500 }}>
+          Details <IconChevronRight />
         </span>
       </div>
     </Link>
