@@ -38,6 +38,7 @@ import Signup from './pages/Signup';
 import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
+import { ThemeProvider } from './context/ThemeContext';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -76,8 +77,8 @@ function App() {
     );
   }
 
-  return (
-    <>
+return (
+    <ThemeProvider>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -165,7 +166,7 @@ function App() {
            <Footer />}
         </div>
       </Router>
-    </>
+    </ThemeProvider>
   );
 }
 

@@ -76,6 +76,20 @@ export default function EventDiscovery() {
   const [error, setError] = useState(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [savedEvents, setSavedEvents] = useState(new Set());
+  const [adminOrgs, setAdminOrgs] = useState([]);
+
+  useEffect(() => {
+    if (!session) return;
+    supabase
+      .from('memberships')
+      .select('organization_id, organizations(id, name)')
+      .eq('member_id', session.user.id)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+      .then(({ data }) => {
+        if (data) setAdminOrgs(data.map((m) => ({ id: m.organization_id, name: m.organizations?.name })));
+      });
+  }, [session]);
 
   // Guest RSVP modal state (preserved from original)
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -365,6 +379,7 @@ export default function EventDiscovery() {
                         session={session}
                         initialSaved={savedEvents.has(event.id)}
                         onRSVP={handleGuestRSVP}
+                        adminOrgs={adminOrgs}
                       />
                     ))}
                   </div>
