@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 import OrganizationSettings from '../components/OrganizationSettings';
 import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
@@ -9,7 +10,7 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import Footer from '../components/Footer';
 
-// ── Icon primitive ────────────────────────────────────────────────────────────
+// ── Icon primitive ─────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
   return (
     <svg
@@ -58,11 +59,58 @@ var ICONS = {
   pending:   ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
   programs:  ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
   plus:      'M12 4v16m8-8H4',
+  dots:      ['M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z'],
+  warn:      ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
+  repeat:    ['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'],
+  pinboard:  ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
 };
 
 var ACTIVITY_PER_PAGE = 5;
 
-// ── Toast system ──────────────────────────────────────────────────────────────
+// ── Post-it color palette ──────────────────────────────────────────────────────
+var ANN_COLORS = {
+  urgent: { bg: '#FFCDD2', pin: '#B71C1C', bdgBg: '#EF5350', bdgTxt: '#FFEBEE', txt: '#1A0000', org: '#7F0000' },
+  normal: { bg: '#FFF9C4', pin: '#B8860B', bdgBg: '#F5B731', bdgTxt: '#3A2800', txt: '#1A1500', org: '#8A6F00' },
+  low:    { bg: '#DCEDC8', pin: '#2E7D32', bdgBg: '#558B2F', bdgTxt: '#F1F8E9', txt: '#0D1F00', org: '#33691E' },
+};
+
+var EVENT_PALETTE = [
+  { bg: '#BBDEFB', pin: '#1565C0', bdgBg: '#1E88E5', bdgTxt: '#E3F2FD', txt: '#0A1F3A', org: '#1565C0' },
+  { bg: '#FFE0B2', pin: '#BF360C', bdgBg: '#E64A19', bdgTxt: '#FBE9E7', txt: '#1A0A00', org: '#BF360C' },
+  { bg: '#E0F7FA', pin: '#006064', bdgBg: '#26C6DA', bdgTxt: '#003A3F', txt: '#00222A', org: '#005A60' },
+  { bg: '#F3E5F5', pin: '#6A1B9A', bdgBg: '#AB47BC', bdgTxt: '#F3E5F5', txt: '#1A0025', org: '#6A1B9A' },
+  { bg: '#FCE4EC', pin: '#880E4F', bdgBg: '#EC407A', bdgTxt: '#FCE4EC', txt: '#1A0010', org: '#880E4F' },
+  { bg: '#DCEDC8', pin: '#2E7D32', bdgBg: '#558B2F', bdgTxt: '#F1F8E9', txt: '#0D1F00', org: '#33691E' },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function formatEventDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function formatShortDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatWeekdayTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function formatTimeOnly(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// ── Toast system ───────────────────────────────────────────────────────────────
 function ToastContainer({ toasts, removeToast }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" aria-live="polite" aria-label="Notifications">
@@ -89,7 +137,7 @@ function ToastContainer({ toasts, removeToast }) {
   );
 }
 
-// ── Skeleton cards ────────────────────────────────────────────────────────────
+// ── Skeleton cards ─────────────────────────────────────────────────────────────
 function StatCardSkeleton() {
   return (
     <div className="bg-gray-100 rounded-xl p-6 border-2 border-gray-200 animate-pulse">
@@ -105,29 +153,85 @@ function StatCardSkeleton() {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function PostitSkeleton() {
+  return (
+    <div style={{ marginTop: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }}>
+        <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: '#E5E7EB' }} />
+      </div>
+      <div className="animate-pulse" style={{ background: '#F3F4F6', borderRadius: '6px', padding: '16px' }}>
+        <div className="h-4 w-16 bg-gray-300 rounded mb-3" />
+        <div className="h-4 w-full bg-gray-300 rounded mb-2" />
+        <div className="h-4 w-3/4 bg-gray-300 rounded mb-4" />
+        <div className="flex justify-between">
+          <div className="h-3 w-24 bg-gray-300 rounded" />
+          <div className="h-3 w-12 bg-gray-300 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 function OrganizationDashboard() {
   var params = useParams();
   var organizationId = params.organizationId;
   var navigate = useNavigate();
+
+  var themeCtx = useTheme();
+  var isDark = themeCtx ? themeCtx.isDark : false;
+  var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
+  var sectionBg     = isDark ? '#151B2D' : '#FFFFFF';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var inputBg       = isDark ? '#151B2D'  : '#F8FAFC';
+  var hoverBg       = isDark ? '#1E2845'  : '#F1F5F9';
+  var toolsBg       = isDark ? '#0E1523'  : '#F8FAFC';
+  var toolsBorder   = isDark ? '#2A3550'  : '#E5E7EB';
+  var toolsBtnBg    = isDark ? '#1A2035'  : '#FFFFFF';
+  var toolsBtnBdr   = isDark ? '#2A3550'  : '#E5E7EB';
+  var toolsBtnTxt   = isDark ? '#94A3B8'  : '#374151';
 
   // Core state
   var [organization, setOrganization] = useState(null);
   var [membership, setMembership] = useState(null);
   var [currentUserId, setCurrentUserId] = useState(null);
   var [stats, setStats] = useState({
-    totalMembers: 0,
-    pendingInvites: 0,
-    activeEvents: 0,
-    unreadAnnouncements: 0,
-    totalGroups: 0,
+    totalMembers: 0, pendingInvites: 0, activeEvents: 0,
+    unreadAnnouncements: 0, totalGroups: 0,
   });
   var [activeTab, setActiveTab] = useState('overview');
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [viewMode, setViewMode] = useState('admin');
 
-  // Programs state — modal for create/edit only (list lives at /programs route)
+  // Overview board data
+  var [overviewEvents, setOverviewEvents] = useState([]);
+  var [overviewAnnouncements, setOverviewAnnouncements] = useState([]);
+  var [overviewLoading, setOverviewLoading] = useState(false);
+
+  // Event action menu
+  var [activeEventMenu, setActiveEventMenu] = useState(null);
+
+  // Event edit
+  var [editingEvent, setEditingEvent] = useState(null);
+
+  // Reschedule modal
+  var [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  var [rescheduleEvent, setRescheduleEvent] = useState(null);
+  var [rescheduleForm, setRescheduleForm] = useState({ start_time: '', end_time: '' });
+  var [rescheduleSaving, setRescheduleSaving] = useState(false);
+
+  // Delete confirm modal
+  var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  var [deletingEvent, setDeletingEvent] = useState(null);
+  var [deleteScope, setDeleteScope] = useState('this');
+  var [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Programs
   var [showProgramModal, setShowProgramModal] = useState(false);
   var [editingProgram, setEditingProgram] = useState(null);
   var [programForm, setProgramForm] = useState({
@@ -146,7 +250,7 @@ function OrganizationDashboard() {
   }
   function removeToast(id) { setToasts(function(prev) { return prev.filter(function(t) { return t.id !== id; }); }); }
 
-  // Modals
+  // Create modals
   var [showCreateEvent, setShowCreateEvent] = useState(false);
   var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
 
@@ -177,27 +281,35 @@ function OrganizationDashboard() {
 
   // Tabs
   var allTabs = [
-    { id: 'overview',   label: 'Overview',   iconKey: 'chart',    roles: ['admin', 'member'] },
-    { id: 'documents',  label: 'Documents',  iconKey: 'folder',   roles: ['admin', 'member'] },
-    { id: 'photos',     label: 'Photos',     iconKey: 'photo',    roles: ['admin', 'member'] },
-    { id: 'approvals',  label: 'Approvals',  iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
-    { id: 'inbox',      label: 'Inbox',      iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
-    { id: 'invite',     label: 'Invite',     iconKey: 'mail',     roles: ['admin'] },
-    { id: 'analytics',  label: 'Analytics',  iconKey: 'trendUp',  roles: ['admin'] },
-    { id: 'settings',   label: 'Settings',   iconKey: 'settings', roles: ['admin'] },
+    { id: 'overview',         label: 'Overview',         iconKey: 'chart',    roles: ['admin', 'member'] },
+    { id: 'documents',        label: 'Documents',        iconKey: 'folder',   roles: ['admin', 'member'] },
+    { id: 'photos',           label: 'Photos',           iconKey: 'photo',    roles: ['admin', 'member'] },
+    { id: 'approvals',        label: 'Approvals',        iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
+    { id: 'inbox',            label: 'Inbox',            iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
+    { id: 'invite',           label: 'Invite',           iconKey: 'mail',     roles: ['admin'] },
+    { id: 'analytics',        label: 'Analytics',        iconKey: 'trendUp',  roles: ['admin'] },
+    { id: 'community-board',  label: 'Community Board',  iconKey: 'pinboard', roles: ['admin'], isLink: true },
+    { id: 'settings',         label: 'Settings',         iconKey: 'settings', roles: ['admin'] },
   ];
 
   var effectiveRole = (membership && membership.role === 'admin' && viewMode === 'admin') ? 'admin' : 'member';
   var tabs = allTabs.filter(function(tab) { return tab.roles.includes(effectiveRole); });
 
-  // ── Effects ──────────────────────────────────────────────────────────────────
+  // ── Effects ────────────────────────────────────────────────────────────────────
   useEffect(function() { fetchData(); }, [organizationId]);
-  useEffect(function() { if (activeTab === 'overview' && organizationId) fetchRecentActivity(); }, [activeTab, organizationId]);
+
+  useEffect(function() {
+    if (activeTab === 'overview' && organizationId) {
+      fetchRecentActivity();
+      fetchOverviewData();
+    }
+  }, [activeTab, organizationId]);
+
   useEffect(function() { if (activeTab === 'inbox' && organizationId) fetchInquiries(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'photos' && organizationId) fetchPhotos(); }, [activeTab, organizationId]);
   useEffect(function() { if (activeTab === 'approvals' && organizationId) fetchPendingApprovals(); }, [activeTab, organizationId]);
 
-  // ── Data fetchers ─────────────────────────────────────────────────────────────
+  // ── Data fetchers ──────────────────────────────────────────────────────────────
   async function fetchData() {
     try {
       var authResult = await supabase.auth.getUser();
@@ -225,6 +337,7 @@ function OrganizationDashboard() {
       }
       setMembership(memberResult.data);
       await fetchStats(authResult.data.user.id);
+      await fetchOverviewData();
       await fetchRecentActivity();
 
       if (memberResult.data.role === 'admin') {
@@ -286,6 +399,33 @@ function OrganizationDashboard() {
       });
     } catch (err) {
       console.error('fetchStats error:', err);
+    }
+  }
+
+  async function fetchOverviewData() {
+    setOverviewLoading(true);
+    try {
+      var evRes = await supabase
+        .from('events')
+        .select('id, title, start_time, end_time, location, event_type, description, recurrence_rule, parent_event_id, is_rescheduled, original_start_time, original_end_time')
+        .eq('organization_id', organizationId)
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true })
+        .limit(3);
+      setOverviewEvents(evRes.data || []);
+
+      var annRes = await supabase
+        .from('announcements')
+        .select('id, title, content, priority, created_at, is_pinned')
+        .eq('organization_id', organizationId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(3);
+      setOverviewAnnouncements(annRes.data || []);
+    } catch (err) {
+      console.error('fetchOverviewData error:', err);
+    } finally {
+      setOverviewLoading(false);
     }
   }
 
@@ -391,13 +531,7 @@ function OrganizationDashboard() {
           .order('created_at', { ascending: false });
         if (result.data) {
           result.data.forEach(function(item) {
-            items.push({
-              id: item.id,
-              type: t.label,
-              table: t.name,
-              title: item[t.titleField],
-              created_at: item.created_at,
-            });
+            items.push({ id: item.id, type: t.label, table: t.name, title: item[t.titleField], created_at: item.created_at });
           });
         }
       }
@@ -448,7 +582,6 @@ function OrganizationDashboard() {
   }
 
   async function fetchPrograms() {
-    setProgramsLoading(true);
     var result = await supabase
       .from('org_programs')
       .select('*')
@@ -456,8 +589,6 @@ function OrganizationDashboard() {
       .order('sort_order')
       .order('created_at');
     if (result.error) { addToast('Failed to load programs', 'error'); }
-    else { setPrograms(result.data || []); }
-    setProgramsLoading(false);
   }
 
   function openNewProgram() {
@@ -469,15 +600,10 @@ function OrganizationDashboard() {
   function openEditProgram(program) {
     setEditingProgram(program);
     setProgramForm({
-      name: program.name || '',
-      description: program.description || '',
-      audience: program.audience || '',
-      schedule: program.schedule || '',
-      how_to_apply: program.how_to_apply || '',
-      contact_name: program.contact_name || '',
-      contact_email: program.contact_email || '',
-      status: program.status || 'active',
-      is_public: program.is_public !== false,
+      name: program.name || '', description: program.description || '', audience: program.audience || '',
+      schedule: program.schedule || '', how_to_apply: program.how_to_apply || '',
+      contact_name: program.contact_name || '', contact_email: program.contact_email || '',
+      status: program.status || 'active', is_public: program.is_public !== false,
     });
     setShowProgramModal(true);
   }
@@ -496,20 +622,116 @@ function OrganizationDashboard() {
     fetchPrograms();
   }
 
-  async function deleteProgram(id) {
-    var result = await supabase.from('org_programs').delete().eq('id', id);
-    if (result.error) { addToast('Failed to delete program', 'error'); return; }
-    addToast('Program deleted', 'success');
-    fetchPrograms();
+  // ── Event action handlers ──────────────────────────────────────────────────────
+  function openEventMenu(eventId) {
+    setActiveEventMenu(activeEventMenu === eventId ? null : eventId);
   }
 
-  async function toggleProgramPublic(program) {
-    var result = await supabase.from('org_programs').update({ is_public: !program.is_public }).eq('id', program.id);
-    if (result.error) { addToast('Failed to update program', 'error'); return; }
-    fetchPrograms();
+  function handleEditEvent(ev) {
+    setEditingEvent(ev);
+    setShowCreateEvent(true);
+    setActiveEventMenu(null);
   }
 
-  // ── Approval actions ──────────────────────────────────────────────────────────
+  function handleRescheduleEvent(ev) {
+    setRescheduleEvent(ev);
+    setRescheduleForm({
+      start_time: ev.start_time ? ev.start_time.slice(0, 16) : '',
+      end_time: ev.end_time ? ev.end_time.slice(0, 16) : '',
+      location: ev.location || '',
+    });
+    setShowRescheduleModal(true);
+    setActiveEventMenu(null);
+  }
+
+  function handleDeleteEvent(ev) {
+    setDeletingEvent(ev);
+    setDeleteScope('this');
+    setShowDeleteConfirm(true);
+    setActiveEventMenu(null);
+  }
+
+  async function handleRescheduleSubmit() {
+    if (!rescheduleForm.start_time) { addToast('New start time is required', 'error'); return; }
+    setRescheduleSaving(true);
+    try {
+      var updatePayload = {
+        is_rescheduled: true,
+        original_start_time: rescheduleEvent.start_time,
+        original_end_time: rescheduleEvent.end_time,
+        start_time: new Date(rescheduleForm.start_time).toISOString(),
+      };
+      if (rescheduleForm.end_time) {
+        updatePayload.end_time = new Date(rescheduleForm.end_time).toISOString();
+      }
+      if (rescheduleForm.location.trim()) {
+        updatePayload.location = rescheduleForm.location.trim();
+      }
+      var res = await supabase.from('events').update(updatePayload).eq('id', rescheduleEvent.id);
+      if (res.error) throw res.error;
+      addToast('Event rescheduled successfully.');
+      setShowRescheduleModal(false);
+      setRescheduleEvent(null);
+      await fetchOverviewData();
+      await fetchStats(currentUserId);
+    } catch (err) {
+      addToast('Could not reschedule: ' + err.message, 'error');
+    } finally {
+      setRescheduleSaving(false);
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    setDeleteLoading(true);
+    try {
+      var res;
+      var isRecurring = !!(deletingEvent.recurrence_rule || deletingEvent.parent_event_id);
+      var groupId = deletingEvent.parent_event_id || deletingEvent.id;
+
+      if (isRecurring && deleteScope === 'all') {
+        res = await supabase.from('events').delete()
+          .or('id.eq.' + groupId + ',parent_event_id.eq.' + groupId);
+      } else if (isRecurring && deleteScope === 'future') {
+        res = await supabase.from('events').delete()
+          .or('id.eq.' + groupId + ',parent_event_id.eq.' + groupId)
+          .gte('start_time', deletingEvent.start_time);
+      } else {
+        res = await supabase.from('events').delete().eq('id', deletingEvent.id);
+      }
+
+      if (res.error) throw res.error;
+      addToast('Event deleted.');
+      setShowDeleteConfirm(false);
+      setDeletingEvent(null);
+      await fetchOverviewData();
+      await fetchStats(currentUserId);
+    } catch (err) {
+      addToast('Could not delete event: ' + err.message, 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  async function handleEventCreated() {
+    await fetchStats(currentUserId);
+    await fetchOverviewData();
+    addToast('Event created successfully.');
+  }
+
+  async function handleEventUpdated() {
+    setEditingEvent(null);
+    await fetchStats(currentUserId);
+    await fetchOverviewData();
+    addToast('Event updated successfully.');
+  }
+
+  async function handleAnnouncementCreated() {
+    await fetchStats(currentUserId);
+    await fetchOverviewData();
+    addToast('Announcement created.');
+  }
+
+  // ── Approval actions ───────────────────────────────────────────────────────────
   async function handleApprove(item) {
     try {
       var result = await supabase.from(item.table).update({ approval_status: 'approved' }).eq('id', item.id);
@@ -535,22 +757,20 @@ function OrganizationDashboard() {
     }
   }
 
-  // ── Activity actions ──────────────────────────────────────────────────────────
+  // ── Activity actions ───────────────────────────────────────────────────────────
   function handleMarkActivityRead(activityId) {
     setReadActivityIds(function(prev) { return new Set(Array.from(prev).concat([activityId])); });
   }
-
   function handleMarkAllActivityRead() {
     setReadActivityIds(new Set(recentActivity.map(function(a) { return a.id; })));
     addToast('All activity marked as read.');
   }
-
   function handleDismissAllActivity() {
     setRecentActivity([]);
     addToast('Activity feed cleared.');
   }
 
-  // ── Inquiry actions ───────────────────────────────────────────────────────────
+  // ── Inquiry actions ────────────────────────────────────────────────────────────
   async function handleMarkInquiryRead(inquiryId) {
     try {
       var result = await supabase.from('contact_inquiries').update({ is_read: true }).eq('id', inquiryId);
@@ -577,7 +797,7 @@ function OrganizationDashboard() {
     }
   }
 
-  // ── Photo actions ─────────────────────────────────────────────────────────────
+  // ── Photo actions ──────────────────────────────────────────────────────────────
   async function handlePhotoUpload(e) {
     var file = e.target.files[0];
     if (!file) return;
@@ -604,7 +824,6 @@ function OrganizationDashboard() {
       await fetchPhotos();
       addToast('Photo uploaded successfully.');
     } catch (err) {
-      console.error('Photo upload error:', err);
       setPhotoError('Upload failed: ' + err.message);
       addToast('Photo upload failed.', 'error');
     } finally {
@@ -631,18 +850,7 @@ function OrganizationDashboard() {
     }
   }
 
-  // ── Event / announcement callbacks ────────────────────────────────────────────
-  async function handleEventCreated() {
-    await fetchStats(currentUserId);
-    addToast('Event created successfully.');
-  }
-
-  async function handleAnnouncementCreated() {
-    await fetchStats(currentUserId);
-    addToast('Announcement created.');
-  }
-
-  // ── Loading state ─────────────────────────────────────────────────────────────
+  // ── Loading state ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
@@ -656,15 +864,15 @@ function OrganizationDashboard() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[1, 2, 3, 4, 5].map(function(i) { return <StatCardSkeleton key={i} />; })}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map(function(i) { return <StatCardSkeleton key={i} />; })}
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────────
+  // ── Error state ────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -687,15 +895,15 @@ function OrganizationDashboard() {
 
   var totalActivityPages = Math.ceil(recentActivity.length / ACTIVITY_PER_PAGE);
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen" style={{ background: pageBg }}>
         <div className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
             {/* ── Org Header ── */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="rounded-xl shadow-sm p-6 mb-6" style={{ background: sectionBg, border: '1px solid ' + borderColor }}>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
                   {organization.logo_url ? (
@@ -713,8 +921,8 @@ function OrganizationDashboard() {
                     </div>
                   )}
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-                    <p className="text-gray-500 mt-1">{organization.description}</p>
+                    <h1 className="text-3xl font-bold" style={{ color: textPrimary }}>{organization.name}</h1>
+                    <p className="mt-1" style={{ color: textMuted }}>{organization.description}</p>
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 capitalize">
                         {organization.type}
@@ -729,9 +937,7 @@ function OrganizationDashboard() {
 
                 {membership && membership.role === 'admin' && (
                   <div className="flex items-center gap-3">
-                    <span className={'text-sm font-semibold ' + (viewMode === 'admin' ? 'text-purple-600' : 'text-gray-400')}>
-                      Admin View
-                    </span>
+                    <span className={'text-sm font-semibold ' + (viewMode === 'admin' ? 'text-purple-600' : 'text-gray-400')}>Admin</span>
                     <button
                       onClick={function() { setViewMode(viewMode === 'admin' ? 'member' : 'admin'); }}
                       className={'relative inline-flex h-8 w-14 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ' +
@@ -743,35 +949,43 @@ function OrganizationDashboard() {
                       <span className={'inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ' +
                         (viewMode === 'admin' ? 'translate-x-1' : 'translate-x-7')} />
                     </button>
-                    <span className={'text-sm font-semibold ' + (viewMode === 'member' ? 'text-blue-600' : 'text-gray-400')}>
-                      Member View
-                    </span>
+                    <span className={'text-sm font-semibold ' + (viewMode === 'member' ? 'text-blue-600' : 'text-gray-400')}>Member</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* ── Tabs ── */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-              <div className="border-b border-gray-200">
+            {/* ── Tabs + Tools ── */}
+            <div className="rounded-xl shadow-sm mb-6" style={{ background: sectionBg, border: '1px solid ' + borderColor }}>
+
+              {/* Tab nav */}
+              <div style={{ borderBottom: '1px solid ' + borderColor }}>
                 <nav
                   className="flex px-4 overflow-x-auto"
                   aria-label="Organization tabs"
-                  style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
+                  style={{ scrollbarWidth: 'thin', scrollbarColor: borderColor + ' transparent' }}
                 >
                   {tabs.map(function(tab) {
                     var isActive = activeTab === tab.id;
+                    var isCB = tab.id === 'community-board';
                     return (
                       <button
                         key={tab.id}
-                        onClick={function() { setActiveTab(tab.id); }}
-                        className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 ' +
+                        onClick={function() {
+                          if (tab.isLink) { navigate('/organizations/' + organizationId + '/community-board'); return; }
+                          setActiveTab(tab.id);
+                        }}
+                        className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' +
                           (isActive
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
+                            ? (isCB ? 'border-purple-500' : 'border-blue-500')
+                            : 'border-transparent')}
+                        style={{ color: isActive ? (isCB ? '#A78BFA' : '#3B82F6') : textMuted }}
                         aria-current={isActive ? 'page' : undefined}
                       >
-                        <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />
+                        {isCB && (
+                          <span className="inline-block w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" aria-hidden="true" />
+                        )}
+                        {!isCB && <Icon path={ICONS[tab.iconKey]} className="h-4 w-4 flex-shrink-0" />}
                         <span className="whitespace-nowrap">{tab.label}</span>
                         {tab.badge > 0 && (
                           <span
@@ -787,210 +1001,256 @@ function OrganizationDashboard() {
                 </nav>
               </div>
 
-              <div className="p-6">
+              {/* ── Tools strip ── */}
+              <div
+                className="overflow-x-auto"
+                style={{ background: toolsBg, borderBottom: '1px solid ' + toolsBorder, scrollbarWidth: 'thin' }}
+              >
+                <div className="flex items-center gap-2 px-5 py-2">
+                  <span className="text-xs font-bold uppercase tracking-widest flex-shrink-0 mr-1" style={{ color: textMuted }}>Tools</span>
+                  {[
+                    { label: 'Create Event',    dot: '#3B82F6', hover: 'blue',   onClick: function() { setEditingEvent(null); setShowCreateEvent(true); }, adminOnly: false },
+                    { label: 'Announcement',    dot: '#F97316', hover: 'orange', onClick: function() { setShowCreateAnnouncement(true); },             adminOnly: true  },
+                    { label: 'Members',         dot: '#60A5FA', hover: 'blue',   onClick: function() { navigate('/organizations/' + organizationId + '/members'); }, adminOnly: false },
+                    { label: 'Scheduling',      dot: '#14B8A6', hover: 'teal',   onClick: function() { navigate('/organizations/' + organizationId + '/scheduling'); }, adminOnly: false },
+                    { label: 'Polls',           dot: '#3B82F6', hover: 'blue',   onClick: function() { navigate('/organizations/' + organizationId + '/polls'); }, adminOnly: false },
+                    { label: 'Surveys',         dot: '#22C55E', hover: 'green',  onClick: function() { navigate('/organizations/' + organizationId + '/surveys'); }, adminOnly: false },
+                    { label: 'Sign-Up Forms',   dot: '#6366F1', hover: 'indigo', onClick: function() { navigate('/organizations/' + organizationId + '/signup-forms'); }, adminOnly: false },
+                    { label: 'Programs',        dot: '#8B5CF6', hover: 'purple', onClick: function() { navigate('/organizations/' + organizationId + '/programs'); }, adminOnly: false },
+                    { label: 'Edit Public Page',dot: '#64748B', hover: 'gray',   onClick: function() { navigate('/organizations/' + organizationId + '/page-editor'); }, adminOnly: true  },
+                  ].filter(function(t) { return !t.adminOnly || effectiveRole === 'admin'; }).map(function(t) {
+                    return (
+                      <button
+                        key={t.label}
+                        onClick={t.onClick}
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ background: toolsBtnBg, border: '1px solid ' + toolsBtnBdr, color: toolsBtnTxt }}
+                      >
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} aria-hidden="true" />
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Tab content ── */}
+              <div className="p-6" style={{ color: textPrimary }}>
 
                 {/* ── OVERVIEW TAB ── */}
                 {activeTab === 'overview' && (
                   <div className="space-y-6">
 
                     {/* Stat cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <button
                         onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
-                        className="bg-blue-50 rounded-xl p-6 border-2 border-blue-100 hover:border-blue-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        className="bg-blue-50 rounded-xl p-5 border-2 border-blue-100 hover:border-blue-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-blue-600 text-xs font-bold uppercase tracking-widest">Members</p>
-                            <p className="text-3xl font-extrabold text-blue-700 mt-2">{stats.totalMembers}</p>
-                            <p className="text-xs text-blue-500 mt-1">View directory</p>
-                          </div>
-                          <Icon path={ICONS.members} className="h-9 w-9 text-blue-300" strokeWidth={1.5} />
-                        </div>
+                        <p className="text-blue-600 text-xs font-bold uppercase tracking-widest">Members</p>
+                        <p className="text-3xl font-extrabold text-blue-700 mt-1">{stats.totalMembers}</p>
+                        <p className="text-xs text-blue-500 mt-1">View directory</p>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/events'); }}
+                        className="bg-green-50 rounded-xl p-5 border-2 border-green-100 hover:border-green-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      >
+                        <p className="text-green-600 text-xs font-bold uppercase tracking-widest">Upcoming Events</p>
+                        <p className="text-3xl font-extrabold text-green-700 mt-1">{stats.activeEvents}</p>
+                        <p className="text-xs text-green-500 mt-1">View calendar</p>
+                      </button>
+
+                      <button
+                        onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }}
+                        className="bg-orange-50 rounded-xl p-5 border-2 border-orange-100 hover:border-orange-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                      >
+                        <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Unread News</p>
+                        <p className="text-3xl font-extrabold text-orange-700 mt-1">{stats.unreadAnnouncements}</p>
+                        <p className="text-xs text-orange-500 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up' : 'Read now'}</p>
                       </button>
 
                       {effectiveRole === 'admin' && (
                         <button
                           onClick={function() { setActiveTab('invite'); }}
-                          className="bg-yellow-50 rounded-xl p-6 border-2 border-yellow-100 hover:border-yellow-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                          className="bg-yellow-50 rounded-xl p-5 border-2 border-yellow-100 hover:border-yellow-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-yellow-600 text-xs font-bold uppercase tracking-widest">Pending Invites</p>
-                              <p className="text-3xl font-extrabold text-yellow-700 mt-2">{stats.pendingInvites}</p>
-                              <p className="text-xs text-yellow-500 mt-1">{stats.pendingInvites === 0 ? 'All caught up' : 'Manage'}</p>
-                            </div>
-                            <Icon path={ICONS.mail} className="h-9 w-9 text-yellow-300" strokeWidth={1.5} />
-                          </div>
+                          <p className="text-yellow-600 text-xs font-bold uppercase tracking-widest">Pending Invites</p>
+                          <p className="text-3xl font-extrabold text-yellow-700 mt-1">{stats.pendingInvites}</p>
+                          <p className="text-xs text-yellow-500 mt-1">{stats.pendingInvites === 0 ? 'All caught up' : 'Manage'}</p>
                         </button>
                       )}
 
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/events'); }}
-                        className="bg-green-50 rounded-xl p-6 border-2 border-green-100 hover:border-green-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-green-600 text-xs font-bold uppercase tracking-widest">Upcoming Events</p>
-                            <p className="text-3xl font-extrabold text-green-700 mt-2">{stats.activeEvents}</p>
-                            <p className="text-xs text-green-500 mt-1">View calendar</p>
-                          </div>
-                          <Icon path={ICONS.calendar} className="h-9 w-9 text-green-300" strokeWidth={1.5} />
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }}
-                        className="bg-orange-50 rounded-xl p-6 border-2 border-orange-100 hover:border-orange-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Unread News</p>
-                            <p className="text-3xl font-extrabold text-orange-700 mt-2">{stats.unreadAnnouncements}</p>
-                            <p className="text-xs text-orange-500 mt-1">{stats.unreadAnnouncements === 0 ? 'All caught up' : 'Read now'}</p>
-                          </div>
-                          <Icon path={ICONS.megaphone} className="h-9 w-9 text-orange-300" strokeWidth={1.5} />
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
-                        className="bg-purple-50 rounded-xl p-6 border-2 border-purple-100 hover:border-purple-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-purple-600 text-xs font-bold uppercase tracking-widest">Groups</p>
-                            <p className="text-3xl font-extrabold text-purple-700 mt-2">{stats.totalGroups}</p>
-                            <p className="text-xs text-purple-500 mt-1">View all</p>
-                          </div>
-                          <Icon path={ICONS.building} className="h-9 w-9 text-purple-300" strokeWidth={1.5} />
-                        </div>
-                      </button>
+                      {effectiveRole !== 'admin' && (
+                        <button
+                          onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
+                          className="bg-purple-50 rounded-xl p-5 border-2 border-purple-100 hover:border-purple-400 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                        >
+                          <p className="text-purple-600 text-xs font-bold uppercase tracking-widest">Groups</p>
+                          <p className="text-3xl font-extrabold text-purple-700 mt-1">{stats.totalGroups}</p>
+                          <p className="text-xs text-purple-500 mt-1">View all</p>
+                        </button>
+                      )}
                     </div>
 
-                    {/* Quick Actions */}
-                    <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                      <h3 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: '#F5B731' }}>
-                        Quick Actions
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button
-                          onClick={function() { setShowCreateEvent(true); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.calendar} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Create Event</span>
-                        </button>
+                    {/* ── Bulletin board ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                        {effectiveRole === 'admin' && (
-                          <button
-                            onClick={function() { setShowCreateAnnouncement(true); }}
-                            className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                          >
-                            <Icon path={ICONS.megaphone} className="h-5 w-5 text-orange-500 flex-shrink-0" />
-                            <span className="font-semibold text-gray-800 text-sm">Create Announcement</span>
-                          </button>
+                      {/* Announcements column */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: '#F5B731' }}>Announcements</h3>
+                          <button onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }} className="text-xs font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-1" style={{ color: '#3B82F6' }}>View all</button>
+                        </div>
+                        {overviewLoading ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px' }}>
+                            <PostitSkeleton /><PostitSkeleton />
+                          </div>
+                        ) : overviewAnnouncements.length === 0 ? (
+                          <div className="mt-4 text-center py-10 rounded-xl border border-dashed" style={{ background: isDark ? '#1A2035' : '#F9FAFB', borderColor: borderColor }}>
+                            <Icon path={ICONS.megaphone} className="h-8 w-8 mx-auto mb-2" style={{ color: textMuted }} strokeWidth={1.5} />
+                            <p className="text-sm font-semibold" style={{ color: textSecondary }}>No announcements yet</p>
+                            <p className="text-xs mt-1" style={{ color: textMuted }}>Post an update for your members</p>
+                            {effectiveRole === 'admin' && <button onClick={function() { setShowCreateAnnouncement(true); }} className="mt-3 text-xs font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" style={{ color: '#3B82F6' }}>Create announcement</button>}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px' }}>
+                            {overviewAnnouncements.map(function(ann) {
+                              var c = ANN_COLORS[ann.priority] || ANN_COLORS.normal;
+                              return (
+                                <div key={ann.id} style={{ marginTop: '12px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }} aria-hidden="true">
+                                    <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.6) 0%, ' + c.pin + ' 52%, rgba(0,0,0,0.25) 100%)', boxShadow: '0 2px 4px rgba(0,0,0,0.35)' }} />
+                                  </div>
+                                  <button onClick={function() { navigate('/organizations/' + organizationId + '/announcements'); }} style={{ background: c.bg, borderRadius: '6px', padding: '14px', width: '100%', textAlign: 'left', cursor: 'pointer', border: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', aspectRatio: '1 / 1' }} className="hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" aria-label={'View announcement: ' + ann.title}>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                        <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', background: c.bdgBg, color: c.bdgTxt }}>{ann.priority === 'urgent' ? 'Urgent' : ann.priority === 'low' ? 'Info' : 'Update'}</span>
+                                        {ann.is_pinned && <span style={{ fontSize: '9px', fontWeight: 700, color: c.org }}>Pinned</span>}
+                                      </div>
+                                      <p style={{ fontSize: '12px', fontWeight: 800, color: c.txt, lineHeight: 1.3, marginBottom: '4px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ann.title}</p>
+                                      {ann.content && <p style={{ fontSize: '10px', color: c.txt, opacity: 0.75, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ann.content}</p>}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <span style={{ fontSize: '10px', fontWeight: 600, color: c.org, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{organization.name}</span>
+                                      <span style={{ fontSize: '10px', color: c.org, opacity: 0.7, flexShrink: 0 }}>{formatShortDate(ann.created_at)}</span>
+                                    </div>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
+                      </div>
 
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/members'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.members} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Member Directory</span>
-                        </button>
-
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/scheduling'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50 transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.clock} className="h-5 w-5 text-teal-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Group Scheduling</span>
-                        </button>
-
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/polls'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.chart} className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Polls</span>
-                        </button>
-
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/surveys'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.clipboard} className="h-5 w-5 text-green-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Surveys</span>
-                        </button>
-
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/signup-forms'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.pencil} className="h-5 w-5 text-indigo-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Sign-Up Forms</span>
-                        </button>
-
-                        <button
-                          onClick={function() { navigate('/organizations/' + organizationId + '/programs'); }}
-                          className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-                        >
-                          <Icon path={ICONS.programs} className="h-5 w-5 text-purple-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm">Programs</span>
-                        </button>
-
-                        {effectiveRole === 'admin' && (
-                          <button
-                            onClick={function() { navigate('/organizations/' + organizationId + '/page-editor'); }}
-                            className="flex items-center gap-3 px-5 py-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                          >
-                            <Icon path={ICONS.globe} className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                            <span className="font-semibold text-gray-800 text-sm">Edit Public Page</span>
-                          </button>
+                      {/* Events column */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: '#F5B731' }}>Upcoming Events</h3>
+                          <button onClick={function() { navigate('/organizations/' + organizationId + '/events'); }} className="text-xs font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-1" style={{ color: '#3B82F6' }}>View all</button>
+                        </div>
+                        {overviewLoading ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px' }}>
+                            <PostitSkeleton /><PostitSkeleton />
+                          </div>
+                        ) : overviewEvents.length === 0 ? (
+                          <div className="mt-4 text-center py-10 rounded-xl border border-dashed" style={{ background: isDark ? '#1A2035' : '#F9FAFB', borderColor: borderColor }}>
+                            <Icon path={ICONS.calendar} className="h-8 w-8 mx-auto mb-2" style={{ color: textMuted }} strokeWidth={1.5} />
+                            <p className="text-sm font-semibold" style={{ color: textSecondary }}>No upcoming events</p>
+                            <p className="text-xs mt-1" style={{ color: textMuted }}>Schedule your next gathering</p>
+                            <button onClick={function() { setEditingEvent(null); setShowCreateEvent(true); }} className="mt-3 text-xs font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" style={{ color: '#3B82F6' }}>Create event</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px' }}>
+                            {overviewEvents.map(function(ev, i) {
+                              var c = EVENT_PALETTE[i % EVENT_PALETTE.length];
+                              var isRecurring = !!(ev.recurrence_rule || ev.parent_event_id);
+                              var evTypeLbl = ev.event_type === 'virtual' ? 'Virtual' : ev.event_type === 'hybrid' ? 'Hybrid' : 'Event';
+                              return (
+                                <div key={ev.id} style={{ marginTop: '12px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }} aria-hidden="true">
+                                    <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.6) 0%, ' + c.pin + ' 52%, rgba(0,0,0,0.25) 100%)', boxShadow: '0 2px 4px rgba(0,0,0,0.35)' }} />
+                                  </div>
+                                  <div style={{ background: c.bg, borderRadius: '6px', padding: '14px', position: 'relative', aspectRatio: '1 / 1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div style={{ paddingRight: effectiveRole === 'admin' ? '22px' : '0' }}>
+                                      {/* Badge row */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+                                        <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: '3px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', background: c.bdgBg, color: c.bdgTxt }}>{evTypeLbl}</span>
+                                        {isRecurring && (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '9px', fontWeight: 700, color: c.org }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '9px', height: '9px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                            Recurring
+                                          </span>
+                                        )}
+                                      </div>
+                                      {/* Title */}
+                                      <p style={{ fontSize: '12px', fontWeight: 800, color: c.txt, lineHeight: 1.3, marginBottom: '4px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.title}</p>
+                                      {/* Rescheduled original date struck */}
+                                      {ev.is_rescheduled && ev.original_start_time && <p style={{ fontSize: '10px', color: c.org, textDecoration: 'line-through', opacity: 0.6 }}>{formatWeekdayTime(ev.original_start_time)}</p>}
+                                      {/* Date — full weekday for recurring, short for one-off */}
+                                      <p style={{ fontSize: '10px', fontWeight: 700, color: c.org, marginTop: '3px', lineHeight: 1.3 }}>
+                                        {ev.is_rescheduled && <span style={{ background: c.bdgBg, color: c.bdgTxt, fontSize: '8px', fontWeight: 700, padding: '1px 4px', borderRadius: '2px', marginRight: '4px', textTransform: 'uppercase' }}>New</span>}
+                                        {isRecurring ? formatWeekdayTime(ev.start_time) : formatEventDate(ev.start_time)}
+                                      </p>
+                                      {/* Location */}
+                                      {ev.location && <p style={{ fontSize: '10px', color: c.org, opacity: 0.8, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.location}</p>}
+                                      {/* Description */}
+                                      {ev.description && <p style={{ fontSize: '10px', color: c.txt, opacity: 0.75, marginTop: '4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.description}</p>}
+                                    </div>
+                                    <div style={{ marginTop: '4px' }}>
+                                      {/* Nothing needed at bottom — content fills the card */}
+                                    </div>
+                                    {effectiveRole === 'admin' && (
+                                      <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                                        <button onClick={function(e) { e.stopPropagation(); openEventMenu(ev.id); }} style={{ width: '22px', height: '22px', borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.org }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-black/20 transition-colors" aria-label={'Actions for ' + ev.title} aria-haspopup="true" aria-expanded={activeEventMenu === ev.id}>
+                                          <Icon path={ICONS.dots} className="h-3 w-3" />
+                                        </button>
+                                        {activeEventMenu === ev.id && (
+                                          <div style={{ position: 'absolute', right: '0', top: 'calc(100% + 4px)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 30, minWidth: '152px', overflow: 'hidden' }} role="menu" aria-label={'Actions for ' + ev.title}>
+                                            <button onClick={function() { handleEditEvent(ev); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 focus:outline-none transition-colors" role="menuitem"><Icon path={ICONS.pencil} className="h-4 w-4 flex-shrink-0" />Edit Event</button>
+                                            <button onClick={function() { handleRescheduleEvent(ev); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 focus:outline-none transition-colors" role="menuitem"><Icon path={ICONS.repeat} className="h-4 w-4 flex-shrink-0" />Reschedule</button>
+                                            <div className="border-t border-gray-100" />
+                                            <button onClick={function() { handleDeleteEvent(ev); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 focus:outline-none transition-colors" role="menuitem"><Icon path={ICONS.trash} className="h-4 w-4 flex-shrink-0" />Delete</button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Recent Activity */}
-                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                    {/* Recent Activity — Bulletin Board */}
+                    <div className="rounded-xl p-6" style={{ background: cardBg, border: '1px solid ' + borderColor }}>
                       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                        <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
+                        <h3 className="text-lg font-bold" style={{ color: textPrimary }}>Recent Activity</h3>
                         <div className="flex items-center gap-2 flex-wrap">
                           {recentActivity.length > 0 && (
                             <>
-                              <button
-                                onClick={handleMarkAllActivityRead}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-1.5 border border-blue-200 hover:bg-blue-50 transition-colors"
-                              >
-                                Mark All Read
-                              </button>
-                              <button
-                                onClick={handleDismissAllActivity}
-                                className="text-xs text-gray-500 hover:text-red-600 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-red-50 transition-colors"
-                              >
-                                Clear
-                              </button>
+                              <button onClick={handleMarkAllActivityRead} className="text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-1.5 transition-colors" style={{ color: '#3B82F6', border: '1px solid #3B82F6', background: isDark ? 'rgba(59,130,246,0.1)' : '#EFF6FF' }}>Mark All Read</button>
+                              <button onClick={handleDismissAllActivity} className="text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 transition-colors" style={{ color: textMuted, border: '1px solid ' + borderColor, background: 'transparent' }}>Clear</button>
                             </>
                           )}
-                          <button
-                            onClick={fetchRecentActivity}
-                            className="text-xs text-gray-500 hover:text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 border border-gray-200 hover:bg-gray-50 transition-colors"
-                          >
-                            Refresh
-                          </button>
+                          <button onClick={fetchRecentActivity} className="text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-lg px-3 py-1.5 transition-colors" style={{ color: textMuted, border: '1px solid ' + borderColor, background: 'transparent' }}>Refresh</button>
                         </div>
                       </div>
 
                       {activityLoading ? (
-                        <div className="space-y-3">
-                          {[1, 2, 3, 4, 5].map(function(i) {
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pt-2">
+                          {[1,2,3,4,5].map(function(i) {
                             return (
-                              <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
-                                <div className="w-5 h-5 bg-gray-200 rounded mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 space-y-2">
-                                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                                  <div className="h-3 bg-gray-200 rounded w-1/3" />
+                              <div key={i} style={{ marginTop: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }}>
+                                  <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: isDark ? '#2A3550' : '#E5E7EB' }} />
+                                </div>
+                                <div className="animate-pulse" style={{ background: isDark ? '#1E2845' : '#F3F4F6', borderRadius: '6px', padding: '14px', aspectRatio: '1/1' }}>
+                                  <div style={{ height: '10px', width: '60%', background: isDark ? '#2A3550' : '#D1D5DB', borderRadius: '4px', marginBottom: '10px' }} />
+                                  <div style={{ height: '13px', width: '90%', background: isDark ? '#2A3550' : '#D1D5DB', borderRadius: '4px', marginBottom: '6px' }} />
+                                  <div style={{ height: '13px', width: '70%', background: isDark ? '#2A3550' : '#D1D5DB', borderRadius: '4px' }} />
                                 </div>
                               </div>
                             );
@@ -998,78 +1258,140 @@ function OrganizationDashboard() {
                         </div>
                       ) : recentActivity.length === 0 ? (
                         <div className="text-center py-10">
-                          <Icon path={ICONS.clock} className="h-10 w-10 text-gray-300 mx-auto mb-2" strokeWidth={1.5} />
-                          <p className="text-gray-600 text-sm font-semibold">No recent activity</p>
-                          <p className="text-gray-400 text-xs mt-1">Events, announcements, and new members will appear here.</p>
+                          <Icon path={ICONS.clock} className="h-10 w-10 mx-auto mb-2" style={{ color: textMuted }} strokeWidth={1.5} />
+                          <p className="text-sm font-semibold" style={{ color: textSecondary }}>No recent activity</p>
+                          <p className="text-xs mt-1" style={{ color: textMuted }}>Events, announcements, and new members will appear here.</p>
                         </div>
                       ) : (
                         <div>
-                          <div className="space-y-2" role="list" aria-label="Recent activity">
+                          {/* Post-it grid */}
+                          <div
+                            className="grid gap-5 pt-2"
+                            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
+                            role="list"
+                            aria-label="Recent activity"
+                          >
                             {recentActivity
                               .slice((activityPage - 1) * ACTIVITY_PER_PAGE, activityPage * ACTIVITY_PER_PAGE)
-                              .map(function(activity) {
+                              .map(function(activity, idx) {
                                 var isRead = readActivityIds.has(activity.id);
+
+                                // Assign Post-it color by activity type
+                                var noteColors = {
+                                  event:        { bg: '#FFF9C4', pin: '#B8860B', bdgBg: '#F5B731', bdgTxt: '#3A2800', txt: '#1A1500', org: '#8A6F00' },
+                                  announcement: { bg: '#FFF9C4', pin: '#B8860B', bdgBg: '#F5B731', bdgTxt: '#3A2800', txt: '#1A1500', org: '#8A6F00' },
+                                  member:       { bg: '#FFF9C4', pin: '#B8860B', bdgBg: '#F5B731', bdgTxt: '#3A2800', txt: '#1A1500', org: '#8A6F00' },
+                                };
+                                var c = noteColors[activity.type] || noteColors.event;
+                                var typeLabel = activity.type === 'event' ? 'Event' : activity.type === 'announcement' ? 'Update' : 'Member';
+
                                 return (
-                                  <div
-                                    key={activity.id}
-                                    role="listitem"
-                                    className={'rounded-xl border transition-colors group ' +
-                                      (isRead ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200')}
-                                  >
-                                    <button
-                                      onClick={function() { if (activity.link) navigate(activity.link); handleMarkActivityRead(activity.id); }}
-                                      className="w-full flex items-center gap-3 p-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded-xl"
-                                      aria-label={'View ' + activity.title}
-                                    >
-                                      <div className={'mt-0.5 flex-shrink-0 ' + (isRead ? 'text-gray-400' : 'text-blue-500')}>
-                                        <Icon path={ICONS[activity.iconKey] || ICONS.clock} className="h-5 w-5" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className={'text-sm font-semibold truncate ' + (isRead ? 'text-gray-500' : 'text-gray-900')}>
+                                  <div key={activity.id} role="listitem" style={{ marginTop: '12px', position: 'relative' }}>
+                                    {/* Tack */}
+                                    <div style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }} aria-hidden="true">
+                                      <div style={{
+                                        width: '13px', height: '13px', borderRadius: '50%',
+                                        background: isRead
+                                          ? (isDark ? '#2A3550' : '#D1D5DB')
+                                          : 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.6) 0%, ' + c.pin + ' 52%, rgba(0,0,0,0.25) 100%)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.35)',
+                                      }} />
+                                    </div>
+                                    {/* Card */}
+                                    <div style={{
+                                      background: isRead ? (isDark ? '#1A2035' : '#F3F4F6') : c.bg,
+                                      borderRadius: '4px',
+                                      padding: '14px',
+                                      aspectRatio: '1 / 1',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      justifyContent: 'space-between',
+                                      boxShadow: isRead ? 'none' : '0 2px 6px rgba(0,0,0,0.12)',
+                                      opacity: isRead ? 0.55 : 1,
+                                      position: 'relative',
+                                    }}>
+                                      {/* X delete button */}
+                                      <button
+                                        onClick={function(e) { e.stopPropagation(); handleMarkActivityRead(activity.id); setRecentActivity(function(prev) { return prev.filter(function(a) { return a.id !== activity.id; }); }); }}
+                                        style={{
+                                          position: 'absolute', top: '6px', right: '6px',
+                                          width: '18px', height: '18px', borderRadius: '50%',
+                                          background: 'rgba(0,0,0,0.15)', border: 'none', cursor: 'pointer',
+                                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                          color: c.org, flexShrink: 0,
+                                        }}
+                                        className="focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 hover:bg-black/25 transition-colors"
+                                        aria-label={'Dismiss: ' + activity.title}
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+
+                                      {/* Clickable area */}
+                                      <button
+                                        onClick={function() { if (activity.link) navigate(activity.link); handleMarkActivityRead(activity.id); }}
+                                        className="focus:outline-none w-full text-left"
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                        aria-label={'View activity: ' + activity.title}
+                                      >
+                                        <span style={{
+                                          display: 'inline-block', padding: '2px 6px', borderRadius: '3px',
+                                          fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                                          marginBottom: '8px',
+                                          background: isRead ? (isDark ? '#2A3550' : '#E5E7EB') : c.bdgBg,
+                                          color: isRead ? (isDark ? '#64748B' : '#6B7280') : c.bdgTxt,
+                                        }}>
+                                          {typeLabel}
+                                        </span>
+                                        <p style={{
+                                          fontSize: '12px', fontWeight: 700, lineHeight: 1.35,
+                                          color: isRead ? (isDark ? '#4B5563' : '#9CA3AF') : c.txt,
+                                          display: '-webkit-box',
+                                          WebkitLineClamp: 3,
+                                          WebkitBoxOrient: 'vertical',
+                                          overflow: 'hidden',
+                                        }}>
                                           {activity.title}
                                         </p>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                          {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                                          })}
-                                        </p>
-                                      </div>
-                                      <Icon path={ICONS.chevRight} className={'h-4 w-4 flex-shrink-0 ' + (isRead ? 'text-gray-300' : 'text-blue-400')} />
-                                    </button>
+                                      </button>
+
+                                      {/* Timestamp */}
+                                      <p style={{
+                                        fontSize: '10px', fontWeight: 600, marginTop: '8px',
+                                        color: isRead ? (isDark ? '#374151' : '#9CA3AF') : c.org,
+                                      }}>
+                                        {new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                      </p>
+                                    </div>
                                   </div>
                                 );
                               })}
                           </div>
 
                           {/* Pagination */}
-                          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                          <div className="flex items-center justify-between mt-5 pt-4" style={{ borderTop: '1px solid ' + borderColor }}>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={function() { setActivityPage(function(p) { return Math.max(1, p - 1); }); }}
                                 disabled={activityPage === 1}
-                                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style={{ border: '1px solid ' + borderColor, color: textMuted, background: 'transparent' }}
                                 aria-label="Previous page"
                               >
                                 <Icon path={ICONS.chevLeft} className="h-4 w-4" />
                               </button>
-                              <span className="text-xs text-gray-500 font-semibold min-w-12 text-center">
-                                {activityPage} / {Math.max(1, totalActivityPages)}
-                              </span>
+                              <span className="text-xs font-semibold min-w-12 text-center" style={{ color: textMuted }}>{activityPage} / {Math.max(1, totalActivityPages)}</span>
                               <button
                                 onClick={function() { setActivityPage(function(p) { return Math.min(totalActivityPages, p + 1); }); }}
                                 disabled={activityPage >= totalActivityPages}
-                                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style={{ border: '1px solid ' + borderColor, color: textMuted, background: 'transparent' }}
                                 aria-label="Next page"
                               >
                                 <Icon path={ICONS.chevRight} className="h-4 w-4" />
                               </button>
                             </div>
-                            <button
-                              onClick={function() { setActivityPage(1); addToast('Showing ' + recentActivity.length + ' recent activities.'); }}
-                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                            >
-                              View All Activity
-                            </button>
                           </div>
                         </div>
                       )}
@@ -1122,9 +1444,7 @@ function OrganizationDashboard() {
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
                         <h3 className="text-base font-bold text-blue-900 mb-4">Upload Photo</h3>
                         {photoError && (
-                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-                            {photoError}
-                          </div>
+                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">{photoError}</div>
                         )}
                         <div className="flex flex-col sm:flex-row gap-3">
                           <div className="flex-1">
@@ -1146,15 +1466,7 @@ function OrganizationDashboard() {
                                 (photoUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600')}
                             >
                               {photoUploading ? 'Uploading...' : 'Upload Photo'}
-                              <input
-                                id="photo-upload"
-                                type="file"
-                                accept="image/jpeg,image/png,image/gif,image/webp"
-                                onChange={handlePhotoUpload}
-                                disabled={photoUploading}
-                                className="sr-only"
-                                aria-label="Choose a photo to upload"
-                              />
+                              <input id="photo-upload" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handlePhotoUpload} disabled={photoUploading} className="sr-only" aria-label="Choose a photo to upload" />
                             </label>
                             <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP · Max 5MB</p>
                           </div>
@@ -1164,43 +1476,24 @@ function OrganizationDashboard() {
 
                     {photosLoading ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map(function(i) {
-                          return <div key={i} className="rounded-xl bg-gray-200 animate-pulse h-40" />;
-                        })}
+                        {[1,2,3,4,5,6,7,8].map(function(i) { return <div key={i} className="rounded-xl bg-gray-200 animate-pulse h-40" />; })}
                       </div>
                     ) : photos.length === 0 ? (
                       <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
                         <Icon path={ICONS.photo} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
                         <h3 className="text-lg font-semibold text-gray-700 mb-1">No photos yet</h3>
-                        <p className="text-gray-500 text-sm">
-                          {effectiveRole === 'admin' ? 'Upload your first photo using the panel above.' : 'No photos have been uploaded yet.'}
-                        </p>
+                        <p className="text-gray-500 text-sm">{effectiveRole === 'admin' ? 'Upload your first photo using the panel above.' : 'No photos have been uploaded yet.'}</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
                         {photos.map(function(photo) {
                           return (
-                            <div
-                              key={photo.id}
-                              role="listitem"
-                              className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                            >
-                              <button
-                                onClick={function() { setLightboxPhoto(photo); }}
-                                className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                                aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}
-                              >
-                                <img
-                                  src={photo.photo_url}
-                                  alt={photo.caption || 'Organization photo'}
-                                  className="w-full h-40 object-cover"
-                                  loading="lazy"
-                                />
+                            <div key={photo.id} role="listitem" className="relative group rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                              <button onClick={function() { setLightboxPhoto(photo); }} className="w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset" aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}>
+                                <img src={photo.photo_url} alt={photo.caption || 'Organization photo'} className="w-full h-40 object-cover" loading="lazy" />
                               </button>
                               {photo.caption && (
-                                <div className="px-2 py-1.5 bg-white">
-                                  <p className="text-xs text-gray-600 truncate">{photo.caption}</p>
-                                </div>
+                                <div className="px-2 py-1.5 bg-white"><p className="text-xs text-gray-600 truncate">{photo.caption}</p></div>
                               )}
                               {effectiveRole === 'admin' && (
                                 <button
@@ -1219,29 +1512,13 @@ function OrganizationDashboard() {
                     )}
 
                     {lightboxPhoto && (
-                      <div
-                        className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Photo viewer"
-                        onClick={function() { setLightboxPhoto(null); }}
-                      >
+                      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Photo viewer" onClick={function() { setLightboxPhoto(null); }}>
                         <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
-                          <button
-                            onClick={function() { setLightboxPhoto(null); }}
-                            className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded"
-                            aria-label="Close photo viewer"
-                          >
+                          <button onClick={function() { setLightboxPhoto(null); }} className="absolute -top-10 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded" aria-label="Close photo viewer">
                             <Icon path={ICONS.x} className="h-7 w-7" strokeWidth={2.5} />
                           </button>
-                          <img
-                            src={lightboxPhoto.photo_url}
-                            alt={lightboxPhoto.caption || 'Organization photo'}
-                            className="w-full max-h-screen object-contain rounded-xl"
-                          />
-                          {lightboxPhoto.caption && (
-                            <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>
-                          )}
+                          <img src={lightboxPhoto.photo_url} alt={lightboxPhoto.caption || 'Organization photo'} className="w-full max-h-screen object-contain rounded-xl" />
+                          {lightboxPhoto.caption && <p className="text-white text-center mt-3 text-sm">{lightboxPhoto.caption}</p>}
                         </div>
                       </div>
                     )}
@@ -1257,15 +1534,13 @@ function OrganizationDashboard() {
                         <p className="text-gray-500 mt-1">Review and approve content submitted by editors.</p>
                       </div>
                       {pendingApprovals.length > 0 && (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
-                          {pendingApprovals.length} pending
-                        </span>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">{pendingApprovals.length} pending</span>
                       )}
                     </div>
 
                     {pendingApprovalsLoading ? (
                       <div className="space-y-3">
-                        {[1, 2, 3].map(function(i) {
+                        {[1,2,3].map(function(i) {
                           return (
                             <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
                               <div className="flex justify-between gap-4">
@@ -1293,37 +1568,15 @@ function OrganizationDashboard() {
                       <div className="space-y-3" role="list" aria-label="Pending approvals">
                         {pendingApprovals.map(function(item) {
                           return (
-                            <div
-                              key={item.type + '-' + item.id}
-                              role="listitem"
-                              className="flex items-center justify-between gap-4 p-5 bg-white border border-yellow-200 rounded-xl hover:border-yellow-300 transition-colors"
-                            >
+                            <div key={item.type + '-' + item.id} role="listitem" className="flex items-center justify-between gap-4 p-5 bg-white border border-yellow-200 rounded-xl hover:border-yellow-300 transition-colors">
                               <div className="flex-1 min-w-0">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
-                                  {item.type}
-                                </span>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mb-2">{item.type}</span>
                                 <p className="font-semibold text-gray-900 truncate">{item.title}</p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {'Submitted ' + new Date(item.created_at).toLocaleDateString('en-US', {
-                                    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-                                  })}
-                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">{'Submitted ' + new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <button
-                                  onClick={function() { handleApprove(item); }}
-                                  className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors"
-                                  aria-label={'Approve ' + item.title}
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={function() { handleReject(item); }}
-                                  className="px-4 py-2 bg-white text-red-600 border border-red-300 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
-                                  aria-label={'Reject ' + item.title}
-                                >
-                                  Reject
-                                </button>
+                                <button onClick={function() { handleApprove(item); }} className="px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors" aria-label={'Approve ' + item.title}>Approve</button>
+                                <button onClick={function() { handleReject(item); }} className="px-4 py-2 bg-white text-red-600 border border-red-300 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors" aria-label={'Reject ' + item.title}>Reject</button>
                               </div>
                             </div>
                           );
@@ -1342,21 +1595,18 @@ function OrganizationDashboard() {
                         <p className="text-gray-500 mt-1">Messages submitted via the public Join Us form</p>
                       </div>
                       {inquiries.length > 0 && (
-                        <span className="text-sm text-gray-500">
-                          {inquiries.filter(function(i) { return !i.is_read; }).length + ' unread · ' + inquiries.length + ' total'}
-                        </span>
+                        <span className="text-sm text-gray-500">{inquiries.filter(function(i) { return !i.is_read; }).length + ' unread · ' + inquiries.length + ' total'}</span>
                       )}
                     </div>
 
                     {inquiriesLoading ? (
                       <div className="space-y-4">
-                        {[1, 2, 3].map(function(i) {
+                        {[1,2,3].map(function(i) {
                           return (
                             <div key={i} className="rounded-xl border border-gray-200 p-5 animate-pulse">
                               <div className="flex justify-between gap-4">
                                 <div className="flex-1 space-y-2">
                                   <div className="h-4 bg-gray-200 rounded w-1/3" />
-                                  <div className="h-3 bg-gray-200 rounded w-1/4" />
                                   <div className="h-3 bg-gray-200 rounded w-full mt-3" />
                                   <div className="h-3 bg-gray-200 rounded w-3/4" />
                                 </div>
@@ -1379,47 +1629,22 @@ function OrganizationDashboard() {
                       <div className="space-y-4" role="list" aria-label="Contact inquiries">
                         {inquiries.map(function(inquiry) {
                           return (
-                            <div
-                              key={inquiry.id}
-                              role="listitem"
-                              className={'rounded-xl border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200')}
-                            >
+                            <div key={inquiry.id} role="listitem" className={'rounded-xl border p-5 transition-all ' + (inquiry.is_read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200')}>
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                                     <span className="font-bold text-gray-900">{inquiry.name}</span>
-                                    {!inquiry.is_read && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>
-                                    )}
-                                    <span className="text-sm text-gray-400">
-                                      {new Date(inquiry.created_at).toLocaleDateString('en-US', {
-                                        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                                      })}
-                                    </span>
+                                    {!inquiry.is_read && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>}
+                                    <span className="text-sm text-gray-400">{new Date(inquiry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                   </div>
-                                  <a
-                                    href={'mailto:' + inquiry.email}
-                                    className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                                  >
-                                    {inquiry.email}
-                                  </a>
+                                  <a href={'mailto:' + inquiry.email} className="text-blue-600 hover:underline text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">{inquiry.email}</a>
                                   <p className="text-gray-700 mt-3 leading-relaxed text-sm">{inquiry.message}</p>
                                 </div>
                                 <div className="flex flex-col gap-2 flex-shrink-0">
                                   {!inquiry.is_read && (
-                                    <button
-                                      onClick={function() { handleMarkInquiryRead(inquiry.id); }}
-                                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
-                                    >
-                                      Mark Read
-                                    </button>
+                                    <button onClick={function() { handleMarkInquiryRead(inquiry.id); }} className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold">Mark Read</button>
                                   )}
-                                  <button
-                                    onClick={function() { handleDeleteInquiry(inquiry.id); }}
-                                    className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold"
-                                  >
-                                    Delete
-                                  </button>
+                                  <button onClick={function() { handleDeleteInquiry(inquiry.id); }} className="px-3 py-1.5 text-sm bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors whitespace-nowrap font-semibold">Delete</button>
                                 </div>
                               </div>
                             </div>
@@ -1434,11 +1659,7 @@ function OrganizationDashboard() {
                 {activeTab === 'invite' && (
                   <div>
                     {membership.role === 'admin' || (organization.settings && organization.settings.allowMemberInvites) ? (
-                      <InviteMember
-                        organizationId={organizationId}
-                        organizationName={organization.name}
-                        onInviteSent={function() { fetchStats(currentUserId); }}
-                      />
+                      <InviteMember organizationId={organizationId} organizationName={organization.name} onInviteSent={function() { fetchStats(currentUserId); }} />
                     ) : (
                       <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
                         <Icon path={ICONS.mail} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
@@ -1456,10 +1677,7 @@ function OrganizationDashboard() {
                 {activeTab === 'settings' && (
                   <div>
                     {membership.role === 'admin' ? (
-                      <OrganizationSettings
-                        organizationId={organizationId}
-                        onUpdate={function(updatedData) { setOrganization(function(prev) { return Object.assign({}, prev, updatedData); }); }}
-                      />
+                      <OrganizationSettings organizationId={organizationId} onUpdate={function(updatedData) { setOrganization(function(prev) { return Object.assign({}, prev, updatedData); }); }} />
                     ) : (
                       <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
                         <Icon path={ICONS.settings} className="h-12 w-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
@@ -1476,14 +1694,26 @@ function OrganizationDashboard() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ── Event action menu backdrop ── */}
+      {activeEventMenu && (
+        <div
+          className="fixed inset-0 z-20"
+          onClick={function() { setActiveEventMenu(null); }}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ── CreateEvent modal ── */}
       <CreateEvent
         isOpen={showCreateEvent}
-        onClose={function() { setShowCreateEvent(false); }}
-        onSuccess={handleEventCreated}
+        onClose={function() { setShowCreateEvent(false); setEditingEvent(null); }}
+        onSuccess={editingEvent ? handleEventUpdated : handleEventCreated}
         organizationId={organizationId}
         organizationName={organization ? organization.name : 'Your Organization'}
+        editingEvent={editingEvent}
       />
+
+      {/* ── CreateAnnouncement modal ── */}
       <CreateAnnouncement
         isOpen={showCreateAnnouncement}
         onClose={function() { setShowCreateAnnouncement(false); }}
@@ -1492,118 +1722,245 @@ function OrganizationDashboard() {
         organizationName={organization ? organization.name : 'Your Organization'}
       />
 
-      {/* ── Program modal (single instance) ── */}
-      {showProgramModal && (
+      {/* ── Reschedule modal ── */}
+      {showRescheduleModal && rescheduleEvent && (
         <div
           className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="program-modal-title"
+          aria-labelledby="reschedule-modal-title"
         >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                  <Icon path={ICONS.repeat} className="h-5 w-5 text-yellow-600" />
+                </div>
+                <h3 id="reschedule-modal-title" className="text-lg font-bold text-gray-900">Reschedule Event</h3>
+              </div>
+              <button
+                onClick={function() { setShowRescheduleModal(false); setRescheduleEvent(null); }}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                aria-label="Close"
+              >
+                <Icon path={ICONS.x} className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Event name */}
+              <p className="text-sm font-semibold text-gray-700 truncate">{rescheduleEvent.title}</p>
+
+              {/* Current date */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Current Date</p>
+                <p className="text-sm text-gray-700 line-through opacity-60">{formatEventDate(rescheduleEvent.start_time)}</p>
+              </div>
+
+              {/* New start time */}
+              <div>
+                <label htmlFor="reschedule-start" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  New Start Date &amp; Time <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="reschedule-start"
+                  type="datetime-local"
+                  value={rescheduleForm.start_time}
+                  onChange={function(e) { setRescheduleForm(function(f) { return Object.assign({}, f, { start_time: e.target.value }); }); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-required="true"
+                />
+              </div>
+
+              {/* New end time */}
+              <div>
+                <label htmlFor="reschedule-end" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  New End Date &amp; Time <span className="text-gray-400 font-normal normal-case">(optional)</span>
+                </label>
+                <input
+                  id="reschedule-end"
+                  type="datetime-local"
+                  value={rescheduleForm.end_time}
+                  onChange={function(e) { setRescheduleForm(function(f) { return Object.assign({}, f, { end_time: e.target.value }); }); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* New location */}
+              <div>
+                <label htmlFor="reschedule-location" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  New Location <span className="text-gray-400 font-normal normal-case">(optional)</span>
+                </label>
+                <input
+                  id="reschedule-location"
+                  type="text"
+                  value={rescheduleForm.location}
+                  onChange={function(e) { setRescheduleForm(function(f) { return Object.assign({}, f, { location: e.target.value }); }); }}
+                  placeholder={rescheduleEvent.location || 'Leave blank to keep current location'}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {rescheduleEvent.location && (
+                  <p className="text-xs text-gray-400 mt-1">Current: {rescheduleEvent.location}</p>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-100 rounded-lg p-3">
+                The original date will be preserved and shown with a strikethrough wherever this event appears.
+              </p>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-100">
+              <button
+                onClick={function() { setShowRescheduleModal(false); setRescheduleEvent(null); }}
+                className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRescheduleSubmit}
+                disabled={rescheduleSaving || !rescheduleForm.start_time}
+                className="flex-1 px-4 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                {rescheduleSaving ? 'Saving...' : 'Reschedule Event'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirm modal ── */}
+      {showDeleteConfirm && deletingEvent && (
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-event-title"
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <Icon path={ICONS.trash} className="h-5 w-5 text-red-600" />
+                </div>
+                <h3 id="delete-event-title" className="text-lg font-bold text-gray-900">Delete Event</h3>
+              </div>
+              <button
+                onClick={function() { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                aria-label="Close"
+              >
+                <Icon path={ICONS.x} className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Warning */}
+              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-100">
+                <Icon path={ICONS.warn} className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-red-800">Delete "{deletingEvent.title}"?</p>
+                  <p className="text-xs text-red-600 mt-1">
+                    {formatEventDate(deletingEvent.start_time)}
+                  </p>
+                  <p className="text-xs text-red-500 mt-2">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              {/* Recurring scope selector */}
+              {(deletingEvent.recurrence_rule || deletingEvent.parent_event_id) && (
+                <div>
+                  <p className="text-sm font-bold text-gray-700 mb-3">This is a recurring event. What would you like to delete?</p>
+                  <div className="space-y-2" role="radiogroup" aria-label="Delete scope">
+                    {[
+                      { value: 'this',   label: 'This event only',            desc: 'Only this occurrence will be removed' },
+                      { value: 'future', label: 'This and future events',     desc: 'This occurrence and all future ones' },
+                      { value: 'all',    label: 'All events in the series',   desc: 'Every occurrence of this event' },
+                    ].map(function(opt) {
+                      return (
+                        <label
+                          key={opt.value}
+                          className={'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ' +
+                            (deleteScope === opt.value ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300')}
+                        >
+                          <input
+                            type="radio"
+                            name="delete-scope"
+                            value={opt.value}
+                            checked={deleteScope === opt.value}
+                            onChange={function(e) { setDeleteScope(e.target.value); }}
+                            className="mt-0.5 accent-red-500 focus:ring-red-500"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800">{opt.label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 p-6 border-t border-gray-100">
+              <button
+                onClick={function() { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+                className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleteLoading}
+                className="flex-1 px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Event'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Program modal ── */}
+      {showProgramModal && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="program-modal-title">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h3 id="program-modal-title" className="text-lg font-bold text-gray-900">
-                {editingProgram ? 'Edit Program' : 'Add Program'}
-              </h3>
-              <button
-                onClick={function() { setShowProgramModal(false); }}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                aria-label="Close modal"
-              >
+              <h3 id="program-modal-title" className="text-lg font-bold text-gray-900">{editingProgram ? 'Edit Program' : 'Add Program'}</h3>
+              <button onClick={function() { setShowProgramModal(false); }} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300" aria-label="Close modal">
                 <Icon path={ICONS.x} className="h-5 w-5" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label htmlFor="prog-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Program Name <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="prog-name"
-                  type="text"
-                  value={programForm.name}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { name: e.target.value }); }); }}
-                  placeholder="e.g. After School Tutoring"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-required="true"
-                />
+                <label htmlFor="prog-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Program Name <span className="text-red-500" aria-hidden="true">*</span></label>
+                <input id="prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { name: e.target.value }); }); }} placeholder="e.g. After School Tutoring" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" aria-required="true" />
               </div>
               <div>
                 <label htmlFor="prog-desc" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Description</label>
-                <textarea
-                  id="prog-desc"
-                  value={programForm.description}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { description: e.target.value }); }); }}
-                  rows={3}
-                  placeholder="What does this program do?"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
+                <textarea id="prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { description: e.target.value }); }); }} rows={3} placeholder="What does this program do?" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
               </div>
               <div>
                 <label htmlFor="prog-audience" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Who Is It For?</label>
-                <input
-                  id="prog-audience"
-                  type="text"
-                  value={programForm.audience}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { audience: e.target.value }); }); }}
-                  placeholder="e.g. Youth ages 6-18"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input id="prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { audience: e.target.value }); }); }} placeholder="e.g. Youth ages 6-18" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label htmlFor="prog-schedule" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Schedule</label>
-                <input
-                  id="prog-schedule"
-                  type="text"
-                  value={programForm.schedule}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { schedule: e.target.value }); }); }}
-                  placeholder="e.g. Every Monday 3-5pm"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="prog-apply" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">How To Apply / Sign Up</label>
-                <textarea
-                  id="prog-apply"
-                  value={programForm.how_to_apply}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { how_to_apply: e.target.value }); }); }}
-                  rows={2}
-                  placeholder="e.g. Fill out form at front desk or call us"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
+                <input id="prog-schedule" type="text" value={programForm.schedule} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { schedule: e.target.value }); }); }} placeholder="e.g. Every Monday 3-5pm" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="prog-contact-name" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Name</label>
-                  <input
-                    id="prog-contact-name"
-                    type="text"
-                    value={programForm.contact_name}
-                    onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_name: e.target.value }); }); }}
-                    placeholder="Jane Smith"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-contact-name" type="text" value={programForm.contact_name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_name: e.target.value }); }); }} placeholder="Jane Smith" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label htmlFor="prog-contact-email" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Contact Email</label>
-                  <input
-                    id="prog-contact-email"
-                    type="email"
-                    value={programForm.contact_email}
-                    onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_email: e.target.value }); }); }}
-                    placeholder="jane@org.org"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-contact-email" type="email" value={programForm.contact_email} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { contact_email: e.target.value }); }); }} placeholder="jane@org.org" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
                 <label htmlFor="prog-status" className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
-                <select
-                  id="prog-status"
-                  value={programForm.status}
-                  onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <select id="prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="active">Active</option>
                   <option value="upcoming">Upcoming</option>
                   <option value="closed">Closed</option>
@@ -1612,14 +1969,10 @@ function OrganizationDashboard() {
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <button
                   onClick={function() { setProgramForm(function(p) { return Object.assign({}, p, { is_public: !p.is_public }); }); }}
-                  className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' +
-                    (programForm.is_public ? 'bg-blue-600' : 'bg-gray-200')}
-                  role="switch"
-                  aria-checked={programForm.is_public}
-                  aria-label="Toggle public visibility"
+                  className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (programForm.is_public ? 'bg-blue-600' : 'bg-gray-200')}
+                  role="switch" aria-checked={programForm.is_public} aria-label="Toggle public visibility"
                 >
-                  <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' +
-                    (programForm.is_public ? 'translate-x-6' : 'translate-x-1')} />
+                  <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (programForm.is_public ? 'translate-x-6' : 'translate-x-1')} />
                 </button>
                 <div>
                   <p className="text-sm font-semibold text-gray-700">Show on public website</p>
@@ -1628,17 +1981,8 @@ function OrganizationDashboard() {
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-100">
-              <button
-                onClick={function() { setShowProgramModal(false); }}
-                className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveProgram}
-                disabled={programSaving}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <button onClick={function() { setShowProgramModal(false); }} className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300">Cancel</button>
+              <button onClick={saveProgram} disabled={programSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {programSaving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
               </button>
             </div>
