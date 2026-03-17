@@ -162,7 +162,7 @@ function Header() {
             })}
             {firstAdminOrg && (
               <button
-                onClick={function() { navigate('/organizations/' + firstAdminOrg.id + '/community-board'); }}
+                onClick={function() { navigate('/community-board'); }}
                 style={{ color: '#A78BFA', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}
                 className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
                 onMouseEnter={function(e) { e.currentTarget.style.background = 'rgba(139,92,246,0.2)'; }}

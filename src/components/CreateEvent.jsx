@@ -343,6 +343,7 @@ var {data:{user},error:userErr}=await supabase.auth.getUser();
         languages:languages.length>0?languages:null,
         volunteer_signup:volunteerSignup,
         donation_dropoff:donationDropoff,
+        is_public: form.visibility === 'public' || publishToDiscovery,
         publish_to_discovery:publishToDiscovery,
         publish_to_website:publishToWebsite,
 approval_status: approvalStatus,
@@ -365,15 +366,12 @@ if (approvalStatus === 'pending') {
       }
       if (onSuccess) onSuccess(newEvent);
 
-      try {
 if (approvalStatus === 'approved') {
         try {
-          var notifRes=await notifyOrganizationMembers({organizationId,type:'event',title:'New Event',message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(),link:'/organizations/'+organizationId+'/events',excludeUserId:null});
+          var notifRes = await notifyOrganizationMembers({organizationId, type:'event', title:'New Event', message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(), link:'/organizations/'+organizationId+'/events', excludeUserId:null});
           if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
         } catch(ne){ console.error('Notification failed:',ne); }
       }
-        if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
-      } catch(ne){ console.error('Notification failed:',ne); }
 
       resetAll(); onClose();
     } catch(err) {

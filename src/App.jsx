@@ -39,6 +39,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
 import { ThemeProvider } from './context/ThemeContext';
+import CommunityBoard from './pages/CommunityBoard';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -141,6 +142,7 @@ return (
             <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/home" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
 
             <Route
               path="*"
