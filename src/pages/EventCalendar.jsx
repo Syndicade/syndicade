@@ -5,113 +5,206 @@ import enUS from 'date-fns/locale/en-US';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import PageHeader from '../components/PageHeader';
+import { useTheme } from '../context/ThemeContext';
 
-const locales = {
-  'en-US': enUS
+var locales = { 'en-US': enUS };
+var localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
+
+var orgColors = {
+  0: '#3b82f6',
+  1: '#10b981',
+  2: '#f59e0b',
+  3: '#ef4444',
+  4: '#8b5cf6',
+  5: '#ec4899',
+  6: '#14b8a6',
+  7: '#f97316',
 };
 
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
+// ── Icons ─────────────────────────────────────────────────────────────────────
+function IconRecurring({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-3.5 w-3.5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
 
+function IconPin({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-3.5 w-3.5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function IconVirtual({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-3.5 w-3.5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function IconHybrid({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-3.5 w-3.5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconCalendar({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-12 w-12'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function IconChevronLeft({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function IconChevronRight({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function IconAlert({ cls }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls || 'h-12 w-12'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  );
+}
+
+// White R in white circle — used both on calendar tiles and in legend
+function RescheduledBadge({ size }) {
+  var s = size || 16;
+  return (
+    <span
+      title="Rescheduled"
+      aria-label="Rescheduled"
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: s + 'px', height: s + 'px', borderRadius: '50%',
+        border: '2px solid #FFFFFF',
+        color: '#FFFFFF',
+        fontSize: Math.round(s * 0.55) + 'px',
+        fontWeight: 800,
+        flexShrink: 0,
+        lineHeight: 1,
+      }}
+    >
+      R
+    </span>
+  );
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function CalendarSkeleton({ isDark }) {
+  var bg     = isDark ? '#1A2035' : '#FFFFFF';
+  var border = isDark ? '#2A3550' : '#E2E8F0';
+  var pulse  = isDark ? '#2A3550' : '#E2E8F0';
+  return (
+    <div style={{ background: bg, borderRadius: '12px', border: '1px solid ' + border, padding: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {[72, 36, 140, 36].map(function(w, i) {
+            return <div key={i} style={{ width: w + 'px', height: '36px', background: pulse, borderRadius: '8px' }} className="animate-pulse" />;
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {[160, 180].map(function(w, i) {
+            return <div key={i} style={{ width: w + 'px', height: '36px', background: pulse, borderRadius: '8px' }} className="animate-pulse" />;
+          })}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', background: border }}>
+        {Array.from({ length: 7 }).map(function(_, i) {
+          return (
+            <div key={i} style={{ background: bg, padding: '8px', textAlign: 'center' }}>
+              <div style={{ width: '32px', height: '12px', background: pulse, borderRadius: '4px', margin: '0 auto' }} className="animate-pulse" />
+            </div>
+          );
+        })}
+        {Array.from({ length: 35 }).map(function(_, i) {
+          return (
+            <div key={i} style={{ background: bg, padding: '8px', minHeight: '80px' }}>
+              <div style={{ width: '20px', height: '12px', background: pulse, borderRadius: '4px', marginBottom: '6px' }} className="animate-pulse" />
+              {i % 4 === 0 && <div style={{ width: '90%', height: '18px', background: pulse, borderRadius: '4px' }} className="animate-pulse" />}
+              {i % 7 === 2 && <div style={{ width: '75%', height: '18px', background: pulse, borderRadius: '4px', marginTop: '4px' }} className="animate-pulse" />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 function EventCalendar() {
-  const navigate = useNavigate();
-  const [events, setEvents] = useState([]);
-  const [organizations, setOrganizations] = useState([]);
-  const [selectedOrg, setSelectedOrg] = useState('all');
-  const [view, setView] = useState('month');
-  const [date, setDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  var navigate = useNavigate();
+  var { isDark } = useTheme();
 
-  // Organization colors for visual distinction
-  const orgColors = {
-    0: '#3b82f6', // blue
-    1: '#10b981', // green
-    2: '#f59e0b', // amber
-    3: '#ef4444', // red
-    4: '#8b5cf6', // purple
-    5: '#ec4899', // pink
-    6: '#14b8a6', // teal
-    7: '#f97316', // orange
-  };
+  var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var inputBg       = isDark ? '#151B2D'  : '#F8FAFC';
 
-  useEffect(() => {
-    fetchOrganizationsAndEvents();
-  }, []);
+  var [events, setEvents]               = useState([]);
+  var [organizations, setOrganizations] = useState([]);
+  var [selectedOrg, setSelectedOrg]     = useState('all');
+  var [view, setView]                   = useState('month');
+  var [date, setDate]                   = useState(new Date());
+  var [loading, setLoading]             = useState(true);
+  var [error, setError]                 = useState(null);
 
-  const fetchOrganizationsAndEvents = async () => {
+  useEffect(function() { fetchOrganizationsAndEvents(); }, []);
+
+  async function fetchOrganizationsAndEvents() {
     try {
       setLoading(true);
       setError(null);
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      var userRes = await supabase.auth.getUser();
+      if (userRes.error) throw userRes.error;
+      if (!userRes.data.user) { navigate('/login'); return; }
+      var user = userRes.data.user;
 
-      // Fetch user's organizations
-      const { data: memberships, error: membershipsError } = await supabase
+      var { data: memberships, error: membershipsError } = await supabase
         .from('memberships')
-        .select(`
-          organization_id,
-          organizations (
-            id,
-            name
-          )
-        `)
+        .select('organization_id, organizations(id, name)')
         .eq('member_id', user.id)
         .eq('status', 'active');
-
       if (membershipsError) throw membershipsError;
 
-      const userOrgs = memberships?.map(m => ({
-        id: m.organizations.id,
-        name: m.organizations.name
-      })) || [];
-
+      var userOrgs = (memberships || []).map(function(m) {
+        return { id: m.organizations.id, name: m.organizations.name };
+      });
       setOrganizations(userOrgs);
 
-      // Fetch events from all user's organizations
-      const orgIds = userOrgs.map(org => org.id);
-      
-      if (orgIds.length === 0) {
-        setEvents([]);
-        setLoading(false);
-        return;
-      }
+      var orgIds = userOrgs.map(function(o) { return o.id; });
+      if (orgIds.length === 0) { setEvents([]); setLoading(false); return; }
 
-      // Fetch events with recurring fields and event_type
-      const { data: eventsData, error: eventsError } = await supabase
+      var { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select(`
-          id,
-          title,
-          description,
-          start_time,
-          end_time,
-          location,
-          is_virtual,
-          virtual_link,
-          visibility,
-          organization_id,
-          is_recurring,
-          parent_event_id,
-          recurrence_rule,
-          organizations (
-            name
-          )
-        `)
+        .select('id, title, description, start_time, end_time, location, is_virtual, virtual_link, visibility, organization_id, is_recurring, parent_event_id, recurrence_rule, is_rescheduled, original_start_time, organizations(name)')
         .in('organization_id', orgIds)
         .in('visibility', ['public', 'members'])
         .order('start_time', { ascending: true });
-
       if (eventsError) throw eventsError;
 
       setEvents(eventsData || []);
@@ -121,76 +214,37 @@ function EventCalendar() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // Helper function to determine event type
-  const getEventType = (event) => {
-    // Check if it's a hybrid event (has both location and virtual_link)
-    if (event.is_virtual && event.location && event.location !== 'Virtual Event') {
-      return 'hybrid';
-    }
-    // Virtual only
-    if (event.is_virtual || event.location === 'Virtual Event') {
-      return 'virtual';
-    }
-    // In-person
+  function getEventType(event) {
+    if (event.is_virtual && event.location && event.location !== 'Virtual Event') return 'hybrid';
+    if (event.is_virtual || event.location === 'Virtual Event') return 'virtual';
     return 'in-person';
-  };
+  }
 
-  // Transform events for calendar display
-  const calendarEvents = useMemo(() => {
-    let filteredEvents = events;
-
-    // Filter out parent events (they're just templates, not actual events)
-    // Only show: instances (has parent_event_id) OR non-recurring events
-    filteredEvents = filteredEvents.filter(event => {
-      // If it's not recurring, show it
+  var calendarEvents = useMemo(function() {
+    var filtered = events.filter(function(event) {
       if (!event.is_recurring) return true;
-      // If it's recurring but has a parent_event_id, it's an instance - show it
       if (event.parent_event_id) return true;
-      // If it's recurring with no parent_event_id, it's a parent template - hide it
       return false;
     });
 
-    // Filter by selected organization
     if (selectedOrg !== 'all') {
-      filteredEvents = filteredEvents.filter(e => e.organization_id === selectedOrg);
+      filtered = filtered.filter(function(e) { return e.organization_id === selectedOrg; });
     }
 
-    return filteredEvents.map((event, index) => {
-      // Assign color based on organization
-      const orgIndex = organizations.findIndex(org => org.id === event.organization_id);
-      const color = orgColors[orgIndex % Object.keys(orgColors).length];
-
-      const eventType = getEventType(event);
-
-      // Build title with icons
-      let iconPrefix = '';
-      
-      // Add recurring icon
-      if (event.is_recurring && event.parent_event_id) {
-        iconPrefix += '🔄 '; // Recurring instance
-      } else if (event.is_recurring && !event.parent_event_id) {
-        iconPrefix += '🔄 '; // Recurring series (parent)
-      }
-
-      // Add event type icon
-      if (eventType === 'virtual') {
-        iconPrefix += '💻 ';
-      } else if (eventType === 'hybrid') {
-        iconPrefix += '🌐 ';
-      } else {
-        iconPrefix += '📍 ';
-      }
-
+    return filtered.map(function(event) {
+      var orgIndex = organizations.findIndex(function(org) { return org.id === event.organization_id; });
+      var color = orgColors[orgIndex % Object.keys(orgColors).length];
+      var eventType = getEventType(event);
       return {
         id: event.id,
-        title: `${iconPrefix}${event.title}`,
+        title: event.title,
         start: new Date(event.start_time),
         end: event.end_time ? new Date(event.end_time) : new Date(event.start_time),
         resource: {
           organizationId: event.organization_id,
-          organizationName: event.organizations?.name,
+          organizationName: event.organizations ? event.organizations.name : '',
           location: event.location,
           isVirtual: event.is_virtual,
           visibility: event.visibility,
@@ -198,347 +252,277 @@ function EventCalendar() {
           isRecurring: event.is_recurring,
           parentEventId: event.parent_event_id,
           recurrenceRule: event.recurrence_rule,
-          eventType: eventType
+          eventType: eventType,
+          isRescheduled: event.is_rescheduled || false,
+          originalStartTime: event.original_start_time || null,
         }
       };
     });
   }, [events, selectedOrg, organizations]);
 
-  // Event style getter - simpler now, just organization colors
-  const eventStyleGetter = (event) => {
+  function eventStyleGetter(event) {
     return {
       style: {
         backgroundColor: event.resource.color,
         borderRadius: '6px',
         opacity: 0.9,
         color: 'white',
-        border: `2px solid ${event.resource.color}`,
+        border: '2px solid ' + event.resource.color,
         display: 'block',
-        fontSize: '0.875rem',
+        fontSize: '0.8rem',
         fontWeight: '500',
-        padding: '2px 5px'
+        padding: '2px 5px',
       }
     };
-  };
+  }
 
-  // Handle event click
-  const handleSelectEvent = (event) => {
-    navigate(`/events/${event.id}`);
-  };
+  function handleSelectEvent(event) {
+    navigate('/events/' + event.id);
+  }
 
-  // Handle slot selection (create new event)
-  const handleSelectSlot = (slotInfo) => {
-    // Could open create event modal here
-    console.log('Selected slot:', slotInfo);
-  };
-
-  // Custom toolbar with filters
-  const CustomToolbar = (toolbar) => {
-    const goToBack = () => {
-      toolbar.onNavigate('PREV');
-    };
-
-    const goToNext = () => {
-      toolbar.onNavigate('NEXT');
-    };
-
-    const goToToday = () => {
-      toolbar.onNavigate('TODAY');
-    };
-
-    const label = () => {
-      const date = toolbar.date;
-      return (
-        <span className="text-lg font-bold text-gray-900">
-          {format(date, 'MMMM yyyy')}
-        </span>
-      );
-    };
-
+  // ── Custom event tile ────────────────────────────────────────────────────────
+  function CustomEvent({ event }) {
+    var r = event.resource;
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-        {/* Navigation and Date */}
-        <div className="flex items-center gap-2">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', overflow: 'hidden' }}>
+        {r.isRecurring   && <span title="Recurring"  style={{ flexShrink: 0 }}><IconRecurring cls="h-3 w-3" /></span>}
+        {r.eventType === 'virtual'   && <span title="Virtual"   style={{ flexShrink: 0 }}><IconVirtual cls="h-3 w-3" /></span>}
+        {r.eventType === 'hybrid'    && <span title="Hybrid"    style={{ flexShrink: 0 }}><IconHybrid  cls="h-3 w-3" /></span>}
+        {r.eventType === 'in-person' && <span title="In-Person" style={{ flexShrink: 0 }}><IconPin     cls="h-3 w-3" /></span>}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem', flex: 1 }}>
+          {event.title}
+        </span>
+        {r.isRescheduled && <RescheduledBadge size={15} />}
+      </div>
+    );
+  }
+
+  // ── Custom Toolbar — receives RBC toolbar props directly ─────────────────────
+  function CustomToolbar(toolbar) {
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
-            onClick={goToToday}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all text-sm font-medium"
-            aria-label="Go to today"
-          >
+            onClick={function() { toolbar.onNavigate('TODAY'); }}
+            style={{ padding: '6px 14px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Go to today">
             Today
           </button>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={goToBack}
-              className="p-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all"
-              aria-label="Previous month"
-            >
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            {label()}
-            <button
-              onClick={goToNext}
-              className="p-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all"
-              aria-label="Next month"
-            >
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={function() { toolbar.onNavigate('PREV'); }}
+            style={{ padding: '6px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', cursor: 'pointer', color: textSecondary, display: 'flex', alignItems: 'center' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Previous">
+            <IconChevronLeft cls="h-4 w-4" />
+          </button>
+          <span style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, minWidth: '140px', textAlign: 'center' }}>
+            {format(toolbar.date, 'MMMM yyyy')}
+          </span>
+          <button
+            onClick={function() { toolbar.onNavigate('NEXT'); }}
+            style={{ padding: '6px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', cursor: 'pointer', color: textSecondary, display: 'flex', alignItems: 'center' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Next">
+            <IconChevronRight cls="h-4 w-4" />
+          </button>
         </div>
 
-        {/* View Toggle and Org Filter */}
-        <div className="flex items-center gap-3">
-          {/* View Selector */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setView('month')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                view === 'month'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              aria-label="Month view"
-            >
-              Month
-            </button>
-            <button
-              onClick={() => setView('week')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                view === 'week'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              aria-label="Week view"
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setView('day')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                view === 'day'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              aria-label="Day view"
-            >
-              Day
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', background: isDark ? '#0E1523' : '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
+            {['month', 'week', 'day'].map(function(v) {
+              var active = view === v;
+              return (
+                <button key={v}
+                  onClick={function() { setView(v); toolbar.onView(v); }}
+                  style={{
+                    padding: '5px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                    border: 'none', cursor: 'pointer',
+                    background: active ? cardBg : 'transparent',
+                    color: active ? textPrimary : textMuted,
+                    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label={v + ' view'} aria-pressed={active}>
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Organization Filter */}
           {organizations.length > 1 && (
             <select
               value={selectedOrg}
-              onChange={(e) => setSelectedOrg(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-              aria-label="Filter by organization"
-            >
+              onChange={function(e) { setSelectedOrg(e.target.value); }}
+              style={{ padding: '6px 12px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', color: textPrimary, fontSize: '13px', cursor: 'pointer' }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Filter by organization">
               <option value="all">All Organizations</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
+              {organizations.map(function(org) {
+                return <option key={org.id} value={org.id}>{org.name}</option>;
+              })}
             </select>
           )}
         </div>
       </div>
     );
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div 
-            className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"
-            role="status"
-            aria-label="Loading calendar"
-          >
-            <span className="sr-only">Loading...</span>
-          </div>
-          <p className="text-gray-600 font-medium">Loading calendar...</p>
-        </div>
-      </div>
-    );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md" role="alert">
-          <h2 className="text-red-800 font-bold text-lg mb-2">Error Loading Calendar</h2>
-          <p className="text-red-700">{error}</p>
-          <button
-            onClick={fetchOrganizationsAndEvents}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: pageBg }}>
       <style>{`
-        .rbc-time-header-content > .rbc-row {
-          min-height: 50px !important;
-        }
+        .rbc-time-header-content > .rbc-row { min-height: 50px !important; }
         .rbc-header {
-          padding: 8px 4px !important;
-          white-space: normal !important;
-          overflow: visible !important;
-          height: auto !important;
-          min-height: 50px !important;
+          padding: 8px 4px !important; white-space: normal !important; min-height: 50px !important;
+          color: ` + textSecondary + `;
+          background: ` + cardBg + `;
+          border-color: ` + borderColor + ` !important;
         }
-        .rbc-time-header {
-          min-height: 50px !important;
-        }
-        .rbc-allday-cell {
-          display: none !important;
-        }
-        .rbc-time-content > .rbc-row.rbc-allday-cell {
-          display: none !important;
-        }
+        .rbc-allday-cell { display: none !important; }
+        .rbc-month-view, .rbc-time-view { border-color: ` + borderColor + ` !important; background: ` + cardBg + `; }
+        .rbc-day-bg { background: ` + cardBg + `; }
+        .rbc-off-range-bg { background: ` + (isDark ? '#0E1523' : '#F8FAFC') + `; }
+        .rbc-today { background: ` + (isDark ? '#1E2845' : '#EFF6FF') + ` !important; }
+        .rbc-date-cell { color: ` + textSecondary + `; padding: 4px 8px; }
+        .rbc-date-cell.rbc-off-range { color: ` + textMuted + `; }
+        .rbc-month-row + .rbc-month-row { border-top: 1px solid ` + borderColor + `; }
+        .rbc-day-bg + .rbc-day-bg { border-left: 1px solid ` + borderColor + `; }
+        .rbc-time-content { border-color: ` + borderColor + ` !important; }
+        .rbc-time-slot { color: ` + textMuted + `; border-color: ` + borderColor + `; }
+        .rbc-timeslot-group { border-color: ` + borderColor + `; }
+        .rbc-current-time-indicator { background: #3B82F6; }
       `}</style>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-<PageHeader
+
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+        <PageHeader
           title="Event Calendar"
-          subtitle="View and manage events from all your organizations"
+          subtitle="View events from all your organizations"
           backTo={null}
           backLabel={null}
           actions={
-            <div className="flex items-center gap-3">
-              <Link 
-                to="/events"
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all font-medium"
-              >
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Link to="/events"
+                style={{ padding: '8px 16px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, fontWeight: 600, fontSize: '13px', textDecoration: 'none' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                 List View
               </Link>
-              <Link 
-                to="/calendar"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium"
-              >
+              <Link to="/calendar"
+                style={{ padding: '8px 16px', background: '#3B82F6', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 600, fontSize: '13px', textDecoration: 'none' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                 Calendar View
               </Link>
             </div>
           }
         />
 
-        {/* Organization Legend - Moved above calendar */}
-        {organizations.length > 0 && events.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Organizations</h3>
-            <div className="flex flex-wrap gap-3">
-              {organizations.map((org, index) => {
-                const color = orgColors[index % Object.keys(orgColors).length];
-                const eventCount = events.filter(e => e.organization_id === org.id).length;
-                return (
-                  <div
-                    key={org.id}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
-                  >
-                    <div
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: color }}
-                      aria-hidden="true"
-                    ></div>
-                    <span className="text-sm text-gray-700 font-medium">
-                      {org.name}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      ({eventCount} {eventCount === 1 ? 'event' : 'events'})
-                    </span>
-                  </div>
-                );
+        {loading ? (
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px', marginBottom: '16px', display: 'flex', gap: '12px' }}>
+              {[100, 130, 110].map(function(w, i) {
+                return <div key={i} style={{ width: w + 'px', height: '28px', background: isDark ? '#2A3550' : '#E2E8F0', borderRadius: '8px' }} className="animate-pulse" />;
               })}
             </div>
+            <CalendarSkeleton isDark={isDark} />
           </div>
-        )}
+        ) : error ? (
+          <div style={{ marginTop: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center' }} role="alert">
+            <div style={{ color: '#EF4444' }}><IconAlert cls="h-12 w-12" /></div>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: textPrimary }}>Could not load calendar</h2>
+            <p style={{ color: textSecondary, maxWidth: '360px' }}>{error}</p>
+            <button onClick={fetchOrganizationsAndEvents}
+              style={{ padding: '10px 24px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <>
+            {organizations.length > 0 && events.length > 0 && (
+              <div style={{ marginTop: '24px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Organizations</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                  {organizations.map(function(org, index) {
+                    var color = orgColors[index % Object.keys(orgColors).length];
+                    var count = events.filter(function(e) { return e.organization_id === org.id; }).length;
+                    return (
+                      <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: isDark ? '#0E1523' : '#F8FAFC', borderRadius: '8px', border: '1px solid ' + borderColor }}>
+                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color, flexShrink: 0 }} aria-hidden="true" />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: textPrimary }}>{org.name}</span>
+                        <span style={{ fontSize: '12px', color: textMuted }}>({count})</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-        {/* Calendar Container */}
-        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mt-6">
-          {events.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">📅</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No Events Yet
-              </h3>
-              <p className="text-gray-600 mb-6">
-                {organizations.length === 0
-                  ? "You're not a member of any organizations yet."
-                  : "Your organizations haven't created any events yet."}
-              </p>
-              {organizations.length > 0 && (
-                <button
-                  onClick={() => navigate('/organizations')}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all inline-flex items-center gap-2"
-                >
-                  <span>View Organizations</span>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+            <div style={{ marginTop: '16px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '20px' }}>
+              {events.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '64px 24px', textAlign: 'center' }}>
+                  <div style={{ color: textMuted }}><IconCalendar cls="h-14 w-14" /></div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 700, color: textPrimary }}>No events yet</h3>
+                  <p style={{ color: textSecondary, maxWidth: '360px', lineHeight: 1.6 }}>
+                    {organizations.length === 0
+                      ? "You're not a member of any organizations yet. Join one to see events here."
+                      : "Your organizations haven't created any events yet."}
+                  </p>
+                  {organizations.length > 0 && (
+                    <button onClick={function() { navigate('/organizations'); }}
+                      style={{ padding: '10px 24px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', marginTop: '8px' }}
+                      className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                      View Organizations
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ height: '680px' }}>
+                  <Calendar
+                    localizer={localizer}
+                    events={calendarEvents}
+                    startAccessor="start"
+                    endAccessor="end"
+                    view={view}
+                    onView={setView}
+                    date={date}
+                    onNavigate={setDate}
+                    onSelectEvent={handleSelectEvent}
+                    selectable
+                    eventPropGetter={eventStyleGetter}
+                    components={{ toolbar: CustomToolbar, event: CustomEvent }}
+                    popup
+                    tooltipAccessor={function(event) {
+                      return event.title + ' — ' + event.resource.organizationName + (event.resource.isRescheduled ? ' (Rescheduled)' : '');
+                    }}
+                    style={{ height: '100%' }}
+                  />
+                </div>
               )}
             </div>
-          ) : (
-<div style={{ height: '700px' }} className="week-view-fix">
-              <Calendar
-                localizer={localizer}
-                events={calendarEvents}
-                startAccessor="start"
-                endAccessor="end"
-                view={view}
-                onView={setView}
-                date={date}
-                onNavigate={setDate}
-                onSelectEvent={handleSelectEvent}
-                onSelectSlot={handleSelectSlot}
-                selectable
-                eventPropGetter={eventStyleGetter}
-                components={{
-                  toolbar: CustomToolbar
-                }}
-                popup
-                tooltipAccessor={(event) => {
-                  return `${event.title} - ${event.resource.organizationName}`;
-                }}
-                style={{ height: '100%' }}
-              />
-            </div>
-          )}
-        </div>
 
-        {/* Icon Legend */}
-        {events.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Event Icons</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🔄</span>
-                <span className="text-sm text-gray-700">Recurring Event</span>
+            {events.length > 0 && (
+              <div style={{ marginTop: '16px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Legend</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+                  {[
+                    { icon: <IconRecurring cls="h-4 w-4" />, label: 'Recurring'   },
+                    { icon: <IconPin       cls="h-4 w-4" />, label: 'In-Person'   },
+                    { icon: <IconVirtual   cls="h-4 w-4" />, label: 'Virtual'     },
+                    { icon: <IconHybrid    cls="h-4 w-4" />, label: 'Hybrid'      },
+                    { icon: <RescheduledBadge size={16} />,  label: 'Rescheduled' },
+                  ].map(function(item, i) {
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: textSecondary }}>{item.icon}</span>
+                        <span style={{ fontSize: '13px', color: textSecondary }}>{item.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📍</span>
-                <span className="text-sm text-gray-700">In-Person</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">💻</span>
-                <span className="text-sm text-gray-700">Virtual</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🌐</span>
-                <span className="text-sm text-gray-700">Hybrid</span>
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
-
       </div>
     </div>
   );

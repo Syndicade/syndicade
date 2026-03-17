@@ -90,7 +90,7 @@ function MultiCheckbox({ options, selected, onChange, legend }) {
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId }) {
+function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent }) {
   var [form, setForm] = useState({
     title:'', description:'', eventType:'in-person', isMultiDay:false,
     schedule:[{date:'',startTime:'',endTime:''}],
@@ -141,9 +141,81 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (form.visibility==='groups'&&organizationId) fetchGroups();
   }, [form.visibility, organizationId]);
 
-  useEffect(function(){
-    if (!isOpen) resetAll();
-  }, [isOpen]);
+useEffect(function(){
+    if (!isOpen) { resetAll(); return; }
+    if (!editingEvent) return;
+
+    // Parse start_time into date and time strings
+    function parseDT(isoStr) {
+      if (!isoStr) return { date: '', time: '' };
+      var d = new Date(isoStr);
+      var date = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      var time = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      return { date: date, time: time };
+    }
+
+    var start = parseDT(editingEvent.start_time);
+    var end   = parseDT(editingEvent.end_time);
+
+    // Determine event format
+    var fmt = 'in-person';
+    if (editingEvent.is_virtual && editingEvent.location === 'Virtual Event') fmt = 'virtual';
+    else if (editingEvent.is_virtual) fmt = 'hybrid';
+
+    // Determine if multi-day (different calendar dates)
+    var isMulti = start.date && end.date && start.date !== end.date;
+
+    var schedule = isMulti
+      ? [{ date: start.date, startTime: start.time, endTime: '' }, { date: end.date, startTime: '', endTime: end.time }]
+      : [{ date: start.date, startTime: start.time, endTime: end.time }];
+
+    setForm({
+      title:        editingEvent.title        || '',
+      description:  editingEvent.description  || '',
+      eventType:    fmt,
+      isMultiDay:   isMulti,
+      schedule:     schedule,
+      locationName: (fmt !== 'virtual' ? (editingEvent.full_address || editingEvent.location || '') : ''),
+      fullAddress:  editingEvent.full_address  || '',
+      city:         editingEvent.city          || '',
+      state:        editingEvent.state         || '',
+      zipCode:      editingEvent.zip_code      || '',
+      virtualLink:  editingEvent.virtual_link  || '',
+      locationLink: '',
+      maxAttendees: editingEvent.max_attendees ? String(editingEvent.max_attendees) : '',
+      visibility:   editingEvent.visibility    || 'members',
+      requireRSVP:  editingEvent.require_rsvp  || false,
+    });
+
+    // Advanced fields
+    setEventTypes(editingEvent.event_types   || []);
+    setAudience(  editingEvent.audience      || []);
+    setLanguages( editingEvent.languages     || []);
+    setVolunteerSignup( editingEvent.volunteer_signup  || false);
+    setDonationDropoff( editingEvent.donation_dropoff  || false);
+    setPublishToDiscovery(editingEvent.publish_to_discovery || false);
+    setPublishToWebsite(  editingEvent.publish_to_website   || false);
+
+    // Recurrence
+    if (editingEvent.is_recurring && editingEvent.recurrence_rule) {
+      var rr = editingEvent.recurrence_rule;
+      setIsRecurring(true);
+      setRecurrenceType(rr.type || 'monthly');
+      if (rr.type === 'monthly') {
+        setDayOfWeek(  rr.dayOfWeek   != null ? rr.dayOfWeek   : 1);
+        setWeekOfMonth(rr.weekOfMonth != null ? rr.weekOfMonth : 1);
+      } else if (rr.type === 'weekly') {
+        setWeeklyDays(rr.daysOfWeek || [1]);
+      } else if (rr.type === 'daily') {
+        setDailyInterval(rr.interval    || 1);
+        setWeekdaysOnly( rr.weekdaysOnly || false);
+      }
+      if (editingEvent.recurrence_end_date) {
+        var red = new Date(editingEvent.recurrence_end_date);
+        setRecurrenceEndDate(red.getFullYear() + '-' + String(red.getMonth()+1).padStart(2,'0') + '-' + String(red.getDate()).padStart(2,'0'));
+      }
+    }
+  }, [isOpen, editingEvent]);
 
   function resetAll() {
     setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false});
@@ -350,29 +422,39 @@ approval_status: approvalStatus,
        flier_url: flierUrl,
       };
 
-      var {data:newEvent,error:eventErr}=await supabase.from('events').insert([eventData]).select().single();
-      if (eventErr) throw eventErr;
+var dbResult;
+      if (editingEvent) {
+        var {data:updatedEvt, error:eventErr} = await supabase.from('events').update(eventData).eq('id', editingEvent.id).select().single();
+        if (eventErr) throw eventErr;
+        dbResult = updatedEvt;
+      } else {
+        var {data:newEvent, error:eventErr} = await supabase.from('events').insert([eventData]).select().single();
+        if (eventErr) throw eventErr;
+        dbResult = newEvent;
+      }
+      var savedEvent = dbResult;
 
-      var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
-      if (groupIdsToLink.length>0) {
-        var {error:grpErr}=await supabase.from('event_groups').insert(groupIdsToLink.map(function(gId){ return {event_id:newEvent.id,group_id:gId}; }));
+var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
+      if (!editingEvent && groupIdsToLink.length>0) {
+        var {error:grpErr}=await supabase.from('event_groups').insert(groupIdsToLink.map(function(gId){ return {event_id:savedEvent.id,group_id:gId}; }));
         if (grpErr) toast.error('Event created but group link failed.');
       }
 
-if (approvalStatus === 'pending') {
+      if (editingEvent) {
+        toast.success('"' + savedEvent.title + '" updated!');
+      } else if (approvalStatus === 'pending') {
         toast.success('Event submitted for admin approval.');
       } else {
-        toast.success('"' + newEvent.title + '" created!' + (isRecurring ? ' Recurring instances generated for 6 months.' : ''));
+        toast.success('"' + savedEvent.title + '" created!' + (isRecurring ? ' Recurring instances generated for 6 months.' : ''));
       }
-      if (onSuccess) onSuccess(newEvent);
+      if (onSuccess) onSuccess(savedEvent);
 
-if (approvalStatus === 'approved') {
+if (!editingEvent && approvalStatus === 'approved') {
         try {
           var notifRes = await notifyOrganizationMembers({organizationId, type:'event', title:'New Event', message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(), link:'/organizations/'+organizationId+'/events', excludeUserId:null});
           if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
         } catch(ne){ console.error('Notification failed:',ne); }
       }
-
       resetAll(); onClose();
     } catch(err) {
       console.error('CreateEvent error:',err);
@@ -392,7 +474,7 @@ if (approvalStatus === 'approved') {
         {/* Sticky header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div>
-            <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">Create New Event</h2>
+            <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">{editingEvent ? 'Edit Event' : 'Create New Event'}</h2>
             <p className="text-gray-500 text-sm mt-0.5">
               {organizationName}
               {groupId && <span className="ml-1 text-blue-600 font-medium">(linked to this group)</span>}
@@ -871,8 +953,8 @@ if (approvalStatus === 'approved') {
           <button type="button" onClick={handleSubmit} disabled={loading||geocoding}
             className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2">
             {loading||geocoding?(
-              <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{geocoding?'Finding location...':'Creating event...'}</>
-            ):'Create Event'}
+              <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{geocoding?'Finding location...':(editingEvent?'Saving...':'Creating event...')}</>
+            ):(editingEvent ? 'Save Changes' : 'Create Event')}
           </button>
         </div>
 

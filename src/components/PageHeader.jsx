@@ -1,116 +1,109 @@
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * PageHeader Component
- * 
- * Provides consistent page headers with back navigation and breadcrumbs
- * throughout the application.
- * 
+ *
  * Props:
- * - title: string (required) - Main page title
- * - subtitle: string (optional) - Subtitle/description
- * - icon: string (optional) - Emoji icon for the page
- * - backTo: string (optional) - Path to navigate back to
- * - backLabel: string (optional) - Label for back button (default: "Back")
- * - organizationName: string (optional) - Show organization context
- * - organizationId: string (optional) - Link back to org dashboard
- * - actions: ReactNode (optional) - Action buttons to display on right
- * 
- * @example
- * <PageHeader
- *   title="Announcements"
- *   subtitle="View and manage announcements"
- *   icon="📢"
- *   organizationName="SQAC"
- *   organizationId="123"
- *   backTo="/organizations/123"
- *   backLabel="Back to Dashboard"
- *   actions={<button>Create Announcement</button>}
- * />
+ * - title: string (required)
+ * - subtitle: string (optional)
+ * - icon: ReactNode (optional) — SVG icon node
+ * - backTo: string (optional)
+ * - backLabel: string (optional, default: "Back")
+ * - organizationName: string (optional)
+ * - organizationId: string (optional)
+ * - actions: ReactNode (optional)
  */
 function PageHeader({
   title,
   subtitle,
   icon,
   backTo,
-  backLabel = 'Back',
+  backLabel,
   organizationName,
   organizationId,
   actions
 }) {
-  const navigate = useNavigate();
+  var navigate = useNavigate();
+  var { isDark } = useTheme();
+  var resolvedBackLabel = backLabel || 'Back';
 
-  const handleBack = () => {
+  var bgColor      = isDark ? '#151B2D' : '#FFFFFF';
+  var borderColor  = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary  = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary= isDark ? '#CBD5E1'  : '#475569';
+  var textMuted    = isDark ? '#94A3B8'  : '#64748B';
+  var hoverBg      = isDark ? '#1E2845'  : '#F1F5F9';
+
+  function handleBack() {
     if (backTo) {
       navigate(backTo);
     } else {
-      navigate(-1); // Go back one page in history
+      navigate(-1);
     }
-  };
+  }
 
   return (
-    <div className="bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Back Button & Breadcrumbs */}
+    <div style={{ background: bgColor, borderBottom: '1px solid ' + borderColor }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px 16px' }}>
+
+        {/* Back button + breadcrumbs */}
         {(backTo || organizationName) && (
-          <div className="flex items-center gap-2 mb-4 text-sm">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '13px' }}>
             <button
               onClick={handleBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-lg px-2 py-1"
-              aria-label={backLabel}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                color: textSecondary, background: 'transparent', border: 'none',
+                fontWeight: 600, cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
+              }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-opacity-10"
+              onMouseEnter={function(e) { e.currentTarget.style.background = hoverBg; }}
+              onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
+              aria-label={resolvedBackLabel}
             >
-              <svg 
-                className="w-4 h-4" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M15 19l-7-7 7-7" 
-                />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              {backLabel}
+              {resolvedBackLabel}
             </button>
 
             {organizationName && (
               <>
-                <span className="text-gray-400">/</span>
+                <span style={{ color: textMuted }}>/</span>
                 {organizationId ? (
                   <button
-                    onClick={() => navigate(`/organizations/${organizationId}`)}
-                    className="text-blue-600 hover:text-blue-800 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded px-1"
+                    onClick={function() { navigate('/organizations/' + organizationId); }}
+                    style={{ color: '#3B82F6', background: 'transparent', border: 'none', fontWeight: 600, cursor: 'pointer', padding: '2px 4px', borderRadius: '4px' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     {organizationName}
                   </button>
                 ) : (
-                  <span className="text-gray-600 font-medium">{organizationName}</span>
+                  <span style={{ color: textSecondary, fontWeight: 600 }}>{organizationName}</span>
                 )}
-                <span className="text-gray-400">/</span>
-                <span className="text-gray-900 font-semibold">{title}</span>
+                <span style={{ color: textMuted }}>/</span>
+                <span style={{ color: textPrimary, fontWeight: 700 }}>{title}</span>
               </>
             )}
           </div>
         )}
 
-        {/* Title & Actions */}
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {icon && (
-                <span className="text-4xl" role="img" aria-label={`${title} icon`}>
+                <span style={{ color: '#F5B731', flexShrink: 0 }} aria-hidden="true">
                   {icon}
                 </span>
               )}
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 truncate">
+                <h1 style={{ fontSize: '26px', fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.2 }}>
                   {title}
                 </h1>
                 {subtitle && (
-                  <p className="mt-1 text-gray-600">
+                  <p style={{ marginTop: '4px', color: textSecondary, fontSize: '14px', lineHeight: 1.5 }}>
                     {subtitle}
                   </p>
                 )}
@@ -119,11 +112,12 @@ function PageHeader({
           </div>
 
           {actions && (
-            <div className="ml-4 flex-shrink-0 flex items-center gap-3">
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
               {actions}
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
