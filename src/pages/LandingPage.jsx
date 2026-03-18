@@ -1,104 +1,187 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 
-function Icon({ path, className = 'h-6 w-6', strokeWidth = 2 }) {
+// ─── Icon ────────────────────────────────────────────────────────────────────
+function Icon({ path, className, strokeWidth, style }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className || 'h-5 w-5'}
+      style={style || {}}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
       {Array.isArray(path)
-        ? path.map((d, i) => <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={d} />)
-        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={path} />}
+        ? path.map(function(d, i) {
+            return (
+              <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={d} />
+            );
+          })
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={path} />}
     </svg>
   );
 }
 
-const ICONS = {
-  menu:      'M4 6h16M4 12h16M4 18h16',
-  x:         'M6 18L18 6M6 6l12 12',
-  check:     'M5 13l4 4L19 7',
-  arrow:     'M13 7l5 5m0 0l-5 5m5-5H6',
-  dashboard: ['M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
-  calendar:  'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  globe:     ['M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
-  users:     'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-  handshake: ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0'],
-  bolt:      ['M13 10V3L4 14h7v7l9-11h-7z'],
-  shield:    ['M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'],
-  device:    ['M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z'],
-  lock:      ['M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
-  clock:     ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
-  megaphone: ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
-  warning:   ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
-  tools:     ['M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', 'M15 12a3 3 0 11-6 0 3 3 0 016 0z'],
-  chevDown:  'M19 9l-7 7-7-7',
-  mail:      ['M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+// ─── Mascot ──────────────────────────────────────────────────────────────────
+function MascotPair({ width, height }) {
+  return (
+    <svg
+      width={width || 200}
+      height={height || 140}
+      viewBox="0 0 200 140"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Shadows */}
+      <ellipse cx="48" cy="128" rx="30" ry="6" fill="#000000" opacity="0.10" />
+      <ellipse cx="152" cy="128" rx="30" ry="6" fill="#000000" opacity="0.10" />
+
+      {/* === Yellow Post-it character === */}
+      <rect x="8" y="10" width="68" height="82" rx="7" fill="#F5B731" />
+      <path d="M60 10 L76 10 L76 26 Z" fill="#B8750A" opacity="0.25" />
+      <circle cx="32" cy="38" r="6" fill="#111827" />
+      <circle cx="56" cy="38" r="6" fill="#111827" />
+      <circle cx="34.5" cy="36" r="2.5" fill="white" />
+      <circle cx="58.5" cy="36" r="2.5" fill="white" />
+      <path d="M30 54 Q44 65 58 54" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
+      {/* Left arm */}
+      <rect x="-4" y="54" width="16" height="11" rx="5.5" fill="#111827" />
+      {/* Right arm toward blue */}
+      <rect x="72" y="54" width="34" height="11" rx="5.5" fill="#111827" />
+      {/* Legs */}
+      <rect x="14" y="90" width="16" height="28" rx="8" fill="#111827" />
+      <rect x="54" y="90" width="16" height="28" rx="8" fill="#111827" />
+
+      {/* === Blue Post-it character === */}
+      <rect x="124" y="10" width="68" height="82" rx="7" fill="#3B82F6" />
+      <path d="M176 10 L192 10 L192 26 Z" fill="#1E40AF" opacity="0.25" />
+      <circle cx="144" cy="38" r="6" fill="#111827" />
+      <circle cx="168" cy="38" r="6" fill="#111827" />
+      <circle cx="146.5" cy="36" r="2.5" fill="white" />
+      <circle cx="170.5" cy="36" r="2.5" fill="white" />
+      <path d="M142 54 Q156 65 170 54" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
+      {/* Left arm toward yellow */}
+      <rect x="94" y="54" width="34" height="11" rx="5.5" fill="#111827" />
+      {/* Right arm */}
+      <rect x="188" y="54" width="16" height="11" rx="5.5" fill="#111827" />
+      {/* Legs */}
+      <rect x="130" y="90" width="16" height="28" rx="8" fill="#111827" />
+      <rect x="170" y="90" width="16" height="28" rx="8" fill="#111827" />
+
+      {/* Clasped hands overlap zone */}
+      <rect x="100" y="54" width="16" height="11" rx="5.5" fill="#111827" />
+      <rect x="101" y="55" width="7" height="9" rx="3.5" fill="#F5B731" opacity="0.8" />
+      <rect x="108" y="55" width="7" height="9" rx="3.5" fill="#3B82F6" opacity="0.8" />
+    </svg>
+  );
+}
+
+// ─── Icons map ───────────────────────────────────────────────────────────────
+var ICONS = {
+  menu:       'M4 6h16M4 12h16M4 18h16',
+  x:          'M6 18L18 6M6 6l12 12',
+  check:      'M5 13l4 4L19 7',
+  arrow:      'M13 7l5 5m0 0l-5 5m5-5H6',
+  chevDown:   'M19 9l-7 7-7-7',
+  sun:        'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 110 8 4 4 0 010-8z',
+  moon:       'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z',
+  megaphone:  ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
+  calendar:   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  users:      'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+  document:   ['M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
+  chart:      ['M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
+  clipboard:  ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+  chat:       ['M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'],
+  globe:      ['M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
+  shield:     ['M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'],
+  tools:      ['M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', 'M15 12a3 3 0 11-6 0 3 3 0 016 0z'],
+  warning:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
+  bolt:       ['M13 10V3L4 14h7v7l9-11h-7z'],
+  lock:       ['M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
+  device:     ['M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z'],
+  clock:      ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
+  mail:       ['M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+  dashboard:  ['M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
 };
 
-const FEATURES = [
-  { iconKey: 'dashboard', color: 'text-blue-400',   bg: 'bg-blue-900/40',   label: 'Unified Dashboard',    desc: 'See all your organizations, events, and updates in one place.' },
-  { iconKey: 'calendar',  color: 'text-emerald-400', bg: 'bg-emerald-900/40', label: 'Combined Calendars',   desc: 'Never miss an event across all the organizations you belong to.' },
-  { iconKey: 'globe',     color: 'text-violet-400',  bg: 'bg-violet-900/40',  label: 'Public Website',       desc: 'A polished public page for your org — no developer needed.' },
-  { iconKey: 'handshake', color: 'text-amber-400',   bg: 'bg-amber-900/40',   label: 'Community Discovery',  desc: 'Members find and connect with other local organizations.' },
+// ─── Data ────────────────────────────────────────────────────────────────────
+var FEATURES = [
+  { iconKey: 'megaphone', color: '#F5B731', bg: 'rgba(245,183,49,0.12)',  label: 'Announcements', desc: 'Pinned updates visible to all members instantly.' },
+  { iconKey: 'calendar',  color: '#3B82F6', bg: 'rgba(59,130,246,0.12)', label: 'Events',         desc: 'Post and manage events with RSVP tracking.' },
+  { iconKey: 'users',     color: '#22C55E', bg: 'rgba(34,197,94,0.12)',   label: 'Volunteers',     desc: 'Sign-up sheets with real-time spot counts.' },
+  { iconKey: 'document',  color: '#F97316', bg: 'rgba(249,115,22,0.12)', label: 'Documents',      desc: 'Meeting minutes, budgets, and shared resources.' },
+  { iconKey: 'chart',     color: '#EC4899', bg: 'rgba(236,72,153,0.12)', label: 'Polls',          desc: 'Make decisions together. Results in real time.' },
+  { iconKey: 'clipboard', color: '#8B5CF6', bg: 'rgba(139,92,246,0.12)', label: 'Sign-Up Forms',  desc: 'Potluck lists, time slots, committee sign-ups.' },
 ];
 
-const PAIN_POINTS = [
-  { iconKey: 'tools',     label: 'Too many tools',    desc: 'Email, spreadsheets, Facebook groups, separate websites — scattered everywhere.' },
-  { iconKey: 'warning',   label: 'Missed events',     desc: 'Updates buried in inboxes, members showing up to the wrong place.' },
-  { iconKey: 'globe',     label: 'Outdated websites', desc: 'No one has time to update the website. It shows.' },
-  { iconKey: 'megaphone', label: 'Volunteer burnout', desc: 'Coordinators spend hours on logistics instead of mission work.' },
-  { iconKey: 'users',     label: 'No coordination',   desc: 'Organizations silo themselves when they could be helping each other.' },
+var PAIN_POINTS = [
+  { iconKey: 'tools',    label: 'Too many tools',    desc: 'Email, spreadsheets, Facebook groups, separate websites — scattered everywhere.' },
+  { iconKey: 'warning',  label: 'Missed events',     desc: 'Updates buried in inboxes, members showing up to the wrong place.' },
+  { iconKey: 'globe',    label: 'Outdated websites', desc: 'No one has time to update the website. It shows.' },
+  { iconKey: 'megaphone',label: 'Volunteer burnout', desc: 'Coordinators spend hours on logistics instead of mission work.' },
+  { iconKey: 'users',    label: 'No coordination',   desc: 'Organizations silo themselves when they could be helping each other.' },
 ];
 
-const STEPS = [
+var STEPS = [
   { n: '1', label: 'Create your organization', desc: 'Set up your profile in minutes. No tech skills required.' },
-  { n: '2', label: 'Add events & invite members', desc: 'Build your calendar and send invitations from one dashboard.' },
+  { n: '2', label: 'Invite members and post events', desc: 'Build your calendar and send invitations from one dashboard.' },
   { n: '3', label: 'Everything flows together', desc: 'Members see unified updates across every org they belong to.' },
 ];
 
-const PRICING = [
+var PRICING_PREVIEW = [
   {
-    name: 'Free', price: '$0', period: 'forever', highlight: false,
-    features: ['1 organization', 'Up to 25 members', 'Event calendar', 'Announcements', 'Public page'],
-    cta: 'Get Started Free',
+    name: 'Starter', price: '$14.99', period: '/mo', highlight: false,
+    members: '50 members', storage: '5 GB',
+    tagline: 'Everything you need to get started.',
   },
   {
-    name: 'Pro', price: '$12', period: 'per month', highlight: true,
-    features: ['3 organizations', 'Up to 150 members', 'Everything in Free', 'Documents library', 'Polls & surveys', 'Analytics'],
-    cta: 'Start Pro Trial',
+    name: 'Growth', price: '$29', period: '/mo', highlight: true,
+    members: '150 members', storage: '15 GB',
+    tagline: 'Payments, analytics, and email notifications.',
   },
   {
-    name: 'Growth', price: '$29', period: 'per month', highlight: false,
-    features: ['Unlimited organizations', 'Unlimited members', 'Everything in Pro', 'Priority support', 'Custom domain', 'Email campaigns'],
-    cta: 'Start Growth Trial',
+    name: 'Pro', price: '$59', period: '/mo', highlight: false,
+    members: '300 members', storage: '50 GB',
+    tagline: 'Custom domain, no branding, email marketing.',
   },
 ];
 
-const FAQS = [
-  { q: 'Is it really free to start?',                    a: 'Yes. The Free plan is free forever with no credit card required. You can upgrade any time as your organization grows.' },
-  { q: 'Can members belong to multiple organizations?',  a: 'Absolutely — that is one of our core features. Members get a unified dashboard showing updates from every organization they belong to.' },
-  { q: 'Do we need technical skills?',                   a: 'None at all. If you can send an email, you can set up Syndicade. Most organizations are fully running within 10 minutes.' },
-  { q: 'Is our data secure?',                            a: 'Yes. All data is encrypted in transit and at rest. We use Supabase infrastructure with enterprise-grade security and role-level access controls.' },
-  { q: 'Can we use our own domain?',                     a: 'Yes on the Growth plan. Free and Pro plans get a clean syndicade.com/org/your-name public URL.' },
+var FAQS = [
+  { q: 'Is there a free trial?', a: 'Yes. All plans include a 1-month free trial with no credit card required. Verified 501(c)(3) nonprofits get an extra free month stacked on top.' },
+  { q: 'Can members belong to multiple organizations?', a: 'Absolutely — that is one of our core features. Members get a unified dashboard showing updates from every organization they belong to, in one place.' },
+  { q: 'Do we need technical skills?', a: 'None at all. If you can send an email, you can set up Syndicade. Most organizations are fully running within 10 minutes.' },
+  { q: 'Do you take a cut of payments or donations?', a: 'Never. We pass through Stripe fees only and take 0% of your dues, ticket sales, or donations. Payment processing is available on the Growth plan and above.' },
+  { q: 'Is our data secure?', a: 'Yes. All data is encrypted in transit and at rest. We use Supabase infrastructure with enterprise-grade security and role-level access controls.' },
+  { q: 'Can we use our own domain?', a: 'Yes on the Pro plan ($59/mo). Starter and Growth plans get a clean orgname.syndicade.com subdomain.' },
 ];
 
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function LandingPage() {
-  const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [openFaq, setOpenFaq]               = useState(null);
-  const [contactForm, setContactForm]       = useState({ name: '', email: '', organization: '', message: '' });
-  const [contactStatus, setContactStatus]   = useState(null);
-  const [contactLoading, setContactLoading] = useState(false);
-  const [scrolled, setScrolled]             = useState(false);
+  var navigate = useNavigate();
+  var { isDark, toggle } = useTheme();
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+  var [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  var [openFaq, setOpenFaq]               = useState(null);
+  var [contactForm, setContactForm]       = useState({ name: '', email: '', organization: '', message: '' });
+  var [contactStatus, setContactStatus]   = useState(null);
+  var [contactLoading, setContactLoading] = useState(false);
+  var [scrolled, setScrolled]             = useState(false);
+
+  useEffect(function() {
+    var onScroll = function() { setScrolled(window.scrollY > 20); };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return function() { window.removeEventListener('scroll', onScroll); };
   }, []);
 
   function scrollTo(id) {
     setMobileMenuOpen(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
   }
 
   async function handleContactSubmit(e) {
@@ -106,122 +189,170 @@ export default function LandingPage() {
     if (!contactForm.name || !contactForm.email || !contactForm.message) return;
     try {
       setContactLoading(true);
-      const { error } = await supabase.from('marketing_contacts').insert([contactForm]);
-      if (error) throw error;
+      var result = await supabase.from('marketing_contacts').insert([contactForm]);
+      if (result.error) throw result.error;
       setContactStatus('success');
       setContactForm({ name: '', email: '', organization: '', message: '' });
-    } catch {
+    } catch (_) {
       setContactStatus('error');
     } finally {
       setContactLoading(false);
     }
   }
 
-  /* ── ADA-safe colour tokens ──────────────────────────────────────────────
-     All text colours verified ≥ 4.5:1 contrast on their backgrounds.
-     #94a3b8 (slate-400) on #0d1526 = 4.6:1  ✓
-     #cbd5e1 (slate-300) on #0d1526 = 8.9:1  ✓
-     #f8fafc (slate-50)  on #0d1526 = 18.9:1 ✓
-  ─────────────────────────────────────────────────────────────────────── */
+  // ── Theme tokens ──────────────────────────────────────────────────────────
+  var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
+  var sectionAltBg  = isDark ? '#151B2D' : '#FFFFFF';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var inputBg       = isDark ? '#151B2D'  : '#F8FAFC';
+  var navBg         = scrolled ? (isDark ? 'rgba(14,21,35,0.96)' : 'rgba(248,250,252,0.96)') : 'transparent';
+  var navBorder     = scrolled ? borderColor : 'transparent';
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: '#0d1526', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div style={{ background: pageBg, minHeight: '100vh', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: textPrimary, transition: 'background 0.2s, color 0.2s' }}>
 
       {/* Skip link */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-400 focus:text-slate-900 focus:rounded-lg focus:font-semibold focus:outline-none"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold focus:outline-none"
+        style={{ background: '#F5B731', color: '#111827' }}
       >
         Skip to main content
       </a>
 
-      {/* ── Sticky Nav ──────────────────────────────────────────────────────── */}
+      {/* ── Nav ───────────────────────────────────────────────────────────── */}
       <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'backdrop-blur-md border-b border-white/10'
-            : 'bg-transparent'
-        }`}
-        style={scrolled ? { background: 'rgba(13,21,38,0.95)' } : {}}
         role="banner"
+        style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+          background: navBg, borderBottom: '1px solid ' + navBorder,
+          backdropFilter: scrolled ? 'blur(12px)' : 'none',
+          transition: 'all 0.3s',
+        }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
 
+          {/* Logo */}
+          <button
+            onClick={function() { window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+            aria-label="Syndicade — scroll to top"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <MascotPair width={36} height={28} />
+            <span style={{ fontSize: '22px', fontWeight: 800, color: textPrimary }}>
+              Syndi<span style={{ color: '#F5B731' }}>cade</span>
+            </span>
+          </button>
+
+          {/* Desktop nav */}
+          <nav className="hidden md:flex" style={{ alignItems: 'center', gap: '24px' }} aria-label="Main navigation">
+            {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
+              return (
+                <button
+                  key={item[0]}
+                  onClick={function() { scrollTo(item[0]); }}
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                  style={{ fontSize: '14px', fontWeight: 500, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
+                  onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }}
+                  onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}
+                >
+                  {item[1]}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right actions */}
+          <div className="hidden md:flex" style={{ alignItems: 'center', gap: '12px' }}>
+            {/* Theme toggle */}
             <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="text-2xl font-black tracking-tight text-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 rounded"
-              aria-label="Syndicade — scroll to top"
+              onClick={toggle}
+              role="switch"
+              aria-checked={!isDark}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="focus:outline-none focus:ring-2 focus:ring-amber-400"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '6px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+                border: '1px solid ' + borderColor, background: cardBg, color: textSecondary,
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
             >
-              Syndi<span className="text-amber-400">cade</span>
+              <Icon path={isDark ? ICONS.moon : ICONS.sun} className="h-3.5 w-3.5" />
+              {isDark ? 'Dark' : 'Light'}
             </button>
 
-            <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">
-              {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => scrollTo(id)}
-                  className="text-sm font-medium text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-1"
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
-
-            <div className="hidden md:flex items-center gap-3">
-              <button
-                onClick={() => navigate('/login')}
-                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => navigate('/login')}
-                className="px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg shadow-blue-900/50"
-              >
-                Start Free
-              </button>
-            </div>
+            <button
+              onClick={function() { navigate('/login'); }}
+              className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
+              style={{ fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', transition: 'color 0.15s' }}
+              onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }}
+              onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}
+            >
+              Log In
+            </button>
 
             <button
-              className="md:hidden p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-400"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-expanded={mobileMenuOpen}
-              aria-label="Toggle mobile menu"
+              onClick={function() { navigate('/login'); }}
+              className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-xl"
+              style={{ fontSize: '14px', fontWeight: 700, color: isDark ? '#111827' : '#FFFFFF', background: '#F5B731', border: 'none', cursor: 'pointer', padding: '9px 20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(245,183,49,0.4)', transition: 'background 0.15s' }}
+              onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
+              onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
             >
-              <Icon path={mobileMenuOpen ? ICONS.x : ICONS.menu} className="h-5 w-5" />
+              Get Started Free
             </button>
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
+            onClick={function() { setMobileMenuOpen(!mobileMenuOpen); }}
+            aria-expanded={mobileMenuOpen}
+            aria-label="Toggle mobile menu"
+            style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', color: textSecondary }}
+          >
+            <Icon path={mobileMenuOpen ? ICONS.x : ICONS.menu} className="h-5 w-5" />
+          </button>
         </div>
 
+        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div
-            className="md:hidden border-t border-white/10 px-4 pb-4 pt-2"
-            style={{ background: 'rgba(13,21,38,0.98)' }}
             role="navigation"
             aria-label="Mobile navigation"
+            style={{ background: cardBg, borderTop: '1px solid ' + borderColor, padding: '12px 24px 20px' }}
           >
-            {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(([id, label]) => (
+            {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
+              return (
+                <button
+                  key={item[0]}
+                  onClick={function() { scrollTo(item[0]); }}
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: textSecondary, background: 'none', border: 'none', borderBottom: '1px solid ' + borderColor, cursor: 'pointer' }}
+                >
+                  {item[1]}
+                </button>
+              );
+            })}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button
-                key={id}
-                onClick={() => scrollTo(id)}
-                className="block w-full text-left py-3 text-sm font-medium text-slate-300 hover:text-white border-b border-white/10 focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
-              >
-                {label}
-              </button>
-            ))}
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => navigate('/login')}
-                className="flex-1 py-2.5 text-sm font-semibold border border-white/20 rounded-lg text-slate-300 hover:text-white hover:border-white/40 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
+                style={{ flex: 1, padding: '10px', fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: '1px solid ' + borderColor, borderRadius: '10px', cursor: 'pointer' }}
               >
                 Log In
               </button>
               <button
-                onClick={() => navigate('/login')}
-                className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
+                style={{ flex: 1, padding: '10px', fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', borderRadius: '10px', cursor: 'pointer' }}
               >
-                Start Free
+                Get Started Free
               </button>
             </div>
           </div>
@@ -232,286 +363,425 @@ export default function LandingPage() {
 
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <section
-          className="relative pt-28 pb-20 md:pt-36 md:pb-28 overflow-hidden"
           aria-labelledby="hero-heading"
+          style={{ paddingTop: '96px', paddingBottom: '64px', position: 'relative', overflow: 'hidden' }}
         >
-          {/* Decorative blobs — aria-hidden, contrast-irrelevant */}
-          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            <div className="absolute top-24 left-1/4 w-80 h-80 rounded-full filter blur-3xl opacity-20" style={{ background: '#1d4ed8' }} />
-            <div className="absolute bottom-10 right-1/4 w-80 h-80 rounded-full filter blur-3xl opacity-15" style={{ background: '#7c3aed' }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full filter blur-3xl opacity-10" style={{ background: '#f59e0b' }} />
+          {/* Background blobs */}
+          <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: '80px', left: '20%', width: '400px', height: '400px', borderRadius: '50%', filter: 'blur(80px)', opacity: isDark ? 0.15 : 0.08, background: '#3B82F6' }} />
+            <div style={{ position: 'absolute', bottom: '40px', right: '15%', width: '300px', height: '300px', borderRadius: '50%', filter: 'blur(60px)', opacity: isDark ? 0.10 : 0.06, background: '#F5B731' }} />
           </div>
 
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '48px', alignItems: 'center' }}>
+
+              {/* Left column */}
               <div>
-                <div className="inline-flex items-center gap-2 border text-xs font-semibold px-3 py-1.5 rounded-full mb-6" style={{ background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
-                  Built for nonprofits and community groups
+                {/* Mascot + badge row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                  <MascotPair width={80} height={56} />
+                  <div
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 14px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+                      background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', color: '#F5B731',
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F5B731', display: 'inline-block', animation: 'pulse 2s infinite' }}
+                    />
+                    Free for community organizations
+                  </div>
                 </div>
 
-                <h1 id="hero-heading" className="text-5xl md:text-6xl font-black text-white leading-tight tracking-tight mb-6">
-                  Where Community<br />
-                  <span className="text-amber-400">Work Connects.</span>
+                <h1
+                  id="hero-heading"
+                  style={{ fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, lineHeight: 1.15, marginBottom: '20px', color: textPrimary }}
+                >
+                  Your community's<br />
+                  <span style={{ color: '#F5B731' }}>bulletin board,</span><br />
+                  brought online.
                 </h1>
 
-                <p className="text-lg text-slate-300 leading-relaxed mb-8 max-w-lg">
-                  Syndicade brings websites, members, events, and communication into one unified system — so your community can focus on its mission, not its software.
+                <p style={{ fontSize: '17px', color: textSecondary, lineHeight: 1.7, marginBottom: '32px', maxWidth: '460px' }}>
+                  Before the internet, communities organized on bulletin boards. Syndicade brings that board online — without the corporate software or the ads.
                 </p>
 
-                <div className="flex flex-wrap gap-4">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
                   <button
-                    onClick={() => navigate('/login')}
-                    className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/60 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    onClick={function() { navigate('/login'); }}
+                    className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      padding: '13px 28px', fontSize: '15px', fontWeight: 700,
+                      background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px',
+                      cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s',
+                    }}
+                    onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
+                    onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
                   >
-                    Start Free
+                    Pin Your Org Free
                     <Icon path={ICONS.arrow} className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => scrollTo('how-it-works')}
-                    className="inline-flex items-center gap-2 px-7 py-3.5 border font-bold rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
-                    style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#cbd5e1' }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff'; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#cbd5e1'; }}
+                    onClick={function() { scrollTo('how-it-works'); }}
+                    className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      padding: '13px 24px', fontSize: '15px', fontWeight: 600,
+                      background: 'none', color: textSecondary,
+                      border: '1px solid ' + borderColor, borderRadius: '12px',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                    onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.borderColor = isDark ? '#94A3B8' : '#94A3B8'; }}
+                    onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.borderColor = borderColor; }}
                   >
                     See How It Works
                   </button>
                 </div>
 
-                <p className="mt-5 text-sm text-slate-400">Free forever plan available. No credit card required.</p>
+                <p style={{ fontSize: '12px', color: textMuted }}>
+                  No credit card&nbsp;&middot;&nbsp;No ads&nbsp;&middot;&nbsp;Funded by member organizations
+                </p>
               </div>
 
-              {/* Dashboard preview */}
-              <div className="relative" aria-hidden="true">
-                <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style={{ background: '#111d35' }}>
-                  <div className="px-4 py-3 flex items-center gap-2 border-b border-white/10" style={{ background: '#0a1220' }}>
-                    <span className="w-3 h-3 rounded-full bg-red-400" />
-                    <span className="w-3 h-3 rounded-full bg-yellow-400" />
-                    <span className="w-3 h-3 rounded-full bg-green-400" />
-                    <span className="ml-4 text-xs text-slate-500 font-mono">syndicade.com/dashboard</span>
+              {/* Right column — bulletin board mockup */}
+              <div aria-hidden="true" style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    background: isDark ? '#111827' : '#1A2035',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    border: '1px solid ' + (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.12)'),
+                    boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  {/* Browser chrome */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#EF4444' }} />
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#F5B731' }} />
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22C55E' }} />
+                    <span style={{ marginLeft: '10px', fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>syndicade.com/board</span>
                   </div>
-                  <div className="p-5" style={{ background: '#0d1526' }}>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      {[['24','Members','text-blue-400','bg-blue-900/40'],['8','Events','text-emerald-400','bg-emerald-900/40'],['3','Orgs','text-violet-400','bg-violet-900/40']].map(([val, label, tc, bg]) => (
-                        <div key={label} className={`rounded-lg p-3 text-center ${bg} border border-white/10`}>
-                          <div className={`text-xl font-black ${tc}`}>{val}</div>
-                          <div className="text-xs text-slate-400 font-medium">{label}</div>
-                        </div>
-                      ))}
-                    </div>
+
+                  {/* Post-it grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                     {[
-                      { dot: 'bg-blue-500', name: 'Toledo Food Bank', w1: 'w-3/4', w2: 'w-1/2', c1: 'bg-blue-800', c2: 'bg-white/10' },
-                      { dot: 'bg-violet-500', name: 'Community Garden Club', w1: 'w-2/3', w2: 'w-5/6', c1: 'bg-violet-800', c2: 'bg-white/10' },
-                    ].map(item => (
-                      <div key={item.name} className="rounded-lg border border-white/10 p-3 mb-3" style={{ background: '#111d35' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-2 h-2 rounded-full ${item.dot}`} />
-                          <span className="text-xs font-semibold text-slate-200">{item.name}</span>
+                      { bg: '#FEF9C3', tack: '#D4A017', badgeBg: '#22C55E', badgeText: 'white', category: 'EVENT',     title: 'Spring Meeting — April 8 at 6pm' },
+                      { bg: '#DBEAFE', tack: '#3B82F6', badgeBg: '#3B82F6', badgeText: 'white', category: 'VOLUNTEER', title: '10 volunteers needed for Food Drive' },
+                      { bg: '#DCFCE7', tack: '#16A34A', badgeBg: '#22C55E', badgeText: 'white', category: 'DOCUMENT',  title: 'Q1 Budget now in Documents' },
+                      { bg: '#FCE7F3', tack: '#DB2777', badgeBg: '#EC4899', badgeText: 'white', category: 'POLL',       title: 'Vote: Summer Gala theme closes Sunday' },
+                    ].map(function(card) {
+                      return (
+                        <div
+                          key={card.category}
+                          style={{
+                            background: card.bg, borderRadius: '4px', padding: '12px',
+                            position: 'relative', marginTop: '10px',
+                            backgroundImage: 'repeating-linear-gradient(transparent,transparent 21px,rgba(0,0,0,0.05) 22px)',
+                            backgroundPositionY: '28px',
+                          }}
+                        >
+                          {/* Tack */}
+                          <div
+                            style={{
+                              width: '12px', height: '12px', borderRadius: '50%',
+                              position: 'absolute', top: '-6px', left: '50%', transform: 'translateX(-50%)',
+                              background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.5) 0%, ' + card.tack + ' 52%, rgba(0,0,0,0.2) 100%)',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                            }}
+                          />
+                          <span
+                            style={{
+                              display: 'inline-block', padding: '2px 7px', borderRadius: '3px',
+                              fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                              marginBottom: '7px', background: card.badgeBg, color: card.badgeText,
+                            }}
+                          >
+                            {card.category}
+                          </span>
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#111827', lineHeight: 1.4, fontFamily: 'Georgia, serif' }}>
+                            {card.title}
+                          </div>
                         </div>
-                        <div className={`h-2 ${item.c1} rounded ${item.w1} mb-1.5`} />
-                        <div className={`h-2 ${item.c2} rounded ${item.w2}`} />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-                <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-900/60">
-                  <Icon path={ICONS.users} className="h-10 w-10 text-white" strokeWidth={1.5} />
+
+                  {/* Org name footer */}
+                  <div style={{ marginTop: '14px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '3px', color: '#64748B', textTransform: 'uppercase' }}>
+                    Riverside Neighborhood Assoc.
+                  </div>
                 </div>
               </div>
+
             </div>
           </div>
         </section>
 
-        {/* ── Trust strip ──────────────────────────────────────────────────── */}
-        <div className="border-y border-white/10 py-4" style={{ background: 'rgba(255,255,255,0.03)' }} aria-hidden="false">
-          <div className="max-w-4xl mx-auto px-4 flex flex-wrap justify-center gap-8">
-            {['No credit card required', 'Free for small orgs', 'Setup in under 5 minutes'].map(t => (
-              <div key={t} className="flex items-center gap-2 text-sm text-slate-300">
-                <Icon path={ICONS.check} className="h-4 w-4 text-emerald-400 flex-shrink-0" strokeWidth={3} />
-                {t}
-              </div>
-            ))}
+        {/* ── Stats bar ─────────────────────────────────────────────────────── */}
+        <div
+          style={{
+            borderTop: '1px solid ' + borderColor, borderBottom: '1px solid ' + borderColor,
+            background: sectionAltBg, padding: '20px 24px',
+          }}
+        >
+          <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0' }}>
+            {[
+              { val: '$14.99/mo', label: 'Starting price' },
+              { val: '1 month',   label: 'Free trial, all plans' },
+              { val: '0%',        label: 'Platform fees on payments' },
+              { val: '0',         label: 'Ads. Ever.' },
+            ].map(function(stat, i) {
+              return (
+                <div
+                  key={stat.label}
+                  style={{
+                    flex: '1 1 150px', textAlign: 'center', padding: '12px 24px',
+                    borderRight: i < 3 ? ('1px solid ' + borderColor) : 'none',
+                  }}
+                >
+                  <div style={{ fontSize: '26px', fontWeight: 800, color: '#F5B731', lineHeight: 1 }}>{stat.val}</div>
+                  <div style={{ fontSize: '12px', color: textMuted, marginTop: '4px' }}>{stat.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── Pain Points ──────────────────────────────────────────────────── */}
-        <section className="py-16" style={{ background: '#0a1220' }} aria-labelledby="pain-heading">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p id="pain-heading" className="text-center text-slate-400 text-sm font-semibold uppercase tracking-widest mb-10">Sound familiar?</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {PAIN_POINTS.map(p => (
-                <div key={p.label} className="rounded-xl p-5 border border-white/10" style={{ background: '#111d35' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon path={ICONS[p.iconKey]} className="h-4 w-4 text-red-400 flex-shrink-0" />
-                    <span className="text-white text-sm font-bold">{p.label}</span>
+        {/* ── Pain Points ───────────────────────────────────────────────────── */}
+        <section aria-labelledby="pain-heading" style={{ padding: '64px 24px', background: pageBg }}>
+          <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+            <p
+              id="pain-heading"
+              style={{ textAlign: 'center', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: textMuted, marginBottom: '40px' }}
+            >
+              Sound familiar?
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+              {PAIN_POINTS.map(function(p) {
+                return (
+                  <div
+                    key={p.label}
+                    style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '20px' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Icon path={ICONS[p.iconKey]} className="h-4 w-4" style={{ color: '#EF4444', flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: textPrimary }}>{p.label}</span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: textMuted, lineHeight: 1.6 }}>{p.desc}</p>
                   </div>
-                  <p className="text-slate-400 text-xs leading-relaxed">{p.desc}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <p className="text-center text-slate-400 mt-10 text-base max-w-xl mx-auto">
+            <p style={{ textAlign: 'center', marginTop: '40px', fontSize: '16px', color: textSecondary, maxWidth: '500px', margin: '40px auto 0' }}>
               Community work is hard enough.{' '}
-              <span className="text-white font-semibold">Your software shouldn't make it harder.</span>
+              <span style={{ color: textPrimary, fontWeight: 600 }}>Your software shouldn't make it harder.</span>
             </p>
           </div>
         </section>
 
-        {/* ── Features ─────────────────────────────────────────────────────── */}
-        <section id="features" className="py-20" style={{ background: '#0d1526' }} aria-labelledby="features-heading">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-14">
-              <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Everything you need</p>
-              <h2 id="features-heading" className="text-4xl font-black text-white mb-4">The Syndicade Solution</h2>
-              <p className="text-slate-400 text-lg max-w-xl mx-auto">One connected ecosystem — not a collection of disconnected tools.</p>
+        {/* ── Features ──────────────────────────────────────────────────────── */}
+        <section
+          id="features"
+          aria-labelledby="features-heading"
+          style={{ padding: '80px 24px', background: sectionAltBg }}
+        >
+          <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                Everything on one board
+              </p>
+              <h2 id="features-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '16px' }}>
+                All the tools your community needs
+              </h2>
+              <p style={{ fontSize: '16px', color: textSecondary, maxWidth: '480px', margin: '0 auto', lineHeight: 1.6 }}>
+                No training required. If you've used a bulletin board, you already know how to use Syndicade.
+              </p>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {FEATURES.map(f => (
-                <div
-                  key={f.label}
-                  className="rounded-2xl border border-white/10 p-6 transition-all hover:border-white/20"
-                  style={{ background: '#111d35' }}
-                >
-                  <div className={`inline-flex p-3 rounded-xl ${f.bg} mb-4`}>
-                    <Icon path={ICONS[f.iconKey]} className={`h-6 w-6 ${f.color}`} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+              {FEATURES.map(function(f) {
+                return (
+                  <div
+                    key={f.label}
+                    style={{
+                      background: cardBg, borderRadius: '14px', padding: '24px',
+                      border: '1px solid ' + borderColor,
+                      borderLeft: '4px solid ' + f.color,
+                      transition: 'box-shadow 0.2s',
+                    }}
+                    onMouseOver={function(e) { e.currentTarget.style.boxShadow = '0 4px 24px rgba(0,0,0,0.12)'; }}
+                    onMouseOut={function(e) { e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div
+                      style={{
+                        width: '40px', height: '40px', borderRadius: '10px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: f.bg, marginBottom: '14px',
+                      }}
+                    >
+                      <Icon path={ICONS[f.iconKey]} className="h-5 w-5" style={{ color: f.color }} />
+                    </div>
+                    <h3 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>{f.label}</h3>
+                    <p style={{ fontSize: '13px', color: textSecondary, lineHeight: 1.6 }}>{f.desc}</p>
                   </div>
-                  <h3 className="text-base font-bold text-white mb-2">{f.label}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* ── Spotlight ────────────────────────────────────────────────────── */}
-        <section className="py-20 border-y border-white/10" style={{ background: '#0a1220' }} aria-labelledby="spotlight-heading">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-14 items-center">
-              <div>
-                <h2 id="spotlight-heading" className="text-4xl font-black text-white leading-tight mb-6">
-                  One login.<br />
-                  <span className="text-blue-400">Every organization.</span><br />
-                  Total clarity.
-                </h2>
-                <div className="space-y-4 mb-8">
-                  {[
-                    ['No missed commitments', 'Your unified calendar shows events from every org you belong to.'],
-                    ['Less email clutter',    'Announcements and updates live in one clean feed.'],
-                    ['Better participation',  'When members stay informed, they show up more.'],
-                  ].map(([title, desc]) => (
-                    <div key={title} className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center mt-0.5" aria-hidden="true">
-                        <Icon path={ICONS.check} className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+        {/* ── Spotlight — Multi-org ─────────────────────────────────────────── */}
+        <section
+          aria-labelledby="spotlight-heading"
+          style={{ padding: '80px 24px', background: pageBg, borderTop: '1px solid ' + borderColor }}
+        >
+          <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '56px', alignItems: 'center' }}>
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '16px' }}>
+                Killer feature
+              </p>
+              <h2 id="spotlight-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, lineHeight: 1.2, marginBottom: '24px' }}>
+                One login.<br />
+                <span style={{ color: '#3B82F6' }}>Every organization.</span><br />
+                Total clarity.
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
+                {[
+                  ['No missed commitments', 'Your unified calendar shows events from every org you belong to.'],
+                  ['Less email clutter', 'Announcements and updates live in one clean feed.'],
+                  ['Better participation', 'When members stay informed, they show up more.'],
+                ].map(function(item) {
+                  return (
+                    <div key={item[0]} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ flexShrink: 0, width: '22px', height: '22px', borderRadius: '50%', background: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px' }} aria-hidden="true">
+                        <Icon path={ICONS.check} className="h-3 w-3" style={{ color: 'white' }} strokeWidth={3} />
                       </div>
                       <div>
-                        <span className="font-bold text-white text-sm">{title}</span>
-                        <p className="text-slate-400 text-sm">{desc}</p>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: textPrimary }}>{item[0]}</span>
+                        <p style={{ fontSize: '13px', color: textSecondary, marginTop: '2px' }}>{item[1]}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => navigate('/login')}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/60 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
-                >
-                  Try It Free
-                  <Icon path={ICONS.arrow} className="h-4 w-4" />
-                </button>
+                  );
+                })}
               </div>
-
-              {/* Multi-org feed mockup */}
-              <div className="rounded-2xl border border-white/10 p-5" style={{ background: '#111d35' }} aria-hidden="true">
-                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/10">
-                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                    <Icon path={ICONS.users} className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-white">My Dashboard</div>
-                    <div className="text-xs text-slate-400">3 organizations</div>
-                  </div>
-                  <div className="ml-auto flex gap-1.5" aria-hidden="true">
-                    {['bg-blue-500','bg-violet-500','bg-emerald-500'].map((c,i) => (
-                      <div key={i} className={`w-2.5 h-2.5 rounded-full ${c}`} />
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { dot: 'bg-blue-500',    org: 'Toledo Food Bank',  event: 'Volunteer Day — Sat 10am',  type: 'event',        tc: 'bg-blue-800/60 text-blue-300' },
-                    { dot: 'bg-violet-500',  org: 'Garden Club',        event: 'Spring Planting Update',   type: 'announcement', tc: 'bg-orange-900/60 text-orange-300' },
-                    { dot: 'bg-emerald-500', org: 'Youth League',        event: 'Game Night — Fri 7pm',     type: 'event',        tc: 'bg-blue-800/60 text-blue-300' },
-                    { dot: 'bg-blue-500',    org: 'Toledo Food Bank',    event: 'New member joined',        type: 'member',       tc: 'bg-emerald-900/60 text-emerald-300' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/10 hover:border-white/20 transition-colors" style={{ background: '#0d1526' }}>
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${item.dot}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-white truncate">{item.event}</div>
-                        <div className="text-xs text-slate-400">{item.org}</div>
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${item.tc}`}>{item.type}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Built For ────────────────────────────────────────────────────── */}
-        <section className="py-20" style={{ background: '#0d1526' }} aria-labelledby="built-for-heading">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 id="built-for-heading" className="text-4xl font-black text-white mb-4">
-              Built for <span className="text-blue-400">Small Nonprofits</span>
-            </h2>
-            <p className="text-slate-400 text-lg mb-12">No IT department needed. No months-long implementation. Just results.</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { icon: 'clock',  text: 'Setup in under 10 minutes' },
-                { icon: 'device', text: 'Mobile-first experience' },
-                { icon: 'lock',   text: 'Privacy controls built-in' },
-                { icon: 'shield', text: 'Accessibility built-in (ADA)' },
-                { icon: 'bolt',   text: 'No developer needed' },
-                { icon: 'users',  text: 'Multi-organization support' },
-              ].map(({ icon, text }) => (
-                <div key={text} className="flex items-center gap-3 p-4 rounded-xl border border-white/10 hover:border-white/20 transition-all text-left" style={{ background: '#111d35' }}>
-                  <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-blue-900/60">
-                    <Icon path={ICONS[icon]} className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-200">{text}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => navigate('/login')}
-              className="mt-10 inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/60 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
-            >
-              Try It Free
-              <Icon path={ICONS.arrow} className="h-4 w-4" />
-            </button>
-          </div>
-        </section>
-
-        {/* ── How It Works ─────────────────────────────────────────────────── */}
-        <section id="how-it-works" className="py-20 border-y border-white/10" style={{ background: '#0a1220' }} aria-labelledby="how-heading">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-14">
-              <h2 id="how-heading" className="text-4xl font-black text-white mb-4">How It Works</h2>
-              <p className="text-slate-400 text-lg">Three steps to a fully connected community organization.</p>
-            </div>
-            <div className="grid md:grid-cols-3 gap-8">
-              {STEPS.map(s => (
-                <div key={s.n} className="text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white text-2xl font-black flex items-center justify-center mx-auto mb-5 shadow-lg shadow-blue-900/60">
-                    {s.n}
-                  </div>
-                  <h3 className="text-base font-bold text-white mb-2">{s.label}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-            <div className="text-center mt-12">
               <button
-                onClick={() => navigate('/login')}
-                className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/60 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '12px 24px', fontSize: '14px', fontWeight: 700,
+                  background: '#3B82F6', color: 'white', border: 'none', borderRadius: '10px',
+                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.4)', transition: 'background 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.background = '#2563EB'; }}
+                onMouseOut={function(e) { e.currentTarget.style.background = '#3B82F6'; }}
+              >
+                Try It Free
+                <Icon path={ICONS.arrow} className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Multi-org feed mockup */}
+            <div
+              aria-hidden="true"
+              style={{ background: cardBg, borderRadius: '16px', padding: '20px', border: '1px solid ' + borderColor }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '14px', borderBottom: '1px solid ' + borderColor }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon path={ICONS.users} className="h-4 w-4" style={{ color: 'white' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: textPrimary }}>My Dashboard</div>
+                  <div style={{ fontSize: '11px', color: textMuted }}>3 organizations</div>
+                </div>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }} aria-hidden="true">
+                  {['#3B82F6','#8B5CF6','#22C55E'].map(function(c, i) {
+                    return <div key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', background: c }} />;
+                  })}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { dot: '#3B82F6', org: 'Toledo Food Bank',    event: 'Volunteer Day — Sat 10am',    badge: 'event',        badgeBg: 'rgba(59,130,246,0.15)',  badgeColor: '#3B82F6' },
+                  { dot: '#8B5CF6', org: 'Garden Club',          event: 'Spring Planting Update',      badge: 'announcement', badgeBg: 'rgba(139,92,246,0.15)', badgeColor: '#8B5CF6' },
+                  { dot: '#22C55E', org: 'Youth League',          event: 'Game Night — Fri 7pm',        badge: 'event',        badgeBg: 'rgba(34,197,94,0.15)',  badgeColor: '#22C55E' },
+                  { dot: '#3B82F6', org: 'Toledo Food Bank',      event: 'New member joined',           badge: 'member',       badgeBg: 'rgba(34,197,94,0.15)',  badgeColor: '#22C55E' },
+                ].map(function(item, i) {
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px 12px', borderRadius: '10px', border: '1px solid ' + borderColor,
+                        background: pageBg,
+                      }}
+                    >
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: item.dot }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.event}</div>
+                        <div style={{ fontSize: '11px', color: textMuted }}>{item.org}</div>
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '99px', background: item.badgeBg, color: item.badgeColor, flexShrink: 0 }}>{item.badge}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── How It Works ──────────────────────────────────────────────────── */}
+        <section
+          id="how-it-works"
+          aria-labelledby="how-heading"
+          style={{ padding: '80px 24px', background: sectionAltBg, borderTop: '1px solid ' + borderColor }}
+        >
+          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                Ready?
+              </p>
+              <h2 id="how-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '12px' }}>
+                How It Works
+              </h2>
+              <p style={{ fontSize: '16px', color: textSecondary }}>Three steps to a fully connected community organization.</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px', marginBottom: '48px' }}>
+              {STEPS.map(function(s) {
+                return (
+                  <div key={s.n} style={{ textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '56px', height: '56px', borderRadius: '16px',
+                        background: '#F5B731', color: '#111827',
+                        fontSize: '22px', fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 20px', boxShadow: '0 4px 16px rgba(245,183,49,0.35)',
+                      }}
+                    >
+                      {s.n}
+                    </div>
+                    <h3 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>{s.label}</h3>
+                    <p style={{ fontSize: '13px', color: textSecondary, lineHeight: 1.6 }}>{s.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <button
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '13px 28px', fontSize: '15px', fontWeight: 700,
+                  background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px',
+                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
+                onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
               >
                 Get Started Now
                 <Icon path={ICONS.arrow} className="h-4 w-4" />
@@ -520,184 +790,288 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Pricing ──────────────────────────────────────────────────────── */}
-        <section id="pricing" className="py-20" style={{ background: '#0d1526' }} aria-labelledby="pricing-heading">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-14">
-              <h2 id="pricing-heading" className="text-4xl font-black text-white mb-4">Simple, Honest Pricing</h2>
-              <p className="text-slate-400 text-lg">No hidden fees. Cancel any time.</p>
+        {/* ── Pricing Preview ───────────────────────────────────────────────── */}
+        <section
+          id="pricing"
+          aria-labelledby="pricing-heading"
+          style={{ padding: '80px 24px', background: pageBg, borderTop: '1px solid ' + borderColor }}
+        >
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                Pricing
+              </p>
+              <h2 id="pricing-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '12px' }}>
+                Simple, honest pricing
+              </h2>
+              <p style={{ fontSize: '16px', color: textSecondary }}>
+                1-month free trial on all plans. No credit card required.
+              </p>
             </div>
-            <div className="grid md:grid-cols-3 gap-6 items-start">
-              {PRICING.map(plan => (
-                <div
-                  key={plan.name}
-                  className={`rounded-2xl p-7 border-2 flex flex-col ${
-                    plan.highlight
-                      ? 'border-blue-500 shadow-2xl shadow-blue-900/60 scale-105'
-                      : 'border-white/10'
-                  }`}
-                  style={{ background: plan.highlight ? '#1d4ed8' : '#111d35' }}
-                >
-                  {plan.highlight && (
-                    <div className="text-xs font-bold bg-white text-blue-700 rounded-full px-3 py-1 self-start mb-4">Most Popular</div>
-                  )}
-                  <h3 className="text-xl font-black mb-1 text-white">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className="text-4xl font-black text-white">{plan.price}</span>
-                    <span className={`text-sm ${plan.highlight ? 'text-blue-200' : 'text-slate-400'}`}>/{plan.period}</span>
-                  </div>
-                  <ul className="space-y-3 my-6 flex-1">
-                    {plan.features.map(f => (
-                      <li key={f} className="flex items-center gap-2 text-sm">
-                        <Icon
-                          path={ICONS.check}
-                          className={`h-4 w-4 flex-shrink-0 ${plan.highlight ? 'text-blue-200' : 'text-blue-400'}`}
-                          strokeWidth={3}
-                        />
-                        <span className={plan.highlight ? 'text-blue-100' : 'text-slate-300'}>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    onClick={() => navigate('/login')}
-                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      plan.highlight
-                        ? 'bg-white text-blue-700 hover:bg-blue-50 focus:ring-white focus:ring-offset-blue-700'
-                        : 'bg-blue-600 text-white hover:bg-blue-500 focus:ring-amber-400 focus:ring-offset-slate-900'
-                    }`}
-                  >
-                    {plan.cta}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
-        {/* ── FAQ ──────────────────────────────────────────────────────────── */}
-        <section id="faq" className="py-20 border-y border-white/10" style={{ background: '#0a1220' }} aria-labelledby="faq-heading">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 id="faq-heading" className="text-4xl font-black text-white mb-4">Frequently Asked Questions</h2>
-            </div>
-            <div className="space-y-3">
-              {FAQS.map((faq, i) => (
-                <div key={i} className="rounded-xl border border-white/10 overflow-hidden" style={{ background: '#111d35' }}>
-                  <button
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="w-full flex items-center justify-between px-6 py-5 text-left font-bold text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset"
-                    aria-expanded={openFaq === i}
-                    aria-controls={`faq-answer-${i}`}
+            {/* 3 plan cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+              {PRICING_PREVIEW.map(function(plan) {
+                return (
+                  <div
+                    key={plan.name}
+                    style={{
+                      background: plan.highlight ? '#1D4ED8' : cardBg,
+                      border: plan.highlight ? '2px solid #3B82F6' : ('1px solid ' + borderColor),
+                      borderRadius: '16px', padding: '28px',
+                      transform: plan.highlight ? 'scale(1.03)' : 'none',
+                      boxShadow: plan.highlight ? '0 12px 40px rgba(29,78,216,0.35)' : 'none',
+                    }}
                   >
-                    <span className="text-sm">{faq.q}</span>
-                    <Icon
-                      path={ICONS.chevDown}
-                      className={`h-4 w-4 text-slate-400 flex-shrink-0 ml-4 transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                  {openFaq === i && (
-                    <div id={`faq-answer-${i}`} className="px-6 pb-5">
-                      <p className="text-sm text-slate-300 leading-relaxed">{faq.a}</p>
+                    {plan.highlight && (
+                      <div style={{ display: 'inline-block', background: 'white', color: '#1D4ED8', fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', marginBottom: '14px' }}>
+                        Most Popular
+                      </div>
+                    )}
+                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: plan.highlight ? 'white' : textPrimary, marginBottom: '4px' }}>{plan.name}</h3>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '36px', fontWeight: 800, color: plan.highlight ? 'white' : textPrimary }}>{plan.price}</span>
+                      <span style={{ fontSize: '14px', color: plan.highlight ? 'rgba(255,255,255,0.7)' : textMuted }}>{plan.period}</span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <p style={{ fontSize: '12px', color: plan.highlight ? 'rgba(255,255,255,0.6)' : textMuted, marginBottom: '16px' }}>
+                      {plan.members}&nbsp;&middot;&nbsp;{plan.storage}
+                    </p>
+                    <p style={{ fontSize: '13px', color: plan.highlight ? 'rgba(255,255,255,0.85)' : textSecondary, lineHeight: 1.5 }}>
+                      {plan.tagline}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* CTA row */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '24px' }}>
+              <button
+                onClick={function() { navigate('/pricing'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '12px 24px', fontSize: '14px', fontWeight: 700,
+                  background: cardBg, color: textPrimary, border: '1px solid ' + borderColor, borderRadius: '10px',
+                  cursor: 'pointer', transition: 'border-color 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.borderColor = '#3B82F6'; }}
+                onMouseOut={function(e) { e.currentTarget.style.borderColor = borderColor; }}
+              >
+                Compare all plans
+                <Icon path={ICONS.arrow} className="h-4 w-4" />
+              </button>
+              <button
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '12px 24px', fontSize: '14px', fontWeight: 700,
+                  background: '#F5B731', color: '#111827', border: 'none', borderRadius: '10px',
+                  cursor: 'pointer', transition: 'background 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
+                onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
+              >
+                Start free trial
+              </button>
+            </div>
+
+            {/* Nonprofit callout */}
+            <div
+              style={{
+                display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px',
+                background: 'rgba(245,183,49,0.06)', border: '1px solid rgba(245,183,49,0.2)',
+                borderRadius: '12px', padding: '18px 24px',
+              }}
+            >
+              <div
+                style={{
+                  flexShrink: 0, width: '36px', height: '36px', borderRadius: '10px',
+                  background: 'rgba(245,183,49,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Icon path={ICONS.shield} className="h-4 w-4" style={{ color: '#F5B731' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '2px' }}>Verified nonprofit rate</p>
+                <p style={{ fontSize: '12px', color: textMuted }}>
+                  Verified 501(c)(3) orgs get 1 extra month free and appear on the public discovery board.
+                </p>
+              </div>
+              <button
+                onClick={function() { navigate('/pricing'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg"
+                style={{
+                  flexShrink: 0, padding: '8px 16px', fontSize: '12px', fontWeight: 700,
+                  background: 'none', color: '#F5B731', border: '1px solid rgba(245,183,49,0.4)', borderRadius: '8px',
+                  cursor: 'pointer', transition: 'border-color 0.15s', whiteSpace: 'nowrap',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.borderColor = '#F5B731'; }}
+                onMouseOut={function(e) { e.currentTarget.style.borderColor = 'rgba(245,183,49,0.4)'; }}
+              >
+                Learn More
+              </button>
+            </div>
+
+            <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '16px' }}>
+              We never take a cut of your donations or ticket sales. Stripe pass-through only.
+            </p>
+          </div>
+        </section>
+
+        {/* ── FAQ ───────────────────────────────────────────────────────────── */}
+        <section
+          id="faq"
+          aria-labelledby="faq-heading"
+          style={{ padding: '80px 24px', background: sectionAltBg, borderTop: '1px solid ' + borderColor }}
+        >
+          <div style={{ maxWidth: '680px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+              <h2 id="faq-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary }}>
+                Frequently Asked Questions
+              </h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {FAQS.map(function(faq, i) {
+                return (
+                  <div
+                    key={i}
+                    style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', overflow: 'hidden' }}
+                  >
+                    <button
+                      onClick={function() { setOpenFaq(openFaq === i ? null : i); }}
+                      aria-expanded={openFaq === i}
+                      aria-controls={'faq-' + i}
+                      className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset"
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '18px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+                      }}
+                      onMouseOver={function(e) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                      onMouseOut={function(e) { e.currentTarget.style.background = 'none'; }}
+                    >
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: textPrimary, paddingRight: '16px' }}>{faq.q}</span>
+                      <Icon
+                        path={ICONS.chevDown}
+                        className="h-4 w-4"
+                        style={{ color: textMuted, flexShrink: 0, transform: openFaq === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                      />
+                    </button>
+                    {openFaq === i && (
+                      <div id={'faq-' + i} style={{ padding: '0 20px 18px' }}>
+                        <p style={{ fontSize: '14px', color: textSecondary, lineHeight: 1.7 }}>{faq.a}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* ── Contact ──────────────────────────────────────────────────────── */}
-        <section id="contact" className="py-20" style={{ background: '#0d1526' }} aria-labelledby="contact-heading">
-          <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10">
-              <h2 id="contact-heading" className="text-4xl font-black text-white mb-4">Get In Touch</h2>
-              <p className="text-slate-400">Questions? We'd love to hear from you.</p>
+        {/* ── Contact ───────────────────────────────────────────────────────── */}
+        <section
+          id="contact"
+          aria-labelledby="contact-heading"
+          style={{ padding: '80px 24px', background: pageBg, borderTop: '1px solid ' + borderColor }}
+        >
+          <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <h2 id="contact-heading" style={{ fontSize: 'clamp(28px, 4vw, 36px)', fontWeight: 800, color: textPrimary, marginBottom: '10px' }}>
+                Get In Touch
+              </h2>
+              <p style={{ fontSize: '15px', color: textSecondary }}>Questions? We'd love to hear from you.</p>
             </div>
 
             {contactStatus === 'success' ? (
-              <div className="text-center py-12 rounded-2xl border border-emerald-800/50" style={{ background: '#0a2218' }}>
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-emerald-900/60">
-                  <Icon path={ICONS.check} className="h-7 w-7 text-emerald-400" strokeWidth={3} />
+              <div style={{ textAlign: 'center', padding: '48px', borderRadius: '16px', background: cardBg, border: '1px solid ' + borderColor }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <Icon path={ICONS.check} className="h-7 w-7" style={{ color: '#22C55E' }} strokeWidth={3} />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">Message Sent!</h3>
-                <p className="text-slate-400 text-sm">We'll get back to you within one business day.</p>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>Message Sent!</h3>
+                <p style={{ fontSize: '14px', color: textSecondary, marginBottom: '24px' }}>We'll get back to you within one business day.</p>
                 <button
-                  onClick={() => setContactStatus(null)}
-                  className="mt-6 text-sm text-blue-400 hover:text-blue-300 underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                  onClick={function() { setContactStatus(null); }}
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                  style={{ fontSize: '13px', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                 >
                   Send another message
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleContactSubmit} noValidate className="space-y-4" aria-label="Contact form">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="contact-name" className="block text-sm font-semibold text-slate-300 mb-1.5">
-                      Name <span aria-hidden="true">*</span>
-                    </label>
-                    <input
-                      id="contact-name"
-                      type="text"
-                      value={contactForm.name}
-                      onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
-                      required
-                      placeholder="Your name"
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                      style={{ background: '#111d35' }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="contact-email" className="block text-sm font-semibold text-slate-300 mb-1.5">
-                      Email <span aria-hidden="true">*</span>
-                    </label>
-                    <input
-                      id="contact-email"
-                      type="email"
-                      value={contactForm.email}
-                      onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))}
-                      required
-                      placeholder="you@example.com"
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                      style={{ background: '#111d35' }}
-                    />
-                  </div>
+              <form onSubmit={handleContactSubmit} noValidate aria-label="Contact form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  {[
+                    { id: 'contact-name',  label: 'Name',  type: 'text',  key: 'name',  placeholder: 'Your name', required: true },
+                    { id: 'contact-email', label: 'Email', type: 'email', key: 'email', placeholder: 'you@example.com', required: true },
+                  ].map(function(field) {
+                    return (
+                      <div key={field.id}>
+                        <label htmlFor={field.id} style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>
+                          {field.label} {field.required && <span aria-hidden="true">*</span>}
+                        </label>
+                        <input
+                          id={field.id}
+                          type={field.type}
+                          value={contactForm[field.key]}
+                          onChange={function(e) { var v = e.target.value; setContactForm(function(p) { var n = Object.assign({}, p); n[field.key] = v; return n; }); }}
+                          required={field.required}
+                          placeholder={field.placeholder}
+                          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{
+                            width: '100%', padding: '11px 14px', borderRadius: '10px', fontSize: '14px',
+                            background: inputBg, color: textPrimary, border: '1px solid ' + borderColor,
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
                 <div>
-                  <label htmlFor="contact-org" className="block text-sm font-semibold text-slate-300 mb-1.5">
-                    Organization <span className="text-slate-500 font-normal">(optional)</span>
+                  <label htmlFor="contact-org" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>
+                    Organization <span style={{ fontWeight: 400, color: textMuted }}>(optional)</span>
                   </label>
                   <input
                     id="contact-org"
                     type="text"
                     value={contactForm.organization}
-                    onChange={e => setContactForm(p => ({ ...p, organization: e.target.value }))}
+                    onChange={function(e) { var v = e.target.value; setContactForm(function(p) { var n = Object.assign({}, p); n.organization = v; return n; }); }}
                     placeholder="Your organization name"
-                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                    style={{ background: '#111d35' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', fontSize: '14px', background: inputBg, color: textPrimary, border: '1px solid ' + borderColor, boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label htmlFor="contact-message" className="block text-sm font-semibold text-slate-300 mb-1.5">
+                  <label htmlFor="contact-message" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>
                     Message <span aria-hidden="true">*</span>
                   </label>
                   <textarea
                     id="contact-message"
                     rows={4}
                     value={contactForm.message}
-                    onChange={e => setContactForm(p => ({ ...p, message: e.target.value }))}
+                    onChange={function(e) { var v = e.target.value; setContactForm(function(p) { var n = Object.assign({}, p); n.message = v; return n; }); }}
                     required
                     placeholder="How can we help?"
-                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
-                    style={{ background: '#111d35' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', fontSize: '14px', background: inputBg, color: textPrimary, border: '1px solid ' + borderColor, resize: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
                 {contactStatus === 'error' && (
-                  <p className="text-sm text-red-400" role="alert">Something went wrong. Please try again.</p>
+                  <p role="alert" style={{ fontSize: '13px', color: '#EF4444' }}>Something went wrong. Please try again.</p>
                 )}
                 <button
                   type="submit"
                   disabled={contactLoading || !contactForm.name || !contactForm.email || !contactForm.message}
-                  className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg shadow-blue-900/50"
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                  style={{
+                    width: '100%', padding: '13px', fontSize: '15px', fontWeight: 700,
+                    background: '#3B82F6', color: 'white', border: 'none', borderRadius: '10px',
+                    cursor: contactLoading ? 'not-allowed' : 'pointer',
+                    opacity: (contactLoading || !contactForm.name || !contactForm.email || !contactForm.message) ? 0.5 : 1,
+                    transition: 'background 0.15s',
+                  }}
                 >
                   {contactLoading ? 'Sending…' : 'Send Message'}
                 </button>
@@ -706,26 +1080,60 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Final CTA ────────────────────────────────────────────────────── */}
-        <section className="py-24 border-t border-white/10" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0d1526 100%)' }} aria-labelledby="final-cta-heading">
-          <div className="max-w-3xl mx-auto px-4 text-center">
-            <h2 id="final-cta-heading" className="text-4xl md:text-5xl font-black text-white mb-5 leading-tight">
-              Ready to simplify<br />community coordination?
+        {/* ── Final CTA ─────────────────────────────────────────────────────── */}
+        <section
+          aria-labelledby="final-cta-heading"
+          style={{
+            padding: '96px 24px',
+            background: isDark
+              ? 'linear-gradient(135deg, #1A2035 0%, #0E1523 100%)'
+              : 'linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 100%)',
+            borderTop: '1px solid ' + borderColor,
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div style={{ marginBottom: '24px' }}>
+              <MascotPair width={120} height={88} />
+            </div>
+            <h2
+              id="final-cta-heading"
+              style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, color: textPrimary, lineHeight: 1.2, marginBottom: '16px' }}
+            >
+              Bring your community board online.
             </h2>
-            <p className="text-slate-300 text-lg mb-10">Join nonprofits and community organizations already using Syndicade.</p>
-            <div className="flex flex-wrap gap-4 justify-center">
+            <p style={{ fontSize: '16px', color: textSecondary, marginBottom: '36px', lineHeight: 1.6 }}>
+              Join nonprofits and community organizations already using Syndicade.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
               <button
-                onClick={() => navigate('/login')}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-700 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-blue-900"
+                onClick={function() { navigate('/login'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '14px 32px', fontSize: '16px', fontWeight: 700,
+                  background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px',
+                  cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
+                onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
               >
-                Start Free
-                <Icon path={ICONS.arrow} className="h-4 w-4" />
+                Pin Your Org Free
+                <Icon path={ICONS.arrow} className="h-5 w-5" />
               </button>
               <button
-                onClick={() => navigate('/login')}
-                className="inline-flex items-center gap-2 px-8 py-4 font-bold rounded-xl border-2 border-white/30 text-white hover:border-white/60 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-blue-900"
+                onClick={function() { navigate('/pricing'); }}
+                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '14px 28px', fontSize: '16px', fontWeight: 600,
+                  background: 'none', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '12px',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.borderColor = isDark ? '#94A3B8' : '#94A3B8'; }}
+                onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.borderColor = borderColor; }}
               >
-                Create Your Organization
+                View Pricing
               </button>
             </div>
           </div>
@@ -733,38 +1141,55 @@ export default function LandingPage() {
 
       </main>
 
-      {/* ── Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/10 py-10" style={{ background: '#060e1a' }} role="contentinfo">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-xl font-black text-white">
-              Syndi<span className="text-amber-400">cade</span>
-            </div>
-            <nav className="flex flex-wrap gap-5 text-sm" aria-label="Footer navigation">
-              {[['features','Features'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => scrollTo(id)}
-                  className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
-                >
-                  {label}
-                </button>
-              ))}
-             <button
-                onClick={() => navigate('/login')}
-                className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
-              >
-                Log In
-              </button>
-              <Link
-                to="/wishlist"
-                className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
-              >
-                Wishlist
-              </Link>
-            </nav>
-            <p className="text-xs text-slate-600">&copy; {new Date().getFullYear()} Syndicade. All rights reserved.</p>
+      {/* ── Footer ────────────────────────────────────────────────────────────── */}
+      <footer
+        role="contentinfo"
+        style={{ background: isDark ? '#060E1A' : '#0E1523', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '36px 24px' }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MascotPair width={32} height={24} />
+            <span style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>
+              Syndi<span style={{ color: '#F5B731' }}>cade</span>
+            </span>
           </div>
+          <nav aria-label="Footer navigation" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+            {[['features','Features'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
+              return (
+                <button
+                  key={item[0]}
+                  onClick={function() { scrollTo(item[0]); }}
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                  style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
+                  onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }}
+                  onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}
+                >
+                  {item[1]}
+                </button>
+              );
+            })}
+            <button
+              onClick={function() { navigate('/login'); }}
+              className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+              style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }}
+              onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}
+            >
+              Log In
+            </button>
+            <Link
+              to="/wishlist"
+              className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+              style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }}
+              onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }}
+              onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}
+            >
+              Wishlist
+            </Link>
+          </nav>
+          <p style={{ fontSize: '12px', color: '#475569' }}>
+            &copy; {new Date().getFullYear()} Syndicade. All rights reserved.
+          </p>
         </div>
       </footer>
 
