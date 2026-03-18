@@ -562,9 +562,11 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     var homePage = enabledPages.find(function(p) { return p.page_key === 'home'; });
     var homeBlocks = homePage ? (blocksByPage[homePage.id] || []) : [];
 
+    var hasHeroBlock = homeBlocks.some(function(b) { return b.block_type === 'hero'; });
+
     return (
       <main id="main-content" style={{ fontFamily: fontFamily }}>
-        {renderHero()}
+        {!hasHeroBlock && renderHero()}
 
         {homeBlocks.length > 0 && (
           <div style={{ backgroundColor: '#ffffff' }}>

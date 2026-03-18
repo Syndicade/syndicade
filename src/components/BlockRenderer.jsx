@@ -30,7 +30,7 @@ function BlockContactForm({ org, primary, borderRadius }) {
     if (!form.name || !form.email || !form.message) { toast.error('Please fill in all fields'); return; }
     setSubmitting(true);
     try {
-      var res = await supabase.from('contact_submissions').insert([{
+      var res = await supabase.from('contact_inquiries').insert([{
         organization_id: org.id,
         name: form.name,
         email: form.email,
@@ -102,7 +102,6 @@ function EventsListBlock({ block, primary, borderRadius }) {
           .select('id, title, description, start_time, end_time, location, event_type, is_virtual, virtual_link, flier_url')
           .eq('organization_id', block.organization_id)
           .eq('publish_to_website', true)
-          .eq('is_cancelled', false)
           .gte('start_time', now)
           .order('start_time', { ascending: true })
           .limit(c.limit || 3);
@@ -176,10 +175,9 @@ function TeamGridBlock({ block, primary, org }) {
   var c = block.content || {};
   var [members, setMembers] = useState([]);
   var [loading, setLoading] = useState(true);
-  var mode = c.mode || 'auto';
+var mode = 'auto';
 
   useEffect(function() {
-    if (mode !== 'auto') { setLoading(false); return; }
     async function fetch() {
       setLoading(true);
       try {
@@ -187,7 +185,6 @@ function TeamGridBlock({ block, primary, org }) {
           .from('memberships')
           .select('role, custom_title, member_id, members(first_name, last_name, display_name, bio, profile_photo_url, avatar_url, is_public_profile)')
           .eq('organization_id', block.organization_id)
-          .eq('show_in_profile', true)
           .eq('status', 'active');
         if (!result.error) {
           var data = (result.data || []).filter(function(m) {
@@ -266,6 +263,83 @@ function TeamGridBlock({ block, primary, org }) {
 }
 
 // ── Main renderer ─────────────────────────────────────────────────────────────
+// ── Smart Programs List Block ─────────────────────────────────────────────────
+function ProgramsListBlock({ block, primary }) {
+  var c = block.content || {};
+  var [programs, setPrograms] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var mode = c.mode || 'auto';
+
+  useEffect(function() {
+    if (mode !== 'auto') { setLoading(false); return; }
+    async function load() {
+      setLoading(true);
+      try {
+        var excluded = c.excluded_ids || [];
+        var result = await supabase
+          .from('org_programs')
+          .select('id, name, description, status, audience, schedule')
+          .eq('organization_id', block.organization_id)
+          .eq('is_public', true)
+          .order('created_at', { ascending: true });
+        if (!result.error) {
+          setPrograms((result.data || []).filter(function(p) { return !excluded.includes(p.id); }));
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [block.organization_id, mode, (c.excluded_ids || []).join(',')]);
+
+  function renderCard(program, i) {
+    return (
+      <div key={program.id || i} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="text-lg font-bold text-gray-900">{program.name}</h3>
+          {program.status && (
+            <span className="flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full"
+              style={{ backgroundColor: primary + '18', color: primary }}>
+              {program.status}
+            </span>
+          )}
+        </div>
+        {program.description && <p className="text-gray-600 text-sm leading-relaxed mb-3">{program.description}</p>}
+        {(program.audience || program.schedule) && (
+          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-100">
+            {program.audience && <span className="text-xs text-gray-500"><span className="font-semibold">Audience:</span> {program.audience}</span>}
+            {program.schedule && <span className="text-xs text-gray-500"><span className="font-semibold">Schedule:</span> {program.schedule}</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  var emptyState = (
+    <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+      <p className="text-gray-500 font-medium">No programs listed yet</p>
+      <p className="text-gray-400 text-sm mt-1">Check back soon.</p>
+    </div>
+  );
+
+var displayItems = programs.concat((c.items || []).filter(function(item) { return item.name; }));
+
+  return (
+    <div>
+      {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading}</h2>}
+      {loading && mode === 'auto' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1,2,3,4].map(function(i) { return <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />; })}
+        </div>
+      ) : displayItems.length === 0 ? emptyState : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {displayItems.map(function(item, i) { return renderCard(item, i); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function renderBlock(block, primary, secondary, borderRadius, fontFamily, org) {
   var c = block.content || {};
   var type = block.block_type;
@@ -492,31 +566,17 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-  // EVENTS LIST
+// EVENTS LIST
   if (type === 'events_list') {
     return <EventsListBlock key={key} block={block} primary={primary} borderRadius={borderRadius} />;
   }
 
   // PROGRAMS LIST
   if (type === 'programs_list') {
-    return (
-      <div key={key}>
-        {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading}</h2>}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {(c.items || []).map(function(item, i) {
-            return (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                {item.name && <h3 className="text-lg font-bold text-gray-900 mb-2">{item.name}</h3>}
-                {item.description && <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return <ProgramsListBlock key={key} block={block} primary={primary} />;
   }
 
-  // TEAM GRID
+// TEAM GRID
   if (type === 'team_grid') {
     return <TeamGridBlock key={key} block={block} primary={primary} org={org} />;
   }

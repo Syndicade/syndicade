@@ -374,6 +374,76 @@ function RichTextEditor({ value, onChange }) {
     </div>
   );
 }
+// ── Programs auto manager ─────────────────────────────────────────────────────
+function ProgramsAutoManager({ organizationId, excludedIds, onChange }) {
+  var [programs, setPrograms] = useState([]);
+  var [loading, setLoading] = useState(true);
+
+  useEffect(function() {
+    async function load() {
+      setLoading(true);
+      try {
+        var result = await supabase
+          .from('org_programs')
+          .select('id, name, status')
+          .eq('organization_id', organizationId)
+          .eq('is_public', true)
+          .order('created_at', { ascending: true });
+        if (!result.error) setPrograms(result.data || []);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [organizationId]);
+
+  var excluded = excludedIds || [];
+
+  function toggleExclude(id) {
+    var next = excluded.includes(id)
+      ? excluded.filter(function(x) { return x !== id; })
+      : excluded.concat([id]);
+    onChange(next);
+  }
+
+  if (loading) return (
+    <div className="space-y-2">
+      {[1,2,3].map(function(i) { return <div key={i} className="h-10 bg-gray-100 rounded-lg animate-pulse" />; })}
+    </div>
+  );
+
+  if (programs.length === 0) return (
+    <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+      <p className="text-xs font-semibold text-gray-500 mb-1">No public programs found</p>
+      <p className="text-xs text-gray-400">Add programs in the Programs section and mark them public.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2" role="list" aria-label="Auto-synced programs">
+      {programs.map(function(program) {
+        var isExcluded = excluded.includes(program.id);
+        return (
+          <div key={program.id} role="listitem"
+            className={'flex items-center justify-between p-3 rounded-lg border transition-all ' + (isExcluded ? 'border-gray-200 bg-gray-50 opacity-50' : 'border-gray-200 bg-white')}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (isExcluded ? 'bg-gray-300' : 'bg-green-400')} aria-hidden="true" />
+              <span className="text-sm font-semibold text-gray-900 truncate">{program.name}</span>
+              {program.status && <span className="text-xs text-gray-400">({program.status})</span>}
+            </div>
+            <button
+              onClick={function() { toggleExclude(program.id); }}
+              aria-label={(isExcluded ? 'Show ' : 'Hide ') + program.name}
+              className={'text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0 ' + (isExcluded ? 'border-blue-200 text-blue-600 hover:bg-blue-50' : 'border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-500')}>
+              {isExcluded ? 'Show' : 'Hide'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Block edit forms ──────────────────────────────────────────────────────────
 function BlockForm({ block, onChange, organizationId }) {
   var c = block.content;
@@ -780,15 +850,25 @@ function BlockForm({ block, onChange, organizationId }) {
     </div>
   );
 
-  // PROGRAMS LIST
+// PROGRAMS LIST
   if (type === 'programs_list') return (
     <div className="space-y-4">
       <div>
         <label htmlFor={'block-heading-' + block.id} className={labelCls}>Section Heading</label>
         <input id={'block-heading-' + block.id} type="text" value={c.heading || ''} onChange={function(e) { set('heading', e.target.value); }} placeholder="Our Programs" className={inputCls} />
       </div>
+<div>
+        <p className={labelCls}>Auto-Synced Programs</p>
+        <p className="text-xs text-gray-400 mb-3">Pulled from your org programs. Hide any you don't want shown.</p>
+        <ProgramsAutoManager
+          organizationId={organizationId}
+          excludedIds={c.excluded_ids || []}
+          onChange={function(ids) { set('excluded_ids', ids); }}
+        />
+      </div>
       <div>
-        <p className={labelCls}>Programs</p>
+        <p className={labelCls}>Additional Programs</p>
+        <p className="text-xs text-gray-400 mb-3">Manually add programs that aren't in your org programs list.</p>
         <div className="space-y-3">
           {(c.items || []).map(function(item, i) {
             return (
@@ -805,7 +885,7 @@ function BlockForm({ block, onChange, organizationId }) {
             );
           })}
         </div>
-        <button onClick={function() { addItem('items', { name: '', description: '', image_url: '' }); }}
+        <button onClick={function() { addItem('items', { name: '', description: '' }); }}
           className="mt-2 w-full py-2 text-xs font-semibold text-blue-600 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
           + Add Program
         </button>
@@ -1344,8 +1424,10 @@ export default function BlockEditor({ organizationId, pages, onBlocksChange }) {
     }
   }
 
-  function handleContentChange(blockId, content) {
-    setBlocks(function(prev) { return prev.map(function(b) { return b.id === blockId ? Object.assign({}, b, { content: content }) : b; }); });
+function handleContentChange(blockId, content) {
+    var updated = blocks.map(function(b) { return b.id === blockId ? Object.assign({}, b, { content: content }) : b; });
+    setBlocks(updated);
+    if (onBlocksChange) onBlocksChange(updated);
     if (debounceTimers.current[blockId]) clearTimeout(debounceTimers.current[blockId]);
     debounceTimers.current[blockId] = setTimeout(function() { saveBlockContent(blockId, content); }, 600);
   }
