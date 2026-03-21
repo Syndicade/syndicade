@@ -31,6 +31,8 @@ function EditEvent({ isOpen, onClose, onSuccess, event, editScope = null, isRecu
   const [visibility, setVisibility] = useState('members');
   const [isPublic, setIsPublic] = useState(false);
   const [requireRsvp, setRequireRsvp] = useState(false);
+  var [publishToDiscovery, setPublishToDiscovery] = useState(false);
+  var [publishToWebsite, setPublishToWebsite] = useState(false);
   
   // Recurring event state
   const [canEditRecurrence, setCanEditRecurrence] = useState(false);
@@ -84,6 +86,8 @@ function EditEvent({ isOpen, onClose, onSuccess, event, editScope = null, isRecu
       setVisibility(event.visibility || 'members');
       setIsPublic(event.visibility === 'public');
       setRequireRsvp(event.require_rsvp !== false);
+      setPublishToDiscovery(event.publish_to_discovery || false);
+      setPublishToWebsite(event.publish_to_website || false);
       
       // Initialize recurring event data
       if (event.recurrence_rule) {
@@ -215,6 +219,9 @@ function EditEvent({ isOpen, onClose, onSuccess, event, editScope = null, isRecu
         max_attendees: maxAttendees ? parseInt(maxAttendees) : null,
         visibility: isPublic ? 'public' : visibility,
         require_rsvp: requireRsvp,
+        publish_to_discovery: publishToDiscovery,
+        publish_to_website: publishToWebsite,
+        is_public: isPublic || publishToDiscovery,
         updated_at: new Date().toISOString()
       };
 
@@ -807,6 +814,29 @@ updateData.recurrence_rule = {
               </div>
             </div>
           </div>
+
+<div className="flex items-start">
+  <div className="flex items-center h-5">
+    <input id="edit-pub-discovery" type="checkbox" checked={publishToDiscovery}
+      onChange={function(e){ setPublishToDiscovery(e.target.checked); }}
+      className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"/>
+  </div>
+  <div className="ml-3">
+    <label htmlFor="edit-pub-discovery" className="font-semibold text-gray-900 text-sm">Show on Discover Events page</label>
+    <p className="text-xs text-gray-600">Visible to anyone browsing public events at /discover.</p>
+  </div>
+</div>
+<div className="flex items-start">
+  <div className="flex items-center h-5">
+    <input id="edit-pub-website" type="checkbox" checked={publishToWebsite}
+      onChange={function(e){ setPublishToWebsite(e.target.checked); }}
+      className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"/>
+  </div>
+  <div className="ml-3">
+    <label htmlFor="edit-pub-website" className="font-semibold text-gray-900 text-sm">Show on organization's website</label>
+    <p className="text-xs text-gray-600">Appears on your org's public website page.</p>
+  </div>
+</div>
 
           {/* Buttons */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">

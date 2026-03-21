@@ -195,6 +195,9 @@ useEffect(function(){
     setDonationDropoff( editingEvent.donation_dropoff  || false);
     setPublishToDiscovery(editingEvent.publish_to_discovery || false);
     setPublishToWebsite(  editingEvent.publish_to_website   || false);
+    if (editingEvent.event_types?.length || editingEvent.audience?.length || editingEvent.publish_to_discovery || editingEvent.publish_to_website || editingEvent.volunteer_signup || editingEvent.donation_dropoff) {
+  setShowAdvanced(true);
+}
 
     // Recurrence
     if (editingEvent.is_recurring && editingEvent.recurrence_rule) {

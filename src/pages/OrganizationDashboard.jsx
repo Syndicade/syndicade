@@ -408,8 +408,8 @@ function OrganizationDashboard() {
     setOverviewLoading(true);
     try {
       var evRes = await supabase
-        .from('events')
-        .select('id, title, start_time, end_time, location, event_type, description, recurrence_rule, parent_event_id, is_rescheduled, original_start_time, original_end_time')
+      .from('events')
+      .select('id, title, start_time, end_time, location, event_type, description, recurrence_rule, parent_event_id, is_rescheduled, original_start_time, original_end_time, publish_to_discovery, publish_to_website, volunteer_signup, donation_dropoff, event_types, audience, languages, visibility, require_rsvp, virtual_link, full_address, city, state, zip_code, max_attendees, is_recurring, recurrence_end_date')
         .eq('organization_id', organizationId)
         .gte('start_time', new Date().toISOString())
         .order('start_time', { ascending: true })

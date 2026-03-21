@@ -674,7 +674,7 @@ export default function PublicOrganizationPage() {
         supabase.from('org_site_config').select('*').eq('organization_id', org.id).maybeSingle(),
         supabase.from('org_site_pages').select('*').eq('organization_id', org.id).order('sort_order', { ascending: true }),
         supabase.from('org_site_nav').select('*').eq('organization_id', org.id).maybeSingle(),
-        supabase.from('events').select('*').eq('organization_id', org.id).eq('visibility', 'public').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(6),
+        supabase.from('events').select('*').eq('organization_id', org.id).eq('publish_to_website', true).gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(6),
         supabase.from('announcements').select('*').eq('organization_id', org.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('org_photos').select('*').eq('organization_id', org.id).order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
         supabase.from('org_site_blocks').select('*').eq('organization_id', org.id).eq('is_visible', true).order('sort_order', { ascending: true }),
