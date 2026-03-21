@@ -408,10 +408,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                   </div>
                   <div>
                     <div style={{ fontSize: '17px', fontWeight: 700, color: '#FFFFFF' }}>{selected.name}</div>
-                    
+                    <a
                       href={'mailto:' + selected.email}
                       style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}
-                      className={'focus:outline-none focus:underline'}
                     >
                       {selected.email}
                     </a>
@@ -435,7 +434,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                       Mark unread
                     </button>
                   )}
-                  
+                  <a
                     href={'mailto:' + selected.email}
                     aria-label={'Reply to ' + selected.name + ' by email'}
                     style={{
@@ -444,7 +443,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                       color: '#FFFFFF', cursor: 'pointer', textDecoration: 'none',
                       display: 'inline-flex', alignItems: 'center', gap: '6px'
                     }}
-                    className={'hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500'}
                   >
                     <IconMail size={13} />
                     Reply via Email
