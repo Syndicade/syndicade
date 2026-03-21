@@ -19,6 +19,7 @@ import EventCalendar from './pages/EventCalendar';
 import AnnouncementFeed from './pages/AnnouncementFeed';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
+import AdminInbox from './pages/AdminInbox';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
 import MemberDirectory from './pages/MemberDirectory';
@@ -120,6 +121,7 @@ return (
             <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
 
             <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/inbox" element={<AdminInbox />} />
             <Route path="/organizations/:organizationId" element={session ? <OrganizationDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/announcements" element={session ? <AnnouncementFeed /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/members" element={session ? <MemberDirectory /> : <Navigate to="/login" replace />} />

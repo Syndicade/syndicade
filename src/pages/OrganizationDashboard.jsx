@@ -285,7 +285,7 @@ function OrganizationDashboard() {
     { id: 'documents',        label: 'Documents',        iconKey: 'folder',   roles: ['admin', 'member'] },
     { id: 'photos',           label: 'Photos',           iconKey: 'photo',    roles: ['admin', 'member'] },
     { id: 'approvals',        label: 'Approvals',        iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
-    { id: 'inbox',            label: 'Inbox',            iconKey: 'inbox',    badge: unreadInquiriesCount,  roles: ['admin'] },
+    { id: 'inbox',            label: 'Inbox',            iconKey: 'inbox',    badge: unreadInquiriesCount, roles: ['admin'], isLink: true },
     { id: 'invite',           label: 'Invite',           iconKey: 'mail',     roles: ['admin'] },
     { id: 'analytics',        label: 'Analytics',        iconKey: 'trendUp',  roles: ['admin'] },
     { id: 'community-board',  label: 'Community Board',  iconKey: 'pinboard', roles: ['admin'], isLink: true },
@@ -972,9 +972,13 @@ function OrganizationDashboard() {
                       <button
                         key={tab.id}
                         onClick={function() {
-                          if (tab.isLink) { navigate('/organizations/' + organizationId + '/community-board'); return; }
-                          setActiveTab(tab.id);
-                        }}
+  if (tab.isLink) {
+    if (tab.id === 'community-board') { navigate('/organizations/' + organizationId + '/community-board'); return; }
+    if (tab.id === 'inbox') { navigate('/organizations/' + organizationId + '/inbox'); return; }
+    return;
+  }
+  setActiveTab(tab.id);
+}}
                         className={'flex-shrink-0 py-4 px-5 border-b-2 font-semibold text-sm transition-all relative inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' +
                           (isActive
                             ? (isCB ? 'border-purple-500' : 'border-blue-500')
