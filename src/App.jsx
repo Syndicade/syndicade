@@ -26,6 +26,7 @@ import MemberDirectory from './pages/MemberDirectory';
 import CheckInPage from './pages/CheckInPage';
 import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
+import OrgChat from './pages/OrgChat';
 import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
@@ -127,6 +128,7 @@ return (
             <Route path="/organizations/:organizationId/members" element={session ? <MemberDirectory /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/programs" element={session ? <OrgPrograms /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/documents" element={session ? <DocumentLibrary /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/chat" element={<OrgChat />} />
             <Route path="/organizations/:organizationId/polls" element={session ? <PollsList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/signup-forms" element={session ? <SignupFormsList /> : <Navigate to="/login" replace />} />
             <Route path="/organizations/:organizationId/surveys" element={session ? <SurveysList /> : <Navigate to="/login" replace />} />

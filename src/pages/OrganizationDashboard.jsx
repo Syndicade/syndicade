@@ -61,6 +61,7 @@ var ICONS = {
   plus:      'M12 4v16m8-8H4',
   dots:      ['M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z'],
   warn:      ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
+  chat:      ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
   repeat:    ['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'],
   pinboard:  ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
 };
@@ -286,6 +287,7 @@ function OrganizationDashboard() {
     { id: 'photos',           label: 'Photos',           iconKey: 'photo',    roles: ['admin', 'member'] },
     { id: 'approvals',        label: 'Approvals',        iconKey: 'pending',  badge: pendingApprovalsCount, roles: ['admin'] },
     { id: 'inbox',            label: 'Inbox',            iconKey: 'inbox',    badge: unreadInquiriesCount, roles: ['admin'], isLink: true },
+    { id: 'chat', label: 'Chat', iconKey: 'chat', roles: ['admin', 'member'], isLink: true },
     { id: 'invite',           label: 'Invite',           iconKey: 'mail',     roles: ['admin'] },
     { id: 'analytics',        label: 'Analytics',        iconKey: 'trendUp',  roles: ['admin'] },
     { id: 'community-board',  label: 'Community Board',  iconKey: 'pinboard', roles: ['admin'], isLink: true },
@@ -971,10 +973,11 @@ function OrganizationDashboard() {
                     return (
                       <button
                         key={tab.id}
-                        onClick={function() {
+onClick={function() {
   if (tab.isLink) {
     if (tab.id === 'community-board') { navigate('/organizations/' + organizationId + '/community-board'); return; }
     if (tab.id === 'inbox') { navigate('/organizations/' + organizationId + '/inbox'); return; }
+    if (tab.id === 'chat') { navigate('/organizations/' + organizationId + '/chat'); return; }
     return;
   }
   setActiveTab(tab.id);
