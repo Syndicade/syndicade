@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
@@ -8,15 +8,10 @@ function Header() {
   var navigate = useNavigate();
   var { isDark, toggle } = useTheme();
 
-  var [searchQuery, setSearchQuery] = useState('');
-  var [searchResults, setSearchResults] = useState([]);
-  var [searchLoading, setSearchLoading] = useState(false);
-  var [searchOpen, setSearchOpen] = useState(false);
   var [currentUser, setCurrentUser] = useState(null);
   var [userMenuOpen, setUserMenuOpen] = useState(false);
   var [firstAdminOrg, setFirstAdminOrg] = useState(null);
 
-  var searchRef = useRef(null);
   var userMenuRef = useRef(null);
 
   useEffect(function() {
@@ -46,60 +41,11 @@ function Header() {
 
   useEffect(function() {
     function handleClickOutside(e) {
-      if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return function() { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
-
-  useEffect(function() {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      setSearchOpen(false);
-      return;
-    }
-    var timer = setTimeout(function() { runSearch(searchQuery.trim()); }, 300);
-    return function() { clearTimeout(timer); };
-  }, [searchQuery]);
-
-  async function runSearch(q) {
-    setSearchLoading(true);
-    try {
-      var [events, announcements, orgs] = await Promise.all([
-        supabase.from('events').select('id, title, start_time, organization_id').ilike('title', '%' + q + '%').limit(4),
-        supabase.from('announcements').select('id, title, organization_id').ilike('title', '%' + q + '%').limit(4),
-        supabase.from('organizations').select('id, name, type').ilike('name', '%' + q + '%').limit(3),
-      ]);
-      var results = [];
-      (orgs.data || []).forEach(function(o) {
-        results.push({ id: 'org-' + o.id, type: 'Organization', title: o.name, subtitle: o.type, path: '/organizations/' + o.id });
-      });
-      (events.data || []).forEach(function(e) {
-        results.push({ id: 'event-' + e.id, type: 'Event', title: e.title, subtitle: new Date(e.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), path: '/events/' + e.id });
-      });
-      (announcements.data || []).forEach(function(a) {
-        results.push({ id: 'ann-' + a.id, type: 'Announcement', title: a.title, subtitle: 'Announcement', path: '/organizations/' + a.organization_id + '/announcements' });
-      });
-      setSearchResults(results);
-      setSearchOpen(results.length > 0);
-    } catch (err) {
-      console.error('Search error:', err);
-    } finally {
-      setSearchLoading(false);
-    }
-  }
-
-  function handleResultClick(path) {
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchOpen(false);
-    navigate(path);
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
-  }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -113,15 +59,13 @@ function Header() {
     || currentUser?.email?.split('@')[0]
     || 'User';
 
-  var headerBg = isDark ? '#0E1523' : '#FFFFFF';
-  var headerBorder = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF' : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
-  var textMuted = isDark ? '#64748B' : '#94A3B8';
-  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
-  var inputBg = isDark ? '#151B2D' : '#F8FAFC';
-  var inputBorder = isDark ? '#2A3550' : '#E2E8F0';
-  var hoverBg = isDark ? '#1E2845' : '#F1F5F9';
+  var headerBg      = isDark ? '#0E1523' : '#FFFFFF';
+  var headerBorder  = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#64748B'  : '#94A3B8';
+  var cardBg        = isDark ? '#1A2035'  : '#FFFFFF';
+  var hoverBg       = isDark ? '#1E2845'  : '#F1F5F9';
 
   return (
     <header style={{ background: headerBg, borderBottom: '1px solid ' + headerBorder }} className="sticky top-0 z-40">
@@ -141,18 +85,17 @@ function Header() {
           {/* Nav links */}
           <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
             {[
-              { label: 'Dashboard', path: '/dashboard' },
+              { label: 'Dashboard',      path: '/dashboard' },
               { label: 'Discover Events', path: '/discover' },
-              { label: 'Discover Orgs', path: '/explore' },
-              { label: 'Programs', path: '/programs' },
-              { label: 'Calendar', path: '/calendar' },
+              { label: 'Discover Orgs',  path: '/explore' },
+              { label: 'Calendar',       path: '/calendar' },
             ].map(function(item) {
               return (
                 <button
                   key={item.path}
                   onClick={function() { navigate(item.path); }}
                   style={{ color: textSecondary }}
-                  className="font-medium text-sm px-3 py-2 rounded-lg hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                   onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
                   onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
                 >
@@ -174,91 +117,14 @@ function Header() {
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 flex-1 justify-end">
-
-            {/* Search */}
-            <div className="relative flex-1 max-w-xs" ref={searchRef}>
-              <label htmlFor="global-search" className="sr-only">Search events, announcements, organizations</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true">
-                  {searchLoading ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
-                  ) : (
-                    <svg className="h-4 w-4" style={{ color: textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  )}
-                </div>
-                <input
-                  id="global-search"
-                  type="search"
-                  value={searchQuery}
-                  onChange={function(e) { setSearchQuery(e.target.value); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Search..."
-                  style={{ background: inputBg, border: '1px solid ' + inputBorder, color: textPrimary }}
-                  className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  aria-label="Search events, announcements, and organizations"
-                  aria-autocomplete="list"
-                  aria-controls={searchOpen ? 'search-results' : undefined}
-                  aria-expanded={searchOpen}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* Search results dropdown */}
-              {searchOpen && searchResults.length > 0 && (
-                <div
-                  id="search-results"
-                  role="listbox"
-                  aria-label="Search results"
-                  style={{ background: cardBg, border: '1px solid ' + headerBorder }}
-                  className="absolute top-full left-0 right-0 mt-1 rounded-xl shadow-xl overflow-hidden z-50"
-                >
-                  {searchResults.map(function(result) {
-                    return (
-                      <button
-                        key={result.id}
-                        role="option"
-                        aria-selected="false"
-                        onClick={function() { handleResultClick(result.path); }}
-                        style={{ borderBottom: '1px solid ' + headerBorder, color: textPrimary }}
-                        className="w-full flex items-center gap-3 px-4 py-3 focus:outline-none transition-colors text-left"
-                        onMouseEnter={function(e) { e.currentTarget.style.background = hoverBg; }}
-                        onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
-                        aria-label={result.type + ': ' + result.title}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{result.title}</p>
-                          <p className="text-xs truncate" style={{ color: textMuted }}>{result.type} · {result.subtitle}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  <div className="px-4 py-2" style={{ background: inputBg, borderTop: '1px solid ' + headerBorder }}>
-                    <p className="text-xs" style={{ color: textMuted }}>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"</p>
-                  </div>
-                </div>
-              )}
-              {searchOpen && searchResults.length === 0 && !searchLoading && searchQuery.length >= 2 && (
-                <div
-                  style={{ background: cardBg, border: '1px solid ' + headerBorder }}
-                  className="absolute top-full left-0 right-0 mt-1 rounded-xl shadow-xl px-4 py-6 text-center z-50"
-                >
-                  <p className="text-sm" style={{ color: textMuted }}>No results for "{searchQuery}"</p>
-                </div>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
 
             {/* Dark/Light toggle pill */}
             <div
               role="group"
               aria-label="Color theme toggle"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                borderRadius: '99px',
-                padding: '2px',
+                display: 'flex', alignItems: 'center', borderRadius: '99px', padding: '2px',
                 background: isDark ? '#151B2D' : '#E2E8F0',
                 border: '1px solid ' + (isDark ? '#2A3550' : '#CBD5E1'),
                 flexShrink: 0,
@@ -269,15 +135,8 @@ function Header() {
                 aria-pressed={isDark}
                 aria-label="Switch to dark mode"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 10px',
-                  borderRadius: '99px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px',
+                  borderRadius: '99px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
                   background: isDark ? '#0E1523' : 'transparent',
                   color: isDark ? '#CBD5E1' : '#64748B',
                   boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.5)' : 'none',
@@ -294,15 +153,8 @@ function Header() {
                 aria-pressed={!isDark}
                 aria-label="Switch to light mode"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 10px',
-                  borderRadius: '99px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px',
+                  borderRadius: '99px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
                   background: isDark ? 'transparent' : '#FFFFFF',
                   color: isDark ? '#64748B' : '#0E1523',
                   boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.12)',
@@ -387,7 +239,8 @@ function Header() {
                       role="menuitem"
                     >
                       <svg className="h-4 w-4" style={{ color: textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       Account Settings
                     </button>

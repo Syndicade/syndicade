@@ -20,7 +20,6 @@ var EVENT_TYPE_COLORS = {
   'youth-event':          { bg: '#3B1A2E', color: '#F472B6' },
 };
 
-// Light mode equivalents — softer pastel backgrounds, accessible text
 var EVENT_TYPE_COLORS_LIGHT = {
   'advocacy-event':       { bg: '#FEE2E2', color: '#B91C1C' },
   'blood-drive':          { bg: '#FFE4E6', color: '#BE123C' },
@@ -41,10 +40,61 @@ var LANGUAGE_LABELS = {
   tl: 'Tagalog', vi: 'Tiếng Việt', ar: 'العربية',
 };
 
+// ── .ics generator ────────────────────────────────────────────────────────────
+function formatICSDate(dateStr) {
+  if (!dateStr) return '';
+  var d = new Date(dateStr);
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function generateICS(event) {
+  var start = formatICSDate(event.start_time);
+  var end   = event.end_time ? formatICSDate(event.end_time) : formatICSDate(event.start_time);
+  var location = [event.location, event.city, event.state].filter(Boolean).join(', ');
+  var description = (event.description || '').replace(/\n/g, '\\n');
+  var url = window.location.origin + '/events/' + event.id;
+
+  var ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Syndicade//EN',
+    'BEGIN:VEVENT',
+    'UID:' + event.id + '@syndicade.com',
+    'DTSTAMP:' + formatICSDate(new Date().toISOString()),
+    'DTSTART:' + start,
+    'DTEND:' + end,
+    'SUMMARY:' + (event.title || 'Event'),
+    'DESCRIPTION:' + description,
+    'LOCATION:' + location,
+    'URL:' + url,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = (event.title || 'event').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.ics';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
 function CalendarIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '13px', height: '13px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function CalendarAddIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '13px', height: '13px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 13v3m0 0v3m0-3h3m-3 0H9" />
     </svg>
   );
 }
@@ -109,13 +159,12 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
   initialSaved = initialSaved || false;
   adminOrgs = adminOrgs || [];
 
-  var cardBg      = isDark ? '#1A2035' : '#FFFFFF';
-  var borderColor = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary   = isDark ? '#FFFFFF' : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
-  var textMuted     = isDark ? '#94A3B8' : '#64748B';
-  var hoverBg       = isDark ? '#1E2845' : '#F1F5F9';
-  var audienceBg    = isDark ? '#1E2845' : '#F1F5F9';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var audienceBg    = isDark ? '#1E2845'  : '#F1F5F9';
 
   var [saved, setSaved] = useState(initialSaved);
   var [saveLoading, setSaveLoading] = useState(false);
@@ -153,6 +202,15 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
       await navigator.clipboard.writeText(url);
       toast.success(et(lang, 'linkCopied'));
     } catch { toast.error('Could not copy link'); }
+  }
+
+  function handleAddToCalendar() {
+    try {
+      generateICS(event);
+      toast.success('Calendar file downloaded');
+    } catch (err) {
+      toast.error('Could not generate calendar file');
+    }
   }
 
   function openColabModal() {
@@ -232,7 +290,9 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+
+          {/* Save + Share icon buttons (top right) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
             <button
               onClick={handleSave}
               disabled={saveLoading}
@@ -310,6 +370,8 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
 
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', marginTop: 'auto', borderTop: '1px solid ' + borderColor, flexWrap: 'wrap', gap: '8px' }}>
+
+          {/* Left: meta tags */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: textMuted }}>
             {event.languages && event.languages.length > 0 && (
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -317,31 +379,47 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                 {event.languages.map(function(l) { return LANGUAGE_LABELS[l] || l; }).join(', ')}
               </span>
             )}
-            {event.volunteer_signup && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#2DD4BF' }}>Volunteer</span>
-            )}
-            {event.donation_dropoff && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#FB923C' }}>Donations</span>
-            )}
-            {event.requires_rsvp && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60A5FA' }}>RSVP</span>
-            )}
+            {event.volunteer_signup && <span style={{ color: '#2DD4BF' }}>Volunteer</span>}
+            {event.donation_dropoff  && <span style={{ color: '#FB923C' }}>Donations</span>}
+            {event.requires_rsvp    && <span style={{ color: '#60A5FA' }}>RSVP</span>}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Right: action buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {/* Add to Calendar — outlined, sits left of primary CTA */}
+            <button
+              onClick={handleAddToCalendar}
+              aria-label={'Add ' + event.title + ' to calendar'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                fontSize: '12px', fontWeight: 600,
+                padding: '6px 12px', borderRadius: '8px',
+                background: 'transparent',
+                border: '1px solid ' + borderColor,
+                color: textSecondary,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+              className="hover:border-blue-500 hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <CalendarAddIcon />
+              Add to Calendar
+            </button>
+
             {showCollaborate && (
               <button
                 onClick={openColabModal}
-                style={{ fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '8px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#A78BFA', cursor: 'pointer' }}
+                style={{ fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '8px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#A78BFA', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 aria-label={'Request to collaborate on ' + event.title}
                 className="focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 Collaborate
               </button>
             )}
+
             <Link
               to={'/events/' + event.id}
-              style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', padding: '6px 12px', borderRadius: '8px', background: '#3B82F6', textDecoration: 'none' }}
+              style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', padding: '6px 12px', borderRadius: '8px', background: '#3B82F6', textDecoration: 'none', whiteSpace: 'nowrap' }}
               aria-label={(et(lang, 'viewEvent')) + ': ' + event.title}
               className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
