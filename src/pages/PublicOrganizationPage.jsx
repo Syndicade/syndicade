@@ -131,7 +131,10 @@ async function handleSubmit(e) {
       var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
       await fetch(SUPABASE_URL + '/functions/v1/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+  'Content-Type': 'application/json',
+  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
+},
         body: JSON.stringify({
           type: 'contact_inquiry',
           data: {
@@ -749,57 +752,28 @@ export default function PublicOrganizationPage() {
     setJoinForm(function(p) { return Object.assign({}, p, { [n]: v }); });
   }
 
-async function handleJoinSubmit(e) {
-  e.preventDefault();
-  setJoinError(null);
-  setJoinLoading(true);
-  try {
-    var { error: err } = await supabase.from('contact_inquiries').insert([{
-      organization_id: organization.id,
-      name: joinForm.name.trim(),
-      email: joinForm.email.trim(),
-      message: joinForm.message.trim(),
-      created_at: new Date().toISOString(),
-    }]);
-    if (err) throw err;
-
-    // Fetch org admin email
-    var adminRes = await supabase
-      .from('memberships')
-      .select('members(email)')
-      .eq('organization_id', organization.id)
-      .eq('role', 'admin')
-      .eq('status', 'active')
-      .limit(1)
-      .single();
-
-    if (adminRes.data && adminRes.data.members && adminRes.data.members.email) {
-      var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
-      await fetch(SUPABASE_URL + '/functions/v1/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'contact_inquiry',
-          data: {
-            adminEmail: adminRes.data.members.email,
-            orgName: organization.name,
-            senderName: joinForm.name.trim(),
-            senderEmail: joinForm.email.trim(),
-            message: joinForm.message.trim(),
-            inboxUrl: window.location.origin + '/organizations/' + organization.id + '/inbox',
-          },
-        }),
-      });
+  async function handleJoinSubmit(e) {
+    e.preventDefault();
+    setJoinError(null);
+    setJoinLoading(true);
+    try {
+      var { error: err } = await supabase.from('contact_inquiries').insert([{
+        organization_id: organization.id,
+        name: joinForm.name.trim(),
+        email: joinForm.email.trim(),
+        message: joinForm.message.trim(),
+        created_at: new Date().toISOString(),
+      }]);
+      if (err) throw err;
+      setJoinSuccess(true);
+      setJoinForm({ name: '', email: '', message: '' });
+    } catch (err) {
+      setJoinError('Something went wrong. Please try again or contact us directly.');
+    } finally {
+      setJoinLoading(false);
     }
-
-    setJoinSuccess(true);
-    setJoinForm({ name: '', email: '', message: '' });
-  } catch (err) {
-    setJoinError('Something went wrong. Please try again or contact us directly.');
-  } finally {
-    setJoinLoading(false);
   }
-}
+
   if (loading) return <PublicPageSkeleton />;
 
   if (error || !organization) {
