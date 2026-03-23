@@ -170,7 +170,7 @@ setUserRsvp(status);
               'Content-Type': 'application/json',
               'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
             },
-            body: JSON.stringify({
+body: JSON.stringify({
               type: 'rsvp_confirmation',
               data: {
                 memberEmail: memberRes.data.email,
@@ -179,6 +179,8 @@ setUserRsvp(status);
                 eventDate: eventDate + ' at ' + eventTime,
                 eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
                 eventUrl: window.location.href,
+                startISO: event.start_time,
+                endISO: event.end_time || event.start_time,
               },
             }),
           });

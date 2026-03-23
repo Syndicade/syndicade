@@ -66,11 +66,18 @@ function buildEmail(type, data) {
     }
   }
 
-  if (type === 'rsvp_confirmation') {
+if (type === 'rsvp_confirmation') {
+    var startDate = data.startISO ? new Date(data.startISO).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z' : '';
+    var endDate = data.endISO ? new Date(data.endISO).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z' : startDate;
+    var gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      '&text=' + encodeURIComponent(data.eventTitle) +
+      '&dates=' + startDate + '/' + endDate +
+      '&location=' + encodeURIComponent(data.eventLocation || '') +
+      '&details=' + encodeURIComponent('View event: ' + data.eventUrl);
     return {
       to: data.memberEmail,
       subject: "You're registered: " + data.eventTitle,
-      html: rsvpConfirmationTemplate(data),
+      html: rsvpConfirmationTemplate(Object.assign({}, data, { googleCalendarUrl: gcalUrl })),
     }
   }
 
@@ -99,10 +106,9 @@ function baseTemplate(content) {
   return (
     '<div style="font-family:Inter,Helvetica,sans-serif;background:#f8fafc;padding:32px 0;min-height:100vh;">' +
     '  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">' +
-    '    <div style="background:#0E1523;padding:24px 32px;display:flex;align-items:center;gap:8px;">' +
-    '      <span style="font-size:20px;font-weight:800;color:#ffffff;">Syndi</span>' +
-    '      <span style="font-size:20px;font-weight:800;color:#F5B731;">cade</span>' +
-    '    </div>' +
+'    <div style="background:#0E1523;padding:24px 32px;">' +
+'      <span style="font-size:20px;font-weight:800;color:#ffffff;">Syndi</span><span style="font-size:20px;font-weight:800;color:#F5B731;">cade</span>' +
+'    </div>' +
     '    <div style="padding:32px;">' +
     content +
     '    </div>' +
@@ -145,7 +151,8 @@ function rsvpConfirmationTemplate(data) {
     '    <span style="font-weight:600;">Location:</span> ' + escapeHtml(data.eventLocation || 'See event page for details') +
     '  </p>' +
     '</div>' +
-    '<a href="' + data.eventUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">View Event Details</a>'
+    '<a href="' + data.eventUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;margin-right:12px;">View Event Details</a>' +
+    '<a href="' + data.googleCalendarUrl + '" style="display:inline-block;background:#ffffff;color:#3B82F6;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;border:2px solid #3B82F6;">Add to Calendar</a>'
   )
 }
 
