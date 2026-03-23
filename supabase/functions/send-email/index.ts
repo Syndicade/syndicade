@@ -74,7 +74,7 @@ if (type === 'rsvp_confirmation') {
       '&dates=' + startDate + '/' + endDate +
       '&location=' + encodeURIComponent(data.eventLocation || '') +
       '&details=' + encodeURIComponent('View event: ' + data.eventUrl);
-var icsUrl = 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + (data.eventId || '')
+var icsUrl = data.eventId ? 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + data.eventId : ''
     return {
       to: data.memberEmail,
       subject: "You're registered: " + data.eventTitle,
