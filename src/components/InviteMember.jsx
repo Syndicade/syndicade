@@ -70,10 +70,29 @@ function InviteMember({ organizationId, organizationName, onInviteSent }) {
 
         if (membershipError) throw membershipError;
 
-        setSuccess(true);
+setSuccess(true);
         setEmail('');
         setMessage('');
-        
+
+        var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+        await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
+          },
+          body: JSON.stringify({
+            type: 'member_invite',
+            data: {
+              inviteeEmail: email.toLowerCase(),
+              orgName: organizationName,
+              inviterName: user.email,
+              orgDescription: '',
+              acceptUrl: window.location.origin + '/dashboard',
+            },
+          }),
+        });
+
         if (onInviteSent) {
           onInviteSent({
             email,
@@ -97,9 +116,28 @@ function InviteMember({ organizationId, organizationName, onInviteSent }) {
 
         if (inviteError) throw inviteError;
 
-        setSuccess(true);
+setSuccess(true);
         setEmail('');
         setMessage('');
+
+        var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+        await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
+          },
+          body: JSON.stringify({
+            type: 'member_invite',
+            data: {
+              inviteeEmail: email.toLowerCase(),
+              orgName: organizationName,
+              inviterName: user.email,
+              orgDescription: message || '',
+              acceptUrl: window.location.origin + '/register?invite=' + email.toLowerCase(),
+            },
+          }),
+        });
 
         if (onInviteSent) {
           onInviteSent({ email, role, isNewUser: true });
