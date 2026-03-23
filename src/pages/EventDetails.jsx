@@ -157,7 +157,7 @@ setUserRsvp(status);
         var memberRes = await supabase
           .from('members')
           .select('email, first_name')
-          .eq('id', currentUser.id)
+          .eq('user_id', currentUser.id)
           .single();
 
         if (memberRes.data && memberRes.data.email) {
