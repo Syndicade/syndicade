@@ -88,7 +88,7 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
       if (insertResult.error) throw insertResult.error;
       var newAnnouncement = insertResult.data;
 
-      // Send notifications only if approved
+// Send notifications only if approved
       if (approvalStatus === 'approved') {
         try {
           var notificationResult = await notifyOrganizationMembers({
@@ -104,6 +104,46 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
           }
         } catch (notifError) {
           console.error('Notification failed (announcement still created):', notifError);
+        }
+
+        // Send email to all members if urgent
+        if (formData.priority === 'urgent') {
+          try {
+            var membersRes = await supabase
+              .from('memberships')
+              .select('members(email)')
+              .eq('organization_id', organizationId)
+              .eq('status', 'active');
+
+            if (membersRes.data && membersRes.data.length > 0) {
+              var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+              var announcementUrl = window.location.origin + '/organizations/' + organizationId;
+              var emailPromises = membersRes.data
+                .filter(function(m) { return m.members && m.members.email; })
+                .map(function(m) {
+                  return fetch(SUPABASE_URL + '/functions/v1/send-email', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
+                    },
+                    body: JSON.stringify({
+                      type: 'urgent_announcement',
+                      data: {
+                        memberEmail: m.members.email,
+                        orgName: organizationName,
+                        announcementTitle: formData.title,
+                        announcementBody: formData.content,
+                        announcementUrl: announcementUrl,
+                      },
+                    }),
+                  });
+                });
+              await Promise.allSettled(emailPromises);
+            }
+          } catch (emailErr) {
+            console.error('Urgent announcement emails failed:', emailErr);
+          }
         }
       }
 
