@@ -140,7 +140,7 @@ const { eventId, organizationId } = useParams();
         if (error) throw error;
       }
 
-      setUserRsvp(status);
+setUserRsvp(status);
       setRsvpSuccess(true);
 
       const { data: updatedRsvps } = await supabase
@@ -150,6 +150,39 @@ const { eventId, organizationId } = useParams();
 
       if (updatedRsvps) {
         setRsvps(updatedRsvps);
+      }
+
+      // Send RSVP confirmation email when going
+      if (status === 'going') {
+        var memberRes = await supabase
+          .from('members')
+          .select('email, first_name')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (memberRes.data && memberRes.data.email) {
+          var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+          var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          var eventTime = new Date(event.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
+            },
+            body: JSON.stringify({
+              type: 'rsvp_confirmation',
+              data: {
+                memberEmail: memberRes.data.email,
+                eventTitle: event.title,
+                orgName: organization ? organization.name : '',
+                eventDate: eventDate + ' at ' + eventTime,
+                eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
+                eventUrl: window.location.href,
+              },
+            }),
+          });
+        }
       }
 
       setTimeout(() => setRsvpSuccess(false), 3000);
