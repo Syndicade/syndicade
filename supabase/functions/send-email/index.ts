@@ -74,10 +74,11 @@ if (type === 'rsvp_confirmation') {
       '&dates=' + startDate + '/' + endDate +
       '&location=' + encodeURIComponent(data.eventLocation || '') +
       '&details=' + encodeURIComponent('View event: ' + data.eventUrl);
+var icsUrl = 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + (data.eventId || '')
     return {
       to: data.memberEmail,
       subject: "You're registered: " + data.eventTitle,
-      html: rsvpConfirmationTemplate(Object.assign({}, data, { googleCalendarUrl: gcalUrl })),
+      html: rsvpConfirmationTemplate(Object.assign({}, data, { googleCalendarUrl: gcalUrl, icsUrl: icsUrl })),
     }
   }
 
@@ -151,8 +152,15 @@ function rsvpConfirmationTemplate(data) {
     '    <span style="font-weight:600;">Location:</span> ' + escapeHtml(data.eventLocation || 'See event page for details') +
     '  </p>' +
     '</div>' +
-    '<a href="' + data.eventUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;margin-right:12px;">View Event Details</a>' +
-    '<a href="' + data.googleCalendarUrl + '" style="display:inline-block;background:#ffffff;color:#3B82F6;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;border:2px solid #3B82F6;">Add to Calendar</a>'
+'<a href="' + data.eventUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;margin-bottom:12px;">View Event Details</a>' +
+    '<div style="margin-top:16px;">' +
+    '<p style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Add to Calendar</p>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+    '<a href="' + data.googleCalendarUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Google Calendar</a>' +
+    '<a href="' + data.icsUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Apple Calendar</a>' +
+    '<a href="' + data.icsUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Outlook</a>' +
+    '</div>' +
+    '</div>'
   )
 }
 

@@ -178,9 +178,10 @@ body: JSON.stringify({
                 orgName: organization ? organization.name : '',
                 eventDate: eventDate + ' at ' + eventTime,
                 eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
-                eventUrl: window.location.href,
+eventUrl: window.location.href,
                 startISO: event.start_time,
                 endISO: event.end_time || event.start_time,
+                eventId: event.id,
               },
             }),
           });
