@@ -103,27 +103,57 @@ function JoinForm({ org, primary, borderRadius }) {
     setForm(function(p) { return Object.assign({}, p, { [n]: v }); });
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      var result = await supabase.from('contact_inquiries').insert([{
-        organization_id: org.id,
-        name: form.name.trim(),
-        email: form.email.trim(),
-        message: form.message.trim(),
-        created_at: new Date().toISOString(),
-      }]);
-      if (result.error) throw result.error;
-      setSuccess(true);
-      setForm({ name: '', email: '', message: '' });
-    } catch (err) {
-      setError('Something went wrong. Please try again or contact us directly.');
-    } finally {
-      setLoading(false);
+async function handleSubmit(e) {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
+  try {
+    var result = await supabase.from('contact_inquiries').insert([{
+      organization_id: org.id,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      message: form.message.trim(),
+      created_at: new Date().toISOString(),
+    }]);
+    if (result.error) throw result.error;
+
+    // Fetch org admin email
+    var adminRes = await supabase
+      .from('memberships')
+      .select('members(email)')
+      .eq('organization_id', org.id)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+      .limit(1)
+      .single();
+
+    if (adminRes.data && adminRes.data.members && adminRes.data.members.email) {
+      var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+      await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'contact_inquiry',
+          data: {
+            adminEmail: adminRes.data.members.email,
+            orgName: org.name,
+            senderName: form.name.trim(),
+            senderEmail: form.email.trim(),
+            message: form.message.trim(),
+            inboxUrl: window.location.origin + '/organizations/' + org.id + '/inbox',
+          },
+        }),
+      });
     }
+
+    setSuccess(true);
+    setForm({ name: '', email: '', message: '' });
+  } catch (err) {
+    setError('Something went wrong. Please try again or contact us directly.');
+  } finally {
+    setLoading(false);
   }
+}
 
   if (success) {
     return (
@@ -719,28 +749,57 @@ export default function PublicOrganizationPage() {
     setJoinForm(function(p) { return Object.assign({}, p, { [n]: v }); });
   }
 
-  async function handleJoinSubmit(e) {
-    e.preventDefault();
-    setJoinError(null);
-    setJoinLoading(true);
-    try {
-      var { error: err } = await supabase.from('contact_inquiries').insert([{
-        organization_id: organization.id,
-        name: joinForm.name.trim(),
-        email: joinForm.email.trim(),
-        message: joinForm.message.trim(),
-        created_at: new Date().toISOString(),
-      }]);
-      if (err) throw err;
-      setJoinSuccess(true);
-      setJoinForm({ name: '', email: '', message: '' });
-    } catch (err) {
-      setJoinError('Something went wrong. Please try again or contact us directly.');
-    } finally {
-      setJoinLoading(false);
-    }
-  }
+async function handleJoinSubmit(e) {
+  e.preventDefault();
+  setJoinError(null);
+  setJoinLoading(true);
+  try {
+    var { error: err } = await supabase.from('contact_inquiries').insert([{
+      organization_id: organization.id,
+      name: joinForm.name.trim(),
+      email: joinForm.email.trim(),
+      message: joinForm.message.trim(),
+      created_at: new Date().toISOString(),
+    }]);
+    if (err) throw err;
 
+    // Fetch org admin email
+    var adminRes = await supabase
+      .from('memberships')
+      .select('members(email)')
+      .eq('organization_id', organization.id)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+      .limit(1)
+      .single();
+
+    if (adminRes.data && adminRes.data.members && adminRes.data.members.email) {
+      var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+      await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'contact_inquiry',
+          data: {
+            adminEmail: adminRes.data.members.email,
+            orgName: organization.name,
+            senderName: joinForm.name.trim(),
+            senderEmail: joinForm.email.trim(),
+            message: joinForm.message.trim(),
+            inboxUrl: window.location.origin + '/organizations/' + organization.id + '/inbox',
+          },
+        }),
+      });
+    }
+
+    setJoinSuccess(true);
+    setJoinForm({ name: '', email: '', message: '' });
+  } catch (err) {
+    setJoinError('Something went wrong. Please try again or contact us directly.');
+  } finally {
+    setJoinLoading(false);
+  }
+}
   if (loading) return <PublicPageSkeleton />;
 
   if (error || !organization) {
