@@ -6,6 +6,7 @@ import RecurringEventOptions from '../components/RecurringEventOptions';
 import EditEvent from '../components/EditEvent';
 import AttendanceReport from '../components/AttendanceReport';
 import AttendanceCheckIn from '../components/AttendanceCheckIn';
+import EventQRCode from '../components/EventQRCode';
 
 function EventDetails() {
   const { eventId, organizationId } = useParams();
@@ -566,13 +567,16 @@ function EventDetails() {
               </div>
             )}
 
-            {/* Attendance Check-In */}
+{/* Attendance Check-In */}
             <AttendanceCheckIn
               event={event}
               currentUser={currentUser}
               userRole={isAdmin ? 'admin' : 'member'}
               organizationId={event.organization_id}
             />
+
+            {/* QR Code */}
+            <EventQRCode event={event} />
 
           </div>
 
