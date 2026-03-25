@@ -35,9 +35,8 @@ function EventDetails() {
       setLoading(true);
       setError(null);
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      setCurrentUser(user);
+const { data: { user } } = await supabase.auth.getUser();
+setCurrentUser(user);
 
       const { data: eventData, error: eventError } = await supabase
         .from('events')
@@ -51,7 +50,13 @@ function EventDetails() {
         setLoading(false);
         return;
       }
-      setEvent(eventData);
+setEvent(eventData);
+
+// If not public and user is not logged in, redirect to login
+if (eventData.visibility !== 'public' && !user) {
+  navigate('/login');
+  return;
+}
 
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
