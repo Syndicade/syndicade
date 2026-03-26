@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import MembershipTiers from '../components/MembershipTiers';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 var SERVICE_CATEGORIES = [
@@ -394,16 +395,13 @@ function RolesTab({ organizationId }) {
               return (
                 <div key={m.id} role="listitem"
                   className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl flex-wrap">
-                  {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0" aria-hidden="true">
                     {name.charAt(0).toUpperCase()}
                   </div>
-                  {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{name}</p>
                     {m.profile.email && <p className="text-xs text-gray-400 truncate">{m.profile.email}</p>}
                   </div>
-                  {/* System role */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <label htmlFor={'sys-role-'+m.id} className="sr-only">System role for {name}</label>
                     <select id={'sys-role-'+m.id} value={m.role} disabled={isUpdating}
@@ -415,7 +413,6 @@ function RolesTab({ organizationId }) {
                       ); })}
                     </select>
                   </div>
-                  {/* Custom role tag */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <label htmlFor={'custom-role-'+m.id} className="sr-only">Custom tag for {name}</label>
                     <select id={'custom-role-'+m.id} value={m.custom_role_id||''} disabled={isUpdating||customRoles.length===0}
@@ -452,7 +449,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var [saving, setSaving] = useState(false);
   var [activeTab, setActiveTab] = useState('basic');
 
-var [form, setForm] = useState({
+  var [form, setForm] = useState({
     name: '', description: '', type: 'community',
     settings: { allowMemberInvites: true, requireApproval: false },
     join_mode: 'invite_only',
@@ -465,10 +462,11 @@ var [form, setForm] = useState({
   });
 
   var tabs = [
-    { id: 'basic',   label: 'Basic Information' },
-    { id: 'privacy', label: 'Privacy & Access'  },
-    { id: 'roles',   label: 'Roles'             },
-    { id: 'discover',label: 'Discover Orgs'     },
+    { id: 'basic',      label: 'Basic Information' },
+    { id: 'privacy',    label: 'Privacy & Access'  },
+    { id: 'roles',      label: 'Roles'             },
+    { id: 'membership', label: 'Membership'        },
+    { id: 'discover',   label: 'Discover Orgs'     },
   ];
 
   useEffect(function(){ fetchOrganization(); }, [organizationId]);
@@ -489,6 +487,13 @@ var [form, setForm] = useState({
         city: data.city || '',
         state: data.state || '',
         zip_code: data.zip_code || '',
+        contact_phone: data.contact_phone || '',
+        address: data.address || '',
+        mailing_same: true,
+        mailing_address: data.mailing_address || '',
+        mailing_city: data.mailing_city || '',
+        mailing_state: data.mailing_state || '',
+        mailing_zip: data.mailing_zip || '',
         service_categories: data.service_categories || [],
         languages: data.languages || [],
         keywords: data.keywords || [],
@@ -522,7 +527,7 @@ var [form, setForm] = useState({
         type: form.type,
         settings: form.settings,
         join_mode: form.join_mode,
-is_public: form.is_public,
+        is_public: form.is_public,
         city: form.city.trim(),
         county: form.county.trim(),
         state: form.state.trim(),
@@ -601,7 +606,7 @@ is_public: form.is_public,
           <div className="px-6 py-6">
 
             {/* Public URL banner */}
-            {publicPageUrl && activeTab !== 'roles' && (
+            {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-2 mb-6">
                 <Icon path={['M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101','M14.828 14.828a4 4 0 015.656 0l4-4a4 4 0 01-5.656-5.656l-1.1 1.1']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
                 <p className="text-sm text-blue-800">
@@ -628,20 +633,18 @@ is_public: form.is_public,
                     {ORG_TYPES.map(function(t){ return <option key={t.value} value={t.value}>{t.label}</option>; })}
                   </select>
                 </div>
-<div>
+                <div>
                   <label htmlFor="org-description" className={labelCls}>Description</label>
                   <textarea id="org-description" name="description" value={form.description} onChange={handleField} rows={4} maxLength={500}
                     className={inputCls+' resize-none'} aria-describedby="desc-count"/>
                   <p id="desc-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.description.length}/500</p>
                 </div>
 
-                {/* Contact */}
                 <div>
                   <label htmlFor="org-phone" className={labelCls}>Phone Number</label>
                   <input id="org-phone" name="contact_phone" type="tel" value={form.contact_phone} onChange={handleField} placeholder="e.g. (419) 555-0100" className={inputCls}/>
                 </div>
 
-                {/* Physical Address */}
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-3">Physical Address</p>
                   <div className="space-y-3">
@@ -670,7 +673,6 @@ is_public: form.is_public,
                   </div>
                 </div>
 
-                {/* Mailing Address */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-bold text-gray-900">Mailing Address</p>
@@ -712,14 +714,13 @@ is_public: form.is_public,
               <section aria-labelledby="privacy-heading" className="space-y-6">
                 <h3 id="privacy-heading" className="text-lg font-bold text-gray-900">Privacy & Access</h3>
 
-                {/* Join mode */}
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-3">How can people join?</p>
                   <div className="space-y-2" role="radiogroup" aria-label="Join mode">
                     {[
-                      { value: 'invite_only',    label: 'Invite Only',          desc: 'Only admins can invite new members.'                                      },
-                      { value: 'request_to_join',label: 'Request to Join',      desc: 'Anyone can request to join. Admins approve or deny requests.'             },
-                      { value: 'both',           label: 'Both',                 desc: 'Admins can invite members, and anyone can also request to join.'          },
+                      { value: 'invite_only',    label: 'Invite Only',     desc: 'Only admins can invite new members.'                                 },
+                      { value: 'request_to_join',label: 'Request to Join', desc: 'Anyone can request to join. Admins approve or deny requests.'        },
+                      { value: 'both',           label: 'Both',            desc: 'Admins can invite members, and anyone can also request to join.'     },
                     ].map(function(opt){
                       var checked = form.join_mode === opt.value;
                       return (
@@ -736,11 +737,10 @@ is_public: form.is_public,
                   </div>
                 </div>
 
-                {/* Checkboxes */}
                 <div className="space-y-3">
                   {[
-                    { id:'allow-invites',  name:'settings.allowMemberInvites', checked:form.settings.allowMemberInvites, label:'Allow Member Invitations', desc:'Let members invite others to join the organization.' },
-                    { id:'require-approval',name:'settings.requireApproval',   checked:form.settings.requireApproval,   label:'Require Admin Approval',    desc:'New members must be approved by an admin before joining.' },
+                    { id:'allow-invites',   name:'settings.allowMemberInvites', checked:form.settings.allowMemberInvites, label:'Allow Member Invitations', desc:'Let members invite others to join the organization.' },
+                    { id:'require-approval',name:'settings.requireApproval',    checked:form.settings.requireApproval,   label:'Require Admin Approval',    desc:'New members must be approved by an admin before joining.' },
                   ].map(function(item){
                     return (
                       <div key={item.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
@@ -762,6 +762,17 @@ is_public: form.is_public,
               <RolesTab organizationId={organizationId}/>
             )}
 
+            {/* ── MEMBERSHIP ── */}
+            {activeTab === 'membership' && (
+              <section aria-labelledby="membership-heading" className="space-y-6">
+                <div>
+                  <h3 id="membership-heading" className="text-lg font-bold text-gray-900">Membership Settings</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">Configure membership tiers, dues amounts, and durations.</p>
+                </div>
+                <MembershipTiers organizationId={organizationId} />
+              </section>
+            )}
+
             {/* ── DISCOVER ORGS ── */}
             {activeTab === 'discover' && (
               <section aria-labelledby="discover-heading" className="space-y-6">
@@ -770,7 +781,6 @@ is_public: form.is_public,
                   <p className="text-gray-500 text-sm mt-0.5">Control how your organization appears in public search.</p>
                 </div>
 
-                {/* Toggle */}
                 <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.is_public?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">List on Discover Orgs page</p>
@@ -782,8 +792,6 @@ is_public: form.is_public,
 
                 {form.is_public && (
                   <div className="space-y-6">
-
-                    {/* Service Categories */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Service Categories</p>
                       <p className="text-xs text-gray-500 mb-3">Select all that apply.</p>
@@ -791,8 +799,6 @@ is_public: form.is_public,
                         onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }}
                         legend="Service categories"/>
                     </div>
-
-                    {/* Languages */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Languages Served</p>
                       <p className="text-xs text-gray-500 mb-3">Which languages does your organization serve?</p>
@@ -800,11 +806,9 @@ is_public: form.is_public,
                         onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{languages:val}); }); }}
                         legend="Languages served"/>
                     </div>
-
-                    {/* Keywords */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Search Keywords</p>
-                      <p className="text-xs text-gray-500 mb-3">Add words people might search that aren't in categories above (e.g. <span className="font-mono">queer</span>, <span className="font-mono">veterans</span>).</p>
+                      <p className="text-xs text-gray-500 mb-3">Add words people might search that aren't in categories above.</p>
                       <KeywordInput keywords={form.keywords}
                         onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}/>
                     </div>
@@ -813,8 +817,8 @@ is_public: form.is_public,
               </section>
             )}
 
-            {/* Save button — not shown on Roles tab */}
-            {activeTab !== 'roles' && (
+            {/* Save button — not shown on Roles or Membership tabs */}
+            {activeTab !== 'roles' && activeTab !== 'membership' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"

@@ -98,6 +98,14 @@ var icsUrl = data.eventId ? 'https://zktmhqrygknkodydbumq.supabase.co/functions/
     }
   }
 
+    if (type === 'dues_reminder') {
+    return {
+      to: data.memberEmail,
+      subject: 'Dues Reminder — ' + data.orgName,
+      html: duesReminderTemplate(data),
+    }
+  }
+
   return null
 }
 
@@ -201,4 +209,15 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
+}
+
+function duesReminderTemplate(data) {
+  return baseTemplate(
+    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 8px;">Dues Reminder</h2>' +
+    '<p style="font-size:14px;color:#475569;margin:0 0 24px;">Hi <strong>' + escapeHtml(data.memberName) + '</strong>,</p>' +
+    '<p style="font-size:14px;color:#475569;margin:0 0 16px;">This is a friendly reminder that your dues for <strong>' + escapeHtml(data.orgName) + '</strong> are currently outstanding.</p>' +
+    (data.duesAmount ? '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #F5B731;border-radius:0 8px 8px 0;padding:16px;margin-bottom:20px;"><p style="margin:0;font-size:15px;color:#0e1523;">Amount due: <strong>$' + escapeHtml(String(data.duesAmount)) + '</strong></p></div>' : '') +
+    (data.message ? '<p style="font-size:14px;color:#475569;margin:0 0 16px;">' + escapeHtml(data.message) + '</p>' : '') +
+    '<p style="font-size:14px;color:#475569;margin:0;">Please contact your organization admin if you have questions.</p>'
+  )
 }
