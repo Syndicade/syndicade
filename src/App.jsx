@@ -43,6 +43,7 @@ import OrganizationDiscovery from './pages/OrganizationDiscovery';
 import { ThemeProvider } from './context/ThemeContext';
 import CommunityBoard from './pages/CommunityBoard';
 import PricingPage from './pages/PricingPage';
+import BillingPage from './pages/BillingPage';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -148,6 +149,7 @@ return (
             <Route path="/home" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/organizations/:organizationId/billing" element={<BillingPage />} />
             <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
 
             <Route

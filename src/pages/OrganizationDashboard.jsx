@@ -1025,6 +1025,7 @@ onClick={function() {
                     { label: 'Sign-Up Forms',   dot: '#6366F1', hover: 'indigo', onClick: function() { navigate('/organizations/' + organizationId + '/signup-forms'); }, adminOnly: false },
                     { label: 'Programs',        dot: '#8B5CF6', hover: 'purple', onClick: function() { navigate('/organizations/' + organizationId + '/programs'); }, adminOnly: false },
                     { label: 'Edit Public Page',dot: '#64748B', hover: 'gray',   onClick: function() { navigate('/organizations/' + organizationId + '/page-editor'); }, adminOnly: true  },
+                    { label: 'Billing',         dot: '#22C55E', hover: 'green',  onClick: function() { navigate('/organizations/' + organizationId + '/billing'); },      adminOnly: true  },
                   ].filter(function(t) { return !t.adminOnly || effectiveRole === 'admin'; }).map(function(t) {
                     return (
                       <button
