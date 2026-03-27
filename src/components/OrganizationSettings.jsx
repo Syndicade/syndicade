@@ -402,6 +402,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     { id: 'roles',      label: 'Roles'             },
     { id: 'membership', label: 'Membership'        },
     { id: 'discover',   label: 'Discover Orgs'     },
+    { id: 'donations', label: 'Donations'         },
   ];
 
   useEffect(function(){ fetchOrganization(); }, [organizationId]);
@@ -433,6 +434,11 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         service_categories: data.service_categories || [],
         languages: data.languages || [],
         keywords: data.keywords || [],
+        enable_donations: data.enable_donations || false,
+        donation_suggested_amount: data.donation_suggested_amount || '',
+        donation_external_link: data.donation_external_link || '',
+        donation_title: data.donation_title || '',
+        donation_description: data.donation_description || '',
       });
     } catch(err) {
       toast.error('Failed to load settings');
@@ -478,6 +484,11 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         service_categories: form.service_categories,
         languages: form.languages,
         keywords: form.keywords,
+        enable_donations: form.enable_donations,
+        donation_suggested_amount: form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
+        donation_external_link: form.donation_external_link ? form.donation_external_link.trim() : null,
+        donation_title: form.donation_title ? form.donation_title.trim() : null,
+        donation_description: form.donation_description ? form.donation_description.trim() : null,
       }).eq('id', organizationId);
       if (error) throw error;
       toast.success('Settings saved!');
@@ -748,7 +759,65 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
-            {/* Save button — not shown on Roles tab */}
+            {/* ── DONATIONS ── */}
+            {activeTab === 'donations' && (
+              <section aria-labelledby="donations-heading" className="space-y-6">
+                <div>
+                  <h3 id="donations-heading" className="text-lg font-bold text-gray-900">Donation Settings</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">Accept donations on your public page via Stripe or an external link.</p>
+                </div>
+
+                <div className={'flex items-center justify-between p-5 rounded-xl border-2 ' + (form.enable_donations ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Enable Donations</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{form.enable_donations ? 'A donation section is showing on your public page.' : 'No donation section on your public page.'}</p>
+                  </div>
+                  <Toggle
+                    checked={form.enable_donations}
+                    onChange={function() { setForm(function(prev) { return Object.assign({}, prev, { enable_donations: !prev.enable_donations }); }); }}
+                    id="enable-donations-toggle"
+                    label={form.enable_donations ? 'Disable donations' : 'Enable donations'}
+                  />
+                </div>
+
+                {form.enable_donations && (
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="donation-title" className={labelCls}>Donation Section Title</label>
+                      <input id="donation-title" type="text" value={form.donation_title}
+                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_title:e.target.value}); }); }}
+                        placeholder={'Support ' + (form.name || 'Us')} className={inputCls} maxLength={100} />
+                    </div>
+                    <div>
+                      <label htmlFor="donation-description" className={labelCls}>Description</label>
+                      <textarea id="donation-description" value={form.donation_description}
+                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_description:e.target.value}); }); }}
+                        rows={3} placeholder="Your donation helps us continue our work in the community."
+                        className={inputCls + ' resize-none'} maxLength={300} />
+                    </div>
+                    <div>
+                      <label htmlFor="donation-amount" className={labelCls}>Suggested Amount (optional)</label>
+                      <div className="relative max-w-xs">
+                        <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none" aria-hidden="true">$</span>
+                        <input id="donation-amount" type="number" min="1" step="1" value={form.donation_suggested_amount}
+                          onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_suggested_amount:e.target.value}); }); }}
+                          placeholder="25" className={inputCls + ' pl-7'} />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">This amount will be pre-highlighted in the donation picker.</p>
+                    </div>
+                    <div>
+                      <label htmlFor="donation-external" className={labelCls}>External Donation Link (optional)</label>
+                      <input id="donation-external" type="url" value={form.donation_external_link}
+                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_external_link:e.target.value}); }); }}
+                        placeholder="https://paypal.me/yourorg" className={inputCls} />
+                      <p className="text-xs text-gray-400 mt-1">PayPal, Venmo, GoFundMe, or any other donation link.</p>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Save button — not shown on Roles tab */}}
             {activeTab !== 'roles' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}

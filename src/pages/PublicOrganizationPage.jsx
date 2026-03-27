@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { renderBlock } from '../components/BlockRenderer';
+import DonationSection from '../components/DonationSection';
 import {
   getThemeVars,
   getNavLinks,
@@ -591,7 +592,9 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     return (
       <main id="main-content" style={{ fontFamily: fontFamily }}>
         {!hasHeroBlock && renderHero()}
-
+{org.enable_donations && (
+  <DonationSection org={org} primary={primary} borderRadius={borderRadius} />
+)}
         {homeBlocks.length > 0 && (
           <div style={{ backgroundColor: '#ffffff' }}>
             <div className="max-w-5xl mx-auto px-6 py-16 space-y-12">
