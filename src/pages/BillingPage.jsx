@@ -16,10 +16,10 @@ function Icon({ path, className }) {
 var ICONS = {
   check:   'M5 13l4 4L19 7',
   star:    ['M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z'],
-  credit:  ['M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'],
   alert:   ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
   clock:   'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-  x:       'M6 18L18 6M6 6l12 12',
+  settings:['M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z','M15 12a3 3 0 11-6 0 3 3 0 016 0z'],
+  back:    'M15 19l-7-7 7-7',
 };
 
 var PLANS = [
@@ -57,11 +57,11 @@ var PLANS = [
 ];
 
 var STATUS_LABELS = {
-  trialing:  { label: 'Free Trial',    color: 'bg-blue-100 text-blue-800'   },
-  active:    { label: 'Active',        color: 'bg-green-100 text-green-800' },
-  past_due:  { label: 'Past Due',      color: 'bg-red-100 text-red-800'     },
-  canceled:  { label: 'Canceled',      color: 'bg-gray-100 text-gray-600'   },
-  incomplete:{ label: 'Incomplete',    color: 'bg-yellow-100 text-yellow-800'},
+  trialing:  { label: 'Free Trial',  color: 'bg-blue-100 text-blue-800'   },
+  active:    { label: 'Active',      color: 'bg-green-100 text-green-800' },
+  past_due:  { label: 'Past Due',    color: 'bg-red-100 text-red-800'     },
+  canceled:  { label: 'Canceled',    color: 'bg-gray-100 text-gray-600'   },
+  incomplete:{ label: 'Incomplete',  color: 'bg-yellow-100 text-yellow-800'},
 };
 
 function Skeleton({ className }) {
@@ -76,7 +76,7 @@ function BillingPage() {
   var [subscription, setSubscription] = useState(null);
   var [loading, setLoading] = useState(true);
   var [checkoutLoading, setCheckoutLoading] = useState(null);
-  var [interval, setInterval] = useState('month');
+  var [billingInterval, setBillingInterval] = useState('month');
   var [orgName, setOrgName] = useState('');
 
   useEffect(function() {
@@ -113,13 +113,8 @@ function BillingPage() {
     setCheckoutLoading(planId);
     try {
       var { data: { session } } = await supabase.auth.getSession();
-if (!session) {
-  toast.error('Please log in to continue.');
-  return;
-}
-var token = session.access_token;
-
-console.log('Token present:', !!token, 'Token length:', token ? token.length : 0);
+      if (!session) { toast.error('Please log in to continue.'); return; }
+      var token = session.access_token;
 
       var response = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-checkout-session', {
         method: 'POST',
@@ -127,7 +122,7 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
         body: JSON.stringify({
           organization_id: organizationId,
           plan: planId,
-          interval: interval,
+          interval: billingInterval,
           success_url: window.location.origin + '/organizations/' + organizationId + '/billing?billing=success',
           cancel_url: window.location.origin + '/organizations/' + organizationId + '/billing?billing=cancelled',
         }),
@@ -144,9 +139,35 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
     }
   }
 
+  async function handleManageSubscription() {
+    setCheckoutLoading('portal');
+    try {
+      var { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Please log in to continue.'); return; }
+      var token = session.access_token;
+
+      var response = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          organization_id: organizationId,
+          return_url: window.location.href,
+        }),
+      });
+
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to open billing portal');
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to open billing portal.');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }
+
   var currentPlan = PLANS.find(function(p) { return p.id === subscription?.plan; }) || null;
   var statusInfo = subscription ? (STATUS_LABELS[subscription.status] || STATUS_LABELS['active']) : null;
-
   var trialEnds = subscription?.trial_ends_at ? new Date(subscription.trial_ends_at) : null;
   var periodEnds = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
   var daysLeftInTrial = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / (1000 * 60 * 60 * 24))) : 0;
@@ -156,7 +177,7 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-5xl mx-auto px-4 space-y-6">
           <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
           <div className="grid grid-cols-3 gap-4">
             <Skeleton className="h-96 rounded-xl" />
             <Skeleton className="h-96 rounded-xl" />
@@ -177,7 +198,7 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
             onClick={function() { navigate('/organizations/' + organizationId); }}
             className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           >
-            <Icon path="M15 19l-7-7 7-7" className="h-4 w-4" />
+            <Icon path={ICONS.back} className="h-4 w-4" />
             Back to Dashboard
           </button>
           <h1 className="text-2xl font-bold text-gray-900">Billing & Subscription</h1>
@@ -188,8 +209,8 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
         {subscription && (
           <div className={'p-5 rounded-xl border-2 ' + (subscription.status === 'past_due' ? 'border-red-300 bg-red-50' : 'border-blue-200 bg-blue-50')}>
             <div className="flex items-start justify-between flex-wrap gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-base font-bold text-gray-900">
                     {currentPlan ? currentPlan.name : 'Unknown'} Plan
                   </span>
@@ -197,6 +218,7 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
                     {statusInfo ? statusInfo.label : subscription.status}
                   </span>
                 </div>
+
                 {subscription.status === 'trialing' && trialEnds && (
                   <p className="text-sm text-blue-700 flex items-center gap-1">
                     <Icon path={ICONS.clock} className="h-4 w-4" />
@@ -216,8 +238,22 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
                     Payment failed. Please update your payment method.
                   </p>
                 )}
+
+                {/* Manage Subscription button */}
+                <div className="mt-3">
+                  <button
+                    onClick={handleManageSubscription}
+                    disabled={checkoutLoading === 'portal'}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                    aria-label="Manage subscription in Stripe portal"
+                  >
+                    <Icon path={ICONS.settings} className="h-4 w-4" />
+                    {checkoutLoading === 'portal' ? 'Loading...' : 'Manage Subscription'}
+                  </button>
+                </div>
               </div>
-              <div className="text-right">
+
+              <div className="text-right flex-shrink-0">
                 <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
                   {subscription.billing_interval === 'year' ? 'Annual billing' : 'Monthly billing'}
                 </p>
@@ -246,17 +282,17 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
 
         {/* Billing interval toggle */}
         <div className="flex items-center justify-center gap-3">
-          <span className={'text-sm font-medium ' + (interval === 'month' ? 'text-gray-900' : 'text-gray-400')}>Monthly</span>
+          <span className={'text-sm font-medium ' + (billingInterval === 'month' ? 'text-gray-900' : 'text-gray-400')}>Monthly</span>
           <button
-            onClick={function() { setInterval(interval === 'month' ? 'year' : 'month'); }}
+            onClick={function() { setBillingInterval(billingInterval === 'month' ? 'year' : 'month'); }}
             role="switch"
-            aria-checked={interval === 'year'}
+            aria-checked={billingInterval === 'year'}
             aria-label="Toggle annual billing"
-            className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (interval === 'year' ? 'bg-blue-500' : 'bg-gray-300')}
+            className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : 'bg-gray-300')}
           >
-            <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (interval === 'year' ? 'left-[26px]' : 'left-0.5')} aria-hidden="true" />
+            <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (billingInterval === 'year' ? 'left-[26px]' : 'left-0.5')} aria-hidden="true" />
           </button>
-          <span className={'text-sm font-medium ' + (interval === 'year' ? 'text-gray-900' : 'text-gray-400')}>
+          <span className={'text-sm font-medium ' + (billingInterval === 'year' ? 'text-gray-900' : 'text-gray-400')}>
             Annual
             <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">2 months free</span>
           </span>
@@ -267,8 +303,8 @@ console.log('Token present:', !!token, 'Token length:', token ? token.length : 0
           {PLANS.map(function(plan) {
             var isCurrent = subscription?.plan === plan.id && subscription?.status !== 'canceled';
             var isLoading = checkoutLoading === plan.id;
-            var price = interval === 'year' ? plan.annualMonthly : plan.monthlyPrice;
-            var totalPrice = interval === 'year' ? plan.annualPrice : null;
+            var price = billingInterval === 'year' ? plan.annualMonthly : plan.monthlyPrice;
+            var totalPrice = billingInterval === 'year' ? plan.annualPrice : null;
 
             return (
               <div
