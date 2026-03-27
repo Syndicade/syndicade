@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Stripe from 'https://esm.sh/stripe@13.11.0?target=deno'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2?target=deno'
 
 var PRICE_TO_PLAN = {
   'price_1TFCIVKcdErNqbVNe5SnUUGX': { plan: 'starter', interval: 'month' },
@@ -11,30 +10,61 @@ var PRICE_TO_PLAN = {
   'price_1TFCJyKcdErNqbVNoBIkHrAJ': { plan: 'pro',     interval: 'year'  },
 }
 
-serve(async function(req) {
-  var stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-    apiVersion: '2023-10-16',
-    httpClient: Stripe.createFetchHttpClient(),
+async function stripeRequest(path, secretKey) {
+  var res = await fetch('https://api.stripe.com/v1' + path, {
+    headers: { 'Authorization': 'Bearer ' + secretKey },
   })
+  var data = await res.json()
+  if (!res.ok) throw new Error(data.error?.message || 'Stripe error')
+  return data
+}
+
+async function verifyWebhookSignature(body, signature, secret) {
+  var parts = signature.split(',')
+  var timestamp = ''
+  var sigHash = ''
+  for (var part of parts) {
+    if (part.startsWith('t=')) timestamp = part.slice(2)
+    if (part.startsWith('v1=')) sigHash = part.slice(3)
+  }
+  if (!timestamp || !sigHash) throw new Error('Invalid signature format')
+
+  var payload = timestamp + '.' + body
+  var encoder = new TextEncoder()
+  var keyData = encoder.encode(secret)
+  var messageData = encoder.encode(payload)
+
+  var cryptoKey = await crypto.subtle.importKey(
+    'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  var signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
+  var signatureArray = Array.from(new Uint8Array(signatureBuffer))
+  var computedSig = signatureArray.map(function(b) { return b.toString(16).padStart(2, '0') }).join('')
+
+  if (computedSig !== sigHash) throw new Error('Webhook signature mismatch')
+  return true
+}
+
+serve(async function(req) {
+  var STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') || ''
+  var webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || ''
 
   var supabase = createClient(
     Deno.env.get('SUPABASE_URL') || '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
   )
 
-  var signature = req.headers.get('stripe-signature')
-  var webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')
   var body = await req.text()
+  var signature = req.headers.get('stripe-signature') || ''
 
   var event
   try {
     if (webhookSecret && signature) {
-      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)
-    } else {
-      event = JSON.parse(body)
+      await verifyWebhookSignature(body, signature, webhookSecret)
     }
+    event = JSON.parse(body)
   } catch (err) {
-    console.error('Webhook signature error:', err)
+    console.error('Webhook error:', err.message)
     return new Response('Webhook error: ' + err.message, { status: 400 })
   }
 
@@ -44,8 +74,8 @@ serve(async function(req) {
       var organizationId = session.metadata?.organization_id
       if (!organizationId) return new Response('ok', { status: 200 })
 
-      var subscription = await stripe.subscriptions.retrieve(session.subscription)
-      var priceId = subscription.items.data[0]?.price?.id
+      var subscription = await stripeRequest('/subscriptions/' + session.subscription, STRIPE_SECRET_KEY)
+      var priceId = subscription.items?.data[0]?.price?.id
       var planInfo = PRICE_TO_PLAN[priceId] || { plan: 'starter', interval: 'month' }
 
       await supabase.from('subscriptions').upsert({
@@ -66,6 +96,7 @@ serve(async function(req) {
     if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       var subscription = event.data.object
       var organizationId = subscription.metadata?.organization_id
+
       if (!organizationId) {
         var { data: sub } = await supabase
           .from('subscriptions')
@@ -76,7 +107,7 @@ serve(async function(req) {
       }
       if (!organizationId) return new Response('ok', { status: 200 })
 
-      var priceId = subscription.items.data[0]?.price?.id
+      var priceId = subscription.items?.data[0]?.price?.id
       var planInfo = PRICE_TO_PLAN[priceId] || { plan: 'starter', interval: 'month' }
 
       await supabase.from('subscriptions').upsert({
@@ -108,12 +139,11 @@ serve(async function(req) {
     }
 
   } catch (err) {
-    console.error('Webhook handler error:', err)
+    console.error('Handler error:', err.message)
     return new Response('Handler error: ' + err.message, { status: 500 })
   }
 
   return new Response(JSON.stringify({ received: true }), {
-    headers: { 'Content-Type': 'application/json' },
-    status: 200,
+    headers: { 'Content-Type': 'application/json' }, status: 200,
   })
 })

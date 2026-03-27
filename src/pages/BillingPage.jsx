@@ -113,7 +113,13 @@ function BillingPage() {
     setCheckoutLoading(planId);
     try {
       var { data: { session } } = await supabase.auth.getSession();
-      var token = session ? session.access_token : '';
+if (!session) {
+  toast.error('Please log in to continue.');
+  return;
+}
+var token = session.access_token;
+
+console.log('Token present:', !!token, 'Token length:', token ? token.length : 0);
 
       var response = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-checkout-session', {
         method: 'POST',
