@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import MembershipTiers from '../components/MembershipTiers';
 
-// ── Constants ────────────────────────────────────────────────────────────────
 var SERVICE_CATEGORIES = [
   'Arts & Culture','Community Advocacy','Education & Tutoring',
   'Food & Nutrition','Health & Wellness','Housing & Shelter',
@@ -48,7 +47,6 @@ var ROLE_COLORS = [
 var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white';
 var labelCls = 'block text-sm font-semibold text-gray-900 mb-2';
 
-// ── Primitives ───────────────────────────────────────────────────────────────
 function Icon({ path, className }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -145,7 +143,6 @@ function ChecklistGroup({ options, selected, onChange, legend }) {
   );
 }
 
-// ── Roles Tab ────────────────────────────────────────────────────────────────
 function RolesTab({ organizationId }) {
   var [members, setMembers] = useState([]);
   var [customRoles, setCustomRoles] = useState([]);
@@ -165,11 +162,9 @@ function RolesTab({ organizationId }) {
         supabase.from('memberships').select('id, role, status, member_id, custom_role_id').eq('organization_id', organizationId).eq('status', 'active'),
         supabase.from('org_roles').select('*').eq('organization_id', organizationId).order('name'),
       ]);
-
       var memberships = membershipsRes.data || [];
       var roles = rolesRes.data || [];
       setCustomRoles(roles);
-
       if (memberships.length > 0) {
         var memberIds = memberships.map(function(m){ return m.member_id; });
         var { data: profiles } = await supabase.from('members').select('user_id, first_name, last_name, email').in('user_id', memberIds);
@@ -180,17 +175,10 @@ function RolesTab({ organizationId }) {
           var customRole = roles.find(function(r){ return r.id === m.custom_role_id; }) || null;
           return Object.assign({}, m, { profile: p, customRole: customRole });
         });
-        merged.sort(function(a,b){
-          var order = { admin:0, editor:1, member:2 };
-          return (order[a.role]||2) - (order[b.role]||2);
-        });
+        merged.sort(function(a,b){ var order = { admin:0, editor:1, member:2 }; return (order[a.role]||2) - (order[b.role]||2); });
         setMembers(merged);
       }
-    } catch(err) {
-      toast.error('Failed to load members');
-    } finally {
-      setLoading(false);
-    }
+    } catch(err) { toast.error('Failed to load members'); } finally { setLoading(false); }
   }
 
   async function updateSystemRole(membershipId, newRole) {
@@ -200,11 +188,7 @@ function RolesTab({ organizationId }) {
       if (error) throw error;
       setMembers(function(prev){ return prev.map(function(m){ return m.id===membershipId ? Object.assign({},m,{role:newRole}) : m; }); });
       toast.success('Role updated');
-    } catch(err) {
-      toast.error('Failed to update role');
-    } finally {
-      setUpdatingMemberId(null);
-    }
+    } catch(err) { toast.error('Failed to update role'); } finally { setUpdatingMemberId(null); }
   }
 
   async function updateCustomRole(membershipId, customRoleId) {
@@ -215,24 +199,11 @@ function RolesTab({ organizationId }) {
       var customRole = customRoles.find(function(r){ return r.id===customRoleId; }) || null;
       setMembers(function(prev){ return prev.map(function(m){ return m.id===membershipId ? Object.assign({},m,{custom_role_id:customRoleId,customRole:customRole}) : m; }); });
       toast.success('Tag updated');
-    } catch(err) {
-      toast.error('Failed to update tag');
-    } finally {
-      setUpdatingMemberId(null);
-    }
+    } catch(err) { toast.error('Failed to update tag'); } finally { setUpdatingMemberId(null); }
   }
 
-  function openNewRole() {
-    setEditingRole(null);
-    setRoleForm({ name: '', color: '#6B7280', permissions: Object.assign({}, DEFAULT_PERMISSIONS) });
-    setShowRoleForm(true);
-  }
-
-  function openEditRole(role) {
-    setEditingRole(role);
-    setRoleForm({ name: role.name, color: role.color || '#6B7280', permissions: Object.assign({}, DEFAULT_PERMISSIONS, role.permissions || {}) });
-    setShowRoleForm(true);
-  }
+  function openNewRole() { setEditingRole(null); setRoleForm({ name: '', color: '#6B7280', permissions: Object.assign({}, DEFAULT_PERMISSIONS) }); setShowRoleForm(true); }
+  function openEditRole(role) { setEditingRole(role); setRoleForm({ name: role.name, color: role.color || '#6B7280', permissions: Object.assign({}, DEFAULT_PERMISSIONS, role.permissions || {}) }); setShowRoleForm(true); }
 
   async function saveRole() {
     if (!roleForm.name.trim()) { toast.error('Role name is required'); return; }
@@ -249,11 +220,7 @@ function RolesTab({ organizationId }) {
       }
       setShowRoleForm(false);
       await fetchAll();
-    } catch(err) {
-      toast.error('Failed to save role: '+err.message);
-    } finally {
-      setSavingRole(false);
-    }
+    } catch(err) { toast.error('Failed to save role: '+err.message); } finally { setSavingRole(false); }
   }
 
   async function deleteRole(roleId) {
@@ -263,38 +230,27 @@ function RolesTab({ organizationId }) {
       if (error) throw error;
       toast.success('Role deleted');
       await fetchAll();
-    } catch(err) {
-      toast.error('Failed to delete role');
-    }
+    } catch(err) { toast.error('Failed to delete role'); }
   }
 
   function togglePermission(key) {
     setRoleForm(function(prev){ return Object.assign({},prev,{ permissions: Object.assign({},prev.permissions,{ [key]: !prev.permissions[key] }) }); });
   }
 
-  if (loading) return (
-    <div className="space-y-3">
-      {[1,2,3,4].map(function(i){ return <Skeleton key={i} className="h-16 w-full"/>; })}
-    </div>
-  );
+  if (loading) return <div className="space-y-3">{[1,2,3,4].map(function(i){ return <Skeleton key={i} className="h-16 w-full"/>; })}</div>;
 
   return (
     <div className="space-y-8">
-
-      {/* Custom Roles */}
       <section aria-labelledby="custom-roles-heading">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 id="custom-roles-heading" className="text-lg font-bold text-gray-900">Custom Role Tags</h3>
             <p className="text-xs text-gray-500 mt-0.5">Create tags like "Women Vets" or "Board Member" to organize and target your members.</p>
           </div>
-          <button type="button" onClick={openNewRole}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-            <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
-            New Role
+          <button type="button" onClick={openNewRole} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>New Role
           </button>
         </div>
-
         {customRoles.length === 0 && !showRoleForm ? (
           <div className="text-center py-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
             <Icon path="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" className="h-10 w-10 text-gray-300 mx-auto mb-2"/>
@@ -315,12 +271,10 @@ function RolesTab({ organizationId }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={function(){ openEditRole(role); }}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label={'Edit '+role.name}>
+                    <button type="button" onClick={function(){ openEditRole(role); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label={'Edit '+role.name}>
                       <Icon path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" className="h-4 w-4"/>
                     </button>
-                    <button type="button" onClick={function(){ deleteRole(role.id); }}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors" aria-label={'Delete '+role.name}>
+                    <button type="button" onClick={function(){ deleteRole(role.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors" aria-label={'Delete '+role.name}>
                       <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4"/>
                     </button>
                   </div>
@@ -329,16 +283,13 @@ function RolesTab({ organizationId }) {
             })}
           </div>
         )}
-
-        {/* Role form */}
         {showRoleForm && (
           <div className="mt-4 p-5 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
             <h4 className="font-bold text-gray-900 text-sm">{editingRole ? 'Edit Role' : 'Create New Role'}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="role-name" className={labelCls}>Role Name</label>
-                <input id="role-name" type="text" value={roleForm.name} onChange={function(e){ setRoleForm(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}
-                  placeholder="e.g. Women Veterans, Board Member" className={inputCls} maxLength={50}/>
+                <input id="role-name" type="text" value={roleForm.name} onChange={function(e){ setRoleForm(function(p){ return Object.assign({},p,{name:e.target.value}); }); }} placeholder="e.g. Women Veterans, Board Member" className={inputCls} maxLength={50}/>
               </div>
               <div>
                 <label className={labelCls}>Color</label>
@@ -356,20 +307,17 @@ function RolesTab({ organizationId }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {PERMISSION_KEYS.map(function(pk){ return (
                   <label key={pk.key} className={'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all '+(roleForm.permissions[pk.key]?'border-blue-400 bg-blue-50':'border-gray-200 bg-white hover:border-gray-300')}>
-                    <input type="checkbox" checked={roleForm.permissions[pk.key]||false} onChange={function(){ togglePermission(pk.key); }}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"/>
+                    <input type="checkbox" checked={roleForm.permissions[pk.key]||false} onChange={function(){ togglePermission(pk.key); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"/>
                     <span className="text-sm text-gray-700">{pk.label}</span>
                   </label>
                 ); })}
               </div>
             </div>
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={saveRole} disabled={savingRole}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all">
+              <button type="button" onClick={saveRole} disabled={savingRole} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all">
                 {savingRole ? 'Saving...' : editingRole ? 'Save Changes' : 'Create Role'}
               </button>
-              <button type="button" onClick={function(){ setShowRoleForm(false); }}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all">
+              <button type="button" onClick={function(){ setShowRoleForm(false); }} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all">
                 Cancel
               </button>
             </div>
@@ -377,7 +325,6 @@ function RolesTab({ organizationId }) {
         )}
       </section>
 
-      {/* Member List */}
       <section aria-labelledby="members-roles-heading">
         <h3 id="members-roles-heading" className="text-lg font-bold text-gray-900 mb-4">
           Member Roles <span className="text-sm font-normal text-gray-400 ml-1">({members.length})</span>
@@ -393,8 +340,7 @@ function RolesTab({ organizationId }) {
               var name = m.profile ? (m.profile.first_name+' '+m.profile.last_name).trim() || m.profile.email : 'Unknown';
               var isUpdating = updatingMemberId === m.id;
               return (
-                <div key={m.id} role="listitem"
-                  className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl flex-wrap">
+                <div key={m.id} role="listitem" className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl flex-wrap">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0" aria-hidden="true">
                     {name.charAt(0).toUpperCase()}
                   </div>
@@ -404,29 +350,18 @@ function RolesTab({ organizationId }) {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <label htmlFor={'sys-role-'+m.id} className="sr-only">System role for {name}</label>
-                    <select id={'sys-role-'+m.id} value={m.role} disabled={isUpdating}
-                      onChange={function(e){ updateSystemRole(m.id, e.target.value); }}
-                      className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
-                      aria-label={'System role for '+name}>
-                      {SYSTEM_ROLES.map(function(r){ return (
-                        <option key={r} value={r}>{r.charAt(0).toUpperCase()+r.slice(1)}</option>
-                      ); })}
+                    <select id={'sys-role-'+m.id} value={m.role} disabled={isUpdating} onChange={function(e){ updateSystemRole(m.id, e.target.value); }} className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50" aria-label={'System role for '+name}>
+                      {SYSTEM_ROLES.map(function(r){ return <option key={r} value={r}>{r.charAt(0).toUpperCase()+r.slice(1)}</option>; })}
                     </select>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <label htmlFor={'custom-role-'+m.id} className="sr-only">Custom tag for {name}</label>
-                    <select id={'custom-role-'+m.id} value={m.custom_role_id||''} disabled={isUpdating||customRoles.length===0}
-                      onChange={function(e){ updateCustomRole(m.id, e.target.value||null); }}
-                      className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
-                      aria-label={'Custom tag for '+name}>
+                    <select id={'custom-role-'+m.id} value={m.custom_role_id||''} disabled={isUpdating||customRoles.length===0} onChange={function(e){ updateCustomRole(m.id, e.target.value||null); }} className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50" aria-label={'Custom tag for '+name}>
                       <option value="">No tag</option>
-                      {customRoles.map(function(r){ return (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ); })}
+                      {customRoles.map(function(r){ return <option key={r.id} value={r.id}>{r.name}</option>; })}
                     </select>
                     {m.customRole && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-white flex-shrink-0"
-                        style={{ backgroundColor: m.customRole.color }} aria-hidden="true">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-white flex-shrink-0" style={{ backgroundColor: m.customRole.color }} aria-hidden="true">
                         {m.customRole.name}
                       </span>
                     )}
@@ -442,7 +377,6 @@ function RolesTab({ organizationId }) {
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
 function OrganizationSettings({ organizationId, onUpdate }) {
   var [organization, setOrganization] = useState(null);
   var [loading, setLoading] = useState(true);
@@ -454,6 +388,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     settings: { allowMemberInvites: true, requireApproval: false },
     join_mode: 'invite_only',
     is_public: false,
+    collect_dues: true,
     city: '', county: '', state: '', zip_code: '',
     contact_phone: '', address: '',
     mailing_same: true,
@@ -483,6 +418,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         settings: Object.assign({ allowMemberInvites: true, requireApproval: false }, data.settings || {}),
         join_mode: data.join_mode || 'invite_only',
         is_public: data.is_public || false,
+        collect_dues: data.collect_dues !== false,
         county: data.county || '',
         city: data.city || '',
         state: data.state || '',
@@ -528,6 +464,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         settings: form.settings,
         join_mode: form.join_mode,
         is_public: form.is_public,
+        collect_dues: form.collect_dues,
         city: form.city.trim(),
         county: form.county.trim(),
         state: form.state.trim(),
@@ -569,7 +506,6 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
 
-        {/* Header */}
         <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Organization Settings</h2>
@@ -585,7 +521,6 @@ function OrganizationSettings({ organizationId, onUpdate }) {
           )}
         </div>
 
-        {/* Sub-tabs */}
         <div className="border-b border-gray-200 px-6">
           <nav className="flex gap-1 overflow-x-auto" aria-label="Settings tabs" style={{ scrollbarWidth:'thin' }}>
             {tabs.map(function(tab){
@@ -601,25 +536,22 @@ function OrganizationSettings({ organizationId, onUpdate }) {
           </nav>
         </div>
 
-        {/* Tab content */}
         <form onSubmit={handleSubmit} noValidate>
           <div className="px-6 py-6">
 
-            {/* Public URL banner */}
             {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-2 mb-6">
                 <Icon path={['M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101','M14.828 14.828a4 4 0 015.656 0l4-4a4 4 0 01-5.656-5.656l-1.1 1.1']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
                 <p className="text-sm text-blue-800">
                   Public URL:{' '}
-                  <a href={publicPageUrl} target="_blank" rel="noopener noreferrer"
-                    className="font-mono font-semibold underline hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                  <a href={publicPageUrl} target="_blank" rel="noopener noreferrer" className="font-mono font-semibold underline hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                     {window.location.origin}{publicPageUrl}
                   </a>
                 </p>
               </div>
             )}
 
-            {/* ── BASIC INFORMATION ── */}
+            {/* ── BASIC ── */}
             {activeTab === 'basic' && (
               <section aria-labelledby="basic-heading" className="space-y-5">
                 <h3 id="basic-heading" className="text-lg font-bold text-gray-900">Basic Information</h3>
@@ -635,16 +567,13 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                 </div>
                 <div>
                   <label htmlFor="org-description" className={labelCls}>Description</label>
-                  <textarea id="org-description" name="description" value={form.description} onChange={handleField} rows={4} maxLength={500}
-                    className={inputCls+' resize-none'} aria-describedby="desc-count"/>
+                  <textarea id="org-description" name="description" value={form.description} onChange={handleField} rows={4} maxLength={500} className={inputCls+' resize-none'} aria-describedby="desc-count"/>
                   <p id="desc-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.description.length}/500</p>
                 </div>
-
                 <div>
                   <label htmlFor="org-phone" className={labelCls}>Phone Number</label>
                   <input id="org-phone" name="contact_phone" type="tel" value={form.contact_phone} onChange={handleField} placeholder="e.g. (419) 555-0100" className={inputCls}/>
                 </div>
-
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-3">Physical Address</p>
                   <div className="space-y-3">
@@ -672,14 +601,11 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                     </div>
                   </div>
                 </div>
-
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-bold text-gray-900">Mailing Address</p>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={form.mailing_same}
-                        onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{mailing_same:!prev.mailing_same}); }); }}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+                      <input type="checkbox" checked={form.mailing_same} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{mailing_same:!prev.mailing_same}); }); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
                       <span className="text-sm text-gray-600">Same as physical address</span>
                     </label>
                   </div>
@@ -709,24 +635,22 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
-            {/* ── PRIVACY & ACCESS ── */}
+            {/* ── PRIVACY ── */}
             {activeTab === 'privacy' && (
               <section aria-labelledby="privacy-heading" className="space-y-6">
                 <h3 id="privacy-heading" className="text-lg font-bold text-gray-900">Privacy & Access</h3>
-
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-3">How can people join?</p>
                   <div className="space-y-2" role="radiogroup" aria-label="Join mode">
                     {[
-                      { value: 'invite_only',    label: 'Invite Only',     desc: 'Only admins can invite new members.'                                 },
-                      { value: 'request_to_join',label: 'Request to Join', desc: 'Anyone can request to join. Admins approve or deny requests.'        },
-                      { value: 'both',           label: 'Both',            desc: 'Admins can invite members, and anyone can also request to join.'     },
+                      { value: 'invite_only',    label: 'Invite Only',     desc: 'Only admins can invite new members.' },
+                      { value: 'request_to_join',label: 'Request to Join', desc: 'Anyone can request to join. Admins approve or deny requests.' },
+                      { value: 'both',           label: 'Both',            desc: 'Admins can invite members, and anyone can also request to join.' },
                     ].map(function(opt){
                       var checked = form.join_mode === opt.value;
                       return (
                         <label key={opt.value} className={'flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 bg-white hover:border-gray-300')}>
-                          <input type="radio" name="join_mode" value={opt.value} checked={checked} onChange={handleField}
-                            className="mt-0.5 w-4 h-4 border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"/>
+                          <input type="radio" name="join_mode" value={opt.value} checked={checked} onChange={handleField} className="mt-0.5 w-4 h-4 border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"/>
                           <div>
                             <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
                             <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
@@ -736,7 +660,6 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                     })}
                   </div>
                 </div>
-
                 <div className="space-y-3">
                   {[
                     { id:'allow-invites',   name:'settings.allowMemberInvites', checked:form.settings.allowMemberInvites, label:'Allow Member Invitations', desc:'Let members invite others to join the organization.' },
@@ -744,8 +667,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   ].map(function(item){
                     return (
                       <div key={item.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                        <input id={item.id} name={item.name} type="checkbox" checked={item.checked} onChange={handleField}
-                          className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"/>
+                        <input id={item.id} name={item.name} type="checkbox" checked={item.checked} onChange={handleField} className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"/>
                         <div>
                           <label htmlFor={item.id} className="font-semibold text-gray-900 text-sm">{item.label}</label>
                           <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
@@ -758,67 +680,76 @@ function OrganizationSettings({ organizationId, onUpdate }) {
             )}
 
             {/* ── ROLES ── */}
-            {activeTab === 'roles' && (
-              <RolesTab organizationId={organizationId}/>
-            )}
+            {activeTab === 'roles' && <RolesTab organizationId={organizationId}/>}
 
             {/* ── MEMBERSHIP ── */}
             {activeTab === 'membership' && (
               <section aria-labelledby="membership-heading" className="space-y-6">
                 <div>
                   <h3 id="membership-heading" className="text-lg font-bold text-gray-900">Membership Settings</h3>
-                  <p className="text-gray-500 text-sm mt-0.5">Configure membership tiers, dues amounts, and durations.</p>
+                  <p className="text-gray-500 text-sm mt-0.5">Configure dues collection, tiers, amounts, and durations.</p>
                 </div>
-                <MembershipTiers organizationId={organizationId} />
+
+                {/* Collect Dues toggle */}
+                <div className={'flex items-center justify-between p-5 rounded-xl border-2 ' + (form.collect_dues ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Collect Dues</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {form.collect_dues
+                        ? 'Dues tracking is enabled. Badges show on member profiles and the member directory.'
+                        : 'Dues tracking is off. No dues badges will appear anywhere.'}
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={form.collect_dues}
+                    onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{collect_dues:!prev.collect_dues}); }); }}
+                    id="collect-dues-toggle"
+                    label={form.collect_dues ? 'Disable dues tracking' : 'Enable dues tracking'}
+                  />
+                </div>
+
+                {form.collect_dues && <MembershipTiers organizationId={organizationId} />}
               </section>
             )}
 
-            {/* ── DISCOVER ORGS ── */}
+            {/* ── DISCOVER ── */}
             {activeTab === 'discover' && (
               <section aria-labelledby="discover-heading" className="space-y-6">
                 <div>
                   <h3 id="discover-heading" className="text-lg font-bold text-gray-900">Discover Orgs Page</h3>
                   <p className="text-gray-500 text-sm mt-0.5">Control how your organization appears in public search.</p>
                 </div>
-
                 <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.is_public?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">List on Discover Orgs page</p>
                     <p className="text-xs text-gray-500 mt-0.5">{form.is_public?'Your organization is visible to the public.':'Your organization is hidden from public discovery.'}</p>
                   </div>
-                  <Toggle checked={form.is_public} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{is_public:!prev.is_public}); }); }}
-                    id="discovery-toggle" label={form.is_public?'Remove from Discover Orgs':'List on Discover Orgs'}/>
+                  <Toggle checked={form.is_public} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{is_public:!prev.is_public}); }); }} id="discovery-toggle" label={form.is_public?'Remove from Discover Orgs':'List on Discover Orgs'}/>
                 </div>
-
                 {form.is_public && (
                   <div className="space-y-6">
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Service Categories</p>
                       <p className="text-xs text-gray-500 mb-3">Select all that apply.</p>
-                      <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories}
-                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }}
-                        legend="Service categories"/>
+                      <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }} legend="Service categories"/>
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Languages Served</p>
                       <p className="text-xs text-gray-500 mb-3">Which languages does your organization serve?</p>
-                      <ChecklistGroup options={LANGUAGES} selected={form.languages}
-                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{languages:val}); }); }}
-                        legend="Languages served"/>
+                      <ChecklistGroup options={LANGUAGES} selected={form.languages} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{languages:val}); }); }} legend="Languages served"/>
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Search Keywords</p>
                       <p className="text-xs text-gray-500 mb-3">Add words people might search that aren't in categories above.</p>
-                      <KeywordInput keywords={form.keywords}
-                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}/>
+                      <KeywordInput keywords={form.keywords} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}/>
                     </div>
                   </div>
                 )}
               </section>
             )}
 
-            {/* Save button — not shown on Roles or Membership tabs */}
-            {activeTab !== 'roles' && activeTab !== 'membership' && (
+            {/* Save button — not shown on Roles tab */}
+            {activeTab !== 'roles' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"

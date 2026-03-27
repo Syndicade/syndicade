@@ -23,8 +23,11 @@ var ICONS = {
   globe:    ['M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
   tag:      ['M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z'],
   check:    'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+  checkSm:  'M5 13l4 4L19 7',
   alert:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
   external: 'M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14',
+  dollar:   ['M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
+  clock:    'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
 function formatPhone(phone) {
@@ -57,7 +60,36 @@ function SectionHeading({ icon, iconColor, label, id }) {
   );
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+function DuesBadge({ membership }) {
+  var paid = membership.dues_paid;
+  var until = membership.dues_paid_until ? new Date(membership.dues_paid_until) : null;
+  var expired = until && until < new Date();
+  var status = !paid ? 'unpaid' : expired ? 'expired' : 'paid';
+
+  if (status === 'paid') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+        <Icon path={ICONS.checkSm} className="h-3 w-3" />
+        {'Dues paid' + (until ? ' · Through ' + until.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '')}
+      </span>
+    );
+  }
+  if (status === 'expired') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+        <Icon path={ICONS.clock} className="h-3 w-3" />
+        {'Dues expired ' + until.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+      <Icon path={ICONS.dollar} className="h-3 w-3" />
+      Dues outstanding
+    </span>
+  );
+}
+
 function ProfileSkeleton() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
@@ -116,7 +148,7 @@ function MemberProfile() {
       setMember(memberResult.data);
 
       var [membershipResult, groupResult, tagResult] = await Promise.all([
-        supabase.from('memberships').select('id, role, status, joined_date, member_since_year, member_since_month, notes_public, organizations(id, name, type)').eq('member_id', userId).eq('status', 'active').order('joined_date', { ascending: false }),
+        supabase.from('memberships').select('id, role, status, joined_date, member_since_year, member_since_month, notes_public, dues_paid, dues_paid_until, dues_amount, organizations(id, name, type)').eq('member_id', userId).eq('status', 'active').order('joined_date', { ascending: false }),
         supabase.from('group_memberships').select('id, role, status, joined_at, groups(id, name, description, type, organization_id, organizations(id, name))').eq('member_id', userId).eq('status', 'active').order('joined_at', { ascending: false }),
         supabase.from('member_tag_assignments').select('member_tags(id, name, color, organization_id, member_tags_organizations:organizations(name))').eq('member_id', userId),
       ]);
@@ -153,11 +185,11 @@ function MemberProfile() {
   var externalOrgs = (member && Array.isArray(member.external_orgs)) ? member.external_orgs : [];
 
   var SOCIAL_LINKS = member ? [
-    { key: 'website',   label: 'Website',    icon: ICONS.globe,    href: member.website   },
-    { key: 'linkedin',  label: 'LinkedIn',   icon: ICONS.link,     href: member.linkedin  },
-    { key: 'instagram', label: 'Instagram',  icon: ICONS.link,     href: member.instagram },
-    { key: 'facebook',  label: 'Facebook',   icon: ICONS.link,     href: member.facebook  },
-    { key: 'twitter',   label: 'X / Twitter',icon: ICONS.link,     href: member.twitter   },
+    { key: 'website',   label: 'Website',     icon: ICONS.globe, href: member.website   },
+    { key: 'linkedin',  label: 'LinkedIn',    icon: ICONS.link,  href: member.linkedin  },
+    { key: 'instagram', label: 'Instagram',   icon: ICONS.link,  href: member.instagram },
+    { key: 'facebook',  label: 'Facebook',    icon: ICONS.link,  href: member.facebook  },
+    { key: 'twitter',   label: 'X / Twitter', icon: ICONS.link,  href: member.twitter   },
   ].filter(function(s) { return s.href && s.href.trim(); }) : [];
 
   if (loading) return <ProfileSkeleton />;
@@ -310,6 +342,11 @@ function MemberProfile() {
                       <div className="flex items-center gap-1.5 mt-2">
                         <Icon path={ICONS.check} className="h-4 w-4 text-green-500 flex-shrink-0" />
                         <p className="text-xs text-blue-700 font-medium">{m.notes_public}</p>
+                      </div>
+                    )}
+                    {isOwnProfile && (
+                      <div className="mt-2">
+                        <DuesBadge membership={m} />
                       </div>
                     )}
                   </div>
