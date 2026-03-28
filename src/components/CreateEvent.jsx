@@ -10,12 +10,10 @@ var EVENT_TYPES = [
   'Health & Wellness','Networking','Religious & Spiritual',
   'Social & Mixer','Sports & Recreation','Volunteer',
 ];
-
 var AUDIENCE_OPTIONS = [
   'Adults (18+)','Children','Families','LGBTQ+',
   'Seniors','Students','Veterans','Women','Youth (13–17)',
 ];
-
 var LANGUAGE_OPTIONS = [
   'Arabic','Chinese (Mandarin)','English','French','Haitian Creole',
   'Hindi','Portuguese','Russian','Somali','Spanish','Tagalog','Vietnamese',
@@ -36,7 +34,6 @@ var STATE_MAP = {
   'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
   'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
 };
-
 var TZ_MAP = {
   'America/New_York':'Eastern Time (EST/EDT)','America/Chicago':'Central Time (CST/CDT)',
   'America/Denver':'Mountain Time (MST/MDT)','America/Phoenix':'Mountain Time (MST)',
@@ -47,7 +44,19 @@ var TZ_MAP = {
 };
 
 function blankTicketType() {
-  return { name: '', price: '', early_bird_price: '', early_bird_ends_at: '', quantity_available: '' };
+  return { name:'', price:'', early_bird_price:'', early_bird_ends_at:'', quantity_available:'' };
+}
+
+function defaultCheckoutFields() {
+  return [
+    { _key: 'default-name',  label:'Full Name',     field_type:'text',  is_required:true,  is_default:true,  options:null, sort_order:0 },
+    { _key: 'default-email', label:'Email Address', field_type:'email', is_required:true,  is_default:true,  options:null, sort_order:1 },
+    { _key: 'default-phone', label:'Phone Number',  field_type:'phone', is_required:false, is_default:true,  options:null, sort_order:2 },
+  ];
+}
+
+function blankCustomField() {
+  return { _key: 'custom-' + Date.now(), label:'', field_type:'text', is_required:false, is_default:false, options:null, sort_order:99 };
 }
 
 // ── Primitives ───────────────────────────────────────────────────────────────
@@ -93,21 +102,16 @@ function MultiCheckbox({ options, selected, onChange, legend }) {
   );
 }
 
-// ── Ticket Type Row ───────────────────────────────────────────────────────────
+// ── Ticket Type Row ──────────────────────────────────────────────────────────
 function TicketTypeRow({ ticket, index, onChange, onRemove, canRemove }) {
   var [showEarlyBird, setShowEarlyBird] = useState(!!(ticket.early_bird_price || ticket.early_bird_ends_at));
 
   function update(field, value) {
-    var updated = Object.assign({}, ticket);
-    updated[field] = value;
-    onChange(index, updated);
+    onChange(index, Object.assign({}, ticket, { [field]: value }));
   }
 
   function toggleEarlyBird() {
-    if (showEarlyBird) {
-      var updated = Object.assign({}, ticket, { early_bird_price: '', early_bird_ends_at: '' });
-      onChange(index, updated);
-    }
+    if (showEarlyBird) onChange(index, Object.assign({}, ticket, { early_bird_price:'', early_bird_ends_at:'' }));
     setShowEarlyBird(!showEarlyBird);
   }
 
@@ -117,108 +121,59 @@ function TicketTypeRow({ ticket, index, onChange, onRemove, canRemove }) {
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Ticket Type {index + 1}</p>
         {canRemove && (
           <button type="button" onClick={function(){ onRemove(index); }}
-            className="text-red-400 hover:text-red-600 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-0.5 transition-colors"
-            aria-label={'Remove ticket type ' + (index + 1)}>
-            Remove
-          </button>
+            className="text-red-400 hover:text-red-600 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-0.5"
+            aria-label={'Remove ticket type ' + (index+1)}>Remove</button>
         )}
       </div>
-
-      {/* Name + Price */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor={'tt-name-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
-            Name <span className="text-red-500" aria-hidden="true">*</span>
-          </label>
-          <input
-            id={'tt-name-'+index}
-            type="text"
-            value={ticket.name}
+          <label htmlFor={'tt-name-'+index} className="block text-xs font-semibold text-gray-700 mb-1">Name <span className="text-red-500" aria-hidden="true">*</span></label>
+          <input id={'tt-name-'+index} type="text" value={ticket.name}
             onChange={function(e){ update('name', e.target.value); }}
-            placeholder="e.g. General Admission"
-            aria-required="true"
-            className={inputCls}
-          />
+            placeholder="e.g. General Admission" aria-required="true" className={inputCls}/>
         </div>
         <div>
-          <label htmlFor={'tt-price-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
-            Price <span className="text-red-500" aria-hidden="true">*</span>
-          </label>
+          <label htmlFor={'tt-price-'+index} className="block text-xs font-semibold text-gray-700 mb-1">Price <span className="text-red-500" aria-hidden="true">*</span></label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm" aria-hidden="true">$</span>
-            <input
-              id={'tt-price-'+index}
-              type="number"
-              min="0"
-              step="0.01"
-              value={ticket.price}
+            <input id={'tt-price-'+index} type="number" min="0" step="0.01" value={ticket.price}
               onChange={function(e){ update('price', e.target.value); }}
-              placeholder="0.00"
-              aria-required="true"
-              className={inputCls+' pl-7'}
-            />
+              placeholder="0.00" aria-required="true" className={inputCls+' pl-7'}/>
           </div>
         </div>
       </div>
-
-      {/* Quantity */}
       <div>
         <label htmlFor={'tt-qty-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
           Quantity Available <span className="text-gray-400 font-normal">(leave blank for unlimited)</span>
         </label>
-        <input
-          id={'tt-qty-'+index}
-          type="number"
-          min="1"
-          step="1"
-          value={ticket.quantity_available}
+        <input id={'tt-qty-'+index} type="number" min="1" step="1" value={ticket.quantity_available}
           onChange={function(e){ update('quantity_available', e.target.value); }}
-          placeholder="Unlimited"
-          className={inputCls}
-        />
+          placeholder="Unlimited" className={inputCls}/>
       </div>
-
-      {/* Early Bird toggle */}
       <div>
         <button type="button" onClick={toggleEarlyBird}
-          className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
+          className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           aria-expanded={showEarlyBird}>
-          <Icon path={showEarlyBird ? 'M19 9l-7 7-7-7' : 'M9 5l7 7-7 7'} className="h-3 w-3"/>
+          <Icon path={showEarlyBird?'M19 9l-7 7-7-7':'M9 5l7 7-7 7'} className="h-3 w-3"/>
           {showEarlyBird ? 'Remove early bird pricing' : 'Add early bird pricing'}
         </button>
-
         {showEarlyBird && (
           <div className="mt-3 space-y-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor={'tt-eb-price-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">
-                  Early Bird Price <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
+                <label htmlFor={'tt-eb-price-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">Early Bird Price <span className="text-red-500" aria-hidden="true">*</span></label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm" aria-hidden="true">$</span>
-                  <input
-                    id={'tt-eb-price-'+index}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={ticket.early_bird_price}
+                  <input id={'tt-eb-price-'+index} type="number" min="0" step="0.01" value={ticket.early_bird_price}
                     onChange={function(e){ update('early_bird_price', e.target.value); }}
-                    placeholder="0.00"
-                    className={inputCls+' pl-7'}
-                  />
+                    placeholder="0.00" className={inputCls+' pl-7'}/>
                 </div>
               </div>
               <div>
-                <label htmlFor={'tt-eb-date-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">
-                  Early Bird Ends <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <input
-                  id={'tt-eb-date-'+index}
-                  type="datetime-local"
-                  value={ticket.early_bird_ends_at}
+                <label htmlFor={'tt-eb-date-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">Early Bird Ends <span className="text-red-500" aria-hidden="true">*</span></label>
+                <input id={'tt-eb-date-'+index} type="datetime-local" value={ticket.early_bird_ends_at}
                   onChange={function(e){ update('early_bird_ends_at', e.target.value); }}
-                  className={inputCls}
-                />
+                  className={inputCls}/>
               </div>
             </div>
             <p className="text-xs text-yellow-700">After this date, the regular price applies automatically.</p>
@@ -229,13 +184,108 @@ function TicketTypeRow({ ticket, index, onChange, onRemove, canRemove }) {
   );
 }
 
+// ── Checkout Field Row ───────────────────────────────────────────────────────
+function CheckoutFieldRow({ field, index, onChange, onRemove, canRemove }) {
+  var [showOptions, setShowOptions] = useState(!!(field.options && field.options.length > 0));
+  var [optionsText, setOptionsText] = useState(field.options ? field.options.join('\n') : '');
+
+  function update(key, value) {
+    onChange(index, Object.assign({}, field, { [key]: value }));
+  }
+
+  function handleOptionsChange(text) {
+    setOptionsText(text);
+    var opts = text.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+    onChange(index, Object.assign({}, field, { options: opts.length > 0 ? opts : null }));
+  }
+
+  var fieldTypeOptions = [
+    { value:'text',     label:'Short Text' },
+    { value:'email',    label:'Email' },
+    { value:'phone',    label:'Phone' },
+    { value:'dropdown', label:'Dropdown' },
+    { value:'checkbox', label:'Checkbox (Yes/No)' },
+  ];
+
+  return (
+    <div className={'border rounded-xl p-4 space-y-3 ' + (field.is_default ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white')}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {field.is_default && (
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">Default</span>
+          )}
+          {!field.is_default && (
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Custom Field</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="text-xs font-semibold text-gray-600">Required</span>
+            <Toggle checked={field.is_required}
+              onChange={function(){ update('is_required', !field.is_required); }}
+              id={'cf-req-'+index} label={'Toggle required for ' + field.label}/>
+          </label>
+          {canRemove && (
+            <button type="button" onClick={function(){ onRemove(index); }}
+              className="text-red-400 hover:text-red-600 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-0.5"
+              aria-label={'Remove field ' + field.label}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={'cf-label-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Field Label <span className="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input id={'cf-label-'+index} type="text" value={field.label}
+            onChange={function(e){ update('label', e.target.value); }}
+            placeholder="e.g. T-shirt size" aria-required="true"
+            className={inputCls}
+            readOnly={field.is_default}/>
+        </div>
+        <div>
+          <label htmlFor={'cf-type-'+index} className="block text-xs font-semibold text-gray-700 mb-1">Field Type</label>
+          <select id={'cf-type-'+index} value={field.field_type}
+            onChange={function(e){
+              update('field_type', e.target.value);
+              if (e.target.value === 'dropdown') setShowOptions(true);
+              else { setShowOptions(false); onChange(index, Object.assign({}, field, { field_type: e.target.value, options: null })); }
+            }}
+            disabled={field.is_default}
+            className={inputCls}>
+            {fieldTypeOptions.map(function(o){
+              return <option key={o.value} value={o.value}>{o.label}</option>;
+            })}
+          </select>
+        </div>
+      </div>
+
+      {/* Dropdown options */}
+      {field.field_type === 'dropdown' && (
+        <div>
+          <label htmlFor={'cf-opts-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Options <span className="text-gray-400 font-normal">(one per line)</span>
+          </label>
+          <textarea id={'cf-opts-'+index} value={optionsText}
+            onChange={function(e){ handleOptionsChange(e.target.value); }}
+            placeholder={'Small\nMedium\nLarge\nXL'}
+            rows={4} className={inputCls+' resize-none'}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent }) {
   var [form, setForm] = useState({
-    title:'', description:'', eventType:'in-person', isMultiDay:false,
+title:'', description:'', eventType:'in-person', isMultiDay:false,
     schedule:[{date:'',startTime:'',endTime:''}],
     locationName:'', fullAddress:'', city:'', state:'', zipCode:'',
-    virtualLink:'', locationLink:'', maxAttendees:'', visibility:'members', requireRSVP:false,
+    virtualLink:'', locationLink:'', maxAttendees:'', visibility:'members', requireRSVP:false, enableCheckIn:true,
   });
   var [loading, setLoading] = useState(false);
   var [geocoding, setGeocoding] = useState(false);
@@ -277,6 +327,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   // Ticketing
   var [isPaid, setIsPaid] = useState(false);
   var [ticketTypes, setTicketTypes] = useState([blankTicketType()]);
+  var [checkoutFields, setCheckoutFields] = useState(defaultCheckoutFields());
 
   var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -290,108 +341,95 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (!editingEvent) return;
 
     function parseDT(isoStr) {
-      if (!isoStr) return { date: '', time: '' };
+      if (!isoStr) return { date:'', time:'' };
       var d = new Date(isoStr);
-      var date = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      var time = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-      return { date: date, time: time };
+      return {
+        date: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),
+        time: String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'),
+      };
     }
 
     var start = parseDT(editingEvent.start_time);
     var end   = parseDT(editingEvent.end_time);
-
     var fmt = 'in-person';
-    if (editingEvent.is_virtual && editingEvent.location === 'Virtual Event') fmt = 'virtual';
-    else if (editingEvent.is_virtual) fmt = 'hybrid';
-
+    if (editingEvent.is_virtual && editingEvent.location==='Virtual Event') fmt='virtual';
+    else if (editingEvent.is_virtual) fmt='hybrid';
     var isMulti = start.date && end.date && start.date !== end.date;
-
     var schedule = isMulti
-      ? [{ date: start.date, startTime: start.time, endTime: '' }, { date: end.date, startTime: '', endTime: end.time }]
-      : [{ date: start.date, startTime: start.time, endTime: end.time }];
+      ? [{date:start.date,startTime:start.time,endTime:''},{date:end.date,startTime:'',endTime:end.time}]
+      : [{date:start.date,startTime:start.time,endTime:end.time}];
 
     setForm({
-      title:        editingEvent.title        || '',
-      description:  editingEvent.description  || '',
-      eventType:    fmt,
-      isMultiDay:   isMulti,
-      schedule:     schedule,
-      locationName: (fmt !== 'virtual' ? (editingEvent.full_address || editingEvent.location || '') : ''),
-      fullAddress:  editingEvent.full_address  || '',
-      city:         editingEvent.city          || '',
-      state:        editingEvent.state         || '',
-      zipCode:      editingEvent.zip_code      || '',
-      virtualLink:  editingEvent.virtual_link  || '',
-      locationLink: '',
-      maxAttendees: editingEvent.max_attendees ? String(editingEvent.max_attendees) : '',
-      visibility:   editingEvent.visibility    || 'members',
-      requireRSVP:  editingEvent.require_rsvp  || false,
+      title:editingEvent.title||'', description:editingEvent.description||'',
+      eventType:fmt, isMultiDay:isMulti, schedule:schedule,
+      locationName:(fmt!=='virtual'?(editingEvent.full_address||editingEvent.location||''):''),
+      fullAddress:editingEvent.full_address||'', city:editingEvent.city||'',
+      state:editingEvent.state||'', zipCode:editingEvent.zip_code||'',
+      virtualLink:editingEvent.virtual_link||'', locationLink:'',
+      maxAttendees:editingEvent.max_attendees?String(editingEvent.max_attendees):'',
+visibility:     editingEvent.visibility     || 'members',
+      requireRSVP:    editingEvent.require_rsvp   || false,
+      enableCheckIn:  editingEvent.enable_check_in !== false,
     });
 
-    setEventTypes(editingEvent.event_types   || []);
-    setAudience(  editingEvent.audience      || []);
-    setLanguages( editingEvent.languages     || []);
-    setVolunteerSignup( editingEvent.volunteer_signup  || false);
-    setDonationDropoff( editingEvent.donation_dropoff  || false);
-    setPublishToDiscovery(editingEvent.publish_to_discovery || false);
-    setPublishToWebsite(  editingEvent.publish_to_website   || false);
+    setEventTypes(editingEvent.event_types||[]);
+    setAudience(editingEvent.audience||[]);
+    setLanguages(editingEvent.languages||[]);
+    setVolunteerSignup(editingEvent.volunteer_signup||false);
+    setDonationDropoff(editingEvent.donation_dropoff||false);
+    setPublishToDiscovery(editingEvent.publish_to_discovery||false);
+    setPublishToWebsite(editingEvent.publish_to_website||false);
 
-    var wasPaid = editingEvent.is_paid || false;
+    var wasPaid = editingEvent.is_paid||false;
     setIsPaid(wasPaid);
+
     if (wasPaid) {
-      supabase
-        .from('event_ticket_types')
-        .select('*')
-        .eq('event_id', editingEvent.id)
-        .order('sort_order')
+      // Load ticket types
+      supabase.from('event_ticket_types').select('*').eq('event_id',editingEvent.id).order('sort_order')
         .then(function(res) {
-          if (res.data && res.data.length > 0) {
+          if (res.data && res.data.length>0) {
             setTicketTypes(res.data.map(function(tt) {
-              var ebEndsAt = '';
+              var ebEndsAt='';
               if (tt.early_bird_ends_at) {
-                var d = new Date(tt.early_bird_ends_at);
-                ebEndsAt = d.getFullYear() + '-' +
-                  String(d.getMonth()+1).padStart(2,'0') + '-' +
-                  String(d.getDate()).padStart(2,'0') + 'T' +
-                  String(d.getHours()).padStart(2,'0') + ':' +
-                  String(d.getMinutes()).padStart(2,'0');
+                var d=new Date(tt.early_bird_ends_at);
+                ebEndsAt=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
               }
-              return {
-                name: tt.name || '',
-                price: tt.price != null ? String(tt.price) : '',
-                early_bird_price: tt.early_bird_price != null ? String(tt.early_bird_price) : '',
-                early_bird_ends_at: ebEndsAt,
-                quantity_available: tt.quantity_available != null ? String(tt.quantity_available) : '',
-              };
+              return { name:tt.name||'', price:tt.price!=null?String(tt.price):'', early_bird_price:tt.early_bird_price!=null?String(tt.early_bird_price):'', early_bird_ends_at:ebEndsAt, quantity_available:tt.quantity_available!=null?String(tt.quantity_available):'' };
             }));
           } else {
             setTicketTypes([blankTicketType()]);
           }
         });
+
+      // Load checkout fields
+      supabase.from('event_checkout_fields').select('*').eq('event_id',editingEvent.id).order('sort_order')
+        .then(function(res) {
+          if (res.data && res.data.length>0) {
+            setCheckoutFields(res.data.map(function(f,i) {
+              return { _key: f.id||('field-'+i), label:f.label, field_type:f.field_type, is_required:f.is_required, is_default:f.is_default, options:f.options, sort_order:f.sort_order };
+            }));
+          } else {
+            setCheckoutFields(defaultCheckoutFields());
+          }
+        });
     } else {
       setTicketTypes([blankTicketType()]);
+      setCheckoutFields(defaultCheckoutFields());
     }
 
-    if (editingEvent.event_types?.length || editingEvent.audience?.length || editingEvent.publish_to_discovery || editingEvent.publish_to_website || editingEvent.volunteer_signup || editingEvent.donation_dropoff || editingEvent.is_paid) {
+    if (editingEvent.event_types?.length||editingEvent.audience?.length||editingEvent.publish_to_discovery||editingEvent.publish_to_website||editingEvent.volunteer_signup||editingEvent.donation_dropoff||editingEvent.is_paid) {
       setShowAdvanced(true);
     }
 
-    if (editingEvent.is_recurring && editingEvent.recurrence_rule) {
-      var rr = editingEvent.recurrence_rule;
-      setIsRecurring(true);
-      setRecurrenceType(rr.type || 'monthly');
-      if (rr.type === 'monthly') {
-        setDayOfWeek(  rr.dayOfWeek   != null ? rr.dayOfWeek   : 1);
-        setWeekOfMonth(rr.weekOfMonth != null ? rr.weekOfMonth : 1);
-      } else if (rr.type === 'weekly') {
-        setWeeklyDays(rr.daysOfWeek || [1]);
-      } else if (rr.type === 'daily') {
-        setDailyInterval(rr.interval    || 1);
-        setWeekdaysOnly( rr.weekdaysOnly || false);
-      }
+    if (editingEvent.is_recurring&&editingEvent.recurrence_rule) {
+      var rr=editingEvent.recurrence_rule;
+      setIsRecurring(true); setRecurrenceType(rr.type||'monthly');
+      if (rr.type==='monthly') { setDayOfWeek(rr.dayOfWeek!=null?rr.dayOfWeek:1); setWeekOfMonth(rr.weekOfMonth!=null?rr.weekOfMonth:1); }
+      else if (rr.type==='weekly') { setWeeklyDays(rr.daysOfWeek||[1]); }
+      else if (rr.type==='daily') { setDailyInterval(rr.interval||1); setWeekdaysOnly(rr.weekdaysOnly||false); }
       if (editingEvent.recurrence_end_date) {
-        var red = new Date(editingEvent.recurrence_end_date);
-        setRecurrenceEndDate(red.getFullYear() + '-' + String(red.getMonth()+1).padStart(2,'0') + '-' + String(red.getDate()).padStart(2,'0'));
+        var red=new Date(editingEvent.recurrence_end_date);
+        setRecurrenceEndDate(red.getFullYear()+'-'+String(red.getMonth()+1).padStart(2,'0')+'-'+String(red.getDate()).padStart(2,'0'));
       }
     }
   }, [isOpen, editingEvent]);
@@ -405,7 +443,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     setShowTimezoneSelector(false); setSelectedTimezone(null);
     setShowAdvanced(false); setEventTypes([]); setAudience([]); setLanguages([]);
     setVolunteerSignup(false); setDonationDropoff(false); setPublishToDiscovery(false); setPublishToWebsite(false); setFlierFile(null);
-    setIsPaid(false); setTicketTypes([blankTicketType()]);
+    setIsPaid(false); setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields());
     setError(null);
   }
 
@@ -421,22 +459,20 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
   function handleChange(e) {
     var name=e.target.name, value=e.target.type==='checkbox'?e.target.checked:e.target.value;
-    setForm(function(prev){ var u={}; u[name]=value; return Object.assign({},prev,u); });
+    setForm(function(prev){ return Object.assign({},prev,{[name]:value}); });
   }
 
   function handleScheduleChange(index, field, value) {
-    var s=form.schedule.slice(); s[index]=Object.assign({},s[index]); s[index][field]=value;
+    var s=form.schedule.slice(); s[index]=Object.assign({},s[index],{[field]:value});
     setForm(function(prev){ return Object.assign({},prev,{schedule:s}); });
   }
 
   function addDay() {
-    if (form.schedule.length<5)
-      setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.concat([{date:'',startTime:'',endTime:''}])}); });
+    if (form.schedule.length<5) setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.concat([{date:'',startTime:'',endTime:''}])}); });
   }
 
   function removeDay(index) {
-    if (form.schedule.length>1)
-      setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.filter(function(_,i){ return i!==index; })}); });
+    if (form.schedule.length>1) setForm(function(prev){ return Object.assign({},prev,{schedule:prev.schedule.filter(function(_,i){ return i!==index; })}); });
   }
 
   function toggleWeeklyDay(day) {
@@ -446,21 +482,19 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     });
   }
 
+  // Ticket helpers
   function handleTicketTypeChange(index, updated) {
-    setTicketTypes(function(prev) {
-      var next = prev.slice();
-      next[index] = updated;
-      return next;
-    });
+    setTicketTypes(function(prev){ var next=prev.slice(); next[index]=updated; return next; });
   }
+  function addTicketType() { setTicketTypes(function(prev){ return prev.concat([blankTicketType()]); }); }
+  function removeTicketType(index) { setTicketTypes(function(prev){ return prev.filter(function(_,i){ return i!==index; }); }); }
 
-  function addTicketType() {
-    setTicketTypes(function(prev) { return prev.concat([blankTicketType()]); });
+  // Checkout field helpers
+  function handleCheckoutFieldChange(index, updated) {
+    setCheckoutFields(function(prev){ var next=prev.slice(); next[index]=updated; return next; });
   }
-
-  function removeTicketType(index) {
-    setTicketTypes(function(prev) { return prev.filter(function(_,i){ return i !== index; }); });
-  }
+  function addCustomField() { setCheckoutFields(function(prev){ return prev.concat([blankCustomField()]); }); }
+  function removeCheckoutField(index) { setCheckoutFields(function(prev){ return prev.filter(function(_,i){ return i!==index; }); }); }
 
   function extractState(s) {
     if (!s) return '';
@@ -473,28 +507,21 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   function formatAddressDisplay(address) {
     var num=address.house_number||'', road=address.road||'';
     var city=address.city||address.town||address.village||'';
-    var parts=[];
-    var street=(num+' '+road).trim();
-    if (street) parts.push(street);
-    if (city) parts.push(city);
-    if (address.state) parts.push(extractState(address.state));
-    if (address.postcode) parts.push(address.postcode);
+    var parts=[]; var street=(num+' '+road).trim();
+    if (street) parts.push(street); if (city) parts.push(city);
+    if (address.state) parts.push(extractState(address.state)); if (address.postcode) parts.push(address.postcode);
     return parts.join(', ');
   }
 
   async function searchAddresses(query) {
     setSearchingAddress(true);
     try {
-      var res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(query)+',USA&limit=8&addressdetails=1',{headers:{'Accept':'application/json'}});
+      var res=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(query)+',USA&limit=8&addressdetails=1',{headers:{'Accept':'application/json'}});
       if (!res.ok) return;
-      var data = await res.json();
-      var filtered = data
-        .filter(function(item){ var a=item.address||{}; return (a.road||a.house_number)&&(a.city||a.town||a.village); })
-        .map(function(item){ return Object.assign({},item,{formatted:formatAddressDisplay(item.address)}); });
-      setAddressSuggestions(filtered);
-      setShowSuggestions(filtered.length>0);
-    } catch(err){ console.error(err); }
-    finally { setSearchingAddress(false); }
+      var data=await res.json();
+      var filtered=data.filter(function(item){ var a=item.address||{}; return (a.road||a.house_number)&&(a.city||a.town||a.village); }).map(function(item){ return Object.assign({},item,{formatted:formatAddressDisplay(item.address)}); });
+      setAddressSuggestions(filtered); setShowSuggestions(filtered.length>0);
+    } catch(err){ console.error(err); } finally { setSearchingAddress(false); }
   }
 
   function handleAddressInputChange(e) {
@@ -518,8 +545,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       var data=await res.json();
       if (data&&data.length>0) return {latitude:parseFloat(data[0].lat),longitude:parseFloat(data[0].lon)};
       return null;
-    } catch(err){ return null; }
-    finally { setGeocoding(false); }
+    } catch(err){ return null; } finally { setGeocoding(false); }
   }
 
   function formatForPostgres(date) {
@@ -540,15 +566,18 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (form.visibility==='groups'&&selectedGroupIds.length===0) { toast.error('Please select at least one group'); return; }
 
     if (isPaid) {
-      for (var ti = 0; ti < ticketTypes.length; ti++) {
-        var tt = ticketTypes[ti];
-        if (!tt.name.trim()) { toast.error('Ticket type ' + (ti+1) + ' needs a name'); return; }
-        if (!tt.price || parseFloat(tt.price) < 0) { toast.error('Ticket type ' + (ti+1) + ' needs a valid price'); return; }
-        if (tt.early_bird_price && !tt.early_bird_ends_at) { toast.error('Ticket type ' + (ti+1) + ': early bird needs an end date'); return; }
-        if (tt.early_bird_ends_at && !tt.early_bird_price) { toast.error('Ticket type ' + (ti+1) + ': early bird needs a price'); return; }
-        if (tt.early_bird_price && parseFloat(tt.early_bird_price) >= parseFloat(tt.price)) {
-          toast.error('Ticket type ' + (ti+1) + ': early bird price must be less than the regular price'); return;
-        }
+      for (var ti=0; ti<ticketTypes.length; ti++) {
+        var tt=ticketTypes[ti];
+        if (!tt.name.trim()) { toast.error('Ticket type '+(ti+1)+' needs a name'); return; }
+        if (!tt.price||parseFloat(tt.price)<0) { toast.error('Ticket type '+(ti+1)+' needs a valid price'); return; }
+        if (tt.early_bird_price&&!tt.early_bird_ends_at) { toast.error('Ticket type '+(ti+1)+': early bird needs an end date'); return; }
+        if (tt.early_bird_ends_at&&!tt.early_bird_price) { toast.error('Ticket type '+(ti+1)+': early bird needs a price'); return; }
+        if (tt.early_bird_price&&parseFloat(tt.early_bird_price)>=parseFloat(tt.price)) { toast.error('Ticket type '+(ti+1)+': early bird price must be less than regular price'); return; }
+      }
+      for (var fi=0; fi<checkoutFields.length; fi++) {
+        var cf=checkoutFields[fi];
+        if (!cf.label.trim()) { toast.error('Checkout field '+(fi+1)+' needs a label'); return; }
+        if (cf.field_type==='dropdown'&&(!cf.options||cf.options.length===0)) { toast.error('Dropdown field "'+cf.label+'" needs at least one option'); return; }
       }
     }
 
@@ -569,15 +598,9 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       if (userErr) throw userErr;
       if (!user) throw new Error('You must be logged in');
 
-      var memberResult = await supabase
-        .from('memberships')
-        .select('role')
-        .eq('organization_id', organizationId)
-        .eq('member_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-      var userRole = memberResult.data ? memberResult.data.role : 'member';
-      var approvalStatus = userRole === 'admin' ? 'approved' : 'pending';
+      var memberResult=await supabase.from('memberships').select('role').eq('organization_id',organizationId).eq('member_id',user.id).eq('status','active').maybeSingle();
+      var userRole=memberResult.data?memberResult.data.role:'member';
+      var approvalStatus=userRole==='admin'?'approved':'pending';
 
       var lat=null,lng=null;
       if ((form.eventType==='in-person'||form.eventType==='hybrid')&&form.locationName) {
@@ -585,15 +608,15 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         if (coords) { lat=coords.latitude; lng=coords.longitude; }
       }
 
-      var flierUrl = null;
+      var flierUrl=null;
       if (flierFile) {
-        if (flierFile.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
-        var fileExt = flierFile.name.split('.').pop();
-        var fileName = organizationId + '/' + Date.now() + '.' + fileExt;
-        var { error: uploadErr } = await supabase.storage.from('event-fliers').upload(fileName, flierFile, { upsert: true });
-        if (uploadErr) { toast.error('File upload failed — event not created'); setLoading(false); return; }
-        var { data: urlData } = supabase.storage.from('event-fliers').getPublicUrl(fileName);
-        flierUrl = urlData.publicUrl;
+        if (flierFile.size>5*1024*1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
+        var fileExt=flierFile.name.split('.').pop();
+        var fileName=organizationId+'/'+Date.now()+'.'+fileExt;
+        var {error:uploadErr}=await supabase.storage.from('event-fliers').upload(fileName,flierFile,{upsert:true});
+        if (uploadErr) { toast.error('File upload failed'); setLoading(false); return; }
+        var {data:urlData}=supabase.storage.from('event-fliers').getPublicUrl(fileName);
+        flierUrl=urlData.publicUrl;
       }
 
       var eventData={
@@ -609,76 +632,63 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         max_attendees:form.maxAttendees?parseInt(form.maxAttendees):null,
         visibility:form.visibility, require_rsvp:form.requireRSVP, created_by:user.id,
         is_recurring:isRecurring,
-        recurrence_rule:isRecurring?(
-          recurrenceType==='monthly'?{type:'monthly',dayOfWeek,weekOfMonth,time:first.startTime+':00'}:
-          recurrenceType==='weekly'?{type:'weekly',daysOfWeek:weeklyDays,time:first.startTime+':00'}:
-          {type:'daily',interval:dailyInterval,weekdaysOnly,time:first.startTime+':00'}
-        ):null,
+        recurrence_rule:isRecurring?(recurrenceType==='monthly'?{type:'monthly',dayOfWeek,weekOfMonth,time:first.startTime+':00'}:recurrenceType==='weekly'?{type:'weekly',daysOfWeek:weeklyDays,time:first.startTime+':00'}:{type:'daily',interval:dailyInterval,weekdaysOnly,time:first.startTime+':00'}):null,
         recurrence_end_date:isRecurring&&recurrenceEndDate?new Date(recurrenceEndDate).toISOString():null,
         parent_event_id:null,
         event_timezone:showTimezoneSelector?selectedTimezone:null,
         event_types:eventTypes.length>0?eventTypes:null,
         audience:audience.length>0?audience:null,
         languages:languages.length>0?languages:null,
-        volunteer_signup:volunteerSignup,
-        donation_dropoff:donationDropoff,
-        is_public: form.visibility === 'public' || publishToDiscovery,
-        publish_to_discovery:publishToDiscovery,
-        publish_to_website:publishToWebsite,
-        is_paid: isPaid,
-        approval_status: approvalStatus,
-        flier_url: flierUrl,
+        volunteer_signup:volunteerSignup, donation_dropoff:donationDropoff,
+        is_public:form.visibility==='public'||publishToDiscovery,
+        publish_to_discovery:publishToDiscovery, publish_to_website:publishToWebsite,
+        is_paid:isPaid, enable_check_in:form.enableCheckIn, approval_status:approvalStatus, flier_url:flierUrl,
       };
 
       var dbResult;
       if (editingEvent) {
-        var {data:updatedEvt, error:eventErr} = await supabase.from('events').update(eventData).eq('id', editingEvent.id).select().single();
-        if (eventErr) throw eventErr;
-        dbResult = updatedEvt;
+        var {data:updatedEvt,error:eventErr}=await supabase.from('events').update(eventData).eq('id',editingEvent.id).select().single();
+        if (eventErr) throw eventErr; dbResult=updatedEvt;
       } else {
-        var {data:newEvent, error:eventErr} = await supabase.from('events').insert([eventData]).select().single();
-        if (eventErr) throw eventErr;
-        dbResult = newEvent;
+        var {data:newEvent,error:eventErr}=await supabase.from('events').insert([eventData]).select().single();
+        if (eventErr) throw eventErr; dbResult=newEvent;
       }
-      var savedEvent = dbResult;
+      var savedEvent=dbResult;
 
       // Save ticket types
-      await supabase.from('event_ticket_types').delete().eq('event_id', savedEvent.id);
+      await supabase.from('event_ticket_types').delete().eq('event_id',savedEvent.id);
       if (isPaid) {
-        var ticketRows = ticketTypes.map(function(tt, i) {
-          return {
-            event_id: savedEvent.id,
-            name: tt.name.trim(),
-            price: parseFloat(tt.price),
-            early_bird_price: tt.early_bird_price ? parseFloat(tt.early_bird_price) : null,
-            early_bird_ends_at: tt.early_bird_ends_at ? new Date(tt.early_bird_ends_at).toISOString() : null,
-            quantity_available: tt.quantity_available ? parseInt(tt.quantity_available) : null,
-            quantity_sold: 0,
-            sort_order: i,
-          };
+        var ticketRows=ticketTypes.map(function(tt,i){
+          return { event_id:savedEvent.id, name:tt.name.trim(), price:parseFloat(tt.price), early_bird_price:tt.early_bird_price?parseFloat(tt.early_bird_price):null, early_bird_ends_at:tt.early_bird_ends_at?new Date(tt.early_bird_ends_at).toISOString():null, quantity_available:tt.quantity_available?parseInt(tt.quantity_available):null, quantity_sold:0, sort_order:i };
         });
-        var { error: ttErr } = await supabase.from('event_ticket_types').insert(ticketRows);
-        if (ttErr) toast.error('Event saved but ticket types failed: ' + ttErr.message);
+        var {error:ttErr}=await supabase.from('event_ticket_types').insert(ticketRows);
+        if (ttErr) toast.error('Event saved but ticket types failed: '+ttErr.message);
+
+        // Save checkout fields
+        await supabase.from('event_checkout_fields').delete().eq('event_id',savedEvent.id);
+        var fieldRows=checkoutFields.map(function(cf,i){
+          return { event_id:savedEvent.id, label:cf.label.trim(), field_type:cf.field_type, options:cf.options||null, is_required:cf.is_required, is_default:cf.is_default||false, sort_order:i };
+        });
+        var {error:cfErr}=await supabase.from('event_checkout_fields').insert(fieldRows);
+        if (cfErr) toast.error('Event saved but checkout fields failed: '+cfErr.message);
+      } else {
+        await supabase.from('event_checkout_fields').delete().eq('event_id',savedEvent.id);
       }
 
       var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
-      if (!editingEvent && groupIdsToLink.length>0) {
+      if (!editingEvent&&groupIdsToLink.length>0) {
         var {error:grpErr}=await supabase.from('event_groups').insert(groupIdsToLink.map(function(gId){ return {event_id:savedEvent.id,group_id:gId}; }));
         if (grpErr) toast.error('Event created but group link failed.');
       }
 
-      if (editingEvent) {
-        toast.success('"' + savedEvent.title + '" updated!');
-      } else if (approvalStatus === 'pending') {
-        toast.success('Event submitted for admin approval.');
-      } else {
-        toast.success('"' + savedEvent.title + '" created!' + (isRecurring ? ' Recurring instances generated for 6 months.' : ''));
-      }
-      if (onSuccess) onSuccess(savedEvent);
+      if (editingEvent) { toast.success('"'+savedEvent.title+'" updated!'); }
+      else if (approvalStatus==='pending') { toast.success('Event submitted for admin approval.'); }
+      else { toast.success('"'+savedEvent.title+'" created!'+(isRecurring?' Recurring instances generated for 6 months.':'')); }
 
-      if (!editingEvent && approvalStatus === 'approved') {
+      if (onSuccess) onSuccess(savedEvent);
+      if (!editingEvent&&approvalStatus==='approved') {
         try {
-          var notifRes = await notifyOrganizationMembers({organizationId, type:'event', title:'New Event', message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(), link:'/organizations/'+organizationId+'/events', excludeUserId:null});
+          var notifRes=await notifyOrganizationMembers({organizationId,type:'event',title:'New Event',message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(),link:'/organizations/'+organizationId+'/events',excludeUserId:null});
           if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
         } catch(ne){ console.error('Notification failed:',ne); }
       }
@@ -700,14 +710,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div>
-            <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">{editingEvent ? 'Edit Event' : 'Create New Event'}</h2>
-            <p className="text-gray-500 text-sm mt-0.5">
-              {organizationName}
-              {groupId && <span className="ml-1 text-blue-600 font-medium">(linked to this group)</span>}
-            </p>
+            <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">{editingEvent?'Edit Event':'Create New Event'}</h2>
+            <p className="text-gray-500 text-sm mt-0.5">{organizationName}{groupId&&<span className="ml-1 text-blue-600 font-medium">(linked to this group)</span>}</p>
           </div>
           <button type="button" onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Close create event dialog">
             <Icon path="M6 18L18 6M6 6l12 12" className="h-5 w-5"/>
           </button>
@@ -715,26 +722,19 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
         <div className="overflow-y-auto flex-1 px-6 py-6 space-y-6">
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-              <p className="text-red-800 font-semibold text-sm">{error}</p>
-            </div>
-          )}
+          {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert"><p className="text-red-800 font-semibold text-sm">{error}</p></div>}
 
           {/* Title */}
           <div>
             <label htmlFor="event-title" className={labelCls}>Event Title <span className="text-red-500" aria-hidden="true">*</span></label>
-            <input id="event-title" name="title" type="text" required aria-required="true" value={form.title} onChange={handleChange}
-              placeholder="e.g. Community Cleanup Day" maxLength={200} className={inputCls}/>
+            <input id="event-title" name="title" type="text" required aria-required="true" value={form.title} onChange={handleChange} placeholder="e.g. Community Cleanup Day" maxLength={200} className={inputCls}/>
             <p className="text-xs text-gray-400 mt-1" aria-live="polite">{form.title.length}/200</p>
           </div>
 
           {/* Description */}
           <div>
             <label htmlFor="event-description" className={labelCls}>Description</label>
-            <textarea id="event-description" name="description" value={form.description} onChange={handleChange}
-              placeholder="Describe what this event is about..." rows={3} maxLength={1000}
-              className={inputCls+' resize-none'} aria-describedby="desc-count"/>
+            <textarea id="event-description" name="description" value={form.description} onChange={handleChange} placeholder="Describe what this event is about..." rows={3} maxLength={1000} className={inputCls+' resize-none'} aria-describedby="desc-count"/>
             <p id="desc-count" className="text-xs text-gray-400 mt-1" aria-live="polite">{form.description.length}/1000</p>
           </div>
 
@@ -742,19 +742,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           <div>
             <label className={labelCls}>Event Format <span className="text-red-500" aria-hidden="true">*</span></label>
             <div className="space-y-2" role="radiogroup" aria-label="Event format">
-              {[
-                {value:'in-person',label:'In-Person',desc:'Physical location only'},
-                {value:'virtual',  label:'Virtual',  desc:'Online only (Zoom, Google Meet, etc.)'},
-                {value:'hybrid',   label:'Hybrid',   desc:'Both in-person and virtual options'},
-              ].map(function(opt){
+              {[{value:'in-person',label:'In-Person',desc:'Physical location only'},{value:'virtual',label:'Virtual',desc:'Online only'},{value:'hybrid',label:'Hybrid',desc:'Both in-person and virtual'}].map(function(opt){
                 var checked=form.eventType===opt.value;
                 return (
                   <label key={opt.value} className={'flex items-center p-3 border-2 rounded-xl cursor-pointer transition-colors '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 hover:bg-gray-50')}>
                     <input type="radio" name="eventType" value={opt.value} checked={checked} onChange={handleChange} className="w-4 h-4 text-blue-600"/>
-                    <div className="ml-3">
-                      <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
-                      <p className="text-xs text-gray-500">{opt.desc}</p>
-                    </div>
+                    <div className="ml-3"><p className="font-semibold text-gray-900 text-sm">{opt.label}</p><p className="text-xs text-gray-500">{opt.desc}</p></div>
                   </label>
                 );
               })}
@@ -770,25 +763,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-semibold text-gray-900">{form.isMultiDay?'Day '+(index+1):'Event Date & Time'}</p>
-                      {form.isMultiDay&&form.schedule.length>1&&(
-                        <button type="button" onClick={function(){ removeDay(index); }}
-                          className="text-red-500 hover:text-red-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded">Remove</button>
-                      )}
+                      {form.isMultiDay&&form.schedule.length>1&&<button type="button" onClick={function(){ removeDay(index); }} className="text-red-500 hover:text-red-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded">Remove</button>}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      {[
-                        {id:'date-'+index,type:'date',label:'Date',field:'date',req:true},
-                        {id:'start-'+index,type:'time',label:'Start Time',field:'startTime',req:true},
-                        {id:'end-'+index,type:'time',label:'End Time',field:'endTime',req:false},
-                      ].map(function(f){
-                        return (
-                          <div key={f.id}>
-                            <label htmlFor={f.id} className="block text-xs text-gray-500 mb-1">{f.label}</label>
-                            <input id={f.id} type={f.type} required={f.req} value={day[f.field]}
-                              onChange={function(e){ handleScheduleChange(index,f.field,e.target.value); }}
-                              className={inputCls}/>
-                          </div>
-                        );
+                      {[{id:'date-'+index,type:'date',label:'Date',field:'date',req:true},{id:'start-'+index,type:'time',label:'Start Time',field:'startTime',req:true},{id:'end-'+index,type:'time',label:'End Time',field:'endTime',req:false}].map(function(f){
+                        return (<div key={f.id}><label htmlFor={f.id} className="block text-xs text-gray-500 mb-1">{f.label}</label><input id={f.id} type={f.type} required={f.req} value={day[f.field]} onChange={function(e){ handleScheduleChange(index,f.field,e.target.value); }} className={inputCls}/></div>);
                       })}
                     </div>
                   </div>
@@ -796,59 +775,39 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
               })}
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" name="isMultiDay" checked={form.isMultiDay} onChange={handleChange}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+                  <input type="checkbox" name="isMultiDay" checked={form.isMultiDay} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
                   <span className="text-sm font-semibold text-gray-900">Multi-Day Event</span>
                 </label>
-                {form.isMultiDay&&form.schedule.length<5&&(
-                  <button type="button" onClick={addDay}
-                    className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                    Add Day
-                  </button>
-                )}
+                {form.isMultiDay&&form.schedule.length<5&&<button type="button" onClick={addDay} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Add Day</button>}
               </div>
             </div>
           </div>
 
           {/* Virtual link */}
-          {(form.eventType==='virtual'||form.eventType==='hybrid') && (
+          {(form.eventType==='virtual'||form.eventType==='hybrid')&&(
             <div>
               <label htmlFor="virtual-link" className={labelCls}>Meeting Link <span className="text-red-500" aria-hidden="true">*</span></label>
-              <input id="virtual-link" name="virtualLink" type="url" required value={form.virtualLink} onChange={handleChange}
-                placeholder="https://zoom.us/j/..." className={inputCls}/>
-              <p className="text-xs text-gray-400 mt-1">Zoom, Google Meet, Microsoft Teams, etc.</p>
+              <input id="virtual-link" name="virtualLink" type="url" required value={form.virtualLink} onChange={handleChange} placeholder="https://zoom.us/j/..." className={inputCls}/>
             </div>
           )}
 
           {/* Physical location */}
-          {(form.eventType==='in-person'||form.eventType==='hybrid') && (
+          {(form.eventType==='in-person'||form.eventType==='hybrid')&&(
             <div className="space-y-4">
               <div>
                 <label htmlFor="location-name" className={labelCls}>Location <span className="text-red-500" aria-hidden="true">*</span></label>
-                <input id="location-name" name="locationName" type="text" required value={form.locationName} onChange={handleChange}
-                  placeholder="123 Main St, Toledo, OH 43604" className={inputCls}/>
+                <input id="location-name" name="locationName" type="text" required value={form.locationName} onChange={handleChange} placeholder="123 Main St, Toledo, OH 43604" className={inputCls}/>
               </div>
               <div className="relative">
                 <label htmlFor="address-search" className={labelCls}>Address Search <span className="text-gray-400 font-normal">(optional helper)</span></label>
                 <div className="relative">
-                  <input id="address-search" type="text" value={addressInput} onChange={handleAddressInputChange}
-                    placeholder="Type to search for an address..." className={inputCls} autoComplete="off"/>
-                  {searchingAddress&&(
-                    <div className="absolute right-3 top-3.5">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" aria-hidden="true"/>
-                    </div>
-                  )}
+                  <input id="address-search" type="text" value={addressInput} onChange={handleAddressInputChange} placeholder="Type to search..." className={inputCls} autoComplete="off"/>
+                  {searchingAddress&&<div className="absolute right-3 top-3.5"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" aria-hidden="true"/></div>}
                 </div>
                 {showSuggestions&&addressSuggestions.length>0&&(
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                     {addressSuggestions.map(function(s,i){
-                      return (
-                        <button key={i} type="button" onMouseDown={function(e){ e.preventDefault(); selectAddress(s); }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none text-left border-b border-gray-100 last:border-0 transition-colors">
-                          <Icon path={['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z','M15 11a3 3 0 11-6 0 3 3 0 016 0z']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
-                          <p className="text-sm text-gray-900">{s.formatted}</p>
-                        </button>
-                      );
+                      return (<button key={i} type="button" onMouseDown={function(e){ e.preventDefault(); selectAddress(s); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none text-left border-b border-gray-100 last:border-0"><Icon path={['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z','M15 11a3 3 0 11-6 0 3 3 0 016 0z']} className="h-4 w-4 text-blue-500 flex-shrink-0"/><p className="text-sm text-gray-900">{s.formatted}</p></button>);
                     })}
                   </div>
                 )}
@@ -865,15 +824,13 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           {/* Max Attendees */}
           <div>
             <label htmlFor="max-attendees" className={labelCls}>Max Attendees <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input id="max-attendees" name="maxAttendees" type="number" min="1" value={form.maxAttendees} onChange={handleChange}
-              placeholder="Leave blank for unlimited" className={inputCls}/>
+            <input id="max-attendees" name="maxAttendees" type="number" min="1" value={form.maxAttendees} onChange={handleChange} placeholder="Leave blank for unlimited" className={inputCls}/>
           </div>
 
           {/* Recurring */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
             <label className="flex items-center gap-3 cursor-pointer mb-1">
-              <input type="checkbox" checked={isRecurring} onChange={function(e){ setIsRecurring(e.target.checked); }}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+              <input type="checkbox" checked={isRecurring} onChange={function(e){ setIsRecurring(e.target.checked); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
               <span className="font-semibold text-gray-900 text-sm">Recurring Event</span>
             </label>
             <p className="text-xs text-gray-500 mb-3 ml-7">Automatically create this event on a regular schedule.</p>
@@ -883,68 +840,14 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   <label className="block text-xs text-gray-600 mb-2">Recurrence Pattern</label>
                   <div className="grid grid-cols-3 gap-2">
                     {['daily','weekly','monthly'].map(function(t){
-                      return (
-                        <button key={t} type="button" onClick={function(){ setRecurrenceType(t); }}
-                          className={'px-3 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(recurrenceType===t?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
-                          {t.charAt(0).toUpperCase()+t.slice(1)}
-                        </button>
-                      );
+                      return (<button key={t} type="button" onClick={function(){ setRecurrenceType(t); }} className={'px-3 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(recurrenceType===t?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>);
                     })}
                   </div>
                 </div>
-                {recurrenceType==='daily'&&(
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <label htmlFor="daily-interval" className="text-xs text-gray-600 whitespace-nowrap">Every</label>
-                      <input id="daily-interval" type="number" min="1" max="30" value={dailyInterval}
-                        onChange={function(e){ setDailyInterval(parseInt(e.target.value)||1); }} className={inputCls+' w-20'}/>
-                      <span className="text-xs text-gray-600">day(s)</span>
-                    </div>
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={weekdaysOnly} onChange={function(e){ setWeekdaysOnly(e.target.checked); }}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
-                      <span className="text-sm text-gray-700">Weekdays only (Mon–Fri)</span>
-                    </label>
-                  </div>
-                )}
-                {recurrenceType==='weekly'&&(
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-2">Days of the week</label>
-                    <div className="grid grid-cols-7 gap-1">
-                      {dayNames.map(function(d,i){
-                        var sel=weeklyDays.includes(i);
-                        return (
-                          <button key={i} type="button" onClick={function(){ toggleWeeklyDay(i); }}
-                            className={'py-2 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(sel?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>
-                            {d}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {recurrenceType==='monthly'&&(
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="week-of-month" className="block text-xs text-gray-600 mb-1">Which week?</label>
-                      <select id="week-of-month" value={weekOfMonth} onChange={function(e){ setWeekOfMonth(parseInt(e.target.value)); }} className={inputCls}>
-                        {[['1','First'],['2','Second'],['3','Third'],['4','Fourth'],['-1','Last']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="day-of-week" className="block text-xs text-gray-600 mb-1">Which day?</label>
-                      <select id="day-of-week" value={dayOfWeek} onChange={function(e){ setDayOfWeek(parseInt(e.target.value)); }} className={inputCls}>
-                        {fullDayNames.map(function(n,i){ return <option key={i} value={i}>{n}</option>; })}
-                      </select>
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <label htmlFor="recurrence-end" className="block text-xs text-gray-600 mb-1">End Date <span className="text-gray-400">(optional)</span></label>
-                  <input id="recurrence-end" type="date" value={recurrenceEndDate} min={form.schedule[0].date}
-                    onChange={function(e){ setRecurrenceEndDate(e.target.value); }} className={inputCls}/>
-                  <p className="text-xs text-gray-400 mt-1">Leave blank — instances generated 6 months in advance.</p>
-                </div>
+                {recurrenceType==='daily'&&(<div className="space-y-3"><div className="flex items-center gap-3"><label htmlFor="daily-interval" className="text-xs text-gray-600 whitespace-nowrap">Every</label><input id="daily-interval" type="number" min="1" max="30" value={dailyInterval} onChange={function(e){ setDailyInterval(parseInt(e.target.value)||1); }} className={inputCls+' w-20'}/><span className="text-xs text-gray-600">day(s)</span></div><label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={weekdaysOnly} onChange={function(e){ setWeekdaysOnly(e.target.checked); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/><span className="text-sm text-gray-700">Weekdays only (Mon–Fri)</span></label></div>)}
+                {recurrenceType==='weekly'&&(<div><label className="block text-xs text-gray-600 mb-2">Days of the week</label><div className="grid grid-cols-7 gap-1">{dayNames.map(function(d,i){ var sel=weeklyDays.includes(i); return (<button key={i} type="button" onClick={function(){ toggleWeeklyDay(i); }} className={'py-2 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '+(sel?'bg-blue-600 text-white':'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50')}>{d}</button>); })}</div></div>)}
+                {recurrenceType==='monthly'&&(<div className="grid grid-cols-2 gap-3"><div><label htmlFor="week-of-month" className="block text-xs text-gray-600 mb-1">Which week?</label><select id="week-of-month" value={weekOfMonth} onChange={function(e){ setWeekOfMonth(parseInt(e.target.value)); }} className={inputCls}>{[['1','First'],['2','Second'],['3','Third'],['4','Fourth'],['-1','Last']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select></div><div><label htmlFor="day-of-week" className="block text-xs text-gray-600 mb-1">Which day?</label><select id="day-of-week" value={dayOfWeek} onChange={function(e){ setDayOfWeek(parseInt(e.target.value)); }} className={inputCls}>{fullDayNames.map(function(n,i){ return <option key={i} value={i}>{n}</option>; })}</select></div></div>)}
+                <div><label htmlFor="recurrence-end" className="block text-xs text-gray-600 mb-1">End Date <span className="text-gray-400">(optional)</span></label><input id="recurrence-end" type="date" value={recurrenceEndDate} min={form.schedule[0].date} onChange={function(e){ setRecurrenceEndDate(e.target.value); }} className={inputCls}/><p className="text-xs text-gray-400 mt-1">Leave blank — instances generated 6 months in advance.</p></div>
               </div>
             )}
           </div>
@@ -953,28 +856,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-900">Event Timezone</span>
-              <button type="button" onClick={function(){ setShowTimezoneSelector(!showTimezoneSelector); }}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors">
-                {showTimezoneSelector?'Use auto-detect':'Specify timezone'}
-              </button>
+              <button type="button" onClick={function(){ setShowTimezoneSelector(!showTimezoneSelector); }} className="text-xs text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">{showTimezoneSelector?'Use auto-detect':'Specify timezone'}</button>
             </div>
-            {!showTimezoneSelector?(
-              <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
-                <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-4 w-4 text-green-500"/>
-                Auto-detected: <strong className="text-gray-700">{TZ_MAP[userTimezone]||userTimezone}</strong>
-              </p>
-            ):(
-              <div className="mt-3">
-                <label htmlFor="event-timezone" className="sr-only">Select event timezone</label>
-                <select id="event-timezone" value={selectedTimezone||userTimezone} onChange={function(e){ setSelectedTimezone(e.target.value); }} className={inputCls}>
-                  <optgroup label="United States">
-                    {[['America/New_York','Eastern (ET)'],['America/Chicago','Central (CT)'],['America/Denver','Mountain (MT)'],['America/Phoenix','Mountain - AZ'],['America/Los_Angeles','Pacific (PT)'],['America/Anchorage','Alaska'],['Pacific/Honolulu','Hawaii']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
-                  </optgroup>
-                  <optgroup label="International">
-                    {[['America/Toronto','Toronto'],['Europe/London','London'],['Europe/Paris','Central Europe'],['Asia/Tokyo','Japan'],['Asia/Kolkata','India'],['Australia/Sydney','Australia East']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
-                  </optgroup>
-                </select>
-              </div>
+            {!showTimezoneSelector?(<p className="text-xs text-gray-500 mt-2 flex items-center gap-2"><Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-4 w-4 text-green-500"/>Auto-detected: <strong className="text-gray-700">{TZ_MAP[userTimezone]||userTimezone}</strong></p>):(
+              <div className="mt-3"><label htmlFor="event-timezone" className="sr-only">Select event timezone</label><select id="event-timezone" value={selectedTimezone||userTimezone} onChange={function(e){ setSelectedTimezone(e.target.value); }} className={inputCls}><optgroup label="United States">{[['America/New_York','Eastern (ET)'],['America/Chicago','Central (CT)'],['America/Denver','Mountain (MT)'],['America/Phoenix','Mountain - AZ'],['America/Los_Angeles','Pacific (PT)'],['America/Anchorage','Alaska'],['Pacific/Honolulu','Hawaii']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</optgroup><optgroup label="International">{[['America/Toronto','Toronto'],['Europe/London','London'],['Europe/Paris','Central Europe'],['Asia/Tokyo','Japan'],['Asia/Kolkata','India'],['Australia/Sydney','Australia East']].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</optgroup></select></div>
             )}
           </div>
 
@@ -982,25 +867,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           <div>
             <label htmlFor="event-flier" className={labelCls}>Flier or Image <span className="text-gray-400 font-normal">(optional)</span></label>
             <div className="flex items-center gap-3">
-              <label htmlFor="event-flier"
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 transition-colors">
+              <label htmlFor="event-flier" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500">
                 <Icon path="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" className="h-4 w-4 text-gray-500"/>
                 <span>Choose file</span>
-                <input id="event-flier" type="file" accept="image/*,.pdf" className="sr-only"
-                  onChange={function(e){ setFlierFile(e.target.files[0]||null); }}
-                  aria-label="Upload event flier or image"/>
+                <input id="event-flier" type="file" accept="image/*,.pdf" className="sr-only" onChange={function(e){ setFlierFile(e.target.files[0]||null); }} aria-label="Upload event flier"/>
               </label>
-              {flierFile ? (
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="text-sm text-gray-700 truncate">{flierFile.name}</span>
-                  <button type="button" onClick={function(){ setFlierFile(null); }}
-                    className="text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded flex-shrink-0" aria-label="Remove file">
-                    <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4"/>
-                  </button>
-                </div>
-              ) : (
-                <span className="text-xs text-gray-400">JPG, PNG, or PDF — max 5MB</span>
-              )}
+              {flierFile?(<div className="flex items-center gap-2 flex-1 min-w-0"><span className="text-sm text-gray-700 truncate">{flierFile.name}</span><button type="button" onClick={function(){ setFlierFile(null); }} className="text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded flex-shrink-0" aria-label="Remove file"><Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4"/></button></div>):(<span className="text-xs text-gray-400">JPG, PNG, or PDF — max 5MB</span>)}
             </div>
           </div>
 
@@ -1008,22 +880,9 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           <div>
             <label className={labelCls}>Who can see this event?</label>
             <div className="space-y-2" role="radiogroup" aria-label="Event visibility">
-              {[
-                {value:'public', label:'Public',         desc:'Anyone can see this event'},
-                {value:'members',label:'All Members',    desc:'All active members of this organization'},
-                {value:'groups', label:'Specific Groups',desc:'Only members of the groups you select'},
-                {value:'draft',  label:'Draft',          desc:'Only visible to admins'},
-              ].map(function(opt){
+              {[{value:'public',label:'Public',desc:'Anyone can see this event'},{value:'members',label:'All Members',desc:'All active members'},{value:'groups',label:'Specific Groups',desc:'Only members of selected groups'},{value:'draft',label:'Draft',desc:'Only visible to admins'}].map(function(opt){
                 var checked=form.visibility===opt.value;
-                return (
-                  <label key={opt.value} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 hover:bg-gray-50')}>
-                    <input type="radio" name="visibility" value={opt.value} checked={checked} onChange={handleChange} className="w-4 h-4 text-blue-600 mt-0.5"/>
-                    <div className="ml-3">
-                      <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
-                      <p className="text-xs text-gray-500">{opt.desc}</p>
-                    </div>
-                  </label>
-                );
+                return (<label key={opt.value} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(checked?'border-blue-500 bg-blue-50':'border-gray-200 hover:bg-gray-50')}><input type="radio" name="visibility" value={opt.value} checked={checked} onChange={handleChange} className="w-4 h-4 text-blue-600 mt-0.5"/><div className="ml-3"><p className="font-semibold text-gray-900 text-sm">{opt.label}</p><p className="text-xs text-gray-500">{opt.desc}</p></div></label>);
               })}
             </div>
           </div>
@@ -1031,53 +890,37 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           {/* Group selector */}
           {form.visibility==='groups'&&(
             <div className="bg-purple-50 border border-purple-200 rounded-xl p-4" role="group" aria-labelledby="group-label">
-              <p id="group-label" className="text-sm font-semibold text-purple-900 mb-3">
-                Select groups <span className="text-red-500" aria-hidden="true">*</span>
-              </p>
-              {loadingGroups?(
+              <p id="group-label" className="text-sm font-semibold text-purple-900 mb-3">Select groups <span className="text-red-500" aria-hidden="true">*</span></p>
+              {loadingGroups?(<div className="space-y-2">{[1,2].map(function(i){ return <div key={i} className="h-10 bg-purple-100 rounded-lg animate-pulse"/>; })}</div>):availableGroups.length===0?(<p className="text-sm text-gray-500">No groups found.</p>):(
                 <div className="space-y-2">
-                  {[1,2].map(function(i){ return <div key={i} className="h-10 bg-purple-100 rounded-lg animate-pulse"/>; })}
-                </div>
-              ):availableGroups.length===0?(
-                <p className="text-sm text-gray-500">No groups found. Create groups first in the Groups tab.</p>
-              ):(
-                <div className="space-y-2">
-                  {availableGroups.map(function(g){
-                    var sel=selectedGroupIds.includes(g.id);
-                    return (
-                      <label key={g.id} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(sel?'border-purple-500 bg-white':'border-gray-200 bg-white hover:border-purple-300')}>
-                        <input type="checkbox" checked={sel}
-                          onChange={function(){ setSelectedGroupIds(function(prev){ return prev.includes(g.id)?prev.filter(function(id){ return id!==g.id; }):prev.concat([g.id]); }); }}
-                          className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 mt-0.5" aria-label={'Select group '+g.name}/>
-                        <div className="ml-3">
-                          <p className="font-semibold text-gray-900 text-sm">{g.name}</p>
-                          {g.description&&<p className="text-xs text-gray-500">{g.description}</p>}
-                        </div>
-                      </label>
-                    );
-                  })}
+                  {availableGroups.map(function(g){ var sel=selectedGroupIds.includes(g.id); return (<label key={g.id} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors '+(sel?'border-purple-500 bg-white':'border-gray-200 bg-white hover:border-purple-300')}><input type="checkbox" checked={sel} onChange={function(){ setSelectedGroupIds(function(prev){ return prev.includes(g.id)?prev.filter(function(id){ return id!==g.id; }):prev.concat([g.id]); }); }} className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 mt-0.5" aria-label={'Select group '+g.name}/><div className="ml-3"><p className="font-semibold text-gray-900 text-sm">{g.name}</p>{g.description&&<p className="text-xs text-gray-500">{g.description}</p>}</div></label>); })}
                 </div>
               )}
-              {selectedGroupIds.length>0&&(
-                <p className="mt-3 text-xs text-purple-700 font-medium">{selectedGroupIds.length} group{selectedGroupIds.length!==1?'s':''} selected</p>
-              )}
+              {selectedGroupIds.length>0&&<p className="mt-3 text-xs text-purple-700 font-medium">{selectedGroupIds.length} group{selectedGroupIds.length!==1?'s':''} selected</p>}
             </div>
           )}
 
-          {/* Require RSVP */}
+{/* Require RSVP */}
           <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-xl">
             <input id="require-rsvp" name="requireRSVP" type="checkbox" checked={form.requireRSVP} onChange={handleChange}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"/>
+            <div><p className="font-semibold text-gray-900 text-sm">Require RSVP</p><p className="text-xs text-gray-500">Members must RSVP to attend this event.</p></div>
+          </label>
+
+          {/* Enable Check-In */}
+          <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <input id="enable-check-in" name="enableCheckIn" type="checkbox" checked={form.enableCheckIn} onChange={handleChange}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"/>
             <div>
-              <p className="font-semibold text-gray-900 text-sm">Require RSVP</p>
-              <p className="text-xs text-gray-500">Members must RSVP to attend this event.</p>
+              <p className="font-semibold text-gray-900 text-sm">Enable Attendance Check-In</p>
+              <p className="text-xs text-gray-500">Show the check-in widget on the event page. Only active on the day of the event.</p>
             </div>
           </label>
 
           {/* ── Advanced Settings ── */}
           <div>
             <button type="button" onClick={function(){ setShowAdvanced(!showAdvanced); }}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-expanded={showAdvanced} aria-controls="advanced-panel">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center" aria-hidden="true">
@@ -1098,7 +941,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   {/* Event Types */}
                   <div>
                     <p className="text-sm font-bold text-gray-900 mb-1">Event Types</p>
-                    <p className="text-xs text-gray-500 mb-3">Select all categories that apply to this event.</p>
+                    <p className="text-xs text-gray-500 mb-3">Select all categories that apply.</p>
                     <MultiCheckbox options={EVENT_TYPES} selected={eventTypes} onChange={setEventTypes} legend="Event types"/>
                   </div>
 
@@ -1122,14 +965,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                     <div className="space-y-3">
                       {[
                         {id:'volunteer',checked:volunteerSignup,onChange:function(){ setVolunteerSignup(!volunteerSignup); },label:'Volunteer Sign-Up Available',desc:'This event needs volunteers.'},
-                        {id:'donation', checked:donationDropoff,onChange:function(){ setDonationDropoff(!donationDropoff); },label:'Donation Drop-Off',           desc:'Physical donations can be dropped off at this event.'},
+                        {id:'donation',checked:donationDropoff,onChange:function(){ setDonationDropoff(!donationDropoff); },label:'Donation Drop-Off',desc:'Physical donations can be dropped off at this event.'},
                       ].map(function(item){
                         return (
                           <div key={item.id} className={'flex items-center justify-between p-4 rounded-xl border '+(item.checked?'border-blue-400 bg-blue-50':'border-gray-200 bg-white')}>
-                            <div>
-                              <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                            </div>
+                            <div><p className="font-semibold text-gray-900 text-sm">{item.label}</p><p className="text-xs text-gray-500 mt-0.5">{item.desc}</p></div>
                             <Toggle checked={item.checked} onChange={item.onChange} id={item.id} label={item.label}/>
                           </div>
                         );
@@ -1143,15 +983,12 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                     <p className="text-xs text-gray-500 mb-3">Choose where this event appears beyond your members.</p>
                     <div className="space-y-3">
                       {[
-                        {id:'pub-discovery',checked:publishToDiscovery,onChange:function(){ setPublishToDiscovery(!publishToDiscovery); },label:'Show on Discover Events page',    desc:'Visible to anyone browsing public events at /discover.'},
-                        {id:'pub-website',  checked:publishToWebsite,  onChange:function(){ setPublishToWebsite(!publishToWebsite); },   label:"Show on organization's website",desc:"Appears on your org's public website page."},
+                        {id:'pub-discovery',checked:publishToDiscovery,onChange:function(){ setPublishToDiscovery(!publishToDiscovery); },label:'Show on Discover Events page',desc:'Visible to anyone browsing public events at /discover.'},
+                        {id:'pub-website',checked:publishToWebsite,onChange:function(){ setPublishToWebsite(!publishToWebsite); },label:"Show on organization's website",desc:"Appears on your org's public website page."},
                       ].map(function(item){
                         return (
                           <div key={item.id} className={'flex items-center justify-between p-4 rounded-xl border '+(item.checked?'border-green-400 bg-green-50':'border-gray-200 bg-white')}>
-                            <div>
-                              <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                            </div>
+                            <div><p className="font-semibold text-gray-900 text-sm">{item.label}</p><p className="text-xs text-gray-500 mt-0.5">{item.desc}</p></div>
                             <Toggle checked={item.checked} onChange={item.onChange} id={item.id} label={item.label}/>
                           </div>
                         );
@@ -1162,43 +999,58 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   {/* ── Ticketing ── */}
                   <div>
                     <p className="text-sm font-bold text-gray-900 mb-1">Ticketing</p>
-                    <p className="text-xs text-gray-500 mb-3">Add ticket types for paid events. Members and guests pay via Stripe. Syndicade takes no cut.</p>
+                    <p className="text-xs text-gray-500 mb-3">Add ticket types for paid events. Syndicade takes no cut.</p>
                     <div className={'flex items-center justify-between p-4 rounded-xl border mb-4 '+(isPaid?'border-yellow-400 bg-yellow-50':'border-gray-200 bg-white')}>
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">Paid Event</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Require payment to RSVP.</p>
-                      </div>
-                      <Toggle
-                        checked={isPaid}
-                        onChange={function(){ setIsPaid(!isPaid); if (!isPaid) setTicketTypes([blankTicketType()]); }}
-                        id="is-paid"
-                        label="Paid Event"
-                      />
+                      <div><p className="font-semibold text-gray-900 text-sm">Paid Event</p><p className="text-xs text-gray-500 mt-0.5">Require payment to RSVP.</p></div>
+                      <Toggle checked={isPaid} onChange={function(){ setIsPaid(!isPaid); if (!isPaid) { setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields()); } }} id="is-paid" label="Paid Event"/>
                     </div>
 
-                    {isPaid && (
-                      <div className="space-y-3" role="list" aria-label="Ticket types">
-                        {ticketTypes.map(function(tt, i) {
-                          return (
-                            <div key={i} role="listitem">
-                              <TicketTypeRow
-                                ticket={tt}
-                                index={i}
-                                onChange={handleTicketTypeChange}
-                                onRemove={removeTicketType}
-                                canRemove={ticketTypes.length > 1}
-                              />
-                            </div>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={addTicketType}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-500 hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                        >
-                          <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
-                          Add Ticket Type
-                        </button>
+                    {isPaid&&(
+                      <div className="space-y-6">
+
+                        {/* Ticket Types */}
+                        <div>
+                          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Ticket Types</p>
+                          <div className="space-y-3" role="list" aria-label="Ticket types">
+                            {ticketTypes.map(function(tt,i){
+                              return (<div key={i} role="listitem"><TicketTypeRow ticket={tt} index={i} onChange={handleTicketTypeChange} onRemove={removeTicketType} canRemove={ticketTypes.length>1}/></div>);
+                            })}
+                          </div>
+                          <button type="button" onClick={addTicketType}
+                            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-500 hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
+                            Add Ticket Type
+                          </button>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-gray-200"/>
+
+                        {/* Checkout Fields */}
+                        <div>
+                          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Checkout Fields</p>
+                          <p className="text-xs text-gray-500 mb-3">These fields are collected from buyers before payment. Toggle required, remove defaults, or add custom fields.</p>
+                          <div className="space-y-3" role="list" aria-label="Checkout fields">
+                            {checkoutFields.map(function(cf,i){
+                              return (
+                                <div key={cf._key||i} role="listitem">
+                                  <CheckoutFieldRow
+                                    field={cf} index={i}
+                                    onChange={handleCheckoutFieldChange}
+                                    onRemove={removeCheckoutField}
+                                    canRemove={true}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button type="button" onClick={addCustomField}
+                            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-500 hover:border-purple-400 hover:text-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
+                            Add Custom Field
+                          </button>
+                        </div>
+
                       </div>
                     )}
                   </div>
@@ -1210,17 +1062,17 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
         </div>
 
-        {/* Sticky footer */}
+        {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
           <button type="button" onClick={onClose} disabled={loading||geocoding}
-            className="px-6 py-3 bg-transparent border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50">
+            className="px-6 py-3 bg-transparent border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50">
             Cancel
           </button>
           <button type="button" onClick={handleSubmit} disabled={loading||geocoding}
-            className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2">
+            className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2">
             {loading||geocoding?(
               <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{geocoding?'Finding location...':(editingEvent?'Saving...':'Creating event...')}</>
-            ):(editingEvent ? 'Save Changes' : 'Create Event')}
+            ):(editingEvent?'Save Changes':'Create Event')}
           </button>
         </div>
 

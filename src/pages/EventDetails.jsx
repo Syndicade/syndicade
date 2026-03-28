@@ -11,8 +11,8 @@ import EventQRCode from '../components/EventQRCode';
 
 var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
 var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE';
+var APP_URL = 'https://syndicade-git-main-syndicades-projects.vercel.app';
 
-// Returns the active price for a ticket type (early bird if still valid)
 function getActivePrice(tt) {
   if (tt.early_bird_price != null && tt.early_bird_ends_at != null) {
     if (new Date(tt.early_bird_ends_at) > new Date()) {
@@ -26,6 +26,123 @@ function formatPrice(price) {
   return '$' + parseFloat(price).toFixed(2);
 }
 
+function isEventDay(startTime) {
+  var now = new Date();
+  var eventDate = new Date(startTime);
+  return now.getFullYear() === eventDate.getFullYear() &&
+    now.getMonth() === eventDate.getMonth() &&
+    now.getDate() === eventDate.getDate();
+}
+
+// ── Checkout Form Modal ──────────────────────────────────────────────────────
+function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal }) {
+  var [values, setValues] = useState(function() {
+    var init = {};
+    fields.forEach(function(f) { init[f.id] = ''; });
+    return init;
+  });
+  var [submitting, setSubmitting] = useState(false);
+
+  function handleChange(fieldId, value) {
+    setValues(function(prev) { return Object.assign({}, prev, { [fieldId]: value }); });
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    for (var i = 0; i < fields.length; i++) {
+      var f = fields[i];
+      if (f.is_required && !values[f.id]) {
+        toast.error(f.label + ' is required');
+        return;
+      }
+    }
+    setSubmitting(true);
+    onSubmit(values);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 overflow-y-auto"
+      role="dialog" aria-modal="true" aria-labelledby="checkout-form-title">
+      <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl shadow-xl w-full max-w-lg my-8">
+
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#2A3550]">
+          <div>
+            <h2 id="checkout-form-title" className="text-lg font-bold text-white">Almost there</h2>
+            <p className="text-[#94A3B8] text-xs mt-0.5">
+              {totalQty} ticket{totalQty !== 1 ? 's' : ''} — {formatPrice(orderTotal)} total
+            </p>
+          </div>
+          <button type="button" onClick={onCancel}
+            className="p-2 text-[#64748B] hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Cancel checkout">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+            {fields.map(function(f) {
+              var inputId = 'cf-' + f.id;
+              return (
+                <div key={f.id}>
+                  <label htmlFor={inputId} className="block text-sm font-semibold text-[#CBD5E1] mb-1.5">
+                    {f.label}
+                    {f.is_required && <span className="text-red-400 ml-1" aria-hidden="true">*</span>}
+                    {!f.is_required && <span className="text-[#64748B] text-xs font-normal ml-1">(optional)</span>}
+                  </label>
+                  {f.field_type === 'dropdown' ? (
+                    <select id={inputId} value={values[f.id]} required={f.is_required}
+                      onChange={function(e) { handleChange(f.id, e.target.value); }}
+                      className="w-full px-4 py-3 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select an option...</option>
+                      {(f.options || []).map(function(opt) {
+                        return <option key={opt} value={opt}>{opt}</option>;
+                      })}
+                    </select>
+                  ) : f.field_type === 'checkbox' ? (
+                    <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#0E1523] border border-[#2A3550] rounded-lg">
+                      <input type="checkbox" id={inputId} checked={values[f.id] === 'yes'}
+                        onChange={function(e) { handleChange(f.id, e.target.checked ? 'yes' : ''); }}
+                        className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500"/>
+                      <span className="text-sm text-[#CBD5E1]">Yes</span>
+                    </label>
+                  ) : (
+                    <input id={inputId}
+                      type={f.field_type === 'email' ? 'email' : f.field_type === 'phone' ? 'tel' : 'text'}
+                      value={values[f.id]}
+                      required={f.is_required}
+                      onChange={function(e) { handleChange(f.id, e.target.value); }}
+                      placeholder={f.field_type === 'email' ? 'your@email.com' : f.field_type === 'phone' ? '(555) 000-0000' : ''}
+                      className="w-full px-4 py-3 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="px-6 py-4 border-t border-[#2A3550] flex items-center gap-3">
+            <button type="button" onClick={onCancel}
+              className="px-5 py-2.5 bg-transparent border border-[#2A3550] text-[#CBD5E1] font-semibold rounded-lg hover:bg-[#1E2845] focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm">
+              Back
+            </button>
+            <button type="submit" disabled={submitting}
+              className="flex-1 px-5 py-2.5 bg-[#F5B731] text-[#0E1523] font-bold rounded-lg hover:bg-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
+              {submitting ? (
+                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Redirecting...</>
+              ) : (
+                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Continue to Payment — {formatPrice(orderTotal)}</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 function EventDetails() {
   var { eventId } = useParams();
   var navigate = useNavigate();
@@ -42,11 +159,11 @@ function EventDetails() {
   var [rsvpSuccess, setRsvpSuccess] = useState(false);
   var [ticketLoading, setTicketLoading] = useState(false);
 
-  // Ticket types + selections
   var [ticketTypes, setTicketTypes] = useState([]);
-  var [selections, setSelections] = useState({}); // { [ticket_type_id]: quantity }
+  var [selections, setSelections] = useState({});
+  var [checkoutFields, setCheckoutFields] = useState([]);
+  var [showCheckoutForm, setShowCheckoutForm] = useState(false);
 
-  // Recurring / edit / report state
   var [showRecurringOptions, setShowRecurringOptions] = useState(false);
   var [recurringAction, setRecurringAction] = useState(null);
   var [showEditModal, setShowEditModal] = useState(false);
@@ -62,19 +179,19 @@ function EventDetails() {
       setCurrentUser(user);
 
       var { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
-
+        .from('events').select('*').eq('id', eventId).single();
       if (eventError) throw eventError;
       if (!eventData) { setError('Event not found'); setLoading(false); return; }
       setEvent(eventData);
 
       if (eventData.visibility !== 'public' && !user) { navigate('/login'); return; }
 
+      // Fetch org — include logo_url and slug for email branding
       var { data: orgData } = await supabase
-        .from('organizations').select('name').eq('id', eventData.organization_id).single();
+        .from('organizations')
+        .select('name, logo_url, slug')
+        .eq('id', eventData.organization_id)
+        .single();
       if (orgData) setOrganization(orgData);
 
       if (user) {
@@ -96,20 +213,18 @@ function EventDetails() {
         }
       }
 
-      // Load ticket types if paid event
       if (eventData.is_paid) {
         var { data: ttData } = await supabase
-          .from('event_ticket_types')
-          .select('*')
-          .eq('event_id', eventData.id)
-          .order('sort_order');
+          .from('event_ticket_types').select('*').eq('event_id', eventData.id).order('sort_order');
         if (ttData && ttData.length > 0) {
           setTicketTypes(ttData);
-          // Init selections to 0
           var initSel = {};
           ttData.forEach(function(tt) { initSel[tt.id] = 0; });
           setSelections(initSel);
         }
+        var { data: cfData } = await supabase
+          .from('event_checkout_fields').select('*').eq('event_id', eventData.id).order('sort_order');
+        if (cfData) setCheckoutFields(cfData);
       }
 
     } catch (err) {
@@ -124,7 +239,6 @@ function EventDetails() {
     if (eventId) fetchEvent();
   }, [eventId]);
 
-  // Auto-RSVP on return from Stripe
   useEffect(function() {
     var params = new URLSearchParams(window.location.search);
     if (params.get('ticket_success') !== '1') return;
@@ -133,22 +247,25 @@ function EventDetails() {
     handleRsvp('going', true);
   }, [currentUser, event]);
 
+  // Build org URL for emails
+  var getOrgUrl = function() {
+    if (!organization) return APP_URL;
+    if (organization.slug) return APP_URL + '/org/' + organization.slug;
+    return APP_URL;
+  };
+
   var handleRsvp = async function(status, fromTicket) {
     if (!currentUser) { toast.error('Please log in to RSVP'); navigate('/login'); return; }
     try {
       setRsvpLoading(true);
       setRsvpSuccess(false);
 
-      if (userRsvp) {
-        var { error: upErr } = await supabase.from('event_rsvps')
-          .update({ status: status, updated_at: new Date().toISOString() })
-          .eq('event_id', eventId).eq('member_id', currentUser.id);
-        if (upErr) throw upErr;
-      } else {
-        var { error: inErr } = await supabase.from('event_rsvps')
-          .insert([{ event_id: eventId, member_id: currentUser.id, status: status, guest_count: 0 }]);
-        if (inErr) throw inErr;
-      }
+      var { error: upsertErr } = await supabase.from('event_rsvps')
+        .upsert(
+          { event_id: eventId, member_id: currentUser.id, status: status, guest_count: 0, updated_at: new Date().toISOString() },
+          { onConflict: 'event_id,member_id' }
+        );
+      if (upsertErr) throw upsertErr;
 
       setUserRsvp(status);
       setRsvpSuccess(true);
@@ -157,43 +274,29 @@ function EventDetails() {
         .from('event_rsvps').select('*, members(first_name, last_name, profile_photo_url)').eq('event_id', eventId);
       if (updatedRsvps) setRsvps(updatedRsvps);
 
-if (status === 'going') {
+      if (status === 'going') {
         if (fromTicket) {
           toast.success('Payment confirmed — you\'re going!');
         } else {
           toast.success('RSVP updated — you\'re going!');
         }
 
-        var memberRes = await supabase
-          .from('members')
-          .select('email, first_name')
-          .eq('user_id', currentUser.id)
-          .single();
-
+        var memberRes = await supabase.from('members').select('email, first_name').eq('user_id', currentUser.id).single();
         if (memberRes.data && memberRes.data.email) {
           var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
           var eventTime = new Date(event.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+          var orgUrl = getOrgUrl();
+          var orgLogoUrl = organization ? (organization.logo_url || '') : '';
+          var orgName = organization ? organization.name : '';
 
           if (fromTicket) {
-            // Fetch purchases for this member + event to build receipt
-            var purchaseRes = await supabase
-              .from('ticket_purchases')
-              .select('*')
-              .eq('event_id', event.id)
-              .eq('member_id', currentUser.id)
-              .order('purchased_at', { ascending: false });
-
+            var purchaseRes = await supabase.from('ticket_purchases').select('*')
+              .eq('event_id', event.id).eq('member_id', currentUser.id).order('purchased_at', { ascending: false });
             var purchases = purchaseRes.data || [];
             var totalAmount = purchases.reduce(function(sum, p) { return sum + parseFloat(p.total_amount); }, 0);
             var lineItems = purchases.map(function(p) {
-              return {
-                name: p.ticket_type_name,
-                quantity: p.quantity,
-                unit_price: p.unit_price,
-                total_amount: p.total_amount,
-              };
+              return { name: p.ticket_type_name, quantity: p.quantity, unit_price: p.unit_price, total_amount: p.total_amount };
             });
-
             await fetch(SUPABASE_URL + '/functions/v1/send-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
@@ -202,7 +305,9 @@ if (status === 'going') {
                 data: {
                   memberEmail: memberRes.data.email,
                   eventTitle: event.title,
-                  orgName: organization ? organization.name : '',
+                  orgName: orgName,
+                  orgLogoUrl: orgLogoUrl,
+                  orgUrl: orgUrl,
                   eventDate: eventDate + ' at ' + eventTime,
                   eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
                   eventUrl: window.location.origin + window.location.pathname,
@@ -224,7 +329,9 @@ if (status === 'going') {
                 data: {
                   memberEmail: memberRes.data.email,
                   eventTitle: event.title,
-                  orgName: organization ? organization.name : '',
+                  orgName: orgName,
+                  orgLogoUrl: orgLogoUrl,
+                  orgUrl: orgUrl,
                   eventDate: eventDate + ' at ' + eventTime,
                   eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
                   eventUrl: window.location.href,
@@ -249,15 +356,11 @@ if (status === 'going') {
     }
   };
 
-  // Quantity stepper helpers
   var getTotal = function() {
     var total = 0;
     ticketTypes.forEach(function(tt) {
       var qty = selections[tt.id] || 0;
-      if (qty > 0) {
-        var active = getActivePrice(tt);
-        total += parseFloat(active.price) * qty;
-      }
+      if (qty > 0) { var active = getActivePrice(tt); total += parseFloat(active.price) * qty; }
     });
     return total;
   };
@@ -273,29 +376,43 @@ if (status === 'going') {
       var tt = ticketTypes.find(function(t) { return t.id === ttId; });
       var current = prev[ttId] || 0;
       var next = Math.max(0, current + delta);
-      // Cap at remaining quantity
       if (tt && tt.quantity_available != null) {
         var remaining = tt.quantity_available - (tt.quantity_sold || 0);
         next = Math.min(next, remaining);
       }
-      next = Math.min(next, 20); // per-type cap of 20 per order
+      next = Math.min(next, 20);
       var updated = Object.assign({}, prev);
       updated[ttId] = next;
       return updated;
     });
   };
 
-  var handleGetTicket = async function() {
+  var handleCheckoutClick = function() {
     if (!currentUser) { toast.error('Please log in to purchase tickets'); navigate('/login'); return; }
     if (getTotalQty() === 0) { toast.error('Please select at least one ticket'); return; }
+    if (checkoutFields.length > 0) {
+      setShowCheckoutForm(true);
+    } else {
+      handleGetTicket(null);
+    }
+  };
 
+  var handleGetTicket = async function(formResponses) {
+    setShowCheckoutForm(false);
     try {
       setTicketLoading(true);
+
+      if (formResponses && checkoutFields.length > 0) {
+        await supabase.from('ticket_checkout_responses').insert([{
+          event_id: event.id,
+          member_id: currentUser.id,
+          responses: formResponses,
+        }]);
+      }
 
       var memberRes = await supabase.from('members').select('email').eq('user_id', currentUser.id).single();
       var memberEmail = memberRes.data ? memberRes.data.email : '';
 
-      // Build selections array — only types with qty > 0
       var selArray = [];
       ticketTypes.forEach(function(tt) {
         var qty = selections[tt.id] || 0;
@@ -309,12 +426,8 @@ if (status === 'going') {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
         body: JSON.stringify({
-          event_id: event.id,
-          member_id: currentUser.id,
-          member_email: memberEmail,
-          selections: selArray,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
+          event_id: event.id, member_id: currentUser.id, member_email: memberEmail,
+          selections: selArray, success_url: successUrl, cancel_url: cancelUrl,
         }),
       });
 
@@ -351,8 +464,7 @@ if (status === 'going') {
     try {
       var { error } = await supabase.from('events').delete().eq('id', eventId);
       if (error) throw error;
-      toast.success('Event deleted.');
-      navigate('/events');
+      toast.success('Event deleted.'); navigate('/events');
     } catch (err) { toast.error('Failed to delete event. Please try again.'); }
   };
 
@@ -415,7 +527,6 @@ if (status === 'going') {
     };
   };
 
-  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0E1523] flex items-center justify-center">
@@ -438,7 +549,6 @@ if (status === 'going') {
     );
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────
   if (error || !event) {
     return (
       <div className="min-h-screen bg-[#0E1523] flex items-center justify-center p-4">
@@ -464,8 +574,8 @@ if (status === 'going') {
   var hasTicket = userRsvp === 'going';
   var totalQty = getTotalQty();
   var orderTotal = getTotal();
+  var showCheckIn = event.enable_check_in !== false && isEventDay(event.start_time);
 
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0E1523]">
 
@@ -508,7 +618,6 @@ if (status === 'going') {
             </div>
           </div>
 
-          {/* Title */}
           <div className="flex items-start gap-3 flex-wrap">
             {event.is_recurring && (
               <span className="inline-flex items-center px-2.5 py-0.5 mt-2 rounded-full text-xs font-semibold bg-[#1D3461] text-blue-400">Recurring</span>
@@ -639,8 +748,18 @@ if (status === 'going') {
               </div>
             )}
 
-            <AttendanceCheckIn event={event} currentUser={currentUser} userRole={isAdmin ? 'admin' : 'member'} organizationId={event.organization_id}/>
+            {/* QR Code */}
             <EventQRCode event={event}/>
+
+            {/* Attendance Check-In — only on event day if enabled */}
+            {showCheckIn && (
+              <AttendanceCheckIn
+                event={event}
+                currentUser={currentUser}
+                userRole={isAdmin ? 'admin' : 'member'}
+                organizationId={event.organization_id}
+              />
+            )}
 
           </div>
 
@@ -650,14 +769,12 @@ if (status === 'going') {
             {/* RSVP / Ticket card */}
             {!isPastEvent && currentUser && (
               <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-
                 {isPaidEvent ? (
                   <>
                     <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'4px'}}>Tickets</p>
                     <p className="text-[#94A3B8] text-xs mb-4">Processed securely via Stripe.</p>
 
                     {hasTicket ? (
-                      /* Already has ticket */
                       <div className="space-y-3">
                         <div className="w-full px-4 py-3 rounded-lg font-semibold text-sm text-center bg-green-600 text-white flex items-center justify-center gap-2">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -677,17 +794,14 @@ if (status === 'going') {
                         </div>
                       </div>
                     ) : (
-                      /* Ticket selector */
                       <div className="space-y-3">
-                        {/* Ticket type rows */}
                         {ticketTypes.map(function(tt) {
                           var active = getActivePrice(tt);
                           var qty = selections[tt.id] || 0;
                           var remaining = tt.quantity_available != null ? tt.quantity_available - (tt.quantity_sold || 0) : null;
                           var soldOut = remaining != null && remaining <= 0;
-
                           return (
-                            <div key={tt.id} className={'rounded-xl border p-3 ' + (soldOut ? 'border-[#2A3550] opacity-50' : 'border-[#2A3550] bg-[#0E1523]')}>
+                            <div key={tt.id} className={'rounded-xl border p-3 ' + (soldOut?'border-[#2A3550] opacity-50':'border-[#2A3550] bg-[#0E1523]')}>
                               <div className="flex items-start justify-between gap-2 mb-2">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-white font-semibold text-sm">{tt.name}</p>
@@ -701,36 +815,22 @@ if (status === 'going') {
                                     )}
                                   </div>
                                   {active.isEarlyBird && tt.early_bird_ends_at && (
-                                    <p className="text-xs text-[#64748B] mt-0.5">
-                                      Ends {new Date(tt.early_bird_ends_at).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}
-                                    </p>
+                                    <p className="text-xs text-[#64748B] mt-0.5">Ends {new Date(tt.early_bird_ends_at).toLocaleDateString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</p>
                                   )}
-                                  {remaining != null && !soldOut && (
-                                    <p className="text-xs text-[#64748B] mt-0.5">{remaining} remaining</p>
-                                  )}
+                                  {remaining != null && !soldOut && <p className="text-xs text-[#64748B] mt-0.5">{remaining} remaining</p>}
                                   {soldOut && <p className="text-xs text-red-400 mt-0.5 font-semibold">Sold Out</p>}
                                 </div>
-
-                                {/* Quantity stepper */}
                                 {!soldOut && (
                                   <div className="flex items-center gap-2 flex-shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={function() { updateQty(tt.id, -1); }}
-                                      disabled={qty === 0}
+                                    <button type="button" onClick={function() { updateQty(tt.id, -1); }} disabled={qty===0}
                                       aria-label={'Decrease quantity for ' + tt.name}
-                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30 transition-colors"
-                                    >
+                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                     </button>
-                                    <span className="w-6 text-center text-white font-bold text-sm" aria-live="polite" aria-label={'Quantity: ' + qty}>{qty}</span>
-                                    <button
-                                      type="button"
-                                      onClick={function() { updateQty(tt.id, 1); }}
-                                      disabled={remaining != null && qty >= remaining}
+                                    <span className="w-6 text-center text-white font-bold text-sm" aria-live="polite">{qty}</span>
+                                    <button type="button" onClick={function() { updateQty(tt.id, 1); }} disabled={remaining!=null&&qty>=remaining}
                                       aria-label={'Increase quantity for ' + tt.name}
-                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30 transition-colors"
-                                    >
+                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                     </button>
                                   </div>
@@ -740,41 +840,22 @@ if (status === 'going') {
                           );
                         })}
 
-                        {/* Order total */}
                         {totalQty > 0 && (
                           <div className="flex items-center justify-between pt-1 px-1">
-                            <span className="text-[#94A3B8] text-sm">{totalQty} ticket{totalQty !== 1 ? 's' : ''}</span>
+                            <span className="text-[#94A3B8] text-sm">{totalQty} ticket{totalQty!==1?'s':''}</span>
                             <span className="text-white font-bold">{formatPrice(orderTotal)}</span>
                           </div>
                         )}
 
-                        {/* Checkout button */}
-                        <button
-                          onClick={handleGetTicket}
-                          disabled={ticketLoading || totalQty === 0}
-                          className="w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 flex items-center justify-center gap-2 bg-[#F5B731] text-[#0E1523] hover:bg-yellow-300"
-                        >
+                        <button onClick={handleCheckoutClick} disabled={ticketLoading||totalQty===0}
+                          className="w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 flex items-center justify-center gap-2 bg-[#F5B731] text-[#0E1523] hover:bg-yellow-300">
                           {ticketLoading ? (
-                            <>
-                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                              </svg>
-                              Redirecting to checkout...
-                            </>
-                          ) : totalQty === 0 ? (
-                            'Select tickets above'
-                          ) : (
-                            <>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                              </svg>
-                              Checkout — {formatPrice(orderTotal)}
-                            </>
+                            <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Redirecting...</>
+                          ) : totalQty === 0 ? 'Select tickets above' : (
+                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Checkout — {formatPrice(orderTotal)}</>
                           )}
                         </button>
 
-                        {/* Maybe / Can't go */}
                         <div className="border-t border-[#2A3550] pt-3 space-y-2">
                           <button onClick={function() { handleRsvp('maybe'); }} disabled={rsvpLoading}
                             className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='maybe'?'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
@@ -790,7 +871,6 @@ if (status === 'going') {
                     )}
                   </>
                 ) : (
-                  /* Free event */
                   <>
                     <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Your RSVP</p>
                     <div className="space-y-3">
@@ -817,7 +897,7 @@ if (status === 'going') {
               <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Responses</p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#CBD5E1] text-sm">{isPaidEvent ? 'Tickets Sold' : 'Going'}</span>
+                  <span className="text-[#CBD5E1] text-sm">{isPaidEvent?'Tickets Sold':'Going'}</span>
                   <span className="font-bold text-green-400">{counts.going}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -835,14 +915,14 @@ if (status === 'going') {
             {counts.going > 0 && (
               <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
                 <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>
-                  {(isPaidEvent ? 'Attending (' : 'Going (') + counts.going + ')'}
+                  {(isPaidEvent?'Attending (':'Going (') + counts.going + ')'}
                 </p>
                 <ul className="space-y-2" role="list">
-                  {rsvps.filter(function(r) { return r.status === 'going'; }).slice(0, 10).map(function(rsvp) {
+                  {rsvps.filter(function(r) { return r.status==='going'; }).slice(0,10).map(function(rsvp) {
                     return (
                       <li key={rsvp.id} className="flex items-center gap-3" role="listitem">
                         {rsvp.members?.profile_photo_url ? (
-                          <img src={rsvp.members.profile_photo_url} alt={rsvp.members.first_name + ' ' + rsvp.members.last_name} className="w-8 h-8 rounded-full object-cover"/>
+                          <img src={rsvp.members.profile_photo_url} alt={rsvp.members.first_name+' '+rsvp.members.last_name} className="w-8 h-8 rounded-full object-cover"/>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-[#1D3461] text-blue-400 flex items-center justify-center font-bold text-xs" aria-hidden="true">
                             {rsvp.members?.first_name?.[0]}{rsvp.members?.last_name?.[0]}
@@ -852,7 +932,7 @@ if (status === 'going') {
                       </li>
                     );
                   })}
-                  {counts.going > 10 && <p className="text-sm text-[#64748B] mt-2">+ {counts.going - 10} more</p>}
+                  {counts.going > 10 && <p className="text-sm text-[#64748B] mt-2">+ {counts.going-10} more</p>}
                 </ul>
               </div>
             )}
@@ -860,6 +940,16 @@ if (status === 'going') {
           </div>
         </div>
       </div>
+
+      {showCheckoutForm && (
+        <CheckoutFormModal
+          fields={checkoutFields}
+          totalQty={totalQty}
+          orderTotal={orderTotal}
+          onSubmit={handleGetTicket}
+          onCancel={function() { setShowCheckoutForm(false); }}
+        />
+      )}
 
       {showRecurringOptions && (
         <RecurringEventOptions event={event} action={recurringAction} onSelect={handleRecurringOptionSelect}
@@ -869,7 +959,7 @@ if (status === 'going') {
       {showEditModal && (
         <EditEvent isOpen={showEditModal} onClose={function() { setShowEditModal(false); setEditScope(null); }}
           onSuccess={handleEventUpdated} event={event} editScope={editScope}
-          isRecurring={event.is_recurring || !!event.parent_event_id}/>
+          isRecurring={event.is_recurring||!!event.parent_event_id}/>
       )}
 
       {showAttendanceReport && (
