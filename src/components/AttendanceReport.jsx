@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 
 function AttendanceReport({ event, onClose }) {
   var [rows, setRows] = useState([]);
+  var [checkoutFields, setCheckoutFields] = useState([]);
   var [loading, setLoading] = useState(true);
   var [stats, setStats] = useState({ totalRsvps: 0, attended: 0, noShows: 0, attendanceRate: 0, totalRevenue: 0 });
   var isPaidEvent = event.is_paid;
@@ -29,7 +30,7 @@ function AttendanceReport({ event, onClose }) {
         .select('member_id, checked_in_at')
         .eq('event_id', event.id);
 
-      // Ticket purchases (only for paid events)
+      // Ticket purchases
       var purchasesByMember = {};
       if (isPaidEvent) {
         var { data: purchaseData } = await supabase
@@ -38,15 +39,12 @@ function AttendanceReport({ event, onClose }) {
           .eq('event_id', event.id);
 
         if (purchaseData) {
-          // Group by member, keep only latest session
           purchaseData.forEach(function(p) {
             if (!purchasesByMember[p.member_id]) {
               purchasesByMember[p.member_id] = { items: [], totalAmount: 0, sessionId: p.stripe_session_id };
             }
-            // If new session, replace
             if (p.stripe_session_id !== purchasesByMember[p.member_id].sessionId) {
-              var existing = purchasesByMember[p.member_id];
-              if (!existing.firstPurchaseDate || p.stripe_session_id > existing.sessionId) {
+              if (p.stripe_session_id > purchasesByMember[p.member_id].sessionId) {
                 purchasesByMember[p.member_id] = { items: [], totalAmount: 0, sessionId: p.stripe_session_id };
               }
             }
@@ -58,16 +56,43 @@ function AttendanceReport({ event, onClose }) {
         }
       }
 
+      // Checkout fields + responses
+      var fields = [];
+      var responsesByMember = {};
+      if (isPaidEvent) {
+        var { data: fieldsData } = await supabase
+          .from('event_checkout_fields')
+          .select('*')
+          .eq('event_id', event.id)
+          .order('sort_order');
+        fields = fieldsData || [];
+        setCheckoutFields(fields);
+
+        var { data: responsesData } = await supabase
+          .from('ticket_checkout_responses')
+          .select('member_id, responses')
+          .eq('event_id', event.id);
+
+        if (responsesData) {
+          responsesData.forEach(function(r) {
+            // Keep most recent if multiple
+            if (!responsesByMember[r.member_id]) {
+              responsesByMember[r.member_id] = r.responses || {};
+            }
+          });
+        }
+      }
+
       var attendedIds = new Set((attendanceData || []).map(function(a) { return a.member_id; }));
       var attendanceMap = {};
       (attendanceData || []).forEach(function(a) { attendanceMap[a.member_id] = a; });
 
-      // Build combined rows
       var combined = (rsvpData || []).map(function(rsvp) {
         var m = rsvp.members;
         var memberId = rsvp.member_id;
         var checkedIn = attendedIds.has(memberId);
         var purchases = purchasesByMember[memberId] || null;
+        var responses = responsesByMember[memberId] || {};
         return {
           memberId: memberId,
           photo: m?.profile_photo_url || null,
@@ -78,6 +103,7 @@ function AttendanceReport({ event, onClose }) {
           checkedInAt: checkedIn ? attendanceMap[memberId]?.checked_in_at : null,
           tickets: purchases ? purchases.items : [],
           totalPaid: purchases ? purchases.totalAmount : 0,
+          responses: responses,
         };
       });
 
@@ -121,8 +147,12 @@ function AttendanceReport({ event, onClose }) {
   function exportToCSV() {
     if (rows.length === 0) { toast.error('No data to export.'); return; }
 
-    var headers = ['Name', 'Email', 'Phone', 'Check-In Status', 'Check-In Time'];
-    if (isPaidEvent) headers = headers.concat(['Tickets', 'Amount Paid']);
+    var headers = ['Name', 'Email', 'Phone'];
+    if (isPaidEvent) {
+      headers = headers.concat(['Tickets', 'Amount Paid']);
+      checkoutFields.forEach(function(f) { headers.push(f.label); });
+    }
+    headers = headers.concat(['Check-In Status', 'Check-In Time']);
 
     var csvRows = rows.map(function(row) {
       var ticketSummary = row.tickets.map(function(t) {
@@ -132,14 +162,18 @@ function AttendanceReport({ event, onClose }) {
       var base = [
         '"' + row.name.trim() + '"',
         '"' + row.email + '"',
-        '"' + row.phone + '"',
-        row.checkedIn ? 'Attended' : 'No Show',
-        row.checkedInAt ? '"' + new Date(row.checkedInAt).toLocaleString() + '"' : 'N/A',
+        '"' + (row.phone || '') + '"',
       ];
-      if (isPaidEvent) base = base.concat([
-        '"' + ticketSummary + '"',
-        '$' + row.totalPaid.toFixed(2),
-      ]);
+      if (isPaidEvent) {
+        base.push('"' + ticketSummary + '"');
+        base.push('$' + row.totalPaid.toFixed(2));
+        checkoutFields.forEach(function(f) {
+          var val = row.responses[f.id] || '';
+          base.push('"' + String(val).replace(/"/g, '""') + '"');
+        });
+      }
+      base.push(row.checkedIn ? 'Attended' : 'No Show');
+      base.push(row.checkedInAt ? '"' + new Date(row.checkedInAt).toLocaleString() + '"' : 'N/A');
       return base.join(',');
     });
 
@@ -159,7 +193,7 @@ function AttendanceReport({ event, onClose }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 overflow-y-auto"
       role="dialog" aria-modal="true" aria-labelledby="report-title">
-      <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl shadow-xl w-full max-w-5xl my-8">
+      <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl shadow-xl w-full max-w-6xl my-8">
 
         {/* Header */}
         <div className="border-b border-[#2A3550] px-6 py-5 flex items-center justify-between">
@@ -215,9 +249,14 @@ function AttendanceReport({ event, onClose }) {
         {/* Table */}
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-4">
-            <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px'}}>
-              Attendee List
-            </p>
+            <div>
+              <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px'}}>
+                Attendee List
+              </p>
+              {isPaidEvent && checkoutFields.length > 0 && (
+                <p className="text-[#64748B] text-xs mt-1">Scroll right to see checkout form responses.</p>
+              )}
+            </div>
             <button onClick={exportToCSV}
               className="flex items-center gap-2 px-4 py-2 bg-[#1E2845] border border-[#2A3550] text-[#CBD5E1] text-sm font-semibold rounded-lg hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -258,17 +297,25 @@ function AttendanceReport({ event, onClose }) {
               <p className="text-[#64748B] text-sm">No one has RSVPed as Going to this event.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-              <table className="w-full text-sm" role="table">
-                <thead className="sticky top-0 bg-[#1E2845]">
+            <div className="overflow-x-auto overflow-y-auto max-h-[400px] rounded-lg border border-[#2A3550]">
+              <table className="w-full text-sm whitespace-nowrap" role="table">
+                <thead className="sticky top-0 bg-[#1E2845] z-10">
                   <tr>
-                    <th className="text-left px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Attendee</th>
-                    <th className="text-left px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Email</th>
-                    <th className="text-left px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Phone</th>
-                    {isPaidEvent && <th className="text-left px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Tickets</th>}
-                    {isPaidEvent && <th className="text-right px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Paid</th>}
-                    <th className="text-left px-3 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Check-In</th>
-                    <th className="px-3 py-3"></th>
+                    <th className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Attendee</th>
+                    <th className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Email</th>
+                    <th className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Phone</th>
+                    {isPaidEvent && <th className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Tickets</th>}
+                    {isPaidEvent && <th className="text-right px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Paid</th>}
+                    {/* Dynamic checkout field columns */}
+                    {isPaidEvent && checkoutFields.map(function(f) {
+                      return (
+                        <th key={f.id} className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">
+                          {f.label}
+                        </th>
+                      );
+                    })}
+                    <th className="text-left px-4 py-3 text-[#64748B] text-xs font-semibold uppercase tracking-wide">Check-In</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2A3550]">
@@ -276,7 +323,7 @@ function AttendanceReport({ event, onClose }) {
                     var initials = row.name.trim().split(' ').map(function(n){ return n[0]; }).join('').slice(0,2).toUpperCase();
                     return (
                       <tr key={row.memberId} className={'transition-colors ' + (row.checkedIn ? 'bg-[#0E1F16]' : 'bg-transparent hover:bg-[#1E2845]')}>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {row.photo ? (
                               <img src={row.photo} alt={row.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0"/>
@@ -285,18 +332,18 @@ function AttendanceReport({ event, onClose }) {
                                 {initials}
                               </div>
                             )}
-                            <span className="text-white font-semibold whitespace-nowrap">{row.name.trim() || '—'}</span>
+                            <span className="text-white font-semibold">{row.name.trim() || '—'}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-[#CBD5E1]">{row.email || '—'}</td>
-                        <td className="px-3 py-3 text-[#CBD5E1]">{row.phone || '—'}</td>
+                        <td className="px-4 py-3 text-[#CBD5E1]">{row.email || '—'}</td>
+                        <td className="px-4 py-3 text-[#CBD5E1]">{row.phone || '—'}</td>
                         {isPaidEvent && (
-                          <td className="px-3 py-3">
+                          <td className="px-4 py-3">
                             {row.tickets.length > 0 ? (
                               <div className="space-y-0.5">
                                 {row.tickets.map(function(t, i) {
                                   return (
-                                    <p key={i} className="text-[#CBD5E1] text-xs whitespace-nowrap">
+                                    <p key={i} className="text-[#CBD5E1] text-xs">
                                       {t.ticket_type_name} <span className="text-[#64748B]">×{t.quantity}</span>
                                     </p>
                                   );
@@ -306,13 +353,26 @@ function AttendanceReport({ event, onClose }) {
                           </td>
                         )}
                         {isPaidEvent && (
-                          <td className="px-3 py-3 text-right">
+                          <td className="px-4 py-3 text-right">
                             {row.totalPaid > 0
                               ? <span className="text-[#F5B731] font-bold">${row.totalPaid.toFixed(2)}</span>
                               : <span className="text-[#64748B]">—</span>}
                           </td>
                         )}
-                        <td className="px-3 py-3">
+                        {/* Dynamic checkout field values */}
+                        {isPaidEvent && checkoutFields.map(function(f) {
+                          var val = row.responses[f.id];
+                          return (
+                            <td key={f.id} className="px-4 py-3 text-[#CBD5E1] max-w-[180px]">
+                              {val ? (
+                                <span className="block truncate" title={String(val)}>{String(val)}</span>
+                              ) : (
+                                <span className="text-[#64748B]">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3">
                           {row.checkedIn ? (
                             <div>
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#1B3A2F] text-green-400 border border-green-800">
@@ -331,16 +391,16 @@ function AttendanceReport({ event, onClose }) {
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3">
                           {row.checkedIn ? (
                             <button onClick={function() { handleToggleCheckIn(row); }}
-                              className="px-2.5 py-1 text-xs font-semibold text-[#94A3B8] border border-[#2A3550] rounded-lg hover:border-red-500 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 whitespace-nowrap"
+                              className="px-2.5 py-1 text-xs font-semibold text-[#94A3B8] border border-[#2A3550] rounded-lg hover:border-red-500 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                               aria-label={'Remove attendance for ' + row.name}>
                               Remove
                             </button>
                           ) : (
                             <button onClick={function() { handleToggleCheckIn(row); }}
-                              className="px-2.5 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap"
+                              className="px-2.5 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-label={'Mark ' + row.name + ' as attended'}>
                               Mark Attended
                             </button>
