@@ -243,8 +243,8 @@ export default function LandingPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
 
             {/* Left — copy, max-width aligned with page sections */}
-            <div style={{ background: pageBg, padding: '56px 48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ maxWidth: '520px', marginLeft: 'auto' }}>
+           <div style={{ background: pageBg, padding: '24px 48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+<div style={{ maxWidth: '520px', marginLeft: 'auto' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', color: '#F5B731', marginBottom: '20px' }}>
                   <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F5B731', display: 'inline-block' }} />
                   Starts at $14.99/mo · 1 month free trial
@@ -276,7 +276,7 @@ export default function LandingPage() {
                 padding: '48px 40px', position: 'relative', overflow: 'hidden',
               }}
             >
-              <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle, #CBD5E1 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+<div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle, #CBD5E1 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
               <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
                 <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '10px', fontWeight: 700, letterSpacing: '3px', color: '#64748B', textTransform: 'uppercase' }}>
                   Riverside Neighborhood Assoc.
@@ -341,7 +341,7 @@ export default function LandingPage() {
         </section>
 
         {/* Multi-org spotlight */}
-        <section aria-labelledby="spotlight-heading" style={{ padding: '80px 24px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
+        <section aria-labelledby="spotlight-heading" style={{ padding: '80px 24px 0px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '48px', alignItems: 'start', marginBottom: '52px' }}>
               <div>
@@ -369,21 +369,30 @@ export default function LandingPage() {
                 </button>
               </div>
               {/* Headline post-it for this column */}
-              <div aria-hidden="true" style={{ paddingTop: '8px' }}>
-                <p style={{ fontSize: '12px', color: textMuted, marginBottom: '4px', textAlign: 'right' }}>Live activity across 3 organizations</p>
+<div aria-hidden="true" style={{ paddingTop: '8px' }}>
+                <p style={{ fontSize: '12px', color: textMuted, marginBottom: '4px', textAlign: 'right' }}>Live activity across multiple organizations</p>
                 <PostIt
                   large={true}
                   bg="#FEF9C3" tackColor="#D4A017"
                   badgeBg="#22C55E" badgeText="white" category="ANNOUNCEMENT"
                   title="Spring Meeting Recap Posted"
                   body="Minutes and action items from last Tuesday's board meeting."
-                  org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
+org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
                 />
+                <div style={{ textAlign: 'center', marginTop: '-120px', marginBottom: '-200px', position: 'relative', zIndex: 1 }}>
+                  <img
+                    src="/mascot-pair.png"
+                    alt=""
+                    aria-hidden="true"
+                    style={{ width: '640px', height: 'auto', display: 'inline-block', maxWidth: '100%' }}
+                    onError={function(e) { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
               </div>
             </div>
 
             {/* 2-row × 3-col post-it board */}
-            <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '24px' }}>
+            <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '24px', marginTop: '0' }}>
               {[
                 { bg: '#DBEAFE', tack: '#1D4ED8', badgeBg: '#3B82F6', badgeText: 'white', cat: 'EVENT',        title: 'Volunteer Orientation — April 8',   body: '6pm at Community Center Room B. Refreshments provided.',    org: 'Riverside NA',   orgColor: '#1D4ED8', date: '3h ago' },
                 { bg: '#DCFCE7', tack: '#16A34A', badgeBg: '#22C55E', badgeText: 'white', cat: 'VOLUNTEER',    title: '10 Spots Left: Food Drive',          body: 'Sorting donations April 12–13. Sign up by Friday!',          org: 'Toledo Food Bank', orgColor: '#15803D', date: '5h ago' },
@@ -403,8 +412,9 @@ export default function LandingPage() {
                 );
               })}
             </div>
-          </div>
-        </section>
+            <div style={{ height: '80px' }} />
+            </div>
+          </section>
 
         {/* How It Works */}
         <section id="how-it-works" aria-labelledby="how-heading" style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid ' + borderColor }}>
