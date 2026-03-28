@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
+import OrgOnboardingWizard from '../components/OrgOnboardingWizard';
 import OrganizationSettings from '../components/OrganizationSettings';
 import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
@@ -1997,7 +1998,19 @@ onClick={function() {
           </div>
         </div>
       )}
+{organization && !organization.onboarding_completed && membership && membership.role === 'admin' && (
+  <OrgOnboardingWizard
+    org={organization}
+    onComplete={function(action) {
+      setOrganization(function(prev) {
+        return Object.assign({}, prev, { onboarding_completed: true });
+      });
+    }}
+  />
+)}
 
+{/* ── Toast notifications ── */}
+<ToastContainer toasts={toasts} removeToast={removeToast} />
       {/* ── Toast notifications ── */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
