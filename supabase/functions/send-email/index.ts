@@ -1,223 +1,223 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-var corsHeaders = {
+const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async function(req) {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+var RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
+var FROM_ADDRESS = 'onboarding@resend.dev'
+
+async function sendEmail(to: string, subject: string, html: string) {
+  var res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + RESEND_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: FROM_ADDRESS, to: [to], subject, html }),
+  })
+  return res.json()
+}
+
+function baseTemplate(content: string) {
+  return `
+    <div style="background:#0E1523;min-height:100vh;padding:40px 0;font-family:'Inter',system-ui,sans-serif;">
+      <div style="max-width:560px;margin:0 auto;background:#1A2035;border-radius:16px;overflow:hidden;border:1px solid #2A3550;">
+        <div style="background:#151B2D;padding:24px 32px;border-bottom:1px solid #2A3550;">
+          <span style="font-size:22px;font-weight:800;color:#FFFFFF;">Syndi</span><span style="font-size:22px;font-weight:800;color:#F5B731;">cade</span>
+        </div>
+        <div style="padding:32px;">
+          ${content}
+        </div>
+        <div style="padding:16px 32px;border-top:1px solid #2A3550;text-align:center;">
+          <p style="color:#64748B;font-size:12px;margin:0;">Syndicade &mdash; Where Community Work Connects</p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     var body = await req.json()
     var { type, data } = body
+    var result
 
-    var RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-    if (!RESEND_API_KEY) {
-      throw new Error('RESEND_API_KEY is not set')
+    // ── Contact Inquiry ──────────────────────────────────────────────────
+    if (type === 'contact_inquiry') {
+      var html = baseTemplate(`
+        <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 8px;">New Contact Inquiry</h2>
+        <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">Someone submitted a message through your organization's public page.</p>
+        <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 8px;">From</p>
+          <p style="color:#fff;font-size:15px;font-weight:600;margin:0;">${data.senderName || 'Unknown'}</p>
+          <p style="color:#94A3B8;font-size:13px;margin:4px 0 0;">${data.senderEmail || ''}</p>
+        </div>
+        <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 8px;">Message</p>
+          <p style="color:#CBD5E1;font-size:14px;line-height:1.6;margin:0;">${data.message || ''}</p>
+        </div>
+        <a href="mailto:${data.senderEmail}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">Reply to ${data.senderName || 'Sender'}</a>
+      `)
+      result = await sendEmail(data.adminEmail, 'New message from ' + (data.senderName || 'a visitor') + ' — ' + (data.orgName || 'Syndicade'), html)
     }
 
-    var emailPayload = buildEmail(type, data)
-    if (!emailPayload) {
+    // ── RSVP Confirmation ────────────────────────────────────────────────
+    else if (type === 'rsvp_confirmation') {
+      var calGoogle = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(data.eventTitle) + '&dates=' + (data.startISO || '').replace(/[-:]/g,'').replace('.000','') + '/' + (data.endISO || '').replace(/[-:]/g,'').replace('.000','') + '&details=' + encodeURIComponent('RSVP confirmed via Syndicade') + '&location=' + encodeURIComponent(data.eventLocation || '')
+      var icsUrl = 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + (data.eventId || '')
+      var html = baseTemplate(`
+        <div style="background:#1B3A2F;border:1px solid #22C55E;border-radius:12px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">
+          <span style="font-size:20px;">✓</span>
+          <p style="color:#22C55E;font-weight:700;font-size:15px;margin:0;">You're going!</p>
+        </div>
+        <h2 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 4px;">${data.eventTitle || ''}</h2>
+        <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">${data.orgName || ''}</p>
+        <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Event Details</p>
+          <p style="color:#CBD5E1;font-size:14px;margin:0 0 6px;"><strong style="color:#fff;">Date & Time:</strong> ${data.eventDate || ''}</p>
+          <p style="color:#CBD5E1;font-size:14px;margin:0;"><strong style="color:#fff;">Location:</strong> ${data.eventLocation || ''}</p>
+        </div>
+        <div style="margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Add to Calendar</p>
+          <a href="${calGoogle}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Google Calendar</a>
+          <a href="${icsUrl}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Apple Calendar</a>
+          <a href="${icsUrl}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-bottom:8px;">Outlook</a>
+        </div>
+        <a href="${data.eventUrl || ''}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">View Event Details</a>
+      `)
+      result = await sendEmail(data.memberEmail, 'You\'re going to ' + (data.eventTitle || 'the event') + '!', html)
+    }
+
+    // ── Ticket Confirmation ──────────────────────────────────────────────
+    else if (type === 'ticket_confirmation') {
+      // Build receipt rows
+      var lineItemsHtml = (data.lineItems || []).map(function(item: any) {
+        return `
+          <tr>
+            <td style="color:#CBD5E1;font-size:14px;padding:10px 0;border-bottom:1px solid #2A3550;">${item.name}</td>
+            <td style="color:#CBD5E1;font-size:14px;padding:10px 0;border-bottom:1px solid #2A3550;text-align:center;">${item.quantity}</td>
+            <td style="color:#CBD5E1;font-size:14px;padding:10px 0;border-bottom:1px solid #2A3550;text-align:right;">$${parseFloat(item.unit_price).toFixed(2)}</td>
+            <td style="color:#fff;font-size:14px;font-weight:700;padding:10px 0;border-bottom:1px solid #2A3550;text-align:right;">$${parseFloat(item.total_amount).toFixed(2)}</td>
+          </tr>
+        `
+      }).join('')
+
+      // QR code encodes a check-in URL: eventId + memberId
+      var checkInPayload = JSON.stringify({ event_id: data.eventId, member_id: data.memberId })
+      var checkInEncoded = encodeURIComponent(checkInPayload)
+      var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + checkInEncoded
+
+      var calGoogle2 = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(data.eventTitle || '') + '&dates=' + (data.startISO || '').replace(/[-:]/g,'').replace('.000','') + '/' + (data.endISO || '').replace(/[-:]/g,'').replace('.000','') + '&location=' + encodeURIComponent(data.eventLocation || '')
+      var icsUrl2 = 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + (data.eventId || '')
+
+      var html = baseTemplate(`
+        <div style="background:#2A1F00;border:1px solid #F5B731;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#F5B731;font-weight:700;font-size:15px;margin:0;">Ticket Confirmed</p>
+          <p style="color:#94A3B8;font-size:13px;margin:4px 0 0;">Payment processed successfully via Stripe.</p>
+        </div>
+
+        <h2 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 4px;">${data.eventTitle || ''}</h2>
+        <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">${data.orgName || ''}</p>
+
+        <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Event Details</p>
+          <p style="color:#CBD5E1;font-size:14px;margin:0 0 6px;"><strong style="color:#fff;">Date & Time:</strong> ${data.eventDate || ''}</p>
+          <p style="color:#CBD5E1;font-size:14px;margin:0;"><strong style="color:#fff;">Location:</strong> ${data.eventLocation || ''}</p>
+        </div>
+
+        <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Receipt</p>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="color:#64748B;font-size:11px;text-align:left;padding-bottom:8px;">Ticket</th>
+                <th style="color:#64748B;font-size:11px;text-align:center;padding-bottom:8px;">Qty</th>
+                <th style="color:#64748B;font-size:11px;text-align:right;padding-bottom:8px;">Price</th>
+                <th style="color:#64748B;font-size:11px;text-align:right;padding-bottom:8px;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lineItemsHtml}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" style="color:#94A3B8;font-size:13px;font-weight:600;padding-top:12px;text-align:right;">Total Paid</td>
+                <td style="color:#F5B731;font-size:16px;font-weight:800;padding-top:12px;text-align:right;">$${parseFloat(data.totalAmount || 0).toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div style="text-align:center;background:#0E1523;border-radius:12px;padding:24px;margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 16px;">Your Check-In QR Code</p>
+          <img src="${qrUrl}" alt="Check-in QR code" width="180" height="180" style="border-radius:8px;background:#fff;padding:8px;"/>
+          <p style="color:#94A3B8;font-size:12px;margin:12px 0 0;">Show this QR code at the door to check in.</p>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Add to Calendar</p>
+          <a href="${calGoogle2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Google Calendar</a>
+          <a href="${icsUrl2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Apple Calendar</a>
+          <a href="${icsUrl2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-bottom:8px;">Outlook</a>
+        </div>
+
+        <a href="${data.eventUrl || ''}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">View Event Details</a>
+      `)
+      result = await sendEmail(data.memberEmail, 'Your ticket for ' + (data.eventTitle || 'the event') + ' is confirmed!', html)
+    }
+
+    // ── Member Invite ────────────────────────────────────────────────────
+    else if (type === 'member_invite') {
+      var html = baseTemplate(`
+        <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 8px;">You've been invited to join ${data.orgName || 'an organization'} on Syndicade</h2>
+        <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">Invited by ${data.inviterName || 'an admin'}${data.message ? ': "' + data.message + '"' : '.'}</p>
+        <a href="${data.inviteUrl || 'https://syndicade-git-main-syndicades-projects.vercel.app'}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">Accept Invitation</a>
+      `)
+      result = await sendEmail(data.inviteeEmail, 'You\'ve been invited to ' + (data.orgName || 'an organization') + ' on Syndicade', html)
+    }
+
+    // ── Urgent Announcement ──────────────────────────────────────────────
+    else if (type === 'urgent_announcement') {
+      var html = baseTemplate(`
+        <div style="background:#7F1D1D;border:1px solid #EF4444;border-radius:12px;padding:12px 16px;margin-bottom:24px;">
+          <p style="color:#FCA5A5;font-weight:700;font-size:13px;margin:0;">URGENT ANNOUNCEMENT</p>
+        </div>
+        <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 4px;">${data.title || ''}</h2>
+        <p style="color:#94A3B8;font-size:13px;margin:0 0 20px;">${data.orgName || ''}</p>
+        <p style="color:#CBD5E1;font-size:14px;line-height:1.6;margin:0 0 24px;">${data.body || ''}</p>
+        <a href="${data.announcementUrl || ''}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">Read Full Announcement</a>
+      `)
+      result = await sendEmail(data.memberEmail, 'Urgent: ' + (data.title || '') + ' — ' + (data.orgName || ''), html)
+    }
+
+    // ── Dues Reminder ────────────────────────────────────────────────────
+    else if (type === 'dues_reminder') {
+      var html = baseTemplate(`
+        <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 8px;">Membership Dues Reminder</h2>
+        <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">This is a friendly reminder from ${data.orgName || 'your organization'} that your membership dues are due.</p>
+        ${data.amount ? '<p style="color:#F5B731;font-size:28px;font-weight:800;margin:0 0 24px;">$' + parseFloat(data.amount).toFixed(2) + '</p>' : ''}
+        <a href="${data.paymentUrl || ''}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">Pay Dues Now</a>
+      `)
+      result = await sendEmail(data.memberEmail, 'Membership dues reminder — ' + (data.orgName || ''), html)
+    }
+
+    else {
       throw new Error('Unknown email type: ' + type)
     }
 
-    var res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + RESEND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'onboarding@resend.dev',
-        to: emailPayload.to,
-        subject: emailPayload.subject,
-        html: emailPayload.html,
-      }),
-    })
-
-    var resData = await res.json()
-
-    if (!res.ok) {
-      throw new Error('Resend error: ' + JSON.stringify(resData))
-    }
-
-    return new Response(JSON.stringify({ success: true, id: resData.id }), {
-      headers: Object.assign({}, corsHeaders, { 'Content-Type': 'application/json' }),
+    return new Response(JSON.stringify({ success: true, result }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
-      headers: Object.assign({}, corsHeaders, { 'Content-Type': 'application/json' }),
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     })
   }
 })
-
-function buildEmail(type, data) {
-  if (type === 'contact_inquiry') {
-    return {
-      to: data.adminEmail,
-      subject: 'New contact inquiry for ' + data.orgName,
-      html: contactInquiryTemplate(data),
-    }
-  }
-
-if (type === 'rsvp_confirmation') {
-    var startDate = data.startISO ? new Date(data.startISO).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z' : '';
-    var endDate = data.endISO ? new Date(data.endISO).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z' : startDate;
-    var gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-      '&text=' + encodeURIComponent(data.eventTitle) +
-      '&dates=' + startDate + '/' + endDate +
-      '&location=' + encodeURIComponent(data.eventLocation || '') +
-      '&details=' + encodeURIComponent('View event: ' + data.eventUrl);
-var icsUrl = data.eventId ? 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics?event_id=' + data.eventId : ''
-    return {
-      to: data.memberEmail,
-      subject: "You're registered: " + data.eventTitle,
-      html: rsvpConfirmationTemplate(Object.assign({}, data, { googleCalendarUrl: gcalUrl, icsUrl: icsUrl })),
-    }
-  }
-
-  if (type === 'member_invite') {
-    return {
-      to: data.inviteeEmail,
-      subject: "You've been invited to join " + data.orgName + " on Syndicade",
-      html: memberInviteTemplate(data),
-    }
-  }
-
-  if (type === 'urgent_announcement') {
-    return {
-      to: data.memberEmail,
-      subject: '[Urgent] ' + data.orgName + ': ' + data.announcementTitle,
-      html: urgentAnnouncementTemplate(data),
-    }
-  }
-
-    if (type === 'dues_reminder') {
-    return {
-      to: data.memberEmail,
-      subject: 'Dues Reminder — ' + data.orgName,
-      html: duesReminderTemplate(data),
-    }
-  }
-
-  return null
-}
-
-// ─── Email Templates ──────────────────────────────────────────────────────────
-
-function baseTemplate(content) {
-  return (
-    '<div style="font-family:Inter,Helvetica,sans-serif;background:#f8fafc;padding:32px 0;min-height:100vh;">' +
-    '  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">' +
-'    <div style="background:#0E1523;padding:24px 32px;">' +
-'      <span style="font-size:20px;font-weight:800;color:#ffffff;">Syndi</span><span style="font-size:20px;font-weight:800;color:#F5B731;">cade</span>' +
-'    </div>' +
-    '    <div style="padding:32px;">' +
-    content +
-    '    </div>' +
-    '    <div style="background:#f8fafc;padding:20px 32px;border-top:1px solid #e2e8f0;text-align:center;">' +
-    '      <p style="font-size:12px;color:#94a3b8;margin:0;">You are receiving this because you are a member of an organization on Syndicade.</p>' +
-    '      <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">Where Community Work Connects.</p>' +
-    '    </div>' +
-    '  </div>' +
-    '</div>'
-  )
-}
-
-function contactInquiryTemplate(data) {
-  return baseTemplate(
-    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 8px;">New Contact Inquiry</h2>' +
-    '<p style="font-size:14px;color:#475569;margin:0 0 24px;">Someone submitted a message through your public page on Syndicade.</p>' +
-    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:24px;">' +
-    '  <p style="margin:0 0 8px;font-size:13px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">From</p>' +
-    '  <p style="margin:0 0 16px;font-size:15px;font-weight:600;color:#0e1523;">' + escapeHtml(data.senderName) + '</p>' +
-    '  <p style="margin:0 0 8px;font-size:13px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Email</p>' +
-    '  <p style="margin:0 0 16px;font-size:15px;color:#0e1523;">' + escapeHtml(data.senderEmail) + '</p>' +
-    '  <p style="margin:0 0 8px;font-size:13px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Message</p>' +
-    '  <p style="margin:0;font-size:15px;color:#0e1523;line-height:1.6;">' + escapeHtml(data.message) + '</p>' +
-    '</div>' +
-    '<a href="' + data.inboxUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">View in Admin Inbox</a>'
-  )
-}
-
-function rsvpConfirmationTemplate(data) {
-  return baseTemplate(
-    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 8px;">You\'re registered!</h2>' +
-    '<p style="font-size:14px;color:#475569;margin:0 0 24px;">Your spot is confirmed for the following event.</p>' +
-    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:24px;">' +
-    '  <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:#0e1523;">' + escapeHtml(data.eventTitle) + '</p>' +
-    '  <p style="margin:0 0 12px;font-size:13px;color:#64748b;">' + escapeHtml(data.orgName) + '</p>' +
-    '  <p style="margin:0 0 6px;font-size:14px;color:#475569;">' +
-    '    <span style="font-weight:600;">Date:</span> ' + escapeHtml(data.eventDate) +
-    '  </p>' +
-    '  <p style="margin:0;font-size:14px;color:#475569;">' +
-    '    <span style="font-weight:600;">Location:</span> ' + escapeHtml(data.eventLocation || 'See event page for details') +
-    '  </p>' +
-    '</div>' +
-'<a href="' + data.eventUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;margin-bottom:12px;">View Event Details</a>' +
-    '<div style="margin-top:16px;">' +
-    '<p style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Add to Calendar</p>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-    '<a href="' + data.googleCalendarUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Google Calendar</a>' +
-    '<a href="' + data.icsUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Apple Calendar</a>' +
-    '<a href="' + data.icsUrl + '" style="display:inline-block;background:#ffffff;color:#374151;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;text-decoration:none;border:1px solid #d1d5db;">Outlook</a>' +
-    '</div>' +
-    '</div>'
-  )
-}
-
-function memberInviteTemplate(data) {
-  return baseTemplate(
-    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 8px;">You\'ve been invited</h2>' +
-    '<p style="font-size:14px;color:#475569;margin:0 0 24px;">' +
-    '  <strong>' + escapeHtml(data.inviterName) + '</strong> has invited you to join ' +
-    '  <strong>' + escapeHtml(data.orgName) + '</strong> on Syndicade.' +
-    '</p>' +
-    (data.orgDescription
-      ? '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #F5B731;border-radius:0 8px 8px 0;padding:16px;margin-bottom:24px;">' +
-        '  <p style="margin:0;font-size:14px;color:#475569;line-height:1.6;">' + escapeHtml(data.orgDescription) + '</p>' +
-        '</div>'
-      : '') +
-    '<a href="' + data.acceptUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">Accept Invitation</a>' +
-    '<p style="font-size:12px;color:#94a3b8;margin:16px 0 0;">This invitation was sent to ' + escapeHtml(data.inviteeEmail) + '. If you did not expect this, you can safely ignore this email.</p>'
-  )
-}
-
-function urgentAnnouncementTemplate(data) {
-  return baseTemplate(
-    '<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:8px;">' +
-    '  <span style="font-size:13px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:0.5px;">Urgent Announcement</span>' +
-    '</div>' +
-    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 4px;">' + escapeHtml(data.announcementTitle) + '</h2>' +
-    '<p style="font-size:13px;color:#64748b;margin:0 0 20px;">' + escapeHtml(data.orgName) + '</p>' +
-    '<div style="font-size:15px;color:#475569;line-height:1.7;margin-bottom:24px;">' + escapeHtml(data.announcementBody) + '</div>' +
-    '<a href="' + data.announcementUrl + '" style="display:inline-block;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">Read Full Announcement</a>'
-  )
-}
-
-function escapeHtml(str) {
-  if (!str) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
-
-function duesReminderTemplate(data) {
-  return baseTemplate(
-    '<h2 style="font-size:20px;font-weight:700;color:#0e1523;margin:0 0 8px;">Dues Reminder</h2>' +
-    '<p style="font-size:14px;color:#475569;margin:0 0 24px;">Hi <strong>' + escapeHtml(data.memberName) + '</strong>,</p>' +
-    '<p style="font-size:14px;color:#475569;margin:0 0 16px;">This is a friendly reminder that your dues for <strong>' + escapeHtml(data.orgName) + '</strong> are currently outstanding.</p>' +
-    (data.duesAmount ? '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #F5B731;border-radius:0 8px 8px 0;padding:16px;margin-bottom:20px;"><p style="margin:0;font-size:15px;color:#0e1523;">Amount due: <strong>$' + escapeHtml(String(data.duesAmount)) + '</strong></p></div>' : '') +
-    (data.message ? '<p style="font-size:14px;color:#475569;margin:0 0 16px;">' + escapeHtml(data.message) + '</p>' : '') +
-    '<p style="font-size:14px;color:#475569;margin:0;">Please contact your organization admin if you have questions.</p>'
-  )
-}

@@ -46,6 +46,10 @@ var TZ_MAP = {
   'Asia/Kolkata':'India (IST)','Australia/Sydney':'Australia East',
 };
 
+function blankTicketType() {
+  return { name: '', price: '', early_bird_price: '', early_bird_ends_at: '', quantity_available: '' };
+}
+
 // ── Primitives ───────────────────────────────────────────────────────────────
 function Icon({ path, className }) {
   return (
@@ -86,6 +90,142 @@ function MultiCheckbox({ options, selected, onChange, legend }) {
         })}
       </div>
     </fieldset>
+  );
+}
+
+// ── Ticket Type Row ───────────────────────────────────────────────────────────
+function TicketTypeRow({ ticket, index, onChange, onRemove, canRemove }) {
+  var [showEarlyBird, setShowEarlyBird] = useState(!!(ticket.early_bird_price || ticket.early_bird_ends_at));
+
+  function update(field, value) {
+    var updated = Object.assign({}, ticket);
+    updated[field] = value;
+    onChange(index, updated);
+  }
+
+  function toggleEarlyBird() {
+    if (showEarlyBird) {
+      var updated = Object.assign({}, ticket, { early_bird_price: '', early_bird_ends_at: '' });
+      onChange(index, updated);
+    }
+    setShowEarlyBird(!showEarlyBird);
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Ticket Type {index + 1}</p>
+        {canRemove && (
+          <button type="button" onClick={function(){ onRemove(index); }}
+            className="text-red-400 hover:text-red-600 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-0.5 transition-colors"
+            aria-label={'Remove ticket type ' + (index + 1)}>
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* Name + Price */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={'tt-name-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Name <span className="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            id={'tt-name-'+index}
+            type="text"
+            value={ticket.name}
+            onChange={function(e){ update('name', e.target.value); }}
+            placeholder="e.g. General Admission"
+            aria-required="true"
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label htmlFor={'tt-price-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Price <span className="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm" aria-hidden="true">$</span>
+            <input
+              id={'tt-price-'+index}
+              type="number"
+              min="0"
+              step="0.01"
+              value={ticket.price}
+              onChange={function(e){ update('price', e.target.value); }}
+              placeholder="0.00"
+              aria-required="true"
+              className={inputCls+' pl-7'}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Quantity */}
+      <div>
+        <label htmlFor={'tt-qty-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+          Quantity Available <span className="text-gray-400 font-normal">(leave blank for unlimited)</span>
+        </label>
+        <input
+          id={'tt-qty-'+index}
+          type="number"
+          min="1"
+          step="1"
+          value={ticket.quantity_available}
+          onChange={function(e){ update('quantity_available', e.target.value); }}
+          placeholder="Unlimited"
+          className={inputCls}
+        />
+      </div>
+
+      {/* Early Bird toggle */}
+      <div>
+        <button type="button" onClick={toggleEarlyBird}
+          className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
+          aria-expanded={showEarlyBird}>
+          <Icon path={showEarlyBird ? 'M19 9l-7 7-7-7' : 'M9 5l7 7-7 7'} className="h-3 w-3"/>
+          {showEarlyBird ? 'Remove early bird pricing' : 'Add early bird pricing'}
+        </button>
+
+        {showEarlyBird && (
+          <div className="mt-3 space-y-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor={'tt-eb-price-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">
+                  Early Bird Price <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm" aria-hidden="true">$</span>
+                  <input
+                    id={'tt-eb-price-'+index}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={ticket.early_bird_price}
+                    onChange={function(e){ update('early_bird_price', e.target.value); }}
+                    placeholder="0.00"
+                    className={inputCls+' pl-7'}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor={'tt-eb-date-'+index} className="block text-xs font-semibold text-yellow-800 mb-1">
+                  Early Bird Ends <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id={'tt-eb-date-'+index}
+                  type="datetime-local"
+                  value={ticket.early_bird_ends_at}
+                  onChange={function(e){ update('early_bird_ends_at', e.target.value); }}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-yellow-700">After this date, the regular price applies automatically.</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -134,6 +274,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   var [publishToWebsite, setPublishToWebsite] = useState(false);
   var [flierFile, setFlierFile] = useState(null);
 
+  // Ticketing
+  var [isPaid, setIsPaid] = useState(false);
+  var [ticketTypes, setTicketTypes] = useState([blankTicketType()]);
+
   var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -141,11 +285,10 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (form.visibility==='groups'&&organizationId) fetchGroups();
   }, [form.visibility, organizationId]);
 
-useEffect(function(){
+  useEffect(function(){
     if (!isOpen) { resetAll(); return; }
     if (!editingEvent) return;
 
-    // Parse start_time into date and time strings
     function parseDT(isoStr) {
       if (!isoStr) return { date: '', time: '' };
       var d = new Date(isoStr);
@@ -157,12 +300,10 @@ useEffect(function(){
     var start = parseDT(editingEvent.start_time);
     var end   = parseDT(editingEvent.end_time);
 
-    // Determine event format
     var fmt = 'in-person';
     if (editingEvent.is_virtual && editingEvent.location === 'Virtual Event') fmt = 'virtual';
     else if (editingEvent.is_virtual) fmt = 'hybrid';
 
-    // Determine if multi-day (different calendar dates)
     var isMulti = start.date && end.date && start.date !== end.date;
 
     var schedule = isMulti
@@ -187,7 +328,6 @@ useEffect(function(){
       requireRSVP:  editingEvent.require_rsvp  || false,
     });
 
-    // Advanced fields
     setEventTypes(editingEvent.event_types   || []);
     setAudience(  editingEvent.audience      || []);
     setLanguages( editingEvent.languages     || []);
@@ -195,11 +335,47 @@ useEffect(function(){
     setDonationDropoff( editingEvent.donation_dropoff  || false);
     setPublishToDiscovery(editingEvent.publish_to_discovery || false);
     setPublishToWebsite(  editingEvent.publish_to_website   || false);
-    if (editingEvent.event_types?.length || editingEvent.audience?.length || editingEvent.publish_to_discovery || editingEvent.publish_to_website || editingEvent.volunteer_signup || editingEvent.donation_dropoff) {
-  setShowAdvanced(true);
-}
 
-    // Recurrence
+    var wasPaid = editingEvent.is_paid || false;
+    setIsPaid(wasPaid);
+    if (wasPaid) {
+      supabase
+        .from('event_ticket_types')
+        .select('*')
+        .eq('event_id', editingEvent.id)
+        .order('sort_order')
+        .then(function(res) {
+          if (res.data && res.data.length > 0) {
+            setTicketTypes(res.data.map(function(tt) {
+              var ebEndsAt = '';
+              if (tt.early_bird_ends_at) {
+                var d = new Date(tt.early_bird_ends_at);
+                ebEndsAt = d.getFullYear() + '-' +
+                  String(d.getMonth()+1).padStart(2,'0') + '-' +
+                  String(d.getDate()).padStart(2,'0') + 'T' +
+                  String(d.getHours()).padStart(2,'0') + ':' +
+                  String(d.getMinutes()).padStart(2,'0');
+              }
+              return {
+                name: tt.name || '',
+                price: tt.price != null ? String(tt.price) : '',
+                early_bird_price: tt.early_bird_price != null ? String(tt.early_bird_price) : '',
+                early_bird_ends_at: ebEndsAt,
+                quantity_available: tt.quantity_available != null ? String(tt.quantity_available) : '',
+              };
+            }));
+          } else {
+            setTicketTypes([blankTicketType()]);
+          }
+        });
+    } else {
+      setTicketTypes([blankTicketType()]);
+    }
+
+    if (editingEvent.event_types?.length || editingEvent.audience?.length || editingEvent.publish_to_discovery || editingEvent.publish_to_website || editingEvent.volunteer_signup || editingEvent.donation_dropoff || editingEvent.is_paid) {
+      setShowAdvanced(true);
+    }
+
     if (editingEvent.is_recurring && editingEvent.recurrence_rule) {
       var rr = editingEvent.recurrence_rule;
       setIsRecurring(true);
@@ -229,6 +405,7 @@ useEffect(function(){
     setShowTimezoneSelector(false); setSelectedTimezone(null);
     setShowAdvanced(false); setEventTypes([]); setAudience([]); setLanguages([]);
     setVolunteerSignup(false); setDonationDropoff(false); setPublishToDiscovery(false); setPublishToWebsite(false); setFlierFile(null);
+    setIsPaid(false); setTicketTypes([blankTicketType()]);
     setError(null);
   }
 
@@ -267,6 +444,22 @@ useEffect(function(){
       if (prev.includes(day)) { if(prev.length===1) return prev; return prev.filter(function(d){ return d!==day; }); }
       return prev.concat([day]).sort(function(a,b){ return a-b; });
     });
+  }
+
+  function handleTicketTypeChange(index, updated) {
+    setTicketTypes(function(prev) {
+      var next = prev.slice();
+      next[index] = updated;
+      return next;
+    });
+  }
+
+  function addTicketType() {
+    setTicketTypes(function(prev) { return prev.concat([blankTicketType()]); });
+  }
+
+  function removeTicketType(index) {
+    setTicketTypes(function(prev) { return prev.filter(function(_,i){ return i !== index; }); });
   }
 
   function extractState(s) {
@@ -346,6 +539,19 @@ useEffect(function(){
     if (form.eventType==='hybrid'&&!form.virtualLink.trim()) { toast.error('Hybrid events require a virtual meeting link'); return; }
     if (form.visibility==='groups'&&selectedGroupIds.length===0) { toast.error('Please select at least one group'); return; }
 
+    if (isPaid) {
+      for (var ti = 0; ti < ticketTypes.length; ti++) {
+        var tt = ticketTypes[ti];
+        if (!tt.name.trim()) { toast.error('Ticket type ' + (ti+1) + ' needs a name'); return; }
+        if (!tt.price || parseFloat(tt.price) < 0) { toast.error('Ticket type ' + (ti+1) + ' needs a valid price'); return; }
+        if (tt.early_bird_price && !tt.early_bird_ends_at) { toast.error('Ticket type ' + (ti+1) + ': early bird needs an end date'); return; }
+        if (tt.early_bird_ends_at && !tt.early_bird_price) { toast.error('Ticket type ' + (ti+1) + ': early bird needs a price'); return; }
+        if (tt.early_bird_price && parseFloat(tt.early_bird_price) >= parseFloat(tt.price)) {
+          toast.error('Ticket type ' + (ti+1) + ': early bird price must be less than the regular price'); return;
+        }
+      }
+    }
+
     setLoading(true);
     try {
       var first=form.schedule[0];
@@ -359,11 +565,10 @@ useEffect(function(){
         var [eh2,emin2]=first.endTime.split(':'); endDT=new Date(+yr,+mo-1,+dy,+eh2,+emin2,0);
       }
 
-var {data:{user},error:userErr}=await supabase.auth.getUser();
+      var {data:{user},error:userErr}=await supabase.auth.getUser();
       if (userErr) throw userErr;
       if (!user) throw new Error('You must be logged in');
 
-      // Check role to determine approval status
       var memberResult = await supabase
         .from('memberships')
         .select('role')
@@ -380,7 +585,6 @@ var {data:{user},error:userErr}=await supabase.auth.getUser();
         if (coords) { lat=coords.latitude; lng=coords.longitude; }
       }
 
-            // Upload flier if attached
       var flierUrl = null;
       if (flierFile) {
         if (flierFile.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
@@ -421,11 +625,12 @@ var {data:{user},error:userErr}=await supabase.auth.getUser();
         is_public: form.visibility === 'public' || publishToDiscovery,
         publish_to_discovery:publishToDiscovery,
         publish_to_website:publishToWebsite,
-approval_status: approvalStatus,
-       flier_url: flierUrl,
+        is_paid: isPaid,
+        approval_status: approvalStatus,
+        flier_url: flierUrl,
       };
 
-var dbResult;
+      var dbResult;
       if (editingEvent) {
         var {data:updatedEvt, error:eventErr} = await supabase.from('events').update(eventData).eq('id', editingEvent.id).select().single();
         if (eventErr) throw eventErr;
@@ -437,7 +642,26 @@ var dbResult;
       }
       var savedEvent = dbResult;
 
-var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
+      // Save ticket types
+      await supabase.from('event_ticket_types').delete().eq('event_id', savedEvent.id);
+      if (isPaid) {
+        var ticketRows = ticketTypes.map(function(tt, i) {
+          return {
+            event_id: savedEvent.id,
+            name: tt.name.trim(),
+            price: parseFloat(tt.price),
+            early_bird_price: tt.early_bird_price ? parseFloat(tt.early_bird_price) : null,
+            early_bird_ends_at: tt.early_bird_ends_at ? new Date(tt.early_bird_ends_at).toISOString() : null,
+            quantity_available: tt.quantity_available ? parseInt(tt.quantity_available) : null,
+            quantity_sold: 0,
+            sort_order: i,
+          };
+        });
+        var { error: ttErr } = await supabase.from('event_ticket_types').insert(ticketRows);
+        if (ttErr) toast.error('Event saved but ticket types failed: ' + ttErr.message);
+      }
+
+      var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?selectedGroupIds.filter(function(id){ return id!==groupId; }):[] )];
       if (!editingEvent && groupIdsToLink.length>0) {
         var {error:grpErr}=await supabase.from('event_groups').insert(groupIdsToLink.map(function(gId){ return {event_id:savedEvent.id,group_id:gId}; }));
         if (grpErr) toast.error('Event created but group link failed.');
@@ -452,7 +676,7 @@ var groupIdsToLink=[...(groupId?[groupId]:[]),...(form.visibility==='groups'?sel
       }
       if (onSuccess) onSuccess(savedEvent);
 
-if (!editingEvent && approvalStatus === 'approved') {
+      if (!editingEvent && approvalStatus === 'approved') {
         try {
           var notifRes = await notifyOrganizationMembers({organizationId, type:'event', title:'New Event', message:form.title+' — '+new Date(form.schedule[0].date).toLocaleDateString(), link:'/organizations/'+organizationId+'/events', excludeUserId:null});
           if (!notifRes.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
@@ -461,7 +685,7 @@ if (!editingEvent && approvalStatus === 'approved') {
       resetAll(); onClose();
     } catch(err) {
       console.error('CreateEvent error:',err);
-      toast.error('Failed to create event: '+err.message);
+      toast.error('Failed to save event: '+err.message);
       setError(err.message);
     } finally { setLoading(false); }
   }
@@ -474,7 +698,6 @@ if (!editingEvent && approvalStatus === 'approved') {
       onKeyDown={function(e){ if(e.key==='Escape') onClose(); }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
 
-        {/* Sticky header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div>
             <h2 id="create-event-title" className="text-2xl font-bold text-gray-900">{editingEvent ? 'Edit Event' : 'Create New Event'}</h2>
@@ -490,7 +713,6 @@ if (!editingEvent && approvalStatus === 'approved') {
           </button>
         </div>
 
-        {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-6 py-6 space-y-6">
 
           {error && (
@@ -637,10 +859,7 @@ if (!editingEvent && approvalStatus === 'approved') {
                   <p className="text-xs text-green-700">Auto-detected: {[form.city,form.state,form.zipCode].filter(Boolean).join(', ')}</p>
                 </div>
               )}
-
-                <div className="flex items-center gap-3">
-                </div>
-              </div>
+            </div>
           )}
 
           {/* Max Attendees */}
@@ -658,7 +877,6 @@ if (!editingEvent && approvalStatus === 'approved') {
               <span className="font-semibold text-gray-900 text-sm">Recurring Event</span>
             </label>
             <p className="text-xs text-gray-500 mb-3 ml-7">Automatically create this event on a regular schedule.</p>
-
             {isRecurring&&(
               <div className="space-y-4 border-l-4 border-blue-400 pl-4">
                 <div>
@@ -674,7 +892,6 @@ if (!editingEvent && approvalStatus === 'approved') {
                     })}
                   </div>
                 </div>
-
                 {recurrenceType==='daily'&&(
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
@@ -690,7 +907,6 @@ if (!editingEvent && approvalStatus === 'approved') {
                     </label>
                   </div>
                 )}
-
                 {recurrenceType==='weekly'&&(
                   <div>
                     <label className="block text-xs text-gray-600 mb-2">Days of the week</label>
@@ -707,7 +923,6 @@ if (!editingEvent && approvalStatus === 'approved') {
                     </div>
                   </div>
                 )}
-
                 {recurrenceType==='monthly'&&(
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -724,7 +939,6 @@ if (!editingEvent && approvalStatus === 'approved') {
                     </div>
                   </div>
                 )}
-
                 <div>
                   <label htmlFor="recurrence-end" className="block text-xs text-gray-600 mb-1">End Date <span className="text-gray-400">(optional)</span></label>
                   <input id="recurrence-end" type="date" value={recurrenceEndDate} min={form.schedule[0].date}
@@ -763,28 +977,33 @@ if (!editingEvent && approvalStatus === 'approved') {
               </div>
             )}
           </div>
-<label htmlFor="event-flier" className={labelCls}>Flier or Image <span className="text-gray-400 font-normal">(optional)</span></label>
-              <div className="flex items-center gap-3">
-                <label htmlFor="event-flier"
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 transition-colors">
-                  <Icon path="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" className="h-4 w-4 text-gray-500"/>
-                  <span>Choose file</span>
-                  <input id="event-flier" type="file" accept="image/*,.pdf" className="sr-only"
-                    onChange={function(e){ setFlierFile(e.target.files[0]||null); }}
-                    aria-label="Upload event flier or image"/>
-                </label>
-                {flierFile ? (
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-sm text-gray-700 truncate">{flierFile.name}</span>
-                    <button type="button" onClick={function(){ setFlierFile(null); }}
-                      className="text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded flex-shrink-0" aria-label="Remove file">
-                      <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4"/>
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-400">JPG, PNG, or PDF — max 5MB</span>
-                )}
-              </div>
+
+          {/* Flier */}
+          <div>
+            <label htmlFor="event-flier" className={labelCls}>Flier or Image <span className="text-gray-400 font-normal">(optional)</span></label>
+            <div className="flex items-center gap-3">
+              <label htmlFor="event-flier"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 transition-colors">
+                <Icon path="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" className="h-4 w-4 text-gray-500"/>
+                <span>Choose file</span>
+                <input id="event-flier" type="file" accept="image/*,.pdf" className="sr-only"
+                  onChange={function(e){ setFlierFile(e.target.files[0]||null); }}
+                  aria-label="Upload event flier or image"/>
+              </label>
+              {flierFile ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-sm text-gray-700 truncate">{flierFile.name}</span>
+                  <button type="button" onClick={function(){ setFlierFile(null); }}
+                    className="text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded flex-shrink-0" aria-label="Remove file">
+                    <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4"/>
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-400">JPG, PNG, or PDF — max 5MB</span>
+              )}
+            </div>
+          </div>
+
           {/* Visibility */}
           <div>
             <label className={labelCls}>Who can see this event?</label>
@@ -866,7 +1085,7 @@ if (!editingEvent && approvalStatus === 'approved') {
                 </div>
                 <div className="text-left">
                   <p className="text-sm font-bold text-gray-900">Advanced Settings</p>
-                  <p className="text-xs text-gray-500">Event types, audience, publishing — all optional</p>
+                  <p className="text-xs text-gray-500">Event types, audience, publishing, ticketing — all optional</p>
                 </div>
               </div>
               <Icon path={showAdvanced?'M5 15l7-7 7 7':'M19 9l-7 7-7-7'} className="h-4 w-4 text-gray-400"/>
@@ -938,6 +1157,50 @@ if (!editingEvent && approvalStatus === 'approved') {
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* ── Ticketing ── */}
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Ticketing</p>
+                    <p className="text-xs text-gray-500 mb-3">Add ticket types for paid events. Members and guests pay via Stripe. Syndicade takes no cut.</p>
+                    <div className={'flex items-center justify-between p-4 rounded-xl border mb-4 '+(isPaid?'border-yellow-400 bg-yellow-50':'border-gray-200 bg-white')}>
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">Paid Event</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Require payment to RSVP.</p>
+                      </div>
+                      <Toggle
+                        checked={isPaid}
+                        onChange={function(){ setIsPaid(!isPaid); if (!isPaid) setTicketTypes([blankTicketType()]); }}
+                        id="is-paid"
+                        label="Paid Event"
+                      />
+                    </div>
+
+                    {isPaid && (
+                      <div className="space-y-3" role="list" aria-label="Ticket types">
+                        {ticketTypes.map(function(tt, i) {
+                          return (
+                            <div key={i} role="listitem">
+                              <TicketTypeRow
+                                ticket={tt}
+                                index={i}
+                                onChange={handleTicketTypeChange}
+                                onRemove={removeTicketType}
+                                canRemove={ticketTypes.length > 1}
+                              />
+                            </div>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={addTicketType}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-500 hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                        >
+                          <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
+                          Add Ticket Type
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                 </div>
