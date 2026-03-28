@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import MembershipTiers from '../components/MembershipTiers';
+import NonprofitVerificationForm from './NonprofitVerificationForm';
 
 var SERVICE_CATEGORIES = [
   'Arts & Culture','Community Advocacy','Education & Tutoring',
@@ -403,6 +404,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     { id: 'membership', label: 'Membership'        },
     { id: 'discover',   label: 'Discover Orgs'     },
     { id: 'donations', label: 'Donations'         },
+    { id: 'verification', label: 'Verification'      },
   ];
 
   useEffect(function(){ fetchOrganization(); }, [organizationId]);
@@ -816,8 +818,12 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                 )}
               </section>
             )}
-
-            {/* Save button — not shown on Roles tab */}}
+{activeTab === 'verification' && (
+  <section aria-label="Nonprofit verification">
+    <NonprofitVerificationForm organizationId={organizationId} />
+  </section>
+)}
+            {/* Save button — not shown on Roles tab */}
             {activeTab !== 'roles' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
