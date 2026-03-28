@@ -27,13 +27,21 @@ function baseTemplate(content: string, orgName?: string, orgLogoUrl?: string, or
   var orgLink = orgUrl || 'https://syndicade-git-main-syndicades-projects.vercel.app'
   var orgDisplay = orgName || 'Syndicade'
 
-  var headerContent = orgLogoUrl
-    ? `<a href="${orgLink}" style="display:inline-block;text-decoration:none;">
-        <img src="${orgLogoUrl}" alt="${orgDisplay}" style="height:48px;max-width:200px;object-fit:contain;border-radius:8px;display:block;"/>
-      </a>
-      <p style="color:#94A3B8;font-size:12px;margin:8px 0 0;">
-        <a href="${orgLink}" style="color:#94A3B8;text-decoration:none;">${orgDisplay}</a>
-      </p>`
+var headerContent = orgLogoUrl
+    ? `<table cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="middle" style="padding-right:12px;">
+            <a href="${orgLink}" style="text-decoration:none;">
+              <img src="${orgLogoUrl}" alt="${orgDisplay}" width="48" height="48" style="border-radius:8px;display:block;object-fit:contain;"/>
+            </a>
+          </td>
+          <td valign="middle">
+            <a href="${orgLink}" style="text-decoration:none;">
+              <span style="font-size:18px;font-weight:800;color:#FFFFFF;">${orgDisplay}</span>
+            </a>
+          </td>
+        </tr>
+      </table>`
     : `<a href="${orgLink}" style="text-decoration:none;">
         <span style="font-size:22px;font-weight:800;color:#FFFFFF;">${orgDisplay}</span>
       </a>`

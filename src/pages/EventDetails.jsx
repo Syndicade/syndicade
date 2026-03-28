@@ -285,14 +285,31 @@ function EventDetails() {
         if (memberRes.data && memberRes.data.email) {
           var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
           var eventTime = new Date(event.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
-          var orgUrl = getOrgUrl();
-          var orgLogoUrl = organization ? (organization.logo_url || '') : '';
+// Re-fetch org to ensure data is available (state may not be set yet on Stripe return)
           var orgName = organization ? organization.name : '';
+          var orgLogoUrl = organization ? (organization.logo_url || '') : '';
+          var orgUrl = getOrgUrl();
+          if (!orgName && event.organization_id) {
+            var orgRefetch = await supabase.from('organizations')
+              .select('name, logo_url, slug').eq('id', event.organization_id).single();
+            if (orgRefetch.data) {
+              orgName = orgRefetch.data.name || '';
+              orgLogoUrl = orgRefetch.data.logo_url || '';
+              orgUrl = orgRefetch.data.slug
+                ? APP_URL + '/org/' + orgRefetch.data.slug
+                : APP_URL;
+            }
+          }
 
           if (fromTicket) {
-            var purchaseRes = await supabase.from('ticket_purchases').select('*')
-              .eq('event_id', event.id).eq('member_id', currentUser.id).order('purchased_at', { ascending: false });
-            var purchases = purchaseRes.data || [];
+var purchaseRes = await supabase.from('ticket_purchases').select('*')
+              .eq('event_id', event.id).eq('member_id', currentUser.id).order('purchased_at', { ascending: false }).limit(10);
+            var allPurchases = purchaseRes.data || [];
+            // Only use purchases from the most recent Stripe session
+            var latestSessionId = allPurchases.length > 0 ? allPurchases[0].stripe_session_id : null;
+            var purchases = latestSessionId
+              ? allPurchases.filter(function(p) { return p.stripe_session_id === latestSessionId; })
+              : allPurchases.slice(0, 1);
             var totalAmount = purchases.reduce(function(sum, p) { return sum + parseFloat(p.total_amount); }, 0);
             var lineItems = purchases.map(function(p) {
               return { name: p.ticket_type_name, quantity: p.quantity, unit_price: p.unit_price, total_amount: p.total_amount };
