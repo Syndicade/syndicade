@@ -1,167 +1,301 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 function Signup() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  
-  const { signUp } = useAuth()
-  const navigate = useNavigate()
+  var [accountType, setAccountType] = useState(null); // 'org' | 'member'
+  var [email, setEmail] = useState('');
+  var [password, setPassword] = useState('');
+  var [confirmPassword, setConfirmPassword] = useState('');
+  var [error, setError] = useState('');
+  var [loading, setLoading] = useState(false);
+  var [message, setMessage] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
-    // Validation
-    if (password !== confirmPassword) {
-      return setError('Passwords do not match')
-    }
-    
-    if (password.length < 6) {
-      return setError('Password must be at least 6 characters')
-    }
+  var navigate = useNavigate();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
 
     try {
-      setError('')
-      setMessage('')
-      setLoading(true)
-      
-      await signUp(email, password)
-      
-    setMessage('Account created! Setting up your organization...')
+      setError('');
+      setMessage('');
+      setLoading(true);
 
-    setTimeout(() => {
-      navigate('/onboarding')
-    }, 1500)
-      
+      var { error: signUpError } = await supabase.auth.signUp({ email, password });
+      if (signUpError) throw signUpError;
+
+      setMessage('Account created! Setting things up...');
+      setTimeout(function() {
+        navigate('/onboarding?type=' + accountType);
+      }, 1200);
     } catch (err) {
-      setError(err.message || 'Failed to create account')
+      setError(err.message || 'Failed to create account');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">
-          Create Account
-        </h1>
-        <p className="text-gray-600 text-center mb-8">
-          Start building amazing websites with AI
-        </p>
-
-        {error && (
-          <div 
-            className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-4"
-            role="alert"
-            aria-live="polite"
-          >
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div 
-            className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-4"
-            role="alert"
-            aria-live="polite"
-          >
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label 
-              htmlFor="email" 
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Email Address
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="you@example.com"
-              disabled={loading}
-              aria-required="true"
-            />
+  // ── Choice screen ────────────────────────────────────────────────────────────
+  if (!accountType) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0E1523',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+        fontFamily: "'Inter','Segoe UI',system-ui,sans-serif"
+      }}>
+        <div style={{ width: '100%', maxWidth: '480px' }}>
+          {/* Logo */}
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <a href="/" style={{ textDecoration: 'none' }}>
+              <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFFFFF' }}>Syndi</span>
+              <span style={{ fontSize: '28px', fontWeight: 800, color: '#F5B731' }}>cade</span>
+            </a>
+            <p style={{ color: '#94A3B8', fontSize: '14px', marginTop: '8px' }}>Where Community Work Connects</p>
           </div>
 
-          <div>
-            <label 
-              htmlFor="password" 
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="At least 6 characters"
-              disabled={loading}
-              aria-required="true"
-              aria-describedby="password-requirements"
-            />
-            <p id="password-requirements" className="mt-1 text-sm text-gray-500">
-              Must be at least 6 characters
+          <div style={{
+            background: '#1A2035', border: '1px solid #2A3550',
+            borderRadius: '16px', padding: '32px'
+          }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px', textAlign: 'center' }}>
+              How are you joining?
+            </h1>
+            <p style={{ fontSize: '14px', color: '#94A3B8', textAlign: 'center', marginBottom: '28px' }}>
+              Choose how you'd like to use Syndicade.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Org option */}
+              <button
+                onClick={function() { setAccountType('org'); }}
+                style={{
+                  background: '#0E1523', border: '1px solid #2A3550',
+                  borderRadius: '12px', padding: '20px', cursor: 'pointer',
+                  textAlign: 'left', transition: 'border-color 0.15s', width: '100%',
+                  display: 'flex', alignItems: 'flex-start', gap: '16px'
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.borderColor = '#3B82F6'; }}
+                onMouseLeave={function(e) { e.currentTarget.style.borderColor = '#2A3550'; }}
+                aria-label="Create an organization account"
+              >
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '10px',
+                  background: 'rgba(59,130,246,0.15)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="1.5" aria-hidden="true">
+                    <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 4px' }}>
+                    I represent an organization
+                  </p>
+                  <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>
+                    Nonprofits, clubs, associations, and community groups. Set up your org page and manage your members.
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+
+              {/* Member option */}
+              <button
+                onClick={function() { setAccountType('member'); }}
+                style={{
+                  background: '#0E1523', border: '1px solid #2A3550',
+                  borderRadius: '12px', padding: '20px', cursor: 'pointer',
+                  textAlign: 'left', transition: 'border-color 0.15s', width: '100%',
+                  display: 'flex', alignItems: 'flex-start', gap: '16px'
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.borderColor = '#22C55E'; }}
+                onMouseLeave={function(e) { e.currentTarget.style.borderColor = '#2A3550'; }}
+                aria-label="Create a member account"
+              >
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '10px',
+                  background: 'rgba(34,197,94,0.15)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="1.5" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 4px' }}>
+                    I'm joining as a member
+                  </p>
+                  <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>
+                    Find and join local organizations, track events, and stay connected with your community.
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+
+            <p style={{ textAlign: 'center', fontSize: '13px', color: '#64748B', marginTop: '24px' }}>
+              Already have an account?{' '}
+              <Link to="/login" style={{ color: '#3B82F6', fontWeight: 600, textDecoration: 'none' }}>
+                Sign in
+              </Link>
             </p>
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          <div>
-            <label 
-              htmlFor="confirmPassword" 
-              className="block text-sm font-medium text-gray-700 mb-2"
+  // ── Email/password form ──────────────────────────────────────────────────────
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#0E1523',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+      fontFamily: "'Inter','Segoe UI',system-ui,sans-serif"
+    }}>
+      <div style={{ width: '100%', maxWidth: '440px' }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <a href="/" style={{ textDecoration: 'none' }}>
+            <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFFFFF' }}>Syndi</span>
+            <span style={{ fontSize: '28px', fontWeight: 800, color: '#F5B731' }}>cade</span>
+          </a>
+        </div>
+
+        <div style={{
+          background: '#1A2035', border: '1px solid #2A3550',
+          borderRadius: '16px', padding: '32px'
+        }}>
+          {/* Back button + context badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+            <button
+              onClick={function() { setAccountType(null); setError(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', display: 'flex', alignItems: 'center' }}
+              aria-label="Go back to account type selection"
             >
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Re-enter your password"
-              disabled={loading}
-              aria-required="true"
-            />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+              background: accountType === 'org' ? 'rgba(59,130,246,0.15)' : 'rgba(34,197,94,0.15)',
+              color: accountType === 'org' ? '#3B82F6' : '#22C55E',
+              border: '1px solid ' + (accountType === 'org' ? 'rgba(59,130,246,0.3)' : 'rgba(34,197,94,0.3)')
+            }}>
+              {accountType === 'org' ? 'Organization account' : 'Member account'}
+            </span>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            aria-busy={loading}
-          >
-            {loading ? 'Creating Account...' : 'Sign Up'}
-          </button>
-        </form>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '6px' }}>
+            Create your account
+          </h1>
+          <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '24px' }}>
+            {accountType === 'org'
+              ? "You'll set up your organization details on the next screen."
+              : "You'll complete your profile and find organizations on the next screen."}
+          </p>
 
-        <p className="mt-6 text-center text-gray-600">
-          Already have an account?{' '}
-          <Link 
-            to="/login" 
-            className="text-blue-600 hover:text-blue-700 font-semibold focus:outline-none focus:underline"
-          >
-            Sign In
-          </Link>
-        </p>
+          {error && (
+            <div role="alert" style={{
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+              color: '#FCA5A5', padding: '12px 16px', borderRadius: '8px',
+              fontSize: '13px', marginBottom: '16px'
+            }}>
+              {error}
+            </div>
+          )}
+
+          {message && (
+            <div role="alert" style={{
+              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+              color: '#86EFAC', padding: '12px 16px', borderRadius: '8px',
+              fontSize: '13px', marginBottom: '16px'
+            }}>
+              {message}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label htmlFor="email" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px' }}>
+                  Email Address
+                </label>
+                <input
+                  id="email" type="email" required value={email}
+                  onChange={function(e) { setEmail(e.target.value); }}
+                  placeholder="you@example.com" disabled={loading}
+                  aria-required="true"
+                  style={{ width: '100%', padding: '10px 14px', background: '#1E2845', border: '1px solid #2A3550', borderRadius: '8px', color: '#FFFFFF', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+                  onBlur={function(e) { e.target.style.borderColor = '#2A3550'; }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px' }}>
+                  Password
+                </label>
+                <input
+                  id="password" type="password" required value={password}
+                  onChange={function(e) { setPassword(e.target.value); }}
+                  placeholder="At least 6 characters" disabled={loading}
+                  aria-required="true" aria-describedby="pw-hint"
+                  style={{ width: '100%', padding: '10px 14px', background: '#1E2845', border: '1px solid #2A3550', borderRadius: '8px', color: '#FFFFFF', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+                  onBlur={function(e) { e.target.style.borderColor = '#2A3550'; }}
+                />
+                <p id="pw-hint" style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>Must be at least 6 characters</p>
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px' }}>
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword" type="password" required value={confirmPassword}
+                  onChange={function(e) { setConfirmPassword(e.target.value); }}
+                  placeholder="Re-enter your password" disabled={loading}
+                  aria-required="true"
+                  style={{ width: '100%', padding: '10px 14px', background: '#1E2845', border: '1px solid #2A3550', borderRadius: '8px', color: '#FFFFFF', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+                  onBlur={function(e) { e.target.style.borderColor = '#2A3550'; }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit" disabled={loading}
+              style={{
+                width: '100%', marginTop: '24px', padding: '12px',
+                background: loading ? '#1E2845' : '#3B82F6',
+                color: '#FFFFFF', fontWeight: 700, fontSize: '15px',
+                borderRadius: '8px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s'
+              }}
+              aria-busy={loading}
+            >
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </button>
+          </form>
+
+          <p style={{ textAlign: 'center', fontSize: '13px', color: '#64748B', marginTop: '20px' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#3B82F6', fontWeight: 600, textDecoration: 'none' }}>
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default Signup
+export default Signup;

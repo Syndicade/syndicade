@@ -20,14 +20,11 @@ async function sendEmail(to: string, subject: string, html: string) {
   return res.json()
 }
 
-// orgLogoUrl: org's logo image URL (optional)
-// orgName: org's display name
-// orgUrl: link to org's public page on Syndicade
 function baseTemplate(content: string, orgName?: string, orgLogoUrl?: string, orgUrl?: string) {
   var orgLink = orgUrl || 'https://syndicade-git-main-syndicades-projects.vercel.app'
   var orgDisplay = orgName || 'Syndicade'
 
-var headerContent = orgLogoUrl
+  var headerContent = orgLogoUrl
     ? `<table cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td valign="middle" style="padding-right:12px;">
@@ -151,16 +148,13 @@ serve(async (req) => {
           <p style="color:#F5B731;font-weight:700;font-size:15px;margin:0;">Ticket Confirmed</p>
           <p style="color:#94A3B8;font-size:13px;margin:4px 0 0;">Payment processed successfully via Stripe.</p>
         </div>
-
         <h2 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 4px;">${data.eventTitle || ''}</h2>
         <p style="color:#94A3B8;font-size:14px;margin:0 0 24px;">${data.orgName || ''}</p>
-
         <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
           <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Event Details</p>
           <p style="color:#CBD5E1;font-size:14px;margin:0 0 6px;"><strong style="color:#fff;">Date & Time:</strong> ${data.eventDate || ''}</p>
           <p style="color:#CBD5E1;font-size:14px;margin:0;"><strong style="color:#fff;">Location:</strong> ${data.eventLocation || ''}</p>
         </div>
-
         <div style="background:#0E1523;border-radius:12px;padding:20px;margin-bottom:24px;">
           <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Receipt</p>
           <table style="width:100%;border-collapse:collapse;">
@@ -183,21 +177,18 @@ serve(async (req) => {
             </tfoot>
           </table>
         </div>
-
         <div style="text-align:center;background:#0E1523;border-radius:12px;padding:24px;margin-bottom:24px;">
           <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 16px;">Your Check-In QR Code</p>
           <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=000000&bgcolor=ffffff&data=${checkInEncoded}&format=png" alt="Check-in QR code" width="180" height="180" style="display:block;margin:0 auto;border-radius:4px;background:#fff;padding:8px;"/>
           <p style="color:#94A3B8;font-size:12px;margin:12px 0 4px;">Show this QR code at the door to check in.</p>
           <p style="color:#64748B;font-size:12px;margin:0;">If the QR code doesn't display, show this code:<br/><strong style="color:#F5B731;font-family:monospace;font-size:18px;letter-spacing:2px;">${shortCode}</strong></p>
         </div>
-
         <div style="margin-bottom:24px;">
           <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 12px;">Add to Calendar</p>
           <a href="${calGoogle2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Google Calendar</a>
           <a href="${icsUrl2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-right:8px;margin-bottom:8px;">Apple Calendar</a>
           <a href="${icsUrl2}" style="display:inline-block;background:#0E1523;border:1px solid #2A3550;color:#CBD5E1;font-weight:600;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;margin-bottom:8px;">Outlook</a>
         </div>
-
         <a href="${data.eventUrl || ''}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">View Event Details</a>
       `, data.orgName, data.orgLogoUrl, data.orgUrl)
       result = await sendEmail(data.memberEmail, 'Your ticket for ' + (data.eventTitle || 'the event') + ' is confirmed!', html)
@@ -211,6 +202,28 @@ serve(async (req) => {
         <a href="${data.inviteUrl || 'https://syndicade-git-main-syndicades-projects.vercel.app'}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">Accept Invitation</a>
       `, data.orgName, data.orgLogoUrl, data.orgUrl)
       result = await sendEmail(data.inviteeEmail, 'You\'ve been invited to ' + (data.orgName || 'an organization') + ' on Syndicade', html)
+    }
+
+    // ── Member Invite Onboarding ─────────────────────────────────────────
+    else if (type === 'member_invite_onboarding') {
+      const { org_name, org_logo_url, inviter_name, invite_name, token, org_id } = data
+      const baseUrl = 'https://syndicade-git-main-syndicades-projects.vercel.app'
+      const signupUrl = baseUrl + '/signup?invite_token=' + token + '&org_id=' + org_id
+      const loginUrl = baseUrl + '/login?invite_token=' + token + '&org_id=' + org_id
+      const greeting = invite_name ? 'Hi ' + invite_name + ',' : 'Hi there,'
+      var html = baseTemplate(`
+        <p style="color:#CBD5E1;font-size:15px;margin:0 0 8px;">${greeting}</p>
+        <p style="color:#CBD5E1;font-size:15px;margin:0 0 24px;line-height:1.6;">
+          <strong style="color:#FFFFFF;">${inviter_name}</strong> has invited you to join
+          <strong style="color:#FFFFFF;">${org_name}</strong> on Syndicade — a platform for community organizations to manage members, events, and more.
+        </p>
+        <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 10px;">New to Syndicade?</p>
+        <a href="${signupUrl}" style="display:block;background:#3B82F6;color:#FFFFFF;text-align:center;padding:14px 24px;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;margin-bottom:16px;">Create my Syndicade account</a>
+        <p style="color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:4px;margin:0 0 10px;">Already have an account?</p>
+        <a href="${loginUrl}" style="display:block;background:#1A2035;color:#FFFFFF;text-align:center;padding:14px 24px;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;border:1px solid #2A3550;margin-bottom:24px;">Log in and add ${org_name}</a>
+        <p style="color:#64748B;font-size:12px;margin:0;line-height:1.6;">This invitation was sent by ${inviter_name} on behalf of ${org_name}. If you weren't expecting this, you can safely ignore this email.</p>
+      `, org_name, org_logo_url)
+      result = await sendEmail(data.to, 'You\'ve been invited to join ' + org_name + ' on Syndicade', html)
     }
 
     // ── Urgent Announcement ──────────────────────────────────────────────
