@@ -121,7 +121,11 @@ export default function OrganizationDiscovery() {
     setLoading(true);
     setError(null);
     var offset = (page - 1) * PAGE_SIZE;
-    var fullKeyword = ([debouncedKeyword].concat(filters.tags || [])).filter(Boolean).join(' ') || null;
+
+    /* ── Separated: top search bar searches text fields only ── */
+    var searchKw    = debouncedKeyword || null;
+    /* ── Filter tags OR-match against search_tags/keywords columns only ── */
+    var filterTags  = (filters.tags || []).length > 0 ? filters.tags : null;
 
     var run = async function () {
       try {
@@ -135,13 +139,18 @@ export default function OrganizationDiscovery() {
           setTotalCount(r.data && r.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + ((r.data || []).length));
         } else {
           var r2 = await supabase.rpc('get_public_orgs', {
-            search_keyword: fullKeyword,
-            filter_state: filters.state || null, filter_city: filters.city || null,
-            filter_county: filters.county || null, filter_zip: filters.zip || null,
+            search_keyword:    searchKw,
+            filter_state:      filters.state || null,
+            filter_city:       filters.city || null,
+            filter_county:     filters.county || null,
+            filter_zip:        filters.zip || null,
             filter_categories: (filters.categories || []).length > 0 ? filters.categories : null,
-            filter_org_type: filters.orgType || null,
-            filter_languages: (filters.languagesServed || []).length > 0 ? filters.languagesServed : null,
-            sort_by: sortBy, page_limit: PAGE_SIZE, page_offset: offset,
+            filter_org_type:   filters.orgType || null,
+            filter_languages:  (filters.languagesServed || []).length > 0 ? filters.languagesServed : null,
+            filter_tags:       filterTags,
+            sort_by:           sortBy,
+            page_limit:        PAGE_SIZE,
+            page_offset:       offset,
           });
           if (r2.error) throw r2.error;
           setOrgs(r2.data || []);
@@ -209,7 +218,7 @@ export default function OrganizationDiscovery() {
 
       <div style={{ minHeight: '100vh', background: pageBg, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", transition: 'background 0.2s' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
-        {/* ── Sticky Search Bar ── */}
+        {/* Sticky Search Bar */}
         <div style={{ background: topBarBg, borderBottom: '1px solid ' + topBarBorder, position: 'sticky', top: 0, zIndex: 30, transition: 'background 0.2s' }}>
           <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ position: 'relative', flex: 1 }}>
@@ -219,7 +228,7 @@ export default function OrganizationDiscovery() {
                 type="search"
                 value={keyword}
                 onChange={function (e) { setKeyword(e.target.value); }}
-                placeholder={t(lang, 'searchPlaceholder') || 'Search organizations...'}
+                placeholder={t(lang, 'searchPlaceholder') || 'Search by name or description...'}
                 aria-label={t(lang, 'searchPlaceholder') || 'Search organizations'}
                 style={{ width: '100%', paddingLeft: '38px', paddingRight: keyword ? '36px' : '14px', paddingTop: '9px', paddingBottom: '9px', background: searchBg, border: '1px solid ' + searchBorder, borderRadius: '10px', fontSize: '13px', color: searchTxt, boxSizing: 'border-box', transition: 'background 0.2s' }}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -237,7 +246,7 @@ export default function OrganizationDiscovery() {
           </div>
         </div>
 
-        {/* ── Body ── */}
+        {/* Body */}
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 20px' }}>
           <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
