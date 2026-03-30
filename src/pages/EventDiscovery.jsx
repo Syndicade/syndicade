@@ -422,7 +422,7 @@ export default function EventDiscovery() {
             </div>
             <button
               onClick={function() { setMobileFiltersOpen(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ display: window.innerWidth >= 1024 ? 'none' : 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
               className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Open filters"
               aria-expanded={mobileFiltersOpen}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast } from '../components/MascotToast';
 import MembershipTiers from '../components/MembershipTiers';
 import NonprofitVerificationForm from './NonprofitVerificationForm';
 
@@ -26,12 +27,12 @@ var ORG_TYPES = [
 var SYSTEM_ROLES = ['admin', 'editor', 'member'];
 
 var PERMISSION_KEYS = [
-  { key: 'create_events',       label: 'Create Events'       },
-  { key: 'create_announcements',label: 'Create Announcements'},
-  { key: 'create_polls',        label: 'Create Polls'        },
-  { key: 'create_surveys',      label: 'Create Surveys'      },
-  { key: 'create_signup_forms', label: 'Create Sign-Up Forms'},
-  { key: 'view_members',        label: 'View Members'        },
+  { key: 'create_events',        label: 'Create Events'        },
+  { key: 'create_announcements', label: 'Create Announcements' },
+  { key: 'create_polls',         label: 'Create Polls'         },
+  { key: 'create_surveys',       label: 'Create Surveys'       },
+  { key: 'create_signup_forms',  label: 'Create Sign-Up Forms' },
+  { key: 'view_members',         label: 'View Members'         },
 ];
 
 var DEFAULT_PERMISSIONS = {
@@ -45,7 +46,7 @@ var ROLE_COLORS = [
   '#F59E0B','#EF4444','#EC4899','#06B6D4',
 ];
 
-var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white';
+var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900';
 var labelCls = 'block text-sm font-semibold text-gray-900 mb-2';
 
 function Icon({ path, className }) {
@@ -88,7 +89,8 @@ function SettingsSkeleton() {
   );
 }
 
-function KeywordInput({ keywords, onChange }) {
+/* ── Keyword / Tag Input ── */
+function KeywordInput({ keywords, onChange, placeholder, ariaLabel }) {
   var [input, setInput] = useState('');
   function add() {
     var v = input.trim().toLowerCase();
@@ -96,25 +98,27 @@ function KeywordInput({ keywords, onChange }) {
     onChange(keywords.concat([v])); setInput('');
   }
   function handleKeyDown(e) {
-    if (e.key==='Enter'||e.key===',') { e.preventDefault(); add(); }
-    if (e.key==='Backspace'&&!input&&keywords.length>0) onChange(keywords.slice(0,-1));
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); }
+    if (e.key === 'Backspace' && !input && keywords.length > 0) onChange(keywords.slice(0, -1));
   }
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-2 min-h-[28px]" role="list" aria-label="Keywords">
-        {keywords.map(function(kw){ return (
-          <span key={kw} role="listitem" className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-            {kw}
-            <button type="button" onClick={function(){ onChange(keywords.filter(function(k){ return k!==kw; })); }}
-              className="text-blue-500 hover:text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-full" aria-label={'Remove '+kw}>
-              <Icon path="M6 18L18 6M6 6l12 12" className="h-3 w-3"/>
-            </button>
-          </span>
-        ); })}
+      <div className="flex flex-wrap gap-2 mb-2 min-h-[28px]" role="list" aria-label={ariaLabel || 'Tags'}>
+        {keywords.map(function(kw) {
+          return (
+            <span key={kw} role="listitem" className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+              {kw}
+              <button type="button" onClick={function(){ onChange(keywords.filter(function(k){ return k !== kw; })); }}
+                className="text-blue-500 hover:text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-full" aria-label={'Remove ' + kw}>
+                <Icon path="M6 18L18 6M6 6l12 12" className="h-3 w-3"/>
+              </button>
+            </span>
+          );
+        })}
       </div>
       <div className="flex gap-2">
         <input type="text" value={input} onChange={function(e){ setInput(e.target.value); }} onKeyDown={handleKeyDown}
-          placeholder="Type a keyword and press Enter" className={inputCls+' flex-1'} maxLength={50} aria-label="Add keyword"/>
+          placeholder={placeholder || 'Type and press Enter'} className={inputCls + ' flex-1'} maxLength={50} aria-label={'Add ' + (ariaLabel || 'tag')}/>
         <button type="button" onClick={add} className="px-4 py-2 bg-blue-100 text-blue-700 font-semibold rounded-lg hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">Add</button>
       </div>
       <p className="text-xs text-gray-400 mt-1">Press Enter or comma to add.</p>
@@ -122,9 +126,13 @@ function KeywordInput({ keywords, onChange }) {
   );
 }
 
-function ChecklistGroup({ options, selected, onChange, legend }) {
+function ChecklistGroup({ options, selected, onChange, legend, max }) {
   function toggle(val) {
-    onChange(selected.includes(val) ? selected.filter(function(v){ return v!==val; }) : selected.concat([val]));
+    if (!selected.includes(val) && max && selected.length >= max) {
+      toast.error('Maximum ' + max + ' categories allowed');
+      return;
+    }
+    onChange(selected.includes(val) ? selected.filter(function(v){ return v !== val; }) : selected.concat([val]));
   }
   return (
     <fieldset>
@@ -188,7 +196,7 @@ function RolesTab({ organizationId }) {
       var { error } = await supabase.from('memberships').update({ role: newRole }).eq('id', membershipId);
       if (error) throw error;
       setMembers(function(prev){ return prev.map(function(m){ return m.id===membershipId ? Object.assign({},m,{role:newRole}) : m; }); });
-      toast.success('Role updated');
+      mascotSuccessToast('Role updated');
     } catch(err) { toast.error('Failed to update role'); } finally { setUpdatingMemberId(null); }
   }
 
@@ -199,7 +207,7 @@ function RolesTab({ organizationId }) {
       if (error) throw error;
       var customRole = customRoles.find(function(r){ return r.id===customRoleId; }) || null;
       setMembers(function(prev){ return prev.map(function(m){ return m.id===membershipId ? Object.assign({},m,{custom_role_id:customRoleId,customRole:customRole}) : m; }); });
-      toast.success('Tag updated');
+      mascotSuccessToast('Tag updated');
     } catch(err) { toast.error('Failed to update tag'); } finally { setUpdatingMemberId(null); }
   }
 
@@ -213,11 +221,11 @@ function RolesTab({ organizationId }) {
       if (editingRole) {
         var { error } = await supabase.from('org_roles').update({ name: roleForm.name.trim(), color: roleForm.color, permissions: roleForm.permissions }).eq('id', editingRole.id);
         if (error) throw error;
-        toast.success('Role updated');
+        mascotSuccessToast('Role updated');
       } else {
         var { error: insErr } = await supabase.from('org_roles').insert({ organization_id: organizationId, name: roleForm.name.trim(), color: roleForm.color, permissions: roleForm.permissions });
         if (insErr) throw insErr;
-        toast.success('Role created');
+        mascotSuccessToast('Role created');
       }
       setShowRoleForm(false);
       await fetchAll();
@@ -229,7 +237,7 @@ function RolesTab({ organizationId }) {
     try {
       var { error } = await supabase.from('org_roles').delete().eq('id', roleId);
       if (error) throw error;
-      toast.success('Role deleted');
+      mascotSuccessToast('Role deleted');
       await fetchAll();
     } catch(err) { toast.error('Failed to delete role'); }
   }
@@ -395,15 +403,25 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     mailing_same: true,
     mailing_address: '', mailing_city: '', mailing_state: '', mailing_zip: '',
     service_categories: [], languages: [], keywords: [],
+    /* ── Discovery blurb ── */
+    discovery_about: '',
+    /* ── Search tags (separate from general keywords) ── */
+    search_tags: [],
+    /* ── Donations ── */
+    enable_donations: false,
+    donation_suggested_amount: '',
+    donation_external_link: '',
+    donation_title: '',
+    donation_description: '',
   });
 
   var tabs = [
-    { id: 'basic',      label: 'Basic Information' },
-    { id: 'privacy',    label: 'Privacy & Access'  },
-    { id: 'roles',      label: 'Roles'             },
-    { id: 'membership', label: 'Membership'        },
-    { id: 'discover',   label: 'Discover Orgs'     },
-    { id: 'donations', label: 'Donations'         },
+    { id: 'basic',        label: 'Basic Information' },
+    { id: 'privacy',      label: 'Privacy & Access'  },
+    { id: 'roles',        label: 'Roles'             },
+    { id: 'membership',   label: 'Membership'        },
+    { id: 'discover',     label: 'Discover Orgs'     },
+    { id: 'donations',    label: 'Donations'         },
     { id: 'verification', label: 'Verification'      },
   ];
 
@@ -415,32 +433,34 @@ function OrganizationSettings({ organizationId, onUpdate }) {
       if (error) throw error;
       setOrganization(data);
       setForm({
-        name: data.name || '',
-        description: data.description || '',
-        type: data.type || 'community',
-        settings: Object.assign({ allowMemberInvites: true, requireApproval: false }, data.settings || {}),
-        join_mode: data.join_mode || 'invite_only',
-        is_public: data.is_public || false,
-        collect_dues: data.collect_dues !== false,
-        county: data.county || '',
-        city: data.city || '',
-        state: data.state || '',
-        zip_code: data.zip_code || '',
-        contact_phone: data.contact_phone || '',
-        address: data.address || '',
-        mailing_same: true,
-        mailing_address: data.mailing_address || '',
-        mailing_city: data.mailing_city || '',
-        mailing_state: data.mailing_state || '',
-        mailing_zip: data.mailing_zip || '',
-        service_categories: data.service_categories || [],
-        languages: data.languages || [],
-        keywords: data.keywords || [],
-        enable_donations: data.enable_donations || false,
+        name:                  data.name || '',
+        description:           data.description || '',
+        type:                  data.type || 'community',
+        settings:              Object.assign({ allowMemberInvites: true, requireApproval: false }, data.settings || {}),
+        join_mode:             data.join_mode || 'invite_only',
+        is_public:             data.is_public || false,
+        collect_dues:          data.collect_dues !== false,
+        county:                data.county || '',
+        city:                  data.city || '',
+        state:                 data.state || '',
+        zip_code:              data.zip_code || '',
+        contact_phone:         data.contact_phone || '',
+        address:               data.address || '',
+        mailing_same:          true,
+        mailing_address:       data.mailing_address || '',
+        mailing_city:          data.mailing_city || '',
+        mailing_state:         data.mailing_state || '',
+        mailing_zip:           data.mailing_zip || '',
+        service_categories:    data.service_categories || [],
+        languages:             data.languages || [],
+        keywords:              data.keywords || [],
+        discovery_about:       data.discovery_about || '',
+        search_tags:           data.search_tags || [],
+        enable_donations:      data.enable_donations || false,
         donation_suggested_amount: data.donation_suggested_amount || '',
-        donation_external_link: data.donation_external_link || '',
-        donation_title: data.donation_title || '',
-        donation_description: data.donation_description || '',
+        donation_external_link:    data.donation_external_link || '',
+        donation_title:            data.donation_title || '',
+        donation_description:      data.donation_description || '',
       });
     } catch(err) {
       toast.error('Failed to load settings');
@@ -466,34 +486,36 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     setSaving(true);
     try {
       var { error } = await supabase.from('organizations').update({
-        name: form.name.trim(),
-        description: form.description.trim(),
-        type: form.type,
-        settings: form.settings,
-        join_mode: form.join_mode,
-        is_public: form.is_public,
-        collect_dues: form.collect_dues,
-        city: form.city.trim(),
-        county: form.county.trim(),
-        state: form.state.trim(),
-        zip_code: form.zip_code.trim(),
-        contact_phone: form.contact_phone.trim(),
-        address: form.address.trim(),
-        mailing_address: form.mailing_same ? form.address.trim() : form.mailing_address.trim(),
-        mailing_city: form.mailing_same ? form.city.trim() : form.mailing_city.trim(),
-        mailing_state: form.mailing_same ? form.state.trim() : form.mailing_state.trim(),
-        mailing_zip: form.mailing_same ? form.zip_code.trim() : form.mailing_zip.trim(),
-        service_categories: form.service_categories,
-        languages: form.languages,
-        keywords: form.keywords,
-        enable_donations: form.enable_donations,
-        donation_suggested_amount: form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
-        donation_external_link: form.donation_external_link ? form.donation_external_link.trim() : null,
-        donation_title: form.donation_title ? form.donation_title.trim() : null,
-        donation_description: form.donation_description ? form.donation_description.trim() : null,
+        name:             form.name.trim(),
+        description:      form.description.trim(),
+        type:             form.type,
+        settings:         form.settings,
+        join_mode:        form.join_mode,
+        is_public:        form.is_public,
+        collect_dues:     form.collect_dues,
+        city:             form.city.trim(),
+        county:           form.county.trim(),
+        state:            form.state.trim(),
+        zip_code:         form.zip_code.trim(),
+        contact_phone:    form.contact_phone.trim(),
+        address:          form.address.trim(),
+        mailing_address:  form.mailing_same ? form.address.trim() : form.mailing_address.trim(),
+        mailing_city:     form.mailing_same ? form.city.trim() : form.mailing_city.trim(),
+        mailing_state:    form.mailing_same ? form.state.trim() : form.mailing_state.trim(),
+        mailing_zip:      form.mailing_same ? form.zip_code.trim() : form.mailing_zip.trim(),
+        service_categories:    form.service_categories,
+        languages:             form.languages,
+        keywords:              form.keywords,
+        discovery_about:       form.discovery_about.trim() || null,
+        search_tags:           form.search_tags,
+        enable_donations:             form.enable_donations,
+        donation_suggested_amount:    form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
+        donation_external_link:       form.donation_external_link ? form.donation_external_link.trim() : null,
+        donation_title:               form.donation_title ? form.donation_title.trim() : null,
+        donation_description:         form.donation_description ? form.donation_description.trim() : null,
       }).eq('id', organizationId);
       if (error) throw error;
-      toast.success('Settings saved!');
+      mascotSuccessToast('Settings saved!', 'Your changes are live.');
       if (onUpdate) onUpdate(form);
     } catch(err) {
       toast.error('Save failed: '+err.message);
@@ -527,7 +549,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
           {publicPageUrl && (
             <a href={publicPageUrl} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all text-sm"
-              aria-label={'View public page, opens in new tab'}>
+              aria-label="View public page, opens in new tab">
               <Icon path="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" className="h-4 w-4"/>
               View Public Page
             </a>
@@ -535,7 +557,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         </div>
 
         <div className="border-b border-gray-200 px-6">
-          <nav className="flex gap-1 overflow-x-auto" aria-label="Settings tabs" style={{ scrollbarWidth:'thin' }}>
+          <nav className="flex gap-1 overflow-x-auto" aria-label="Settings tabs" style={{ scrollbarWidth: 'thin' }}>
             {tabs.map(function(tab){
               var active = activeTab === tab.id;
               return (
@@ -656,9 +678,9 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   <p className="text-sm font-bold text-gray-900 mb-3">How can people join?</p>
                   <div className="space-y-2" role="radiogroup" aria-label="Join mode">
                     {[
-                      { value: 'invite_only',    label: 'Invite Only',     desc: 'Only admins can invite new members.' },
-                      { value: 'request_to_join',label: 'Request to Join', desc: 'Anyone can request to join. Admins approve or deny requests.' },
-                      { value: 'both',           label: 'Both',            desc: 'Admins can invite members, and anyone can also request to join.' },
+                      { value: 'invite_only',     label: 'Invite Only',     desc: 'Only admins can invite new members.' },
+                      { value: 'request_to_join', label: 'Request to Join', desc: 'Anyone can request to join. Admins approve or deny requests.' },
+                      { value: 'both',            label: 'Both',            desc: 'Admins can invite members, and anyone can also request to join.' },
                     ].map(function(opt){
                       var checked = form.join_mode === opt.value;
                       return (
@@ -675,8 +697,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                 </div>
                 <div className="space-y-3">
                   {[
-                    { id:'allow-invites',   name:'settings.allowMemberInvites', checked:form.settings.allowMemberInvites, label:'Allow Member Invitations', desc:'Let members invite others to join the organization.' },
-                    { id:'require-approval',name:'settings.requireApproval',    checked:form.settings.requireApproval,   label:'Require Admin Approval',    desc:'New members must be approved by an admin before joining.' },
+                    { id:'allow-invites',    name:'settings.allowMemberInvites', checked:form.settings.allowMemberInvites, label:'Allow Member Invitations', desc:'Let members invite others to join the organization.' },
+                    { id:'require-approval', name:'settings.requireApproval',    checked:form.settings.requireApproval,   label:'Require Admin Approval',    desc:'New members must be approved by an admin before joining.' },
                   ].map(function(item){
                     return (
                       <div key={item.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
@@ -702,26 +724,14 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   <h3 id="membership-heading" className="text-lg font-bold text-gray-900">Membership Settings</h3>
                   <p className="text-gray-500 text-sm mt-0.5">Configure dues collection, tiers, amounts, and durations.</p>
                 </div>
-
-                {/* Collect Dues toggle */}
-                <div className={'flex items-center justify-between p-5 rounded-xl border-2 ' + (form.collect_dues ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
+                <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.collect_dues?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">Collect Dues</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {form.collect_dues
-                        ? 'Dues tracking is enabled. Badges show on member profiles and the member directory.'
-                        : 'Dues tracking is off. No dues badges will appear anywhere.'}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{form.collect_dues?'Dues tracking is enabled. Badges show on member profiles and the member directory.':'Dues tracking is off. No dues badges will appear anywhere.'}</p>
                   </div>
-                  <Toggle
-                    checked={form.collect_dues}
-                    onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{collect_dues:!prev.collect_dues}); }); }}
-                    id="collect-dues-toggle"
-                    label={form.collect_dues ? 'Disable dues tracking' : 'Enable dues tracking'}
-                  />
+                  <Toggle checked={form.collect_dues} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{collect_dues:!prev.collect_dues}); }); }} id="collect-dues-toggle" label={form.collect_dues?'Disable dues tracking':'Enable dues tracking'}/>
                 </div>
-
-                {form.collect_dues && <MembershipTiers organizationId={organizationId} />}
+                {form.collect_dues && <MembershipTiers organizationId={organizationId}/>}
               </section>
             )}
 
@@ -730,8 +740,10 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               <section aria-labelledby="discover-heading" className="space-y-6">
                 <div>
                   <h3 id="discover-heading" className="text-lg font-bold text-gray-900">Discover Orgs Page</h3>
-                  <p className="text-gray-500 text-sm mt-0.5">Control how your organization appears in public search.</p>
+                  <p className="text-gray-500 text-sm mt-0.5">Control how your organization appears in public search results.</p>
                 </div>
+
+                {/* Public listing toggle */}
                 <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.is_public?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">List on Discover Orgs page</p>
@@ -739,23 +751,77 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   </div>
                   <Toggle checked={form.is_public} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{is_public:!prev.is_public}); }); }} id="discovery-toggle" label={form.is_public?'Remove from Discover Orgs':'List on Discover Orgs'}/>
                 </div>
+
                 {form.is_public && (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
+
+                    {/* ── Discovery Blurb ── */}
                     <div>
-                      <p className="text-sm font-bold text-gray-900 mb-1">Service Categories</p>
-                      <p className="text-xs text-gray-500 mb-3">Select all that apply.</p>
-                      <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }} legend="Service categories"/>
+                      <label htmlFor="discovery-about" className={labelCls}>
+                        Discovery Blurb
+                      </label>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Shown on org cards in the Discover page. Keep it to 1–2 sentences — punchy and specific beats generic every time.
+                      </p>
+                      <textarea
+                        id="discovery-about"
+                        value={form.discovery_about}
+                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{discovery_about:e.target.value}); }); }}
+                        maxLength={280}
+                        rows={3}
+                        placeholder="e.g. We connect local volunteers with food-insecure families across Lucas County. Our programs run year-round and are always free to participate."
+                        className={inputCls + ' resize-none'}
+                        aria-describedby="discovery-about-count"
+                      />
+                      <p id="discovery-about-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">
+                        {form.discovery_about.length} / 280
+                      </p>
                     </div>
+
+                    {/* ── Service Categories ── */}
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 mb-1">Service Categories <span className="text-xs font-normal text-gray-400">({form.service_categories.length}/6 selected)</span></p>
+                      <p className="text-xs text-gray-500 mb-3">Select up to 6 that apply. These appear as filter tags on the Discover page.</p>
+                      <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }} legend="Service categories" max={6}/>
+                    </div>
+
+                    {/* ── Languages Served ── */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Languages Served</p>
                       <p className="text-xs text-gray-500 mb-3">Which languages does your organization serve?</p>
                       <ChecklistGroup options={LANGUAGES} selected={form.languages} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{languages:val}); }); }} legend="Languages served"/>
                     </div>
+
+                    {/* ── Search Tags ── */}
                     <div>
-                      <p className="text-sm font-bold text-gray-900 mb-1">Search Keywords</p>
-                      <p className="text-xs text-gray-500 mb-3">Add words people might search that aren't in categories above.</p>
-                      <KeywordInput keywords={form.keywords} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}/>
+                      <p className="text-sm font-bold text-gray-900 mb-1">Search Tags</p>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Short tags that describe your org — shown as pills on your card and used for keyword search.
+                        Examples: <span className="font-medium">veterans</span>, <span className="font-medium">food pantry</span>, <span className="font-medium">after school</span>.
+                      </p>
+                      <KeywordInput
+                        keywords={form.search_tags}
+                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{search_tags:val}); }); }}
+                        placeholder="e.g. food pantry, after school, veteran support"
+                        ariaLabel="Search tags"
+                      />
                     </div>
+
+                    {/* ── Additional Keywords ── */}
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 mb-1">Additional Search Keywords</p>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Words people might type that aren't captured by your categories or tags above.
+                        These are used for search matching only — not displayed on your card.
+                      </p>
+                      <KeywordInput
+                        keywords={form.keywords}
+                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}
+                        placeholder="e.g. Toledo, northwest Ohio, nonprofit"
+                        ariaLabel="Additional search keywords"
+                      />
+                    </div>
+
                   </div>
                 )}
               </section>
@@ -768,62 +834,49 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   <h3 id="donations-heading" className="text-lg font-bold text-gray-900">Donation Settings</h3>
                   <p className="text-gray-500 text-sm mt-0.5">Accept donations on your public page via Stripe or an external link.</p>
                 </div>
-
-                <div className={'flex items-center justify-between p-5 rounded-xl border-2 ' + (form.enable_donations ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50')}>
+                <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.enable_donations?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">Enable Donations</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{form.enable_donations ? 'A donation section is showing on your public page.' : 'No donation section on your public page.'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{form.enable_donations?'A donation section is showing on your public page.':'No donation section on your public page.'}</p>
                   </div>
-                  <Toggle
-                    checked={form.enable_donations}
-                    onChange={function() { setForm(function(prev) { return Object.assign({}, prev, { enable_donations: !prev.enable_donations }); }); }}
-                    id="enable-donations-toggle"
-                    label={form.enable_donations ? 'Disable donations' : 'Enable donations'}
-                  />
+                  <Toggle checked={form.enable_donations} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{enable_donations:!prev.enable_donations}); }); }} id="enable-donations-toggle" label={form.enable_donations?'Disable donations':'Enable donations'}/>
                 </div>
-
                 {form.enable_donations && (
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="donation-title" className={labelCls}>Donation Section Title</label>
-                      <input id="donation-title" type="text" value={form.donation_title}
-                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_title:e.target.value}); }); }}
-                        placeholder={'Support ' + (form.name || 'Us')} className={inputCls} maxLength={100} />
+                      <input id="donation-title" type="text" value={form.donation_title} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_title:e.target.value}); }); }} placeholder={'Support '+(form.name||'Us')} className={inputCls} maxLength={100}/>
                     </div>
                     <div>
                       <label htmlFor="donation-description" className={labelCls}>Description</label>
-                      <textarea id="donation-description" value={form.donation_description}
-                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_description:e.target.value}); }); }}
-                        rows={3} placeholder="Your donation helps us continue our work in the community."
-                        className={inputCls + ' resize-none'} maxLength={300} />
+                      <textarea id="donation-description" value={form.donation_description} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_description:e.target.value}); }); }} rows={3} placeholder="Your donation helps us continue our work in the community." className={inputCls+' resize-none'} maxLength={300}/>
                     </div>
                     <div>
                       <label htmlFor="donation-amount" className={labelCls}>Suggested Amount (optional)</label>
                       <div className="relative max-w-xs">
                         <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none" aria-hidden="true">$</span>
-                        <input id="donation-amount" type="number" min="1" step="1" value={form.donation_suggested_amount}
-                          onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_suggested_amount:e.target.value}); }); }}
-                          placeholder="25" className={inputCls + ' pl-7'} />
+                        <input id="donation-amount" type="number" min="1" step="1" value={form.donation_suggested_amount} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_suggested_amount:e.target.value}); }); }} placeholder="25" className={inputCls+' pl-7'}/>
                       </div>
                       <p className="text-xs text-gray-400 mt-1">This amount will be pre-highlighted in the donation picker.</p>
                     </div>
                     <div>
                       <label htmlFor="donation-external" className={labelCls}>External Donation Link (optional)</label>
-                      <input id="donation-external" type="url" value={form.donation_external_link}
-                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_external_link:e.target.value}); }); }}
-                        placeholder="https://paypal.me/yourorg" className={inputCls} />
+                      <input id="donation-external" type="url" value={form.donation_external_link} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_external_link:e.target.value}); }); }} placeholder="https://paypal.me/yourorg" className={inputCls}/>
                       <p className="text-xs text-gray-400 mt-1">PayPal, Venmo, GoFundMe, or any other donation link.</p>
                     </div>
                   </div>
                 )}
               </section>
             )}
-{activeTab === 'verification' && (
-  <section aria-label="Nonprofit verification">
-    <NonprofitVerificationForm organizationId={organizationId} />
-  </section>
-)}
-            {/* Save button — not shown on Roles tab */}
+
+            {/* ── VERIFICATION ── */}
+            {activeTab === 'verification' && (
+              <section aria-label="Nonprofit verification">
+                <NonprofitVerificationForm organizationId={organizationId}/>
+              </section>
+            )}
+
+            {/* Save button */}
             {activeTab !== 'roles' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}

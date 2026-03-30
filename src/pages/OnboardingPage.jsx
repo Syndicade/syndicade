@@ -148,23 +148,28 @@ function OrgStep1({ userEmail, onNext }) {
         .single();
       if (error) throw error;
 
-// Ensure member profile exists first
-await supabase.from('members').upsert({
+// Ensure member profile exists
+var { error: memberInsertError } = await supabase.from('members').insert({
   user_id: user.id,
   email: user.email,
   first_name: 'Admin',
-  last_name: '',
-  onboarding_completed: false
-}, { onConflict: 'user_id' });
+  last_name: ''
+});
+// Ignore duplicate error (409) — member already exists
+if (memberInsertError && memberInsertError.code !== '23505') {
+  throw memberInsertError;
+}
+console.log('org.id:', org.id, 'user.id:', user.id);
 
 // Auto-add creator as admin
-await supabase.from('memberships').insert({
+var { error: membershipError } = await supabase.from('memberships').insert({
   organization_id: org.id,
   member_id: user.id,
   role: 'admin',
   status: 'active',
   joined_date: new Date().toISOString()
 });
+if (membershipError) throw membershipError;
 
       onNext({ org });
     } catch (err) {
