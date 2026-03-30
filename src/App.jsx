@@ -19,6 +19,7 @@ import EventCalendar from './pages/EventCalendar';
 import AnnouncementFeed from './pages/AnnouncementFeed';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
+import OrgLayout from './pages/OrgLayout';
 import AdminInbox from './pages/AdminInbox';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
@@ -82,7 +83,16 @@ function App() {
     );
   }
 
-return (
+  // Paths where the global Header and Footer should be hidden
+  const hideChrome = (
+    window.location.pathname.startsWith('/org/') ||
+    window.location.pathname.startsWith('/home') ||
+    window.location.pathname === '/about' ||
+    window.location.pathname === '/onboarding' ||
+    window.location.pathname === '/welcome'
+  );
+
+  return (
     <ThemeProvider>
       <Toaster
         position="top-right"
@@ -95,15 +105,11 @@ return (
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-          {session &&
-            !window.location.pathname.startsWith('/org/') &&
-            !window.location.pathname.startsWith('/home') &&
-            window.location.pathname !== '/about' &&
-            window.location.pathname !== '/onboarding' &&
-            window.location.pathname !== '/welcome' &&
-            <Header />}
+          {session && !hideChrome && <Header />}
+
           <Routes>
 
+            {/* ── Public / auth routes ────────────────────────────────────── */}
             <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
@@ -112,46 +118,77 @@ return (
             <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/legal" element={<LegalCenter />} />
-
-            <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
-<Route path="/events/:eventId" element={<EventDetails />} />
-<Route path="/organizations/:organizationId/events/:eventId" element={<EventDetails />} />
-
-            <Route path="/discover" element={<EventDiscovery />} />
-            <Route path="/explore" element={<OrganizationDiscovery />} />
-            <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
-
-            <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/inbox" element={<AdminInbox />} />
-            <Route path="/organizations/:organizationId" element={session ? <OrganizationDashboard /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/announcements" element={session ? <AnnouncementFeed /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/members" element={session ? <MemberDirectory /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/programs" element={session ? <OrgPrograms /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/documents" element={session ? <DocumentLibrary /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/chat" element={<OrgChat />} />
-            <Route path="/organizations/:organizationId/polls" element={session ? <PollsList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/signup-forms" element={session ? <SignupFormsList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/surveys" element={session ? <SurveysList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/scheduling" element={session ? <SchedulingPolls /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/groups" element={session ? <GroupsList /> : <Navigate to="/login" replace />} />
-            <Route path="/organizations/:organizationId/groups/:groupId" element={session ? <GroupDetail /> : <Navigate to="/login" replace />} />
-
-            <Route path="/check-in/:eventId" element={<CheckInPage />} />
-            <Route path="/guest-check-in/:eventId" element={<GuestCheckInPage />} />
-
-            <Route path="/org/:slug" element={<PublicOrganizationPage />} />
-            <Route path="/org/:slug" element={<PublicOrganizationPage />} />
-<Route path="/org/:slug/:pageSlug" element={<PublicOrganizationPage />} />  {/* ADD THIS */}
-            <Route path="/organizations/:organizationId/page-editor" element={session ? <OrgPageEditor /> : <Navigate to="/login" replace />} />
-            <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
-            <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/home" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/organizations/:organizationId/billing" element={<BillingPage />} />
+
+            {/* ── Discovery / global event routes ────────────────────────── */}
+            <Route path="/discover" element={<EventDiscovery />} />
+            <Route path="/explore" element={<OrganizationDiscovery />} />
+            <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
+            <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
+            <Route path="/events/:eventId" element={<EventDetails />} />
+
+            {/* ── Check-in (no auth required for guests) ─────────────────── */}
+            <Route path="/check-in/:eventId" element={<CheckInPage />} />
+            <Route path="/guest-check-in/:eventId" element={<GuestCheckInPage />} />
+
+            {/* ── Public org pages ────────────────────────────────────────── */}
+            <Route path="/org/:slug" element={<PublicOrganizationPage />} />
+            <Route path="/org/:slug/:pageSlug" element={<PublicOrganizationPage />} />
+
+            {/* ── Account / profile ───────────────────────────────────────── */}
+            <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
+            <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
 
+            {/* ── Organization list ───────────────────────────────────────── */}
+            <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
+
+            {/* ── Organization pages — all wrapped in OrgLayout ───────────── */}
+            {/*    OrgLayout renders: org header + left nav + <Outlet />       */}
+            {/*    Child routes render inside the Outlet (nav stays visible)   */}
+            <Route
+              path="/organizations/:organizationId"
+              element={session ? <OrgLayout /> : <Navigate to="/login" replace />}
+            >
+              {/* Overview / home tab */}
+              <Route index element={<OrganizationDashboard />} />
+
+              {/* Dashboard sub-sections (handled by OrganizationDashboard reading the path) */}
+              <Route path="photos"    element={<OrganizationDashboard />} />
+              <Route path="approvals" element={<OrganizationDashboard />} />
+              <Route path="analytics" element={<OrganizationDashboard />} />
+              <Route path="settings"  element={<OrganizationDashboard />} />
+              <Route path="invite"    element={<OrganizationDashboard />} />
+
+              {/* Workspace */}
+              <Route path="events" element={<EventList />} />
+              <Route path="events/:eventId" element={<EventDetails />} />
+              <Route path="announcements" element={<AnnouncementFeed />} />
+              <Route path="members" element={<MemberDirectory />} />
+              <Route path="chat" element={<OrgChat />} />
+              <Route path="documents" element={<DocumentLibrary />} />
+
+              {/* Tools */}
+              <Route path="polls" element={<PollsList />} />
+              <Route path="signup-forms" element={<SignupFormsList />} />
+              <Route path="surveys" element={<SurveysList />} />
+              <Route path="programs" element={<OrgPrograms />} />
+              <Route path="scheduling" element={<SchedulingPolls />} />
+              <Route path="groups" element={<GroupsList />} />
+              <Route path="groups/:groupId" element={<GroupDetail />} />
+
+              {/* Admin */}
+              <Route path="inbox" element={<AdminInbox />} />
+              <Route path="page-editor" element={<OrgPageEditor />} />
+              <Route path="billing" element={<BillingPage />} />
+
+              {/* Platform */}
+              <Route path="community-board" element={<CommunityBoard />} />
+            </Route>
+
+            {/* ── 404 ─────────────────────────────────────────────────────── */}
             <Route
               path="*"
               element={
@@ -168,12 +205,8 @@ return (
             />
 
           </Routes>
-          {!window.location.pathname.startsWith('/org/') &&
-           !window.location.pathname.startsWith('/home') &&
-           window.location.pathname !== '/about' &&
-           window.location.pathname !== '/onboarding' &&
-           window.location.pathname !== '/welcome' &&
-           <Footer />}
+
+          {!hideChrome && <Footer />}
         </div>
       </Router>
     </ThemeProvider>
