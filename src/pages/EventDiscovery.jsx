@@ -257,6 +257,7 @@ export default function EventDiscovery() {
       var offset = (page - 1) * PAGE_SIZE;
       var res = await supabase.rpc('get_public_events', {
         search_keyword: debouncedKeyword || null,
+        filter_tags: (filters.tags || []).length > 0 ? filters.tags : null,
         filter_event_types: filters.eventTypes.length > 0 ? filters.eventTypes : null,
         filter_audience: filters.audience.length > 0 ? filters.audience : null,
         filter_languages: filters.languages.length > 0 ? filters.languages : null,
@@ -291,36 +292,49 @@ export default function EventDiscovery() {
     }
   }, [viewMode, page, debouncedKeyword, filters, sortBy, lang]);
 
-  var fetchPrograms = useCallback(async function() {
-    if (viewMode !== 'programs') return;
-    setProgramsLoading(true);
-    setProgramsError(null);
-    try {
-      var offset = (programsPage - 1) * PAGE_SIZE;
-      var res = await supabase.rpc('get_public_programs', {
-        search_keyword: debouncedKeyword || null,
-        filter_status: programStatus || null,
-        filter_audience: filters.audience.length > 0 ? filters.audience[0] : null,
-        filter_org_type: filters.orgType || null,
-        filter_state: filters.state || null,
-        filter_city: filters.city || null,
-        filter_zip: filters.zip || null,
-        page_limit: PAGE_SIZE,
-        page_offset: offset,
+var fetchPrograms = useCallback(async function() {
+  if (viewMode !== 'programs') return;
+  setProgramsLoading(true);
+  setProgramsError(null);
+  try {
+    var offset = (programsPage - 1) * PAGE_SIZE;
+    var query = supabase
+      .from('org_programs')
+      .select('*, organizations!inner(id, name, slug, logo_url, type, city, state, county, is_public)')
+      .eq('is_public', true)
+      .eq('publish_to_discovery', true)
+      .eq('organizations.is_public', true)
+      .range(offset, offset + PAGE_SIZE - 1)
+      .order('created_at', { ascending: false });
+
+    if (programStatus) query = query.eq('status', programStatus);
+    if (filters.state) query = query.ilike('organizations.state', filters.state);
+    if (filters.city) query = query.ilike('organizations.city', '%' + filters.city + '%');
+    if (debouncedKeyword) query = query.or('name.ilike.%' + debouncedKeyword + '%,description.ilike.%' + debouncedKeyword + '%');
+
+    var res = await query;
+    if (res.error) throw res.error;
+    var safeData = (res.data || []).filter(function(p) { return p && p.id; }).map(function(p) {
+      return Object.assign({}, p, {
+        org_name: p.organizations ? p.organizations.name : '',
+        org_slug: p.organizations ? p.organizations.slug : '',
+        org_logo_url: p.organizations ? p.organizations.logo_url : null,
+        org_type: p.organizations ? p.organizations.type : '',
+        org_city: p.organizations ? p.organizations.city : '',
+        org_state: p.organizations ? p.organizations.state : '',
+        org_county: p.organizations ? p.organizations.county : '',
       });
-      if (res.error) throw res.error;
-      // Filter out any malformed rows before rendering
-      var safeData = (res.data || []).filter(function(p) { return p && p.id; });
-      setPrograms(safeData);
-      setProgramsTotalCount(safeData.length === PAGE_SIZE ? programsPage * PAGE_SIZE + 1 : offset + safeData.length);
-    } catch (err) {
-      console.error('Program discovery fetch error:', err);
-      setProgramsError(err.message || 'Failed to load programs');
-      toast.error('Failed to load programs');
-    } finally {
-      setProgramsLoading(false);
-    }
-  }, [viewMode, programsPage, debouncedKeyword, filters, programStatus]);
+    });
+    setPrograms(safeData);
+    setProgramsTotalCount(safeData.length === PAGE_SIZE ? programsPage * PAGE_SIZE + 1 : offset + safeData.length);
+  } catch (err) {
+    console.error('Program discovery fetch error:', err);
+    setProgramsError(err.message || 'Failed to load programs');
+    toast.error('Failed to load programs');
+  } finally {
+    setProgramsLoading(false);
+  }
+}, [viewMode, programsPage, debouncedKeyword, filters, programStatus]);
 
   useEffect(function() { fetchEvents(); }, [fetchEvents]);
   useEffect(function() { fetchPrograms(); }, [fetchPrograms]);
