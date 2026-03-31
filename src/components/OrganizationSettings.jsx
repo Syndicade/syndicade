@@ -89,7 +89,6 @@ function SettingsSkeleton() {
   );
 }
 
-/* ── Keyword / Tag Input ── */
 function KeywordInput({ keywords, onChange, placeholder, ariaLabel }) {
   var [input, setInput] = useState('');
   function add() {
@@ -391,6 +390,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var [loading, setLoading] = useState(true);
   var [saving, setSaving] = useState(false);
   var [activeTab, setActiveTab] = useState('basic');
+  var [deleteConfirmText, setDeleteConfirmText] = useState('');
+  var [deleting, setDeleting] = useState(false);
 
   var [form, setForm] = useState({
     name: '', description: '', type: 'community',
@@ -403,11 +404,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     mailing_same: true,
     mailing_address: '', mailing_city: '', mailing_state: '', mailing_zip: '',
     service_categories: [], languages: [], keywords: [],
-    /* ── Discovery blurb ── */
     discovery_about: '',
-    /* ── Search tags (separate from general keywords) ── */
     search_tags: [],
-    /* ── Donations ── */
     enable_donations: false,
     donation_suggested_amount: '',
     donation_external_link: '',
@@ -423,6 +421,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     { id: 'discover',     label: 'Discover Orgs'     },
     { id: 'donations',    label: 'Donations'         },
     { id: 'verification', label: 'Verification'      },
+    { id: 'danger',       label: 'Danger Zone'       },
   ];
 
   useEffect(function(){ fetchOrganization(); }, [organizationId]);
@@ -524,6 +523,30 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     }
   }
 
+  async function handleDeleteOrg() {
+    if (deleteConfirmText !== 'DELETE') return;
+    if (!window.confirm('Are you absolutely sure? This will permanently delete ' + organization.name + ' and all its data.')) return;
+    setDeleting(true);
+    try {
+      var tables = [
+        'memberships', 'events', 'announcements', 'chat_channels',
+        'documents', 'polls', 'surveys', 'org_programs',
+        'org_site_config', 'org_followers', 'signup_forms',
+        'org_photos', 'notifications',
+      ];
+      for (var i = 0; i < tables.length; i++) {
+        await supabase.from(tables[i]).delete().eq('organization_id', organizationId);
+      }
+      var delRes = await supabase.from('organizations').delete().eq('id', organizationId);
+      if (delRes.error) throw delRes.error;
+      toast.success('Organization deleted.');
+      window.location.href = '/dashboard';
+    } catch(err) {
+      toast.error('Delete failed: ' + err.message);
+      setDeleting(false);
+    }
+  }
+
   if (loading) return <SettingsSkeleton/>;
 
   if (!organization) {
@@ -560,9 +583,14 @@ function OrganizationSettings({ organizationId, onUpdate }) {
           <nav className="flex gap-1 overflow-x-auto" aria-label="Settings tabs" style={{ scrollbarWidth: 'thin' }}>
             {tabs.map(function(tab){
               var active = activeTab === tab.id;
+              var isDanger = tab.id === 'danger';
               return (
                 <button key={tab.id} type="button" onClick={function(){ setActiveTab(tab.id); }}
-                  className={'py-3 px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-t-lg '+(active?'border-blue-500 text-blue-600':'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')}
+                  className={'py-3 px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-t-lg ' + (
+                    isDanger
+                      ? (active ? 'border-red-500 text-red-600' : 'border-transparent text-red-400 hover:text-red-600 hover:border-red-300')
+                      : (active ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')
+                  )}
                   aria-current={active?'page':undefined}>
                   {tab.label}
                 </button>
@@ -574,7 +602,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         <form onSubmit={handleSubmit} noValidate>
           <div className="px-6 py-6">
 
-            {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && (
+            {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && activeTab !== 'danger' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-2 mb-6">
                 <Icon path={['M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101','M14.828 14.828a4 4 0 015.656 0l4-4a4 4 0 01-5.656-5.656l-1.1 1.1']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
                 <p className="text-sm text-blue-800">
@@ -742,8 +770,6 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   <h3 id="discover-heading" className="text-lg font-bold text-gray-900">Discover Orgs Page</h3>
                   <p className="text-gray-500 text-sm mt-0.5">Control how your organization appears in public search results.</p>
                 </div>
-
-                {/* Public listing toggle */}
                 <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.is_public?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">List on Discover Orgs page</p>
@@ -751,77 +777,34 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   </div>
                   <Toggle checked={form.is_public} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{is_public:!prev.is_public}); }); }} id="discovery-toggle" label={form.is_public?'Remove from Discover Orgs':'List on Discover Orgs'}/>
                 </div>
-
                 {form.is_public && (
                   <div className="space-y-8">
-
-                    {/* ── Discovery Blurb ── */}
                     <div>
-                      <label htmlFor="discovery-about" className={labelCls}>
-                        Discovery Blurb
-                      </label>
-                      <p className="text-xs text-gray-500 mb-2">
-                        Shown on org cards in the Discover page. Keep it to 1–2 sentences — punchy and specific beats generic every time.
-                      </p>
-                      <textarea
-                        id="discovery-about"
-                        value={form.discovery_about}
-                        onChange={function(e){ setForm(function(p){ return Object.assign({},p,{discovery_about:e.target.value}); }); }}
-                        maxLength={280}
-                        rows={3}
-                        placeholder="e.g. We connect local volunteers with food-insecure families across Lucas County. Our programs run year-round and are always free to participate."
-                        className={inputCls + ' resize-none'}
-                        aria-describedby="discovery-about-count"
-                      />
-                      <p id="discovery-about-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">
-                        {form.discovery_about.length} / 280
-                      </p>
+                      <label htmlFor="discovery-about" className={labelCls}>Discovery Blurb</label>
+                      <p className="text-xs text-gray-500 mb-2">Shown on org cards in the Discover page. Keep it to 1–2 sentences.</p>
+                      <textarea id="discovery-about" value={form.discovery_about} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{discovery_about:e.target.value}); }); }} maxLength={280} rows={3} placeholder="e.g. We connect local volunteers with food-insecure families across Lucas County." className={inputCls + ' resize-none'} aria-describedby="discovery-about-count"/>
+                      <p id="discovery-about-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.discovery_about.length} / 280</p>
                     </div>
-
-                    {/* ── Service Categories ── */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Service Categories <span className="text-xs font-normal text-gray-400">({form.service_categories.length}/6 selected)</span></p>
-                      <p className="text-xs text-gray-500 mb-3">Select up to 6 that apply. These appear as filter tags on the Discover page.</p>
+                      <p className="text-xs text-gray-500 mb-3">Select up to 6 that apply.</p>
                       <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{service_categories:val}); }); }} legend="Service categories" max={6}/>
                     </div>
-
-                    {/* ── Languages Served ── */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Languages Served</p>
                       <p className="text-xs text-gray-500 mb-3">Which languages does your organization serve?</p>
                       <ChecklistGroup options={LANGUAGES} selected={form.languages} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{languages:val}); }); }} legend="Languages served"/>
                     </div>
-
-                    {/* ── Search Tags ── */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Search Tags</p>
-                      <p className="text-xs text-gray-500 mb-3">
-                        Short tags that describe your org — shown as pills on your card and used for keyword search.
-                        Examples: <span className="font-medium">veterans</span>, <span className="font-medium">food pantry</span>, <span className="font-medium">after school</span>.
-                      </p>
-                      <KeywordInput
-                        keywords={form.search_tags}
-                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{search_tags:val}); }); }}
-                        placeholder="e.g. food pantry, after school, veteran support"
-                        ariaLabel="Search tags"
-                      />
+                      <p className="text-xs text-gray-500 mb-3">Short tags shown on your card and used for keyword search.</p>
+                      <KeywordInput keywords={form.search_tags} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{search_tags:val}); }); }} placeholder="e.g. food pantry, after school, veteran support" ariaLabel="Search tags"/>
                     </div>
-
-                    {/* ── Additional Keywords ── */}
                     <div>
                       <p className="text-sm font-bold text-gray-900 mb-1">Additional Search Keywords</p>
-                      <p className="text-xs text-gray-500 mb-3">
-                        Words people might type that aren't captured by your categories or tags above.
-                        These are used for search matching only — not displayed on your card.
-                      </p>
-                      <KeywordInput
-                        keywords={form.keywords}
-                        onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }}
-                        placeholder="e.g. Toledo, northwest Ohio, nonprofit"
-                        ariaLabel="Additional search keywords"
-                      />
+                      <p className="text-xs text-gray-500 mb-3">Used for search matching only — not displayed on your card.</p>
+                      <KeywordInput keywords={form.keywords} onChange={function(val){ setForm(function(prev){ return Object.assign({},prev,{keywords:val}); }); }} placeholder="e.g. Toledo, northwest Ohio, nonprofit" ariaLabel="Additional search keywords"/>
                     </div>
-
                   </div>
                 )}
               </section>
@@ -857,12 +840,10 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                         <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none" aria-hidden="true">$</span>
                         <input id="donation-amount" type="number" min="1" step="1" value={form.donation_suggested_amount} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_suggested_amount:e.target.value}); }); }} placeholder="25" className={inputCls+' pl-7'}/>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">This amount will be pre-highlighted in the donation picker.</p>
                     </div>
                     <div>
                       <label htmlFor="donation-external" className={labelCls}>External Donation Link (optional)</label>
                       <input id="donation-external" type="url" value={form.donation_external_link} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{donation_external_link:e.target.value}); }); }} placeholder="https://paypal.me/yourorg" className={inputCls}/>
-                      <p className="text-xs text-gray-400 mt-1">PayPal, Venmo, GoFundMe, or any other donation link.</p>
                     </div>
                   </div>
                 )}
@@ -876,8 +857,51 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
-            {/* Save button */}
-            {activeTab !== 'roles' && (
+            {/* ── DANGER ZONE ── */}
+            {activeTab === 'danger' && (
+              <section aria-labelledby="danger-heading" className="space-y-6">
+                <div>
+                  <h3 id="danger-heading" className="text-lg font-bold text-gray-900">Danger Zone</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">Irreversible actions. Proceed with caution.</p>
+                </div>
+                <div className="border-2 border-red-200 rounded-xl p-6 space-y-5">
+                  <div>
+                    <h4 className="text-base font-bold text-red-700">Delete Organization</h4>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Permanently deletes <strong>{organization.name}</strong> and all associated data — members, events, announcements, documents, polls, surveys, and sign-up forms. This cannot be undone.
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="delete-confirm" className="block text-sm font-semibold text-gray-900 mb-2">
+                      Type <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-red-700">DELETE</span> to confirm
+                    </label>
+                    <input
+                      id="delete-confirm"
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={function(e) { setDeleteConfirmText(e.target.value); }}
+                      placeholder="DELETE"
+                      className="w-full max-w-xs px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm bg-white text-gray-900"
+                      aria-describedby="delete-confirm-hint"
+                    />
+                    <p id="delete-confirm-hint" className="text-xs text-gray-400 mt-1">This action is permanent and cannot be reversed.</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={deleteConfirmText !== 'DELETE' || deleting}
+                    onClick={handleDeleteOrg}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
+                    aria-label="Delete organization permanently"
+                  >
+                    <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4"/>
+                    {deleting ? 'Deleting...' : 'Delete Organization'}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {/* Save button — hidden on roles, membership save handled internally, hidden on danger */}
+            {activeTab !== 'roles' && activeTab !== 'danger' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
