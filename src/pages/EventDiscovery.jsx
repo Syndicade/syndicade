@@ -247,7 +247,11 @@ export default function EventDiscovery() {
     return function() { clearTimeout(timer); };
   }, [keyword]);
 
-  useEffect(function() { setPage(1); setProgramsPage(1); }, [debouncedKeyword, filters, sortBy, programStatus, viewMode]);
+  useEffect(function() {
+  setPage(1);
+  setProgramsPage(1);
+  if (viewMode === 'programs') setProgramsLoading(true);
+}, [debouncedKeyword, filters, sortBy, programStatus, viewMode]);
 
   var fetchEvents = useCallback(async function() {
     if (viewMode !== 'events') return;
@@ -281,7 +285,17 @@ export default function EventDiscovery() {
         page_offset: offset,
       });
       if (res.error) throw res.error;
-      setEvents(res.data || []);
+      var sorted = (res.data || []).slice().sort(function(a, b) {
+        if (a.is_featured && !b.is_featured) return -1;
+        if (!a.is_featured && b.is_featured) return 1;
+        return 0;
+      });
+      var withDemo = sorted.map(function(e) {
+        return Object.assign({}, e, {
+          is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001'
+        });
+      });
+      setEvents(withDemo);
       setTotalCount(res.data && res.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (res.data ? res.data.length : 0));
     } catch (err) {
       console.error('Event discovery fetch error:', err);
@@ -298,19 +312,19 @@ var fetchPrograms = useCallback(async function() {
   setProgramsError(null);
   try {
     var offset = (programsPage - 1) * PAGE_SIZE;
-    var query = supabase
+var query = supabase
       .from('org_programs')
       .select('*, organizations!inner(id, name, slug, logo_url, type, city, state, county, is_public)')
       .eq('is_public', true)
       .eq('publish_to_discovery', true)
-      .eq('organizations.is_public', true)
-      .range(offset, offset + PAGE_SIZE - 1)
-      .order('created_at', { ascending: false });
+      .eq('organizations.is_public', true);
 
     if (programStatus) query = query.eq('status', programStatus);
     if (filters.state) query = query.ilike('organizations.state', filters.state);
     if (filters.city) query = query.ilike('organizations.city', '%' + filters.city + '%');
     if (debouncedKeyword) query = query.or('name.ilike.%' + debouncedKeyword + '%,description.ilike.%' + debouncedKeyword + '%');
+
+    query = query.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
 
     var res = await query;
     if (res.error) throw res.error;
@@ -325,6 +339,7 @@ var fetchPrograms = useCallback(async function() {
         org_county: p.organizations ? p.organizations.county : '',
       });
     });
+    console.log('safeData count:', safeData.length, safeData[0]);
     setPrograms(safeData);
     setProgramsTotalCount(safeData.length === PAGE_SIZE ? programsPage * PAGE_SIZE + 1 : offset + safeData.length);
   } catch (err) {
@@ -613,6 +628,7 @@ var fetchPrograms = useCallback(async function() {
               )}
 
               {/* Empty — programs */}
+              {console.log('render check:', { isLoading: isLoading, currentError: currentError, viewMode: viewMode, programsCount: programs.length })}
               {!isLoading && !currentError && viewMode === 'programs' && programs.length === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
                   <span style={{ color: textMuted, marginBottom: '16px' }}><ProgramsEmptyIcon /></span>
@@ -624,46 +640,71 @@ var fetchPrograms = useCallback(async function() {
                 </div>
               )}
 
-              {/* Events grid */}
-              {!isLoading && !currentError && viewMode === 'events' && events.length > 0 && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {events.map(function(event) {
-                      return (
-                        <EventDiscoveryCard
-                          key={event.id}
-                          event={event}
-                          lang={lang}
-                          session={session}
-                          initialSaved={savedEvents.has(event.id)}
-                          onRSVP={handleGuestRSVP}
-                          adminOrgs={adminOrgs}
-                        />
-                      );
-                    })}
-                  </div>
-                  <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
-                    Featured events are promoted by their organizations for 7 days.
-                  </p>
-                </>
-              )}
+{/* Events grid */}
+{!isLoading && !currentError && viewMode === 'events' && events.length > 0 && (
+  <>
+    {/* Featured — each gets its own full-width row */}
+    {events.filter(function(e) { return e.is_featured; }).length > 0 && (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
+        {events.filter(function(e) { return e.is_featured; }).map(function(event) {
+          return (
+            <EventDiscoveryCard
+              key={event.id}
+              event={event}
+              lang={lang}
+              session={session}
+              initialSaved={savedEvents.has(event.id)}
+              onRSVP={handleGuestRSVP}
+              adminOrgs={adminOrgs}
+            />
+          );
+        })}
+      </div>
+    )}
 
-              {/* Programs grid */}
-              {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {programs.filter(function(p) { return p && p.id; }).map(function(program) {
-                    return (
-                      <ProgramDiscoveryCard
-                        key={program.id}
-                        program={program}
-                        session={session}
-                        isDark={isDark}
-                        initialSaved={savedPrograms.has(program.id)}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+    {/* Non-featured — 2-column grid */}
+    {events.filter(function(e) { return !e.is_featured; }).length > 0 && (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {events.filter(function(e) { return !e.is_featured; }).map(function(event) {
+          return (
+            <EventDiscoveryCard
+              key={event.id}
+              event={event}
+              lang={lang}
+              session={session}
+              initialSaved={savedEvents.has(event.id)}
+              onRSVP={handleGuestRSVP}
+              adminOrgs={adminOrgs}
+            />
+          );
+        })}
+      </div>
+    )}
+
+    <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
+      Featured events are promoted by their organizations for 7 days.
+    </p>
+  </>
+)}
+
+{/* Programs grid */}
+{!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {programs.filter(function(p) { return p && p.id; }).map(function(program) {
+      return (
+        <ProgramDiscoveryCard
+          key={program.id}
+          program={program}
+          session={session}
+          isDark={isDark}
+          initialSaved={savedPrograms.has(program.id)}
+        />
+      );
+    })}
+  </div>
+)}
+
+{/* Pagination */}
 
               {/* Pagination */}
               {!isLoading && !currentError && totalPages > 1 && (

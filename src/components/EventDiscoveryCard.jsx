@@ -5,6 +5,7 @@ import { et } from '../lib/eventDiscoveryTranslations';
 import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
+import DemoBadge from '../components/DemoBadge';
 
 var EVENT_TYPE_COLORS = {
   'advocacy-event':        { bg: '#3B1A1A', color: '#F87171' },
@@ -287,11 +288,12 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                   >
                     {event.org_name}
                   </Link>
-                  {isFeatured && (
+{isFeatured && (
                     <span style={{ marginLeft: 'auto', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#F5B731', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>
                       Featured
                     </span>
                   )}
+                  {event.is_demo && <DemoBadge size="sm" />}
                 </div>
               )}
             </div>

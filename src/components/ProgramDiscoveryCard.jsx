@@ -1,6 +1,7 @@
  import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import DemoBadge from './DemoBadge';
 
 function Icon({ path, className, strokeWidth }) {
   return (
@@ -113,10 +114,10 @@ export default function ProgramDiscoveryCard({ program, session, isDark, initial
                 <span style={{ color: '#60A5FA', fontWeight: 800, fontSize: '10px' }}>{orgInitials}</span>
               </div>
             )}
-            <span style={{ fontSize: '12px', color: textMuted, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+<span style={{ fontSize: '12px', color: textMuted, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {program.org_name || 'Unknown Organization'}
             </span>
-
+            
             {/* Save button */}
             <button
               onClick={handleSave}
