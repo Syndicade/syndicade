@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
+import { Mail } from 'lucide-react';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -35,6 +36,7 @@ var ICONS = {
   billing:    ['M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'],
   x:          'M6 18L18 6M6 6l12 12',
   menu:       'M4 6h16M4 12h16M4 18h16',
+ email: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
 };
 
 // ── Nav groups ────────────────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
         { id:'inbox',     label:'Inbox',        iconKey:'inbox',     route:'inbox',     path: base + '/inbox',     badge: unreadCount },
         { id:'analytics', label:'Analytics',    iconKey:'analytics', route:'analytics', path: base + '/analytics' },
         { id:'publicpage',label:'Public Page',  iconKey:'pencil',    route:'page-editor',path: base + '/page-editor' },
+        { id:'email-blasts', label:'Email Blasts', iconKey:'email', route:'email-blasts', path: base + '/email-blasts', adminOnly: true },
       ]
     },
     {

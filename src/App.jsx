@@ -17,6 +17,7 @@ import EventList from './pages/EventList';
 import EventDetails from './pages/EventDetails';
 import EventCalendar from './pages/EventCalendar';
 import AnnouncementFeed from './pages/AnnouncementFeed';
+import EmailBlasts from './pages/EmailBlasts';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrgLayout from './pages/OrgLayout';
@@ -166,6 +167,7 @@ function App() {
               <Route path="events" element={<EventList />} />
               <Route path="events/:eventId" element={<EventDetails />} />
               <Route path="announcements" element={<AnnouncementFeed />} />
+              <Route path="email-blasts" element={<EmailBlasts />} />
               <Route path="members" element={<MemberDirectory />} />
               <Route path="chat" element={<OrgChat />} />
               <Route path="documents" element={<DocumentLibrary />} />
