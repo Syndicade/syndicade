@@ -11,6 +11,8 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import CommunityBoard from '../pages/CommunityBoard';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
+import CreatePoll from '../components/CreatePoll';
+import CreateSignupForm from '../components/CreateSignupForm';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -29,6 +31,7 @@ var ICONS = {
   calendar:   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
   megaphone:  ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
   members:    'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+  groups:     ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'],
   chat:       ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
   folder:     'M3 7a2 2 0 012-2h3.586a1 1 0 01.707.293L10.414 6.5A1 1 0 0011.121 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
   photo:      ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
@@ -159,6 +162,9 @@ function OrganizationDashboard() {
   // Modals
   var [showCreateEvent, setShowCreateEvent] = useState(false);
   var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  var [showCreatePoll, setShowCreatePoll] = useState(false);
+  var [showCreateSignupForm, setShowCreateSignupForm] = useState(false);
+var [showInviteModal, setShowInviteModal] = useState(false);
 
   // Approvals
   var [pendingApprovals, setPendingApprovals] = useState([]);
@@ -219,7 +225,7 @@ function OrganizationDashboard() {
       if (!authResult.data.user) { navigate('/login'); return; }
       setCurrentUserId(authResult.data.user.id);
 
-      var orgResult = await supabase.from('organizations').select('*').eq('id', organizationId).single();
+      var orgResult = await supabase.from('organizations').select('id,name,type,logo_url,description,is_verified_nonprofit').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
       setOrganization(orgResult.data);
 
@@ -882,6 +888,7 @@ function OrganizationDashboard() {
         { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'] },
         { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'] },
         { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'] },
+        { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
         { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
         { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
         { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
@@ -1190,10 +1197,10 @@ function OrganizationDashboard() {
               {[
                 { label:'Create Event',        color:'#3B82F6', dot:'#3B82F6', bg:'rgba(59,130,246,0.08)', borderClr:'rgba(59,130,246,0.2)', action: function() { setEditingEvent(null); setShowCreateEvent(true); } },
                 { label:'Create Announcement', color:textSecondary, dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreateAnnouncement(true); } },
-                { label:'Create Poll',          color:textSecondary, dot:'#A78BFA', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { navigate('/organizations/'+organizationId+'/polls'); } },
-                { label:'Create Sign-Up Form',  color:textSecondary, dot:'#818CF8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { navigate('/organizations/'+organizationId+'/signup-forms'); } },
-                { label:'Invite Members',  color:textSecondary, dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setActiveTab('invite'); } },
-                { label:'Edit Public Page',color:textSecondary, dot:'#94A3B8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { navigate('/organizations/'+organizationId+'/page-editor'); } },
+                { label:'Create Poll',          color:textSecondary, dot:'#A78BFA', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreatePoll(true); }},
+                { label:'Create Sign-Up Form',  color:textSecondary, dot:'#818CF8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreateSignupForm(true); } },
+                { label:'Invite Members',  color:textSecondary, dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowInviteModal(true); } },
+                { label:'Create Program',  color:textSecondary, dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowProgramModal(true); setEditingProgram(null); setProgramForm({ name:'', description:'', audience:'', schedule:'', how_to_apply:'', contact_name:'', contact_email:'', status:'active', is_public:true }); } },
               ].map(function(qa) {
                 return (
                   <button key={qa.label} onClick={qa.action}
@@ -1419,6 +1426,66 @@ function OrganizationDashboard() {
         organizationName={organization ? organization.name : ''}
       />
 
+      <CreatePoll
+  isOpen={showCreatePoll}
+  onClose={function() { setShowCreatePoll(false); }}
+  onSuccess={function() { setShowCreatePoll(false); }}
+  organizationId={organizationId}
+  organizationName={organization ? organization.name : ''}
+/>
+
+{showCreateSignupForm && (
+  <CreateSignupForm
+    organizationId={organizationId}
+    onClose={function() { setShowCreateSignupForm(false); }}
+    onFormCreated={function() { setShowCreateSignupForm(false); mascotSuccessToast('Sign-up form created!'); }}
+  />
+)}
+
+{showInviteModal && (
+  <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:50 }} role="dialog" aria-modal="true" aria-label="Invite member" onClick={function() { setShowInviteModal(false); }}>
+    <div style={{ width:'100%', maxWidth:'520px' }} onClick={function(e) { e.stopPropagation(); }}>
+      <InviteMember organizationId={organizationId} organizationName={organization ? organization.name : ''} onInviteSent={function() { fetchStats(currentUserId); setShowInviteModal(false); }} />
+    </div>
+  </div>
+)}
+
+{showProgramModal && (
+  <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowProgramModal(false); }}>
+    <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)', width:'100%', maxWidth:'512px', maxHeight:'90vh', overflowY:'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 24px', borderBottom:'1px solid '+borderColor }}>
+        <h2 id="prog-modal-title" style={{ fontSize:'17px', fontWeight:800, color:textPrimary, margin:0 }}>Add Program</h2>
+        <button onClick={function() { setShowProgramModal(false); }} style={{ padding:'6px', borderRadius:'8px', background:'none', border:'none', cursor:'pointer', color:textMuted }} className="focus:outline-none focus:ring-2 focus:ring-gray-500" aria-label="Close modal"><Icon path={ICONS.x} className="h-5 w-5" /></button>
+      </div>
+      <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:'16px' }}>
+        <div>
+          <label htmlFor="dash-prog-name" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Program Name <span style={{ color:'#EF4444' }} aria-hidden="true">*</span></label>
+          <input id="dash-prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{name:e.target.value}); }); }} placeholder="e.g. After School Tutoring" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
+        </div>
+        <div>
+          <label htmlFor="dash-prog-desc" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Description</label>
+          <textarea id="dash-prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{description:e.target.value}); }); }} rows={3} placeholder="What does this program do?" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', resize:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label htmlFor="dash-prog-audience" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Who Is It For?</label>
+          <input id="dash-prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{audience:e.target.value}); }); }} placeholder="e.g. Youth ages 6-18" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label htmlFor="dash-prog-status" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Status</label>
+          <select id="dash-prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{status:e.target.value}); }); }} style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none' }} className="focus:ring-2 focus:ring-blue-500">
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:'12px', padding:'16px 24px', borderTop:'1px solid '+borderColor }}>
+        <button onClick={function() { setShowProgramModal(false); }} style={{ flex:1, padding:'10px', border:'1px solid '+borderColor, color:textSecondary, fontSize:'14px', fontWeight:600, borderRadius:'8px', background:'transparent', cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
+        <button onClick={saveProgram} disabled={programSaving} style={{ flex:1, padding:'10px', background:'#3B82F6', color:'#fff', fontSize:'14px', fontWeight:700, borderRadius:'8px', border:'none', cursor:programSaving?'not-allowed':'pointer', opacity:programSaving?0.6:1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">{programSaving ? 'Saving...' : 'Add Program'}</button>
+      </div>
+    </div>
+  </div>
+)}
       {/* Reschedule modal */}
       {showRescheduleModal && rescheduleEvent && (
         <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="reschedule-title">

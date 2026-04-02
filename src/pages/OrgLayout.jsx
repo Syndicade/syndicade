@@ -21,6 +21,7 @@ var ICONS = {
   calendar:   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
   megaphone:  ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
   members:    'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+  groups:     ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'],
   chat:       ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
   folder:     'M3 7a2 2 0 012-2h3.586a1 1 0 01.707.293L10.414 6.5A1 1 0 0011.121 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
   photo:      ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
@@ -52,6 +53,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
         { id:'events',        label:'Events',        iconKey:'calendar',  route:'events',        path: base + '/events' },
         { id:'announcements', label:'Announcements', iconKey:'megaphone', route:'announcements', path: base + '/announcements' },
         { id:'members',       label:'Members',       iconKey:'members',   route:'members',       path: base + '/members' },
+        { id:'groups', label:'Groups', iconKey:'groups', route:'groups', path: base + '/groups' },
         { id:'chat',          label:'Chat',          iconKey:'chat',      route:'chat',          path: base + '/chat' },
         { id:'documents',     label:'Documents',     iconKey:'folder',    route:'documents',     path: base + '/documents' },
         { id:'photos',        label:'Photos',        iconKey:'photo',     route:'photos',        path: base + '/photos' },
@@ -124,7 +126,7 @@ function OrgLayout() {
       if (authResult.error || !authResult.data.user) { navigate('/login'); return; }
       var userId = authResult.data.user.id;
 
-      var orgResult = await supabase.from('organizations').select('id,name,type,logo_url,description').eq('id', organizationId).single();
+      var orgResult = await supabase.from('organizations').select('id,name,type,logo_url,description,is_verified_nonprofit').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
       setOrganization(orgResult.data);
 
@@ -185,7 +187,7 @@ function OrgLayout() {
               <button
                 key={item.id}
                 onClick={function() { setMobileNavOpen(false); navigate(item.path); }}
-                style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px', borderRadius:'7px', fontSize: item.isSub ? '10px' : '11px', fontWeight:600, color:color, background:bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap' }}
+                style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px', borderRadius:'7px', fontSize: item.isSub ? '11px' : '12px', fontWeight:600, color:color, background:bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap' }}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:color }} />
@@ -252,6 +254,14 @@ function OrgLayout() {
                 <span style={{ display:'inline-flex', padding:'2px 8px', borderRadius:'99px', fontSize:'10px', fontWeight:700, background: isAdmin ? (isDark?'rgba(139,92,246,0.15)':'#F5F3FF') : (isDark?'rgba(59,130,246,0.12)':'#EFF6FF'), color: isAdmin ? '#A78BFA' : '#60A5FA' }}>
                   {isAdmin ? 'Admin' : 'Member'}
                 </span>
+                {organization && organization.is_verified_nonprofit && (
+  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', padding:'2px 8px', borderRadius:'99px', fontSize:'10px', fontWeight:700, background:'rgba(34,197,94,0.15)', color:'#22C55E', border:'1px solid rgba(34,197,94,0.3)' }}>
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width:'10px', height:'10px', flexShrink:0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+    </svg>
+    Verified
+  </span>
+)}
               </div>
             </div>
             {membership && membership.role === 'admin' && (
@@ -283,7 +293,7 @@ function OrgLayout() {
 
             {/* LEFT NAV (desktop) */}
             <aside
-              style={{ width:'200px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
+              style={{ width:'240px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
               aria-label="Organization navigation"
               role="navigation"
             >
