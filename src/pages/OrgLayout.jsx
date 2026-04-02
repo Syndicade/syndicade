@@ -231,8 +231,8 @@ function OrgLayout() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>
-      <div style={{ padding:'20px 16px' }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto' }}>
+<div style={{ padding:'20px 8px' }}>
+  <div style={{ maxWidth:'1600px', margin:'0 auto' }}>
 
           {/* Org header */}
           <div style={{ background:sectionBg, borderRadius:'12px', padding:'12px 18px', marginBottom:'12px', border:'1px solid '+borderColor, display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
@@ -279,11 +279,11 @@ function OrgLayout() {
           </div>
 
           {/* Main layout: nav + content */}
-          <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
+          <div style={{ display:'flex', gap:'16px', alignItems:'flex-start' }}>
 
             {/* LEFT NAV (desktop) */}
             <aside
-              style={{ width:'160px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
+              style={{ width:'200px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
               aria-label="Organization navigation"
               role="navigation"
             >

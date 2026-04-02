@@ -134,6 +134,12 @@ export default function OrgCard({ org, lang = 'en', session, initialFollowed = f
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '14px', fontWeight: 700, color: nameTxt, lineHeight: 1.3, wordBreak: 'break-word' }}>{displayName}</h2>
               {(org.is_demo || (org.id && org.id.startsWith('a0000000-0000-0000-0000-00000000000'))) && <DemoBadge size="sm" />}
+{org.is_verified_nonprofit && (
+  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', fontSize:'10px', fontWeight:700, color:'#22C55E', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', borderRadius:'99px', padding:'2px 7px', flexShrink:0 }} aria-label="Verified nonprofit">
+    <svg xmlns="http://www.w3.org/2000/svg" style={{width:'9px',height:'9px'}} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+    Verified
+  </span>
+)}
               {active && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '99px', padding: '2px 7px', flexShrink: 0 }} aria-label="Recently active">
                   <Zap size={9} aria-hidden="true" />Active

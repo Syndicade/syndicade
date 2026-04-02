@@ -294,6 +294,12 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                     </span>
                   )}
                   {event.is_demo && <DemoBadge size="sm" />}
+{event.org_is_verified_nonprofit && (
+  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', fontSize:'10px', fontWeight:700, color:'#22C55E', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', borderRadius:'99px', padding:'2px 7px', flexShrink:0 }} aria-label="Verified nonprofit">
+    <svg xmlns="http://www.w3.org/2000/svg" style={{width:'9px',height:'9px'}} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+    Verified
+  </span>
+)}
                 </div>
               )}
             </div>
