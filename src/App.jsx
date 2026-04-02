@@ -46,6 +46,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import CommunityBoard from './pages/CommunityBoard';
 import PricingPage from './pages/PricingPage';
 import BillingPage from './pages/BillingPage';
+import NotFound from './pages/NotFound';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -67,22 +68,28 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"
-            role="status"
-            aria-label="Loading application"
-          >
-            <span className="sr-only">Loading...</span>
-          </div>
-          <p className="text-gray-600 text-lg">Loading Syndicade...</p>
-        </div>
+if (loading) {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: '#0E1523' }}
+      role="status"
+      aria-label="Loading Syndicade"
+    >
+      <div className="text-center">
+        <img
+          src="/mascot-loading.png"
+          alt=""
+          aria-hidden="true"
+          style={{ width: '180px', display: 'block', margin: '0 auto 16px' }}
+        />
+        <p style={{ color: '#64748B', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>
+          Loading Syndicade...
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Paths where the global Header and Footer should be hidden
   const hideChrome = (
@@ -190,21 +197,8 @@ function App() {
               <Route path="community-board" element={<CommunityBoard />} />
             </Route>
 
-            {/* ── 404 ─────────────────────────────────────────────────────── */}
-            <Route
-              path="*"
-              element={
-                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                  <div className="text-center">
-                    <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
-                    <p className="text-xl text-gray-600 mb-6">Page not found</p>
-                    <a href="/" className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 inline-block">
-                      Go Home
-                    </a>
-                  </div>
-                </div>
-              }
-            />
+{/* ── 404 ─────────────────────────────────────────────────────── */}
+<Route path="*" element={<NotFound />} />
 
           </Routes>
 

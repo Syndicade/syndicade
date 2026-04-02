@@ -12,11 +12,12 @@ export function mascotSuccessToast(message, subtext) {
         transition: 'opacity 0.2s',
         boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
       }}>
-<img
-  src="/mascot-pair.png"
-  alt=""
-  style={{ width: '64px', height: '64px', objectFit: 'contain', flexShrink: 0 }}
-/>
+        <img
+          src="/mascot-success.png"
+          alt=""
+          aria-hidden="true"
+          style={{ width: '48px', height: 'auto', objectFit: 'contain', flexShrink: 0 }}
+        />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: '#F5B731', marginBottom: '2px' }}>{message}</div>
           {subtext && <div style={{ fontSize: '12px', color: '#94A3B8' }}>{subtext}</div>}
