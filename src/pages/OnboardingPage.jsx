@@ -159,7 +159,6 @@ var { error: memberInsertError } = await supabase.from('members').insert({
 if (memberInsertError && memberInsertError.code !== '23505') {
   throw memberInsertError;
 }
-console.log('org.id:', org.id, 'user.id:', user.id);
 
 // Auto-add creator as admin
 var { error: membershipError } = await supabase.from('memberships').insert({
