@@ -6,6 +6,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import LegalCenter from './pages/LegalCenter';
 import { Toaster } from 'react-hot-toast';
+import StaffDashboard from './pages/StaffDashboard';
 
 import LandingPage from './pages/LandingPage';
 import AboutPage from './pages/AboutPage';
@@ -119,6 +120,7 @@ if (loading) {
 
             {/* ── Public / auth routes ────────────────────────────────────── */}
             <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
+            <Route path="/staff" element={<StaffDashboard />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
             <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <Signup />} />

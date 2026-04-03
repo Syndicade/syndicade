@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useSiteContentMap } from '../hooks/useSiteContent';
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
 function Icon({ path, size, style }) {
@@ -41,25 +42,25 @@ var ICONS = {
 
 // ─── Feature row data ─────────────────────────────────────────────────────────
 var FEATURE_ROWS = [
-  { label: 'Members',                  starter: '50',       growth: '150',      pro: '300',         icon: 'users' },
-  { label: 'Storage',                  starter: '5 GB',     growth: '15 GB',    pro: '50 GB',       icon: 'storage' },
-  { label: 'Events & calendar',        starter: true,       growth: true,       pro: true,          icon: 'calendar' },
-  { label: 'Announcements',            starter: true,       growth: true,       pro: true,          icon: 'megaphone' },
-  { label: 'Polls & surveys',          starter: true,       growth: true,       pro: true,          icon: 'clipboard' },
-  { label: 'Document library',         starter: true,       growth: true,       pro: true,          icon: 'document' },
-  { label: 'Member directory',         starter: true,       growth: true,       pro: true,          icon: 'users' },
-  { label: 'Sign-up forms',            starter: true,       growth: true,       pro: true,          icon: 'clipboard' },
-  { label: 'RSVP & check-in',          starter: true,       growth: true,       pro: true,          icon: 'check' },
-  { label: 'Recurring events',         starter: true,       growth: true,       pro: true,          icon: 'refresh' },
-  { label: 'Subdomain (orgname.syndicade.com)', starter: true, growth: true,   pro: true,          icon: 'globe' },
-  { label: 'Payment processing (Stripe, 0% fee)', starter: false, growth: true, pro: true,         icon: 'credit' },
-  { label: 'Basic analytics & reports', starter: false,     growth: true,       pro: true,          icon: 'chart' },
-  { label: 'Email notifications',      starter: false,      growth: true,       pro: true,          icon: 'mail' },
-  { label: 'Raffle & event tools',     starter: false,      growth: true,       pro: true,          icon: 'raffle' },
-  { label: 'Custom domain',            starter: false,      growth: false,      pro: true,          icon: 'globe' },
-  { label: 'Remove Syndicade branding', starter: false,     growth: false,      pro: true,          icon: 'tag' },
-  { label: 'Advanced analytics & exports', starter: false,  growth: false,      pro: true,          icon: 'chart' },
-  { label: 'Email marketing blasts',   starter: false,      growth: false,      pro: true,          icon: 'mail' },
+  { label: 'Members',                           starter: '50',   growth: '150',  pro: '300',  icon: 'users' },
+  { label: 'Storage',                           starter: '5 GB', growth: '15 GB',pro: '50 GB',icon: 'storage' },
+  { label: 'Events & calendar',                 starter: true,   growth: true,   pro: true,   icon: 'calendar' },
+  { label: 'Announcements',                     starter: true,   growth: true,   pro: true,   icon: 'megaphone' },
+  { label: 'Polls & surveys',                   starter: true,   growth: true,   pro: true,   icon: 'clipboard' },
+  { label: 'Document library',                  starter: true,   growth: true,   pro: true,   icon: 'document' },
+  { label: 'Member directory',                  starter: true,   growth: true,   pro: true,   icon: 'users' },
+  { label: 'Sign-up forms',                     starter: true,   growth: true,   pro: true,   icon: 'clipboard' },
+  { label: 'RSVP & check-in',                   starter: true,   growth: true,   pro: true,   icon: 'check' },
+  { label: 'Recurring events',                  starter: true,   growth: true,   pro: true,   icon: 'refresh' },
+  { label: 'Subdomain (orgname.syndicade.com)', starter: true,   growth: true,   pro: true,   icon: 'globe' },
+  { label: 'Payment processing (Stripe, 0% fee)', starter: false, growth: true,  pro: true,   icon: 'credit' },
+  { label: 'Basic analytics & reports',         starter: false,  growth: true,   pro: true,   icon: 'chart' },
+  { label: 'Email notifications',               starter: false,  growth: true,   pro: true,   icon: 'mail' },
+  { label: 'Raffle & event tools',              starter: false,  growth: true,   pro: true,   icon: 'raffle' },
+  { label: 'Custom domain',                     starter: false,  growth: false,  pro: true,   icon: 'globe' },
+  { label: 'Remove Syndicade branding',         starter: false,  growth: false,  pro: true,   icon: 'tag' },
+  { label: 'Advanced analytics & exports',      starter: false,  growth: false,  pro: true,   icon: 'chart' },
+  { label: 'Email marketing blasts',            starter: false,  growth: false,  pro: true,   icon: 'mail' },
 ];
 
 var FAQS = [
@@ -89,6 +90,33 @@ export default function PricingPage() {
   var [annual, setAnnual]   = useState(true);
   var [openFaq, setOpenFaq] = useState(null);
 
+  // ── Editable content from Supabase (staff edits via /staff → Content tab) ──
+  var content = useSiteContentMap([
+    'pricing_hero_label',
+    'pricing_hero_headline_main',
+    'pricing_hero_headline_accent',
+    'pricing_hero_subheadline',
+    'pricing_compete_label',
+    'pricing_compete_headline',
+    'pricing_compete_subheadline',
+    'pricing_final_cta_headline',
+    'pricing_final_cta_body',
+    'pricing_final_cta_np_note',
+    'footer_copyright',
+  ], {
+    pricing_hero_label:           'Pricing',
+    pricing_hero_headline_main:   'Funded by communities,',
+    pricing_hero_headline_accent: 'not investors.',
+    pricing_hero_subheadline:     'No ads. No data selling. No cut of your donations. Just a fair price to keep the board running.',
+    pricing_compete_label:        'How we compare',
+    pricing_compete_headline:     'More affordable. More purpose-built.',
+    pricing_compete_subheadline:  'Wild Apricot charges 4\u00d7 more. MemberPlanet takes a cut of every dollar you raise. We don\u2019t.',
+    pricing_final_cta_headline:   'Ready to pin your org\nto the board?',
+    pricing_final_cta_body:       '1 month free. No credit card. Cancel anytime.',
+    pricing_final_cta_np_note:    'Verified 501(c)(3)? You get an extra month free. Submit your EIN at signup.',
+    footer_copyright:             new Date().getFullYear() + ' Syndicade. All rights reserved.',
+  });
+
   // ── Tokens ──────────────────────────────────────────────────────────────────
   var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
   var sectionBg     = isDark ? '#151B2D' : '#FFFFFF';
@@ -99,47 +127,11 @@ export default function PricingPage() {
   var textMuted     = isDark ? '#94A3B8'  : '#64748B';
   var tableAlt      = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
-  // ── Prices based on billing toggle ──────────────────────────────────────────
+  // ── Plans ────────────────────────────────────────────────────────────────────
   var plans = [
-    {
-      key: 'starter',
-      name: 'Starter',
-      monthly: '$14.99',
-      annual: '$12.49',
-      annualTotal: '$149.88',
-      members: '50',
-      storage: '5 GB',
-      tagline: 'Everything a small org needs to get organized and stay connected.',
-      bg: '#FEF9C3', tack: '#D4A017', nameColor: '#92700A',
-      btnBg: '#0E1523', btnColor: '#F5B731',
-      pop: false,
-    },
-    {
-      key: 'growth',
-      name: 'Growth',
-      monthly: '$29',
-      annual: '$24.17',
-      annualTotal: '$290.00',
-      members: '150',
-      storage: '15 GB',
-      tagline: 'For orgs ready to collect payments and track engagement.',
-      bg: '#DBEAFE', tack: '#1D4ED8', nameColor: '#1E40AF',
-      btnBg: '#3B82F6', btnColor: 'white',
-      pop: true,
-    },
-    {
-      key: 'pro',
-      name: 'Pro',
-      monthly: '$59',
-      annual: '$49.17',
-      annualTotal: '$590.00',
-      members: '300',
-      storage: '50 GB',
-      tagline: 'Full control — custom domain, your branding, advanced analytics.',
-      bg: '#DCFCE7', tack: '#16A34A', nameColor: '#166534',
-      btnBg: '#16A34A', btnColor: 'white',
-      pop: false,
-    },
+    { key: 'starter', name: 'Starter', monthly: '$14.99', annual: '$12.49', annualTotal: '$149.88', members: '50',  storage: '5 GB',  tagline: 'Everything a small org needs to get organized and stay connected.',          bg: '#FEF9C3', tack: '#D4A017', nameColor: '#92700A', btnBg: '#0E1523', btnColor: '#F5B731', pop: false },
+    { key: 'growth',  name: 'Growth',  monthly: '$29',    annual: '$24.17', annualTotal: '$290.00', members: '150', storage: '15 GB', tagline: 'For orgs ready to collect payments and track engagement.',                   bg: '#DBEAFE', tack: '#1D4ED8', nameColor: '#1E40AF', btnBg: '#3B82F6', btnColor: 'white',   pop: true  },
+    { key: 'pro',     name: 'Pro',     monthly: '$59',    annual: '$49.17', annualTotal: '$590.00', members: '300', storage: '50 GB', tagline: 'Full control — custom domain, your branding, advanced analytics.',           bg: '#DCFCE7', tack: '#16A34A', nameColor: '#166534', btnBg: '#16A34A', btnColor: 'white',   pop: false },
   ];
 
   function renderCell(val) {
@@ -178,9 +170,7 @@ export default function PricingPage() {
             <Icon path="M15 19l-7-7 7-7" size={16} />
             <span style={{ fontSize: '22px', fontWeight: 800, color: isDark ? '#FFFFFF' : '#0E1523' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
           </Link>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Segmented theme toggle */}
             <div role="group" aria-label="Color theme" style={{ display: 'flex', alignItems: 'center', background: isDark ? '#0E1523' : '#E2E8F0', border: '1px solid ' + borderColor, borderRadius: '99px', padding: '3px', gap: '2px' }}>
               {[{ val: false, icon: ICONS.sun, label: 'Light' }, { val: true, icon: ICONS.moon, label: 'Dark' }].map(function(opt) {
                 var active = isDark === opt.val;
@@ -192,9 +182,7 @@ export default function PricingPage() {
                 );
               })}
             </div>
-            <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}>
-              Log In
-            </button>
+            <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}>Log In</button>
             <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-xl" style={{ fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', cursor: 'pointer', padding: '9px 20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(245,183,49,0.35)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
               Get Started Free
             </button>
@@ -206,15 +194,21 @@ export default function PricingPage() {
 
         {/* ── Hero ─────────────────────────────────────────────────────────── */}
         <section aria-labelledby="pricing-hero-heading" style={{ padding: '64px 24px 48px', background: isDark ? '#0E1523' : '#F8FAFC', borderBottom: '1px solid ' + borderColor, textAlign: 'center' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '14px' }}>Pricing</p>
+          {/* Section label — editable */}
+          <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '14px' }}>
+            {content['pricing_hero_label']}
+          </p>
+          {/* Headline — editable (two lines, second in yellow) */}
           <h1 id="pricing-hero-heading" style={{ fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, color: textPrimary, lineHeight: 1.15, marginBottom: '16px' }}>
-            Funded by communities,<br /><span style={{ color: '#F5B731' }}>not investors.</span>
+            {content['pricing_hero_headline_main']}<br />
+            <span style={{ color: '#F5B731' }}>{content['pricing_hero_headline_accent']}</span>
           </h1>
+          {/* Subheadline — editable */}
           <p style={{ fontSize: '17px', color: textSecondary, maxWidth: '520px', margin: '0 auto 32px', lineHeight: 1.7 }}>
-            No ads. No data selling. No cut of your donations. Just a fair price to keep the board running.
+            {content['pricing_hero_subheadline']}
           </p>
 
-          {/* Billing toggle */}
+          {/* Billing toggle — not editable, pricing-driven */}
           <div role="group" aria-label="Billing period" style={{ display: 'inline-flex', alignItems: 'center', background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '99px', padding: '4px', gap: '2px', marginBottom: '12px' }}>
             {[{ val: false, label: 'Monthly' }, { val: true, label: 'Annual — 2 months free' }].map(function(opt) {
               var active = annual === opt.val;
@@ -229,85 +223,32 @@ export default function PricingPage() {
           <p style={{ fontSize: '12px', color: textMuted }}>1-month free trial on all plans · No credit card required</p>
         </section>
 
-        {/* ── Plan cards — Post-it notes ────────────────────────────────────── */}
+        {/* ── Plan cards ───────────────────────────────────────────────────── */}
         <section aria-labelledby="plans-heading" style={{ padding: '32px 24px 64px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <h2 id="plans-heading" className="sr-only">Pricing plans</h2>
           <div style={{ maxWidth: '960px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '28px' }}>
             {plans.map(function(plan) {
               return (
-                <div
-                  key={plan.key}
-                  style={{
-                    background: plan.bg,
-                    borderRadius: '4px',
-                    padding: '24px',
-                    position: 'relative',
-                    marginTop: '14px',
-                    boxShadow: plan.pop
-                      ? '4px 6px 20px rgba(0,0,0,0.22), 0 2px 4px rgba(0,0,0,0.14)'
-                      : '3px 4px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.10)',
-                    backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, rgba(0,0,0,0.048) 28px)',
-                    backgroundPositionY: '36px',
-                  }}
-                >
-                  {/* Tack */}
+                <div key={plan.key} style={{ background: plan.bg, borderRadius: '4px', padding: '24px', position: 'relative', marginTop: '14px', boxShadow: plan.pop ? '4px 6px 20px rgba(0,0,0,0.22), 0 2px 4px rgba(0,0,0,0.14)' : '3px 4px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.10)', backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, rgba(0,0,0,0.048) 28px)', backgroundPositionY: '36px' }}>
                   <div aria-hidden="true" style={{ width: '15px', height: '15px', borderRadius: '50%', position: 'absolute', top: '-7px', left: '50%', transform: 'translateX(-50%)', background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.55) 0%, ' + plan.tack + ' 52%, rgba(0,0,0,0.25) 100%)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} />
-
-                  {/* Popular badge */}
-                  {plan.pop && (
-                    <div style={{ display: 'inline-block', background: '#3B82F6', color: 'white', fontSize: '9px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      Most Popular
-                    </div>
-                  )}
-
-                  {/* Plan name */}
-                  <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', color: plan.nameColor, marginBottom: '10px' }}>
-                    {plan.name}
-                  </div>
-
-                  {/* Price */}
+                  {plan.pop && <div style={{ display: 'inline-block', background: '#3B82F6', color: 'white', fontSize: '9px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Most Popular</div>}
+                  <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', color: plan.nameColor, marginBottom: '10px' }}>{plan.name}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '44px', fontWeight: 800, color: '#111827', lineHeight: 1, fontFamily: 'Georgia, serif' }}>
-                      {annual ? plan.annual : plan.monthly}
-                    </span>
+                    <span style={{ fontSize: '44px', fontWeight: 800, color: '#111827', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{annual ? plan.annual : plan.monthly}</span>
                     <span style={{ fontSize: '13px', color: '#6B7280' }}>/mo</span>
                   </div>
-
-                  {annual && (
-                    <p style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>
-                      Billed as {plan.annualTotal}/yr
-                    </p>
-                  )}
-
-                  {/* Members + storage */}
+                  {annual && <p style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>Billed as {plan.annualTotal}/yr</p>}
                   <div style={{ display: 'flex', gap: '12px', margin: '12px 0' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: '#374151', background: 'rgba(0,0,0,0.07)', padding: '3px 8px', borderRadius: '4px' }}>
-                      <Icon path={ICONS.users} size={11} style={{ color: '#6B7280' }} />
-                      {plan.members} members
+                      <Icon path={ICONS.users} size={11} style={{ color: '#6B7280' }} />{plan.members} members
                     </span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: '#374151', background: 'rgba(0,0,0,0.07)', padding: '3px 8px', borderRadius: '4px' }}>
-                      <Icon path={ICONS.storage} size={11} style={{ color: '#6B7280' }} />
-                      {plan.storage}
+                      <Icon path={ICONS.storage} size={11} style={{ color: '#6B7280' }} />{plan.storage}
                     </span>
                   </div>
-
-                  {/* Tagline */}
-                  <p style={{ fontSize: '13px', color: '#374151', lineHeight: 1.6, marginBottom: '20px', fontFamily: 'Georgia, serif' }}>
-                    {plan.tagline}
-                  </p>
-
-                  {/* Divider */}
+                  <p style={{ fontSize: '13px', color: '#374151', lineHeight: 1.6, marginBottom: '20px', fontFamily: 'Georgia, serif' }}>{plan.tagline}</p>
                   <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', marginBottom: '16px' }} />
-
-                  {/* CTA */}
-                  <button
-                    onClick={function() { navigate('/login'); }}
-                    className="focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    aria-label={'Start ' + plan.name + ' free trial'}
-                    style={{ width: '100%', padding: '11px', fontSize: '14px', fontWeight: 700, background: plan.btnBg, color: plan.btnColor, border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'opacity 0.15s' }}
-                    onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }}
-                    onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}
-                  >
+                  <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" aria-label={'Start ' + plan.name + ' free trial'} style={{ width: '100%', padding: '11px', fontSize: '14px', fontWeight: 700, background: plan.btnBg, color: plan.btnColor, border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
                     Start Free Trial
                   </button>
                   <p style={{ textAlign: 'center', fontSize: '11px', color: '#9CA3AF', marginTop: '8px' }}>No credit card required</p>
@@ -315,39 +256,26 @@ export default function PricingPage() {
               );
             })}
           </div>
-
-          {/* Annual note */}
-          {annual && (
-            <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '24px' }}>
-              Annual billing = 2 months free (17% off). Switch to monthly anytime.
-            </p>
-          )}
+          {annual && <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '24px' }}>Annual billing = 2 months free (17% off). Switch to monthly anytime.</p>}
         </section>
 
         {/* ── Nonprofit callout ─────────────────────────────────────────────── */}
         <section aria-labelledby="nonprofit-heading" style={{ padding: '48px 24px', background: isDark ? '#0A1020' : '#FEFBF0', borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '24px', background: 'rgba(245,183,49,0.07)', border: '1px solid rgba(245,183,49,0.25)', borderRadius: '16px', padding: '28px 28px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '24px', background: 'rgba(245,183,49,0.07)', border: '1px solid rgba(245,183,49,0.25)', borderRadius: '16px', padding: '28px' }}>
               <div style={{ flexShrink: 0, width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(245,183,49,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F5B731' }}>
                 <Icon path={ICONS.shield} size={22} />
               </div>
               <div style={{ flex: 1, minWidth: '220px' }}>
-                <h2 id="nonprofit-heading" style={{ fontSize: '18px', fontWeight: 800, color: textPrimary, marginBottom: '8px' }}>
-                  Verified nonprofit rate
-                </h2>
+                <h2 id="nonprofit-heading" style={{ fontSize: '18px', fontWeight: 800, color: textPrimary, marginBottom: '8px' }}>Verified nonprofit rate</h2>
                 <p style={{ fontSize: '14px', color: textSecondary, lineHeight: 1.7, marginBottom: '16px' }}>
                   Verified 501(c)(3) organizations get <strong style={{ color: textPrimary }}>1 extra month free</strong> at signup on any plan — stacks with annual billing. That's up to 3 months free before you pay a cent.
                 </p>
                 <p style={{ fontSize: '13px', color: textMuted, marginBottom: '16px' }}>
                   Verified nonprofits also appear on the public discovery board, so local community members can find your events and organization.
                 </p>
-                {/* NP year 1 breakdown */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
-                  {[
-                    { name: 'Starter', year1: '$134.89', period: 'year 1 (annual)' },
-                    { name: 'Growth',  year1: '$261.00', period: 'year 1 (annual)' },
-                    { name: 'Pro',     year1: '$531.00', period: 'year 1 (annual)' },
-                  ].map(function(p) {
+                  {[{ name: 'Starter', year1: '$134.89', period: 'year 1 (annual)' },{ name: 'Growth', year1: '$261.00', period: 'year 1 (annual)' },{ name: 'Pro', year1: '$531.00', period: 'year 1 (annual)' }].map(function(p) {
                     return (
                       <div key={p.name} style={{ background: 'rgba(245,183,49,0.08)', border: '1px solid rgba(245,183,49,0.18)', borderRadius: '10px', padding: '12px 14px' }}>
                         <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#F5B731', marginBottom: '4px' }}>{p.name}</div>
@@ -357,9 +285,7 @@ export default function PricingPage() {
                     );
                   })}
                 </div>
-                <p style={{ fontSize: '12px', color: textMuted, marginTop: '14px' }}>
-                  Submit your EIN or IRS determination letter at signup. Approved within 48 hours. After the free month, full price same as everyone else.
-                </p>
+                <p style={{ fontSize: '12px', color: textMuted, marginTop: '14px' }}>Submit your EIN or IRS determination letter at signup. Approved within 48 hours. After the free month, full price same as everyone else.</p>
               </div>
             </div>
           </div>
@@ -372,7 +298,6 @@ export default function PricingPage() {
               <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>Compare plans</p>
               <h2 id="compare-heading" style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 800, color: textPrimary }}>Everything side by side</h2>
             </div>
-
             <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid ' + borderColor }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px' }} role="table" aria-label="Feature comparison by plan">
                 <thead>
@@ -396,9 +321,7 @@ export default function PricingPage() {
                       <tr key={row.label} style={{ background: i % 2 === 1 ? tableAlt : 'transparent', borderTop: '1px solid ' + borderColor }}>
                         <td style={{ padding: '13px 20px', fontSize: '13px', color: textSecondary }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: textMuted, flexShrink: 0 }}>
-                              <Icon path={ICONS[row.icon] || ICONS.check} size={14} />
-                            </span>
+                            <span style={{ color: textMuted, flexShrink: 0 }}><Icon path={ICONS[row.icon] || ICONS.check} size={14} /></span>
                             {row.label}
                           </div>
                         </td>
@@ -411,17 +334,9 @@ export default function PricingPage() {
                 </tbody>
               </table>
             </div>
-
             <div style={{ textAlign: 'center', marginTop: '28px' }}>
-              <button
-                onClick={function() { navigate('/login'); }}
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s' }}
-                onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
-                onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
-              >
-                Start your free trial
-                <Icon path={ICONS.arrow} size={16} />
+              <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
+                Start your free trial <Icon path={ICONS.arrow} size={16} />
               </button>
             </div>
           </div>
@@ -431,27 +346,23 @@ export default function PricingPage() {
         <section aria-labelledby="compete-heading" style={{ padding: '64px 24px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>How we compare</p>
+              {/* Label — editable */}
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                {content['pricing_compete_label']}
+              </p>
+              {/* Headline — editable */}
               <h2 id="compete-heading" style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 800, color: textPrimary, marginBottom: '12px' }}>
-                More affordable. More purpose-built.
+                {content['pricing_compete_headline']}
               </h2>
+              {/* Subheadline — editable */}
               <p style={{ fontSize: '15px', color: textSecondary }}>
-                Wild Apricot charges 4× more. MemberPlanet takes a cut of every dollar you raise. We don't.
+                {content['pricing_compete_subheadline']}
               </p>
             </div>
-
             <div style={{ borderRadius: '14px', border: '1px solid ' + borderColor, overflow: 'hidden' }}>
               {COMPETITORS.map(function(comp, i) {
                 return (
-                  <div
-                    key={comp.name}
-                    style={{
-                      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px',
-                      padding: '18px 24px',
-                      background: comp.highlight ? (isDark ? 'rgba(245,183,49,0.07)' : 'rgba(245,183,49,0.05)') : (i % 2 === 1 ? tableAlt : 'transparent'),
-                      borderTop: i > 0 ? '1px solid ' + borderColor : 'none',
-                    }}
-                  >
+                  <div key={comp.name} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', padding: '18px 24px', background: comp.highlight ? (isDark ? 'rgba(245,183,49,0.07)' : 'rgba(245,183,49,0.05)') : (i % 2 === 1 ? tableAlt : 'transparent'), borderTop: i > 0 ? '1px solid ' + borderColor : 'none' }}>
                     <div style={{ flex: '0 0 160px' }}>
                       <span style={{ fontSize: '14px', fontWeight: comp.highlight ? 800 : 600, color: comp.highlight ? textPrimary : textSecondary }}>
                         {comp.name}
@@ -466,16 +377,13 @@ export default function PricingPage() {
                     </div>
                     {comp.highlight && (
                       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px', color: '#22C55E', fontSize: '12px', fontWeight: 700 }}>
-                        <Icon path={ICONS.check} size={14} />
-                        Best value
+                        <Icon path={ICONS.check} size={14} /> Best value
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-
-            {/* 0% fee callout */}
             <div style={{ marginTop: '20px', background: isDark ? 'rgba(34,197,94,0.07)' : 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '12px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(34,197,94,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22C55E' }}>
                 <Icon path={ICONS.zap} size={18} />
@@ -499,13 +407,7 @@ export default function PricingPage() {
               {FAQS.map(function(faq, i) {
                 return (
                   <div key={i} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', overflow: 'hidden' }}>
-                    <button
-                      onClick={function() { setOpenFaq(openFaq === i ? null : i); }}
-                      aria-expanded={openFaq === i}
-                      aria-controls={'faq-' + i}
-                      className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset"
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
-                    >
+                    <button onClick={function() { setOpenFaq(openFaq === i ? null : i); }} aria-expanded={openFaq === i} aria-controls={'faq-' + i} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: textPrimary, paddingRight: '16px' }}>{faq.q}</span>
                       <span style={{ color: textMuted, flexShrink: 0, transform: openFaq === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'flex' }}>
                         <Icon path={ICONS.chevDown} size={16} />
@@ -526,58 +428,44 @@ export default function PricingPage() {
         {/* ── Final CTA ─────────────────────────────────────────────────────── */}
         <section aria-labelledby="cta-heading" style={{ padding: '80px 24px', background: '#0E1523', textAlign: 'center' }}>
           <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-            {/* Post-it tack decoration */}
             <div aria-hidden="true" style={{ width: '16px', height: '16px', borderRadius: '50%', margin: '0 auto 24px', background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.5) 0%, #F5B731 52%, rgba(0,0,0,0.2) 100%)', boxShadow: '0 3px 8px rgba(0,0,0,0.5)' }} />
-            <h2 id="cta-heading" style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '16px' }}>
-              Ready to pin your org<br />to the board?
+            {/* CTA headline — editable */}
+            <h2 id="cta-heading" style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '16px', whiteSpace: 'pre-line' }}>
+              {content['pricing_final_cta_headline']}
             </h2>
+            {/* CTA body — editable */}
             <p style={{ fontSize: '16px', color: '#CBD5E1', marginBottom: '36px', lineHeight: 1.6 }}>
-              1 month free. No credit card. Cancel anytime.
+              {content['pricing_final_cta_body']}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginBottom: '20px' }}>
-              <button
-                onClick={function() { navigate('/login'); }}
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s' }}
-                onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
-                onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}
-              >
-                Start free trial
-                <Icon path={ICONS.arrow} size={18} />
+              <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
+                Start free trial <Icon path={ICONS.arrow} size={18} />
               </button>
-              <button
-                onClick={function() { navigate('/'); }}
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 24px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }}
-                onMouseOver={function(e) { e.currentTarget.style.borderColor = '#94A3B8'; e.currentTarget.style.color = '#FFFFFF'; }}
-                onMouseOut={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}
-              >
+              <button onClick={function() { navigate('/'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 24px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#94A3B8'; e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}>
                 Learn more
               </button>
             </div>
+            {/* NP note — editable */}
             <p style={{ fontSize: '12px', color: '#64748B' }}>
-              Verified 501(c)(3)? You get an extra month free. Submit your EIN at signup.
+              {content['pricing_final_cta_np_note']}
             </p>
           </div>
         </section>
 
       </main>
 
-      {/* ── Footer ────────────────────────────────────────────────────────────── */}
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
       <footer role="contentinfo" style={{ background: '#060E1A', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <span style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
           <nav aria-label="Footer navigation" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
             {[['/', 'Home'], ['/pricing', 'Pricing']].map(function(item) {
-              return (
-                <Link key={item[0]} to={item[0]} style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>
-                  {item[1]}
-                </Link>
-              );
+              return <Link key={item[0]} to={item[0]} style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>{item[1]}</Link>;
             })}
             <button onClick={function() { navigate('/login'); }} style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>Log In</button>
           </nav>
-          <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {new Date().getFullYear()} Syndicade. All rights reserved.</p>
+          {/* Copyright — editable (shared key with LandingPage) */}
+          <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {content['footer_copyright']}</p>
         </div>
       </footer>
 

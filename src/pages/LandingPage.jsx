@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
+import { useSiteContentMap } from '../hooks/useSiteContent';
 
 function Icon({ path, size, style }) {
   var s = size || 16;
@@ -115,6 +116,51 @@ export default function LandingPage() {
   var [contactLoading, setContactLoading] = useState(false);
   var [scrolled, setScrolled]             = useState(false);
 
+  // ── Editable content from Supabase (staff edits via /staff → Content tab) ──
+  // Fallback values = current hardcoded text, so page never shows blank.
+  // Update values in the Content Editor — changes go live on next page load.
+  var content = useSiteContentMap([
+    'hero_headline_main',
+    'hero_headline_accent',
+    'hero_subheadline',
+    'hero_cta_primary',
+    'hero_cta_secondary',
+    'features_section_label',
+    'features_headline',
+    'features_subheadline',
+    'spotlight_label',
+    'pricing_section_label',
+    'pricing_headline',
+    'pricing_subheadline',
+    'pricing_trial_badge',
+    'final_cta_headline',
+    'final_cta_body',
+    'final_cta_button',
+    'footer_tagline',
+    'footer_contact_email',
+    'footer_copyright',
+  ], {
+    hero_headline_main:      "Your community's",
+    hero_headline_accent:    'bulletin board,',
+    hero_subheadline:        'Before the internet, communities organized on bulletin boards. Syndicade brings that board online — without the corporate software, the ads, or taking a cut of your donations.',
+    hero_cta_primary:        'Pin Your Org Free',
+    hero_cta_secondary:      'See How It Works',
+    features_section_label:  'Everything on one board',
+    features_headline:       'All the tools your community needs',
+    features_subheadline:    "No training required. If you've used a bulletin board, you already know how to use Syndicade.",
+    spotlight_label:         'Killer feature',
+    pricing_section_label:   'Pricing',
+    pricing_headline:        'Funded by communities, not investors',
+    pricing_subheadline:     'No ads. No data selling. A fair price to keep the board running.',
+    pricing_trial_badge:     'Annual billing = 2 months free. We never take a cut of your donations or ticket sales.',
+    final_cta_headline:      'Bring your community board online.',
+    final_cta_body:          'Join nonprofits and community organizations already using Syndicade.',
+    final_cta_button:        'Pin Your Org Free',
+    footer_tagline:          'Where Community Work Connects.',
+    footer_contact_email:    'hello@syndicade.com',
+    footer_copyright:        new Date().getFullYear() + ' Syndicade. All rights reserved.',
+  });
+
   useEffect(function() {
     var onScroll = function() { setScrolled(window.scrollY > 20); };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -179,31 +225,11 @@ export default function LandingPage() {
           </nav>
 
           <div className="hidden md:flex" style={{ alignItems: 'center', gap: '10px' }}>
-            {/* Theme toggle — segmented pill, shows both options */}
-            <div
-              role="group"
-              aria-label="Color theme"
-              style={{ display: 'flex', alignItems: 'center', background: isDark ? '#0E1523' : '#E2E8F0', border: '1px solid ' + borderColor, borderRadius: '99px', padding: '3px', gap: '2px' }}
-            >
+            <div role="group" aria-label="Color theme" style={{ display: 'flex', alignItems: 'center', background: isDark ? '#0E1523' : '#E2E8F0', border: '1px solid ' + borderColor, borderRadius: '99px', padding: '3px', gap: '2px' }}>
               {[{ val: false, icon: ICONS.sun, label: 'Light' }, { val: true, icon: ICONS.moon, label: 'Dark' }].map(function(opt) {
                 var active = isDark === opt.val;
                 return (
-                  <button
-                    key={opt.label}
-                    onClick={function() { if (!active) toggle(); }}
-                    aria-pressed={active}
-                    aria-label={'Switch to ' + opt.label + ' mode'}
-                    className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-full"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '5px',
-                      padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
-                      background: active ? (isDark ? '#1A2035' : '#FFFFFF') : 'transparent',
-                      color: active ? textPrimary : textMuted,
-                      border: 'none', cursor: active ? 'default' : 'pointer',
-                      boxShadow: active ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
-                      transition: 'all 0.15s',
-                    }}
-                  >
+                  <button key={opt.label} onClick={function() { if (!active) toggle(); }} aria-pressed={active} aria-label={'Switch to ' + opt.label + ' mode'} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-full" style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: active ? (isDark ? '#1A2035' : '#FFFFFF') : 'transparent', color: active ? textPrimary : textMuted, border: 'none', cursor: active ? 'default' : 'pointer', boxShadow: active ? '0 1px 4px rgba(0,0,0,0.15)' : 'none', transition: 'all 0.15s' }}>
                     <Icon path={opt.icon} size={12} />
                     {opt.label}
                   </button>
@@ -238,60 +264,52 @@ export default function LandingPage() {
 
       <main id="main-content">
 
-        {/* Hero */}
+        {/* ── Hero ── */}
         <section aria-labelledby="hero-heading" style={{ paddingTop: '64px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
 
-            {/* Left — copy, max-width aligned with page sections */}
-           <div style={{ background: pageBg, padding: '24px 48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-<div style={{ maxWidth: '520px', marginLeft: 'auto' }}>
+            {/* Left — copy */}
+            <div style={{ background: pageBg, padding: '24px 48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ maxWidth: '520px', marginLeft: 'auto' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', color: '#F5B731', marginBottom: '20px' }}>
                   <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F5B731', display: 'inline-block' }} />
                   Starts at $14.99/mo · 1 month free trial
                 </div>
+
+                {/* Headline — line 1 and 2 are editable, "brought online." is line 3 */}
                 <h1 id="hero-heading" style={{ fontSize: 'clamp(32px, 4.5vw, 52px)', fontWeight: 800, lineHeight: 1.15, marginBottom: '18px', color: textPrimary }}>
-                  Your community's<br /><span style={{ color: '#F5B731' }}>bulletin board,</span><br />brought online.
+                  {content['hero_headline_main']}<br />
+                  <span style={{ color: '#F5B731' }}>{content['hero_headline_accent']}</span><br />
+                  brought online.
                 </h1>
+
+                {/* Subheadline — editable */}
                 <p style={{ fontSize: '16px', color: textSecondary, lineHeight: 1.7, marginBottom: '32px' }}>
-                  Before the internet, communities organized on bulletin boards. Syndicade brings that board online — without the corporate software, the ads, or taking a cut of your donations.
+                  {content['hero_subheadline']}
                 </p>
+
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                  {/* Primary CTA — editable */}
                   <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#0E1523', color: '#F5B731', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.25)', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
-                    Pin Your Org Free <Icon path={ICONS.arrow} size={16} />
+                    {content['hero_cta_primary']} <Icon path={ICONS.arrow} size={16} />
                   </button>
+                  {/* Secondary CTA — editable */}
                   <button onClick={function() { scrollTo('how-it-works'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 24px', fontSize: '15px', fontWeight: 600, background: 'none', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.borderColor = '#94A3B8'; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.borderColor = borderColor; }}>
-                    See How It Works
+                    {content['hero_cta_secondary']}
                   </button>
                 </div>
                 <p style={{ fontSize: '12px', color: textMuted }}>No credit card&nbsp;&middot;&nbsp;No ads&nbsp;&middot;&nbsp;No platform fees on payments</p>
               </div>
             </div>
 
-            {/* Right — dark navy board, post-its float directly */}
-            <div
-              aria-hidden="true"
-              style={{
-                background: '#1A2035',
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-                padding: '48px 40px', position: 'relative', overflow: 'hidden',
-              }}
-            >
-<div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle, #CBD5E1 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+            {/* Right — post-it board (decorative, not editable) */}
+            <div aria-hidden="true" style={{ background: '#1A2035', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '48px 40px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle, #CBD5E1 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
               <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
                 <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '10px', fontWeight: 700, letterSpacing: '3px', color: '#64748B', textTransform: 'uppercase' }}>
                   Riverside Neighborhood Assoc.
                 </div>
-                {/* Large featured post-it */}
-                <PostIt
-                  large={true}
-                  bg="#FEF9C3" tackColor="#D4A017"
-                  badgeBg="#22C55E" badgeText="white" category="EVENT"
-                  title="Spring Volunteer Drive — April 20, 9am–noon"
-                  body="We need 12 volunteers for our spring food drive. Tools provided, coffee and breakfast for all helpers."
-                  org="Toledo Food Bank" orgColor="#D97706"
-                  date="2 hours ago" btnLabel="RSVP" btnBg="#D4A017" btnTextColor="white"
-                />
-                {/* Two smaller post-its side by side */}
+                <PostIt large={true} bg="#FEF9C3" tackColor="#D4A017" badgeBg="#22C55E" badgeText="white" category="EVENT" title="Spring Volunteer Drive — April 20, 9am–noon" body="We need 12 volunteers for our spring food drive. Tools provided, coffee and breakfast for all helpers." org="Toledo Food Bank" orgColor="#D97706" date="2 hours ago" btnLabel="RSVP" btnBg="#D4A017" btnTextColor="white" />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <PostIt bg="#DBEAFE" tackColor="#1D4ED8" badgeBg="#3B82F6" badgeText="white" category="POLL" title="Vote: Summer Gala theme closes Sunday" org="Riverside NA" orgColor="#1D4ED8" date="1 day ago" />
                   <PostIt bg="#DCFCE7" tackColor="#16A34A" badgeBg="#22C55E" badgeText="white" category="DOCUMENT" title="Q1 Budget now in Documents" org="Arts Alliance" orgColor="#15803D" date="3 days ago" />
@@ -302,7 +320,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Stats bar — always dark */}
+        {/* Stats bar — always dark, not editable (pricing-driven) */}
         <div style={{ background: '#0E1523', borderTop: '1px solid #2A3550', borderBottom: '1px solid #2A3550' }}>
           <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             {[{ val: '$14.99/mo', label: 'Starting price' },{ val: '1 month', label: 'Free trial, all plans' },{ val: '0%', label: 'Platform fee on payments' },{ val: '0', label: 'Ads. Ever.' }].map(function(stat, i) {
@@ -316,13 +334,22 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Features */}
+        {/* ── Features ── */}
         <section id="features" aria-labelledby="features-heading" style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '52px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>Everything on one board</p>
-              <h2 id="features-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '14px' }}>All the tools your community needs</h2>
-              <p style={{ fontSize: '16px', color: textSecondary, maxWidth: '480px', margin: '0 auto', lineHeight: 1.6 }}>No training required. If you've used a bulletin board, you already know how to use Syndicade.</p>
+              {/* Section label — editable */}
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                {content['features_section_label']}
+              </p>
+              {/* Headline — editable */}
+              <h2 id="features-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '14px' }}>
+                {content['features_headline']}
+              </h2>
+              {/* Subheadline — editable */}
+              <p style={{ fontSize: '16px', color: textSecondary, maxWidth: '480px', margin: '0 auto', lineHeight: 1.6 }}>
+                {content['features_subheadline']}
+              </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
               {FEATURES.map(function(f) {
@@ -340,12 +367,16 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Multi-org spotlight */}
+        {/* ── Multi-org spotlight ── */}
         <section aria-labelledby="spotlight-heading" style={{ padding: '80px 24px 0px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '48px', alignItems: 'start', marginBottom: '52px' }}>
               <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '16px' }}>Killer feature</p>
+                {/* Spotlight label — editable */}
+                <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '16px' }}>
+                  {content['spotlight_label']}
+                </p>
+                {/* Spotlight headline — kept structured for the blue span styling */}
                 <h2 id="spotlight-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, lineHeight: 1.2, marginBottom: '24px' }}>
                   One login.<br /><span style={{ color: '#3B82F6' }}>Every organization.</span><br />Total clarity.
                 </h2>
@@ -368,55 +399,33 @@ export default function LandingPage() {
                   Try It Free <Icon path={ICONS.arrow} size={16} />
                 </button>
               </div>
-              {/* Headline post-it for this column */}
-<div aria-hidden="true" style={{ paddingTop: '8px' }}>
+              <div aria-hidden="true" style={{ paddingTop: '8px' }}>
                 <p style={{ fontSize: '12px', color: textMuted, marginBottom: '4px', textAlign: 'right' }}>Live activity across multiple organizations</p>
-                <PostIt
-                  large={true}
-                  bg="#FEF9C3" tackColor="#D4A017"
-                  badgeBg="#22C55E" badgeText="white" category="ANNOUNCEMENT"
-                  title="Spring Meeting Recap Posted"
-                  body="Minutes and action items from last Tuesday's board meeting."
-org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
-                />
+                <PostIt large={true} bg="#FEF9C3" tackColor="#D4A017" badgeBg="#22C55E" badgeText="white" category="ANNOUNCEMENT" title="Spring Meeting Recap Posted" body="Minutes and action items from last Tuesday's board meeting." org="Toledo Food Bank" orgColor="#D97706" date="1h ago" />
                 <div style={{ textAlign: 'center', marginTop: '-120px', marginBottom: '-200px', position: 'relative', zIndex: 1 }}>
-                  <img
-                    src="/mascot-pair.png"
-                    alt=""
-                    aria-hidden="true"
-                    style={{ width: '640px', height: 'auto', display: 'inline-block', maxWidth: '100%' }}
-                    onError={function(e) { e.currentTarget.style.display = 'none'; }}
-                  />
+                  <img src="/mascot-pair.png" alt="" aria-hidden="true" style={{ width: '640px', height: 'auto', display: 'inline-block', maxWidth: '100%' }} onError={function(e) { e.currentTarget.style.display = 'none'; }} />
                 </div>
               </div>
             </div>
 
-            {/* 2-row × 3-col post-it board */}
+            {/* Post-it board grid */}
             <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '24px', marginTop: '0' }}>
               {[
-                { bg: '#DBEAFE', tack: '#1D4ED8', badgeBg: '#3B82F6', badgeText: 'white', cat: 'EVENT',        title: 'Volunteer Orientation — April 8',   body: '6pm at Community Center Room B. Refreshments provided.',    org: 'Riverside NA',   orgColor: '#1D4ED8', date: '3h ago' },
-                { bg: '#DCFCE7', tack: '#16A34A', badgeBg: '#22C55E', badgeText: 'white', cat: 'VOLUNTEER',    title: '10 Spots Left: Food Drive',          body: 'Sorting donations April 12–13. Sign up by Friday!',          org: 'Toledo Food Bank', orgColor: '#15803D', date: '5h ago' },
-                { bg: '#FCE7F3', tack: '#DB2777', badgeBg: '#EC4899', badgeText: 'white', cat: 'POLL',         title: 'Vote: Summer Gala Theme',            body: 'Garden Party · Masquerade · Under the Stars.',              org: 'Arts Alliance',  orgColor: '#DB2777', date: '1d ago' },
-                { bg: '#FEF3C7', tack: '#D97706', badgeBg: '#F59E0B', badgeText: 'white', cat: 'EVENT',        title: 'Neighborhood Watch Meeting',         body: 'Every 3rd Tuesday. April 15 at 7pm.',                        org: 'Riverside NA',   orgColor: '#D97706', date: '2d ago' },
-                { bg: '#EDE9FE', tack: '#7C3AED', badgeBg: '#8B5CF6', badgeText: 'white', cat: 'DOCUMENT',     title: '2025 Q1 Financial Report',           body: "Treasurer's budget vs. actuals through March 31st.",         org: 'Arts Alliance',  orgColor: '#7C3AED', date: '3d ago' },
-                { bg: '#CCFBF1', tack: '#0F766E', badgeBg: '#14B8A6', badgeText: 'white', cat: 'VOLUNTEER',    title: 'Garden Workday — April 26',          body: 'Spring planting. Bring gloves. Lunch provided!',             org: 'Garden Club',    orgColor: '#0F766E', date: '4d ago' },
+                { bg: '#DBEAFE', tack: '#1D4ED8', badgeBg: '#3B82F6', badgeText: 'white', cat: 'EVENT',     title: 'Volunteer Orientation — April 8',  body: '6pm at Community Center Room B. Refreshments provided.',   org: 'Riverside NA',    orgColor: '#1D4ED8', date: '3h ago' },
+                { bg: '#DCFCE7', tack: '#16A34A', badgeBg: '#22C55E', badgeText: 'white', cat: 'VOLUNTEER', title: '10 Spots Left: Food Drive',         body: 'Sorting donations April 12–13. Sign up by Friday!',         org: 'Toledo Food Bank', orgColor: '#15803D', date: '5h ago' },
+                { bg: '#FCE7F3', tack: '#DB2777', badgeBg: '#EC4899', badgeText: 'white', cat: 'POLL',      title: 'Vote: Summer Gala Theme',           body: 'Garden Party · Masquerade · Under the Stars.',             org: 'Arts Alliance',   orgColor: '#DB2777', date: '1d ago' },
+                { bg: '#FEF3C7', tack: '#D97706', badgeBg: '#F59E0B', badgeText: 'white', cat: 'EVENT',     title: 'Neighborhood Watch Meeting',        body: 'Every 3rd Tuesday. April 15 at 7pm.',                       org: 'Riverside NA',    orgColor: '#D97706', date: '2d ago' },
+                { bg: '#EDE9FE', tack: '#7C3AED', badgeBg: '#8B5CF6', badgeText: 'white', cat: 'DOCUMENT',  title: '2025 Q1 Financial Report',          body: "Treasurer's budget vs. actuals through March 31st.",        org: 'Arts Alliance',   orgColor: '#7C3AED', date: '3d ago' },
+                { bg: '#CCFBF1', tack: '#0F766E', badgeBg: '#14B8A6', badgeText: 'white', cat: 'VOLUNTEER', title: 'Garden Workday — April 26',         body: 'Spring planting. Bring gloves. Lunch provided!',            org: 'Garden Club',     orgColor: '#0F766E', date: '4d ago' },
               ].map(function(card) {
-                return (
-                  <PostIt
-                    key={card.title}
-                    bg={card.bg} tackColor={card.tack}
-                    badgeBg={card.badgeBg} badgeText={card.badgeText}
-                    category={card.cat} title={card.title} body={card.body}
-                    org={card.org} orgColor={card.orgColor} date={card.date}
-                  />
-                );
+                return <PostIt key={card.title} bg={card.bg} tackColor={card.tack} badgeBg={card.badgeBg} badgeText={card.badgeText} category={card.cat} title={card.title} body={card.body} org={card.org} orgColor={card.orgColor} date={card.date} />;
               })}
             </div>
             <div style={{ height: '80px' }} />
-            </div>
-          </section>
+          </div>
+        </section>
 
-        {/* How It Works */}
+        {/* ── How It Works ── (labels kept hardcoded — rarely change) */}
         <section id="how-it-works" aria-labelledby="how-heading" style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '900px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '52px' }}>
@@ -443,13 +452,22 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
           </div>
         </section>
 
-        {/* Pricing — Post-it cards */}
+        {/* ── Pricing ── */}
         <section id="pricing" aria-labelledby="pricing-heading" style={{ padding: '80px 24px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '960px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>Pricing</p>
-              <h2 id="pricing-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '12px' }}>Funded by communities, not investors</h2>
-              <p style={{ fontSize: '16px', color: textSecondary }}>No ads. No data selling. A fair price to keep the board running.</p>
+              {/* Section label — editable */}
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>
+                {content['pricing_section_label']}
+              </p>
+              {/* Headline — editable */}
+              <h2 id="pricing-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '12px' }}>
+                {content['pricing_headline']}
+              </h2>
+              {/* Subheadline — editable */}
+              <p style={{ fontSize: '16px', color: textSecondary }}>
+                {content['pricing_subheadline']}
+              </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px', marginBottom: '32px' }}>
               {[
@@ -490,11 +508,14 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
               </div>
               <button onClick={function() { navigate('/pricing'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flexShrink: 0, padding: '7px 16px', fontSize: '12px', fontWeight: 700, background: 'none', color: '#F5B731', border: '1px solid rgba(245,183,49,0.4)', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Learn More</button>
             </div>
-            <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '14px' }}>Annual billing = 2 months free. We never take a cut of your donations or ticket sales.</p>
+            {/* Trial badge — editable */}
+            <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '14px' }}>
+              {content['pricing_trial_badge']}
+            </p>
           </div>
         </section>
 
-        {/* FAQ */}
+        {/* ── FAQ ── (kept hardcoded — structural content, rarely changes) */}
         <section id="faq" aria-labelledby="faq-heading" style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '680px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '48px' }}>
@@ -522,7 +543,7 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
           </div>
         </section>
 
-        {/* Contact */}
+        {/* ── Contact ── */}
         <section id="contact" aria-labelledby="contact-heading" style={{ padding: '80px 24px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '560px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '40px' }}>
@@ -567,15 +588,22 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
           </div>
         </section>
 
-        {/* Final CTA */}
+        {/* ── Final CTA ── */}
         <section aria-labelledby="final-cta-heading" style={{ padding: '96px 24px', background: '#0E1523', textAlign: 'center' }}>
           <div style={{ maxWidth: '560px', margin: '0 auto' }}>
             <img src="/mascot-pair.png" alt="" aria-hidden="true" style={{ width: '140px', height: 'auto', marginBottom: '28px' }} onError={function(e) { e.currentTarget.style.display = 'none'; }} />
-            <h2 id="final-cta-heading" style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '16px' }}>Bring your community board online.</h2>
-            <p style={{ fontSize: '16px', color: '#CBD5E1', marginBottom: '36px', lineHeight: 1.6 }}>Join nonprofits and community organizations already using Syndicade.</p>
+            {/* Headline — editable */}
+            <h2 id="final-cta-heading" style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '16px' }}>
+              {content['final_cta_headline']}
+            </h2>
+            {/* Body — editable */}
+            <p style={{ fontSize: '16px', color: '#CBD5E1', marginBottom: '36px', lineHeight: 1.6 }}>
+              {content['final_cta_body']}
+            </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+              {/* Primary button — editable */}
               <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
-                Pin Your Org Free <Icon path={ICONS.arrow} size={18} />
+                {content['final_cta_button']} <Icon path={ICONS.arrow} size={18} />
               </button>
               <button onClick={function() { navigate('/pricing'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#94A3B8'; e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}>
                 View Pricing
@@ -586,7 +614,7 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
 
       </main>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <footer role="contentinfo" style={{ background: '#060E1A', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '36px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -599,7 +627,8 @@ org="Toledo Food Bank" orgColor="#D97706" date="1h ago"
             <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>Log In</button>
             <Link to="/wishlist" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>Wishlist</Link>
           </nav>
-          <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {new Date().getFullYear()} Syndicade. All rights reserved.</p>
+          {/* Copyright — editable */}
+          <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {content['footer_copyright']}</p>
         </div>
       </footer>
 
