@@ -515,7 +515,7 @@ function OrgsTab() {
                         <p className="text-[14px] text-white font-600 truncate">{org.name}</p>
                         {org.is_verified_nonprofit && <CheckCircle size={13} className="text-green-400 flex-shrink-0" aria-label="Verified nonprofit" />}
                       </div>
-                      <p className="text-[12px] text-[#64748B]">{org.city && org.state ? org.city + ', ' + org.state + ' · ' : ''}{sub ? (PLAN_LABELS[sub.plan_id] || sub.plan_id) : 'Free'}</p>
+                      <p className="text-[12px] text-[#64748B]">{org.city && org.state ? org.city + ', ' + org.state + ' · ' : ''}{sub ? (PLAN_LABELS[sub.plan] || sub.plan) : 'Free'}</p>
                     </div>
                     <span className={'text-[11px] font-700 px-2.5 py-1 rounded-full flex-shrink-0 border ' + statusColor}>
                       {sub?.status === 'active' ? 'Paid' : sub?.status === 'trialing' ? 'Trial' : 'Free'}
@@ -575,10 +575,10 @@ function OverviewTab() {
     var [mr, or, sr, er, mw, mm] = await Promise.all([
       supabase.from('members').select('user_id', { count: 'exact', head: true }),
       orgQuery,
-      supabase.from('subscriptions').select('organization_id, plan_id, status, trial_ends_at, current_period_end'),
+     supabase.from('subscriptions').select('organization_id, plan, status, trial_ends_at, current_period_end'),
       supabase.from('events').select('id', { count: 'exact', head: true }),
-      supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('created_at', weekAgo),
-      supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('created_at', monthAgo),
+supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('joined_date', weekAgo),
+      supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('joined_date', monthAgo),
     ]);
     var allOrgs = or.data || [];
     var allSubs = sr.data || [];
@@ -587,9 +587,9 @@ function OverviewTab() {
     var canceledSubs = allSubs.filter(function (s) { return s.status === 'canceled'; });
     var paidIds = new Set(activeSubs.map(function (s) { return s.organization_id; }));
     var trialIds = new Set(trialSubs.map(function (s) { return s.organization_id; }));
-    var mrr = activeSubs.reduce(function (acc, s) { return acc + (PLAN_PRICES[s.plan_id] || 0); }, 0);
+    var mrr = activeSubs.reduce(function (acc, s) { return acc + (PLAN_PRICES[s.plan] || 0); }, 0);
     var planMap = {};
-    activeSubs.forEach(function (s) { planMap[s.plan_id] = (planMap[s.plan_id] || 0) + 1; });
+    activeSubs.forEach(function (s) { planMap[s.plan] = (planMap[s.plan] || 0) + 1; });
     setPlanBreakdown(Object.keys(planMap).map(function (k) { return { plan: k, label: PLAN_LABELS[k] || k, count: planMap[k], mrr: (planMap[k] * (PLAN_PRICES[k] || 0)).toFixed(2) }; }));
     var newOrgsWeek = allOrgs.filter(function (o) { return o.created_at > weekAgo; }).length;
     var newOrgsMonth = allOrgs.filter(function (o) { return o.created_at > monthAgo; }).length;
