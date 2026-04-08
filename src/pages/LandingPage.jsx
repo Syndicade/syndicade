@@ -75,11 +75,11 @@ var ICONS = {
 
 var FEATURES = [
   { iconKey: 'users',      color: '#3B82F6', bg: 'rgba(59,130,246,0.12)',  label: 'Multi-Org Dashboard',    desc: 'Members who belong to multiple organizations log in once and see everything in one unified view. No other platform does this.' },
-  { iconKey: 'calendar',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)',   label: 'Events + Ticketing',     desc: 'Run free or paid events. Sell tickets at 0% platform fee — you keep more than legacy event platforms.' },
+  { iconKey: 'calendar',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)',   label: 'Events + Ticketing',     desc: 'Run free or paid events. Sell tickets with no revenue cut — just a flat $1/ticket fee. You keep far more than legacy event platforms.' },
   { iconKey: 'globe',      color: '#F5B731', bg: 'rgba(245,183,49,0.12)',  label: 'Public Discovery Board', desc: 'Verified nonprofits appear publicly so community members can find your org and events without needing an account.' },
   { iconKey: 'megaphone',  color: '#8B5CF6', bg: 'rgba(139,92,246,0.12)', label: 'Community Board',        desc: 'A private space for verified org admins to post needs, share surplus resources, and find collaboration partners.' },
   { iconKey: 'mail',       color: '#EC4899', bg: 'rgba(236,72,153,0.12)', label: 'Email + Newsletters',    desc: 'Send announcements and beautifully designed newsletters directly to your member list. No third-party subscription needed.' },
-  { iconKey: 'creditCard', color: '#14B8A6', bg: 'rgba(20,184,166,0.12)', label: 'Payments — 0% Fee',      desc: 'Collect dues, sell tickets, and accept donations. We never take a cut — only Stripe\'s standard processing fees.' },
+  { iconKey: 'creditCard', color: '#14B8A6', bg: 'rgba(20,184,166,0.12)', label: 'Payments — No Revenue Cut', desc: 'We never take a percentage of your dues, donations, or ticket sales. Paid events have a flat $1/ticket fee. Only Stripe processing applies.' },
   { iconKey: 'monitor',    color: '#F97316', bg: 'rgba(249,115,22,0.12)', label: 'Public Website Included', desc: 'Every org gets a public-facing website. Starter gets a full scrollable page. Growth gets 7 pages. Pro gets unlimited.' },
   { iconKey: 'qrCode',     color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', label: 'QR Check-In',           desc: 'Day-of attendance check-in via QR scan. Works on any device. No extra app or hardware required.' },
 ];
@@ -94,7 +94,7 @@ var FAQS = [
   { q: 'Is there a free trial?', a: 'Yes. All plans include a 14-day free trial with no credit card required. Verified 501(c)(3) nonprofits automatically get 30 days. Promo codes (distributed at events and through partners) can extend your trial to 30 days as well.' },
   { q: 'Can members belong to multiple organizations?', a: 'Absolutely — that is one of our core features. Members get a unified dashboard showing updates from every organization they belong to, all in one place.' },
   { q: 'Do we need technical skills?', a: 'None at all. If you can send an email, you can set up Syndicade. Most organizations are fully running within 10 minutes.' },
-  { q: 'Do you take a cut of payments or donations?', a: 'Never. We pass through Stripe fees only and take 0% of your dues, ticket sales, or donations. Payment processing is available on Growth and above.' },
+  { q: 'Do you take a cut of payments or donations?', a: 'We never take a percentage of your revenue. Dues and donations pass through Stripe only. Paid event tickets have a flat $1/ticket fee — not a percentage cut. For context, selling 50 tickets at $25 costs you $50 flat vs. $137+ on Eventbrite. Payment processing requires Growth plan or above.' },
   { q: 'Is our data secure?', a: 'Yes. All data is encrypted in transit and at rest. We use Supabase infrastructure with enterprise-grade security and row-level access controls. Your member data is never sold, shared with advertisers, or used to train AI models.' },
   { q: 'Can we use our own domain?', a: 'Yes on Growth ($50/yr add-on) and included free on Pro ($69/mo). All plans get a clean orgname.syndicade.com subdomain at no extra cost.' },
   { q: 'What happens when we hit our member limit?', a: 'You can add members above your plan cap at $1/member/month, making the next tier the obvious choice. You\'re never cut off — we just make upgrading the clear value move.' },
@@ -173,6 +173,15 @@ export default function LandingPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   }
 
+  function goToSignup() {
+    navigate('/signup');
+  }
+
+  function goToPricing() {
+    window.scrollTo({ top: 0 });
+    navigate('/pricing');
+  }
+
   async function handleContactSubmit(e) {
     e.preventDefault();
     if (!contactForm.name || !contactForm.email || !contactForm.message) return;
@@ -221,7 +230,7 @@ export default function LandingPage() {
       annualPrice: '$32.50',
       annualTotal: '$390/yr',
       meta: '150 members · 10 GB storage · 7 pages',
-      tagline: 'Everything in Starter + paid event tickets (0% platform fee), membership dues, email blasts + newsletter builder (500/mo), full analytics, and admin inbox.',
+      tagline: 'Everything in Starter + paid event tickets (flat $1/ticket, no revenue cut), membership dues, email blasts + newsletter builder (500/mo), full analytics, and admin inbox.',
       btnBg: '#3B82F6',
       btnColor: 'white',
       tack: '#1D4ED8',
@@ -260,14 +269,23 @@ export default function LandingPage() {
             <span style={{ fontSize: '22px', fontWeight: 800, color: isDark ? '#FFFFFF' : '#0E1523' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
           </button>
 
-          <nav className="hidden md:flex" style={{ alignItems: 'center', gap: '28px' }} aria-label="Main navigation">
-            {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
+          <nav className="hidden md:flex" style={{ alignItems: 'center', gap: '4px' }} aria-label="Main navigation">
+            <Link to="/features" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 500, color: textSecondary, padding: '6px 12px', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}>Features</Link>
+            <Link to="/pricing" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 500, color: textSecondary, padding: '6px 12px', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}>Pricing</Link>
+            {[['faq','FAQ'],['contact','Contact']].map(function(item) {
               return (
-                <button key={item[0]} onClick={function() { scrollTo(item[0]); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '14px', fontWeight: 500, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}>
+                <button key={item[0]} onClick={function() { scrollTo(item[0]); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 500, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}>
                   {item[1]}
                 </button>
               );
             })}
+            <div style={{ width: '1px', height: '16px', background: borderColor, margin: '0 4px' }} aria-hidden="true" />
+            <Link to="/discover" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 500, color: '#3B82F6', padding: '6px 12px', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#93C5FD'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#3B82F6'; }}>
+              Discover Events
+            </Link>
+            <Link to="/explore" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 500, color: '#22C55E', padding: '6px 12px', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#86EFAC'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#22C55E'; }}>
+              Explore Orgs
+            </Link>
           </nav>
 
           <div className="hidden md:flex" style={{ alignItems: 'center', gap: '10px' }}>
@@ -285,7 +303,7 @@ export default function LandingPage() {
             <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; }}>
               Log In
             </button>
-            <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-xl" style={{ fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', cursor: 'pointer', padding: '9px 20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
+            <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-xl" style={{ fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', cursor: 'pointer', padding: '9px 20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
               Start Free — 14 Days
             </button>
           </div>
@@ -297,12 +315,16 @@ export default function LandingPage() {
 
         {mobileMenuOpen && (
           <div role="navigation" aria-label="Mobile navigation" style={{ background: cardBg, borderTop: '1px solid ' + borderColor, padding: '12px 24px 20px' }}>
-            {[['features','Features'],['how-it-works','How It Works'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
+            <Link to="/features" onClick={function() { setMobileMenuOpen(false); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ display: 'block', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: textSecondary, borderBottom: '1px solid ' + borderColor, textDecoration: 'none' }}>Features</Link>
+            {[['how-it-works','How It Works'],['faq','FAQ'],['contact','Contact']].map(function(item) {
               return <button key={item[0]} onClick={function() { scrollTo(item[0]); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: textSecondary, background: 'none', border: 'none', borderBottom: '1px solid ' + borderColor, cursor: 'pointer' }}>{item[1]}</button>;
             })}
+            <Link to="/pricing" onClick={function() { setMobileMenuOpen(false); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ display: 'block', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: textSecondary, borderBottom: '1px solid ' + borderColor, textDecoration: 'none' }}>Pricing</Link>
+            <Link to="/discover" onClick={function() { setMobileMenuOpen(false); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ display: 'block', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: '#3B82F6', borderBottom: '1px solid ' + borderColor, textDecoration: 'none' }}>Discover Events</Link>
+            <Link to="/explore" onClick={function() { setMobileMenuOpen(false); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ display: 'block', padding: '12px 0', fontSize: '14px', fontWeight: 500, color: '#22C55E', borderBottom: '1px solid ' + borderColor, textDecoration: 'none' }}>Explore Organizations</Link>
             <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
               <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flex: 1, padding: '10px', fontSize: '14px', fontWeight: 600, color: textSecondary, background: 'none', border: '1px solid ' + borderColor, borderRadius: '10px', cursor: 'pointer' }}>Log In</button>
-              <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flex: 1, padding: '10px', fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>Start Free</button>
+              <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flex: 1, padding: '10px', fontSize: '14px', fontWeight: 700, color: '#111827', background: '#F5B731', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>Start Free</button>
             </div>
           </div>
         )}
@@ -333,14 +355,14 @@ export default function LandingPage() {
                 </p>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-                  <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#0E1523', color: '#F5B731', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.25)', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
+                  <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#0E1523', color: '#F5B731', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.25)', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
                     {content['hero_cta_primary']} <Icon path={ICONS.arrow} size={16} />
                   </button>
                   <button onClick={function() { scrollTo('how-it-works'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 24px', fontSize: '15px', fontWeight: 600, background: 'none', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.borderColor = '#94A3B8'; }} onMouseOut={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.borderColor = borderColor; }}>
                     {content['hero_cta_secondary']}
                   </button>
                 </div>
-                <p style={{ fontSize: '12px', color: textMuted }}>No credit card&nbsp;&middot;&nbsp;No ads&nbsp;&middot;&nbsp;No platform fees on payments</p>
+                <p style={{ fontSize: '12px', color: textMuted }}>No credit card&nbsp;&middot;&nbsp;No ads&nbsp;&middot;&nbsp;No revenue cut on payments</p>
               </div>
             </div>
 
@@ -368,7 +390,7 @@ export default function LandingPage() {
             {[
               { val: '$19.99/mo', label: 'Starting price' },
               { val: '14 days',   label: 'Free trial, no card needed' },
-              { val: '0%',        label: 'Platform fee on payments' },
+              { val: '$1/ticket',  label: 'Flat fee on paid events (no % cut)' },
               { val: '0',         label: 'Ads. Ever.' },
             ].map(function(stat, i) {
               return (
@@ -408,10 +430,13 @@ export default function LandingPage() {
                 );
               })}
             </div>
+            <div style={{ textAlign: 'center', marginTop: '32px' }}>
+              <Link to="/features" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-xl" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 24px', fontSize: '14px', fontWeight: 600, background: cardBg, color: textPrimary, border: '1px solid ' + borderColor, borderRadius: '10px', textDecoration: 'none', transition: 'border-color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#F5B731'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = borderColor; }}>
+                View all features in detail <Icon path={ICONS.arrow} size={15} />
+              </Link>
+            </div>
           </div>
         </section>
-
-        {/* ── Why Not Just Use a Social Feed ── */}
         <section aria-labelledby="privacy-heading" style={{ padding: '80px 24px', background: '#0E1523', borderBottom: '1px solid #2A3550' }}>
           <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '52px' }}>
@@ -469,7 +494,94 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Multi-org spotlight ── */}
+        {/* ── Discovery Section ── */}
+        <section aria-labelledby="discovery-heading" style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid ' + borderColor }}>
+          <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '52px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '12px' }}>Open to the community</p>
+              <h2 id="discovery-heading" style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: textPrimary, marginBottom: '14px' }}>
+                Find events and organizations near you
+              </h2>
+              <p style={{ fontSize: '16px', color: textSecondary, maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
+                No account needed. Verified nonprofits and their public events are searchable by anyone in the community. Show up. Get involved.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+
+              {/* Discover Events card */}
+              <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '16px', overflow: 'hidden' }}>
+                <div style={{ background: 'linear-gradient(135deg, #1D3461 0%, #1A2035 100%)', padding: '32px 28px 24px', borderBottom: '1px solid ' + borderColor }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', color: '#3B82F6' }}>
+                    <Icon path={ICONS.calendar} size={24} />
+                  </div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>Discover Events</h3>
+                  <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: 1.6 }}>Browse upcoming public events from verified nonprofits in your community. Filter by date, type, or neighborhood.</p>
+                </div>
+                <div style={{ padding: '20px 28px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                    {['Food drives, fundraisers, volunteer opportunities','RSVP directly — no account needed for public events','Events from verified orgs only — no spam, no fakes','See what\'s happening across your whole city'].map(function(item) {
+                      return (
+                        <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                          <span aria-hidden="true" style={{ flexShrink: 0, marginTop: '3px', color: '#3B82F6' }}><Icon path={ICONS.check} size={14} /></span>
+                          <span style={{ fontSize: '13px', color: textSecondary }}>{item}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Link to="/discover" className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 700, background: '#3B82F6', color: 'white', borderRadius: '10px', textDecoration: 'none', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#2563EB'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#3B82F6'; }}>
+                    Browse Events <Icon path={ICONS.arrow} size={15} />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Find Organizations card */}
+              <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '16px', overflow: 'hidden' }}>
+                <div style={{ background: 'linear-gradient(135deg, #1B3A2F 0%, #1A2035 100%)', padding: '32px 28px 24px', borderBottom: '1px solid ' + borderColor }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', color: '#22C55E' }}>
+                    <Icon path={ICONS.globe} size={24} />
+                  </div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>Find Organizations</h3>
+                  <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: 1.6 }}>Explore verified nonprofits and community groups in your area. Follow orgs you care about and never miss an update.</p>
+                </div>
+                <div style={{ padding: '20px 28px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                    {['Search by cause, neighborhood, or keyword','Verified 501(c)(3) badge — know you\'re supporting a real org','Follow organizations to get their public updates','Discover collaboration between orgs working on similar causes'].map(function(item) {
+                      return (
+                        <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                          <span aria-hidden="true" style={{ flexShrink: 0, marginTop: '3px', color: '#22C55E' }}><Icon path={ICONS.check} size={14} /></span>
+                          <span style={{ fontSize: '13px', color: textSecondary }}>{item}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Link to="/explore" className="focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 rounded-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 700, background: '#22C55E', color: '#111827', borderRadius: '10px', textDecoration: 'none', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#16A34A'; e.currentTarget.style.color = 'white'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#22C55E'; e.currentTarget.style.color = '#111827'; }}>
+                    Explore Organizations <Icon path={ICONS.arrow} size={15} />
+                  </Link>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Community callout bar */}
+            <div style={{ background: isDark ? '#151B2D' : '#F1F5F9', border: '1px solid ' + borderColor, borderRadius: '14px', padding: '24px 28px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F5B731', flexShrink: 0 }}>
+                  <Icon path={ICONS.users} size={22} />
+                </div>
+                <div>
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, marginBottom: '2px' }}>The Community Board — for verified org admins</p>
+                  <p style={{ fontSize: '13px', color: textMuted }}>A private space where verified nonprofits post needs, share surplus resources, and find collaboration partners. No social feed. No noise.</p>
+                </div>
+              </div>
+              <button onClick={goToSignup} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flexShrink: 0, padding: '10px 20px', fontSize: '13px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Get Verified Access
+              </button>
+            </div>
+          </div>
+        </section>
+
+
         <section aria-labelledby="spotlight-heading" style={{ padding: '80px 24px 0px', background: pageBg, borderBottom: '1px solid ' + borderColor }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '48px', alignItems: 'start', marginBottom: '52px' }}>
@@ -499,7 +611,7 @@ export default function LandingPage() {
                     );
                   })}
                 </div>
-                <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 700, background: '#3B82F6', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#2563EB'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#3B82F6'; }}>
+                <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', fontSize: '14px', fontWeight: 700, background: '#3B82F6', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#2563EB'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#3B82F6'; }}>
                   Try It Free <Icon path={ICONS.arrow} size={16} />
                 </button>
               </div>
@@ -549,7 +661,7 @@ export default function LandingPage() {
               })}
             </div>
             <div style={{ textAlign: 'center' }}>
-              <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
+              <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
                 Get Started Now <Icon path={ICONS.arrow} size={16} />
               </button>
             </div>
@@ -616,7 +728,7 @@ export default function LandingPage() {
                     )}
                     <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '14px' }}>{plan.meta}</div>
                     <p style={{ fontSize: '12px', color: '#374151', lineHeight: 1.6, marginBottom: '18px' }}>{plan.tagline}</p>
-                    <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" style={{ width: '100%', padding: '10px', fontSize: '13px', fontWeight: 700, background: plan.btnBg, color: plan.btnColor, border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
+                    <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" style={{ width: '100%', padding: '10px', fontSize: '13px', fontWeight: 700, background: plan.btnBg, color: plan.btnColor, border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
                       Start Free — 14 Days
                     </button>
                   </div>
@@ -649,7 +761,7 @@ export default function LandingPage() {
 
             {/* Compare plans link */}
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <button onClick={function() { navigate('/pricing'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 22px', fontSize: '14px', fontWeight: 600, background: cardBg, color: textPrimary, border: '1px solid ' + borderColor, borderRadius: '10px', cursor: 'pointer', transition: 'border-color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#3B82F6'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = borderColor; }}>
+              <button onClick={function() { goToPricing(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 22px', fontSize: '14px', fontWeight: 600, background: cardBg, color: textPrimary, border: '1px solid ' + borderColor, borderRadius: '10px', cursor: 'pointer', transition: 'border-color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#3B82F6'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = borderColor; }}>
                 Compare all plans in detail <Icon path={ICONS.arrow} size={15} />
               </button>
             </div>
@@ -663,7 +775,7 @@ export default function LandingPage() {
                 <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '2px' }}>Verified nonprofit rate</p>
                 <p style={{ fontSize: '12px', color: textMuted }}>Verified 501(c)(3) orgs get a 30-day free trial (vs standard 14 days), a public discovery board listing, a verified badge, and access to the Community Board.</p>
               </div>
-              <button onClick={function() { navigate('/pricing'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flexShrink: 0, padding: '7px 16px', fontSize: '12px', fontWeight: 700, background: 'none', color: '#F5B731', border: '1px solid rgba(245,183,49,0.4)', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Learn More</button>
+              <button onClick={function() { goToPricing(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg" style={{ flexShrink: 0, padding: '7px 16px', fontSize: '12px', fontWeight: 700, background: 'none', color: '#F5B731', border: '1px solid rgba(245,183,49,0.4)', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Learn More</button>
             </div>
 
             <p style={{ textAlign: 'center', fontSize: '12px', color: textMuted, marginTop: '14px' }}>
@@ -757,10 +869,10 @@ export default function LandingPage() {
             </p>
             <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '36px' }}>14-day free trial · No credit card · Cancel any time</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
-              <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
+              <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)', transition: 'background 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
                 {content['final_cta_button']} <Icon path={ICONS.arrow} size={18} />
               </button>
-              <button onClick={function() { navigate('/pricing'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#94A3B8'; e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}>
+              <button onClick={function() { goToPricing(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.borderColor = '#94A3B8'; e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}>
                 View Pricing
               </button>
             </div>
@@ -770,19 +882,74 @@ export default function LandingPage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer role="contentinfo" style={{ background: '#060E1A', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '36px 24px' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
+      <footer role="contentinfo" style={{ background: '#060E1A', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '48px 24px 32px' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+
+          {/* Top row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '40px', marginBottom: '40px' }}>
+
+            {/* Logo + tagline */}
+            <div>
+              <button onClick={function() { window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" aria-label="Scroll to top" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                <span style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
+              </button>
+              <p style={{ fontSize: '13px', color: '#64748B', marginTop: '6px' }}>Where Community Work Connects.</p>
+            </div>
+
+            {/* Link columns */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px' }}>
+
+              {/* Community */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '14px' }}>Community</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[['Discover Events','/discover'],['Explore Organizations','/explore']].map(function(item) {
+                    return (
+                      <Link key={item[0]} to={item[1]} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>
+                        {item[0]}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Platform */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '14px' }}>Platform</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[['Features','/features'],['Pricing','/pricing'],['About','/about']].map(function(item) {
+                    return (
+                      <Link key={item[0]} to={item[1]} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>
+                        {item[0]}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Legal */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '14px' }}>Legal</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[['Terms of Service','/legal'],['Privacy Policy','/legal'],['Legal Information','/legal']].map(function(item) {
+                    return (
+                      <Link key={item[0]} to={item[1]} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>
+                        {item[0]}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
           </div>
-          <nav aria-label="Footer navigation" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
-            {[['features','Features'],['pricing','Pricing'],['faq','FAQ'],['contact','Contact']].map(function(item) {
-              return <button key={item[0]} onClick={function() { scrollTo(item[0]); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>{item[1]}</button>;
-            })}
-            <button onClick={function() { navigate('/login'); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>Log In</button>
-            <Link to="/wishlist" className="focus:outline-none focus:ring-2 focus:ring-amber-400 rounded" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none', transition: 'color 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; }} onMouseOut={function(e) { e.currentTarget.style.color = '#94A3B8'; }}>Wishlist</Link>
-          </nav>
-          <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {content['footer_copyright']}</p>
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <p style={{ fontSize: '12px', color: '#475569' }}>&copy; {content['footer_copyright']}</p>
+            <p style={{ fontSize: '12px', color: '#475569' }}>No ads &middot; No data selling &middot; No revenue cut on payments</p>
+          </div>
+
         </div>
       </footer>
 

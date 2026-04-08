@@ -46,6 +46,7 @@ import OrganizationDiscovery from './pages/OrganizationDiscovery';
 import { ThemeProvider } from './context/ThemeContext';
 import CommunityBoard from './pages/CommunityBoard';
 import PricingPage from './pages/PricingPage';
+import FeaturesPage from './pages/FeaturesPage';
 import BillingPage from './pages/BillingPage';
 import NotFound from './pages/NotFound';
 
@@ -69,36 +70,42 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-if (loading) {
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: '#0E1523' }}
-      role="status"
-      aria-label="Loading Syndicade"
-    >
-      <div className="text-center">
-        <img
-          src="/mascot-loading.png"
-          alt=""
-          aria-hidden="true"
-          style={{ width: '180px', display: 'block', margin: '0 auto 16px' }}
-        />
-        <p style={{ color: '#64748B', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>
-          Loading Syndicade...
-        </p>
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: '#0E1523' }}
+        role="status"
+        aria-label="Loading Syndicade"
+      >
+        <div className="text-center">
+          <img
+            src="/mascot-loading.png"
+            alt=""
+            aria-hidden="true"
+            style={{ width: '180px', display: 'block', margin: '0 auto 16px' }}
+          />
+          <p style={{ color: '#64748B', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>
+            Loading Syndicade...
+          </p>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-  // Paths where the global Header and Footer should be hidden
-  const hideChrome = (
-    window.location.pathname.startsWith('/org/') ||
-    window.location.pathname.startsWith('/home') ||
-    window.location.pathname === '/about' ||
-    window.location.pathname === '/onboarding' ||
-    window.location.pathname === '/welcome'
+  // Pages that manage their own header/footer — suppress the global chrome
+  var path = window.location.pathname;
+  var hideChrome = (
+    path === '/' ||
+    path === '/home' ||
+    path === '/about' ||
+    path === '/login' ||
+    path === '/signup' ||
+    path === '/pricing' ||
+    path === '/features' ||
+    path === '/onboarding' ||
+    path === '/welcome' ||
+    path.startsWith('/org/')
   );
 
   return (
@@ -114,11 +121,11 @@ if (loading) {
       />
       <Router>
         <div className="min-h-screen bg-gray-50">
-          {session && !hideChrome && <Header />}
+          {!hideChrome && <Header />}
 
           <Routes>
 
-            {/* ── Public / auth routes ────────────────────────────────────── */}
+            {/* ── Public / auth routes ──────────────────────────────── */}
             <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
             <Route path="/staff" element={<StaffDashboard />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
@@ -131,48 +138,44 @@ if (loading) {
             <Route path="/home" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/features" element={<FeaturesPage />} />
 
-            {/* ── Discovery / global event routes ────────────────────────── */}
+            {/* ── Discovery / global event routes ──────────────────── */}
             <Route path="/discover" element={<EventDiscovery />} />
             <Route path="/explore" element={<OrganizationDiscovery />} />
             <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/events/:eventId" element={<EventDetails />} />
 
-            {/* ── Check-in (no auth required for guests) ─────────────────── */}
+            {/* ── Check-in (no auth required for guests) ───────────── */}
             <Route path="/check-in/:eventId" element={<CheckInPage />} />
             <Route path="/guest-check-in/:eventId" element={<GuestCheckInPage />} />
 
-            {/* ── Public org pages ────────────────────────────────────────── */}
+            {/* ── Public org pages ─────────────────────────────────── */}
             <Route path="/org/:slug" element={<PublicOrganizationPage />} />
             <Route path="/org/:slug/:pageSlug" element={<PublicOrganizationPage />} />
 
-            {/* ── Account / profile ───────────────────────────────────────── */}
+            {/* ── Account / profile ────────────────────────────────── */}
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
             <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
 
-            {/* ── Organization list ───────────────────────────────────────── */}
+            {/* ── Organization list ─────────────────────────────────── */}
             <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
 
-            {/* ── Organization pages — all wrapped in OrgLayout ───────────── */}
-            {/*    OrgLayout renders: org header + left nav + <Outlet />       */}
-            {/*    Child routes render inside the Outlet (nav stays visible)   */}
+            {/* ── Organization pages — all wrapped in OrgLayout ──────── */}
             <Route
               path="/organizations/:organizationId"
               element={session ? <OrgLayout /> : <Navigate to="/login" replace />}
             >
-              {/* Overview / home tab */}
               <Route index element={<OrganizationDashboard />} />
 
-              {/* Dashboard sub-sections (handled by OrganizationDashboard reading the path) */}
               <Route path="photos"    element={<OrganizationDashboard />} />
               <Route path="approvals" element={<OrganizationDashboard />} />
               <Route path="analytics" element={<OrganizationDashboard />} />
               <Route path="settings"  element={<OrganizationDashboard />} />
               <Route path="invite"    element={<OrganizationDashboard />} />
 
-              {/* Workspace */}
               <Route path="events" element={<EventList />} />
               <Route path="events/:eventId" element={<EventDetails />} />
               <Route path="announcements" element={<AnnouncementFeed />} />
@@ -181,7 +184,6 @@ if (loading) {
               <Route path="chat" element={<OrgChat />} />
               <Route path="documents" element={<DocumentLibrary />} />
 
-              {/* Tools */}
               <Route path="polls" element={<PollsList />} />
               <Route path="signup-forms" element={<SignupFormsList />} />
               <Route path="surveys" element={<SurveysList />} />
@@ -190,17 +192,15 @@ if (loading) {
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />
 
-              {/* Admin */}
               <Route path="inbox" element={<AdminInbox />} />
               <Route path="page-editor" element={<OrgPageEditor />} />
               <Route path="billing" element={<BillingPage />} />
 
-              {/* Platform */}
               <Route path="community-board" element={<CommunityBoard />} />
             </Route>
 
-{/* ── 404 ─────────────────────────────────────────────────────── */}
-<Route path="*" element={<NotFound />} />
+            {/* ── 404 ──────────────────────────────────────────────── */}
+            <Route path="*" element={<NotFound />} />
 
           </Routes>
 
