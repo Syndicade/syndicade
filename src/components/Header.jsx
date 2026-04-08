@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
+import { useLocation } from 'react-router-dom';
 
 function Header() {
   var navigate = useNavigate();
+  var location = useLocation();
   var { isDark, toggle } = useTheme();
 
   var [currentUser, setCurrentUser]   = useState(null);
@@ -118,30 +120,56 @@ function Header() {
             </nav>
           )}
 
-          {/* ── Nav links — logged OUT ── */}
-          {!currentUser && (
-            <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
-              {[
-                { label: 'Features',              path: '/features' },
-                { label: 'Pricing',               path: '/pricing'  },
-                { label: 'Discover Events',        path: '/discover' },
-                { label: 'Explore Organizations',  path: '/explore'  },
-              ].map(function(item) {
-                return (
-                  <button
-                    key={item.path}
-                    onClick={function() { navigate(item.path); }}
-                    style={{ color: textSecondary }}
-                    className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                    onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
-          )}
+{/* ── Nav links — logged OUT ── */}
+{!currentUser && (
+  <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
+
+    {location.pathname !== '/features' && (
+      <button
+        onClick={function() { navigate('/features'); }}
+        style={{ color: textSecondary }}
+        className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+        onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+      >
+        Features
+      </button>
+    )}
+
+    {location.pathname !== '/pricing' && (
+      <button
+        onClick={function() { navigate('/pricing'); }}
+        style={{ color: textSecondary }}
+        className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+        onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+      >
+        Pricing
+      </button>
+    )}
+
+    <button
+      onClick={function() { navigate('/discover'); }}
+      className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+      style={{ color: '#60A5FA' }}
+      onMouseEnter={function(e) { e.currentTarget.style.color = '#93C5FD'; e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={function(e) { e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'transparent'; }}
+    >
+      Discover Events
+    </button>
+
+    <button
+      onClick={function() { navigate('/explore'); }}
+      className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+      style={{ color: '#4ADE80' }}
+      onMouseEnter={function(e) { e.currentTarget.style.color = '#86EFAC'; e.currentTarget.style.background = hoverBg; }}
+      onMouseLeave={function(e) { e.currentTarget.style.color = '#4ADE80'; e.currentTarget.style.background = 'transparent'; }}
+    >
+      Explore Orgs
+    </button>
+
+  </nav>
+)}
 
           {/* Right side */}
           <div className="flex items-center gap-2">

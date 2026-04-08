@@ -149,7 +149,7 @@ function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <p className="text-xs" style={{ color: '#475569' }}>
-              No ads. No data selling. 0% platform fees.
+              No ads. No data selling. No revenue cut on payments.
             </p>
           </div>
         </div>
