@@ -37,28 +37,28 @@ var ICONS = {
   billing:    ['M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'],
   x:          'M6 18L18 6M6 6l12 12',
   menu:       'M4 6h16M4 12h16M4 18h16',
- email: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+  email:      'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
 };
 
 // ── Nav groups ────────────────────────────────────────────────────────────────
-// route: the path segment after /organizations/:id/
-// If route is '' it matches the index (overview)
+// tourKey: the data-tour attribute value for guided tour targeting.
+// Only add tourKey to items that are tour steps — leave others undefined.
 function buildNavGroups(organizationId, pendingCount, unreadCount) {
   var base = '/organizations/' + organizationId;
   return [
-    {
-      label: 'Workspace',
-      items: [
-        { id:'overview',      label:'Overview',      iconKey:'overview',  route:'',              path: base },
-        { id:'events',        label:'Events',        iconKey:'calendar',  route:'events',        path: base + '/events' },
-        { id:'announcements', label:'Announcements', iconKey:'megaphone', route:'announcements', path: base + '/announcements' },
-        { id:'members',       label:'Members',       iconKey:'members',   route:'members',       path: base + '/members' },
-        { id:'groups', label:'Groups', iconKey:'groups', route:'groups', path: base + '/groups' },
-        { id:'chat',          label:'Chat',          iconKey:'chat',      route:'chat',          path: base + '/chat' },
-        { id:'documents',     label:'Documents',     iconKey:'folder',    route:'documents',     path: base + '/documents' },
-        { id:'photos',        label:'Photos',        iconKey:'photo',     route:'photos',        path: base + '/photos' },
-      ]
-    },
+{
+  label: 'Workspace',
+  items: [
+    { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
+    { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'], tourKey:'tour-events-nav' },
+    { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'], tourKey:'tour-announcements-nav' },
+    { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'], tourKey:'tour-members-nav' },
+    { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
+    { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
+    { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
+    { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
+  ]
+},
     {
       label: 'Tools',
       items: [
@@ -71,11 +71,11 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       label: 'Admin',
       adminOnly: true,
       items: [
-        { id:'approvals', label:'Approvals',   iconKey:'approvals', route:'approvals', path: base + '/approvals', badge: pendingCount },
-        { id:'inbox',     label:'Inbox',        iconKey:'inbox',     route:'inbox',     path: base + '/inbox',     badge: unreadCount },
-        { id:'analytics', label:'Analytics',    iconKey:'analytics', route:'analytics', path: base + '/analytics' },
-        { id:'publicpage',label:'Public Page',  iconKey:'pencil',    route:'page-editor',path: base + '/page-editor' },
-        { id:'email-blasts', label:'Email Blasts', iconKey:'email', route:'email-blasts', path: base + '/email-blasts', adminOnly: true },
+        { id:'approvals',    label:'Approvals',    iconKey:'approvals', route:'approvals',    path: base + '/approvals',    badge: pendingCount },
+        { id:'inbox',        label:'Inbox',        iconKey:'inbox',     route:'inbox',        path: base + '/inbox',        badge: unreadCount },
+        { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics' },
+        { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey: 'tour-public-page-nav', adminOnly: true },
+        { id:'email-blasts', label:'Email Blasts', iconKey:'email',     route:'email-blasts', path: base + '/email-blasts', adminOnly: true },
       ]
     },
     {
@@ -98,14 +98,14 @@ function OrgLayout() {
 
   var themeCtx = useTheme();
   var isDark = themeCtx ? themeCtx.isDark : true;
-  var pageBg      = isDark ? '#0E1523' : '#F8FAFC';
-  var sectionBg   = isDark ? '#151B2D' : '#FFFFFF';
-  var cardBg      = isDark ? '#1A2035' : '#FFFFFF';
-  var elevatedBg  = isDark ? '#1E2845' : '#F1F5F9';
-  var borderColor = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF'  : '#0E1523';
-  var textMuted   = isDark ? '#94A3B8'  : '#64748B';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
+  var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
+  var sectionBg     = isDark ? '#151B2D' : '#FFFFFF';
+  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
+  var elevatedBg    = isDark ? '#1E2845' : '#F1F5F9';
+  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
+  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
 
   var [organization, setOrganization] = useState(null);
   var [membership, setMembership] = useState(null);
@@ -136,7 +136,6 @@ function OrgLayout() {
       setMembership(memResult.data);
 
       if (memResult.data.role === 'admin') {
-        // Badge counts (non-blocking)
         supabase.from('contact_inquiries').select('*', { count:'exact', head:true }).eq('organization_id', organizationId).eq('is_read', false).then(function(r) { setUnreadCount(r.count || 0); });
         var tables = ['events','announcements','polls','surveys','signup_forms'];
         var total = 0;
@@ -157,9 +156,8 @@ function OrgLayout() {
   // ── Active route detection ─────────────────────────────────────────────────
   function isActive(item) {
     var base = '/organizations/' + organizationId;
-    var pathname = location.pathname.replace(/\/$/, ''); // strip trailing slash
+    var pathname = location.pathname.replace(/\/$/, '');
     if (item.route === '') {
-      // Overview is active only at the exact base path
       return pathname === base;
     }
     return pathname === base + '/' + item.route || pathname.startsWith(base + '/' + item.route + '/');
@@ -187,6 +185,7 @@ function OrgLayout() {
               <button
                 key={item.id}
                 onClick={function() { setMobileNavOpen(false); navigate(item.path); }}
+                data-tour={item.tourKey || undefined}
                 style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px', borderRadius:'7px', fontSize: item.isSub ? '11px' : '12px', fontWeight:600, color:color, background:bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap' }}
                 aria-current={active ? 'page' : undefined}
               >
@@ -233,8 +232,8 @@ function OrgLayout() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>
-<div style={{ padding:'20px 8px' }}>
-  <div style={{ maxWidth:'1600px', margin:'0 auto' }}>
+      <div style={{ padding:'20px 8px' }}>
+        <div style={{ maxWidth:'1600px', margin:'0 auto' }}>
 
           {/* Org header */}
           <div style={{ background:sectionBg, borderRadius:'12px', padding:'12px 18px', marginBottom:'12px', border:'1px solid '+borderColor, display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
@@ -255,13 +254,13 @@ function OrgLayout() {
                   {isAdmin ? 'Admin' : 'Member'}
                 </span>
                 {organization && organization.is_verified_nonprofit && (
-  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', padding:'2px 8px', borderRadius:'99px', fontSize:'10px', fontWeight:700, background:'rgba(34,197,94,0.15)', color:'#22C55E', border:'1px solid rgba(34,197,94,0.3)' }}>
-    <svg xmlns="http://www.w3.org/2000/svg" style={{ width:'10px', height:'10px', flexShrink:0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-    </svg>
-    Verified
-  </span>
-)}
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', padding:'2px 8px', borderRadius:'99px', fontSize:'10px', fontWeight:700, background:'rgba(34,197,94,0.15)', color:'#22C55E', border:'1px solid rgba(34,197,94,0.3)' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" style={{ width:'10px', height:'10px', flexShrink:0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Verified
+                  </span>
+                )}
               </div>
             </div>
             {membership && membership.role === 'admin' && (
@@ -293,6 +292,7 @@ function OrgLayout() {
 
             {/* LEFT NAV (desktop) */}
             <aside
+              data-tour="tour-org-nav"
               style={{ width:'240px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
               aria-label="Organization navigation"
               role="navigation"
@@ -302,7 +302,6 @@ function OrgLayout() {
 
             {/* PAGE CONTENT via Outlet */}
             <main style={{ flex:1, minWidth:0 }} role="main">
-              {/* Pass org/membership data to child pages via context */}
               <Outlet context={{ organization:organization, membership:membership, isAdmin:isAdmin, viewMode:viewMode, organizationId:organizationId }} />
             </main>
 

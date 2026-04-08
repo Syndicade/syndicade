@@ -80,15 +80,18 @@ export default function GuidedTour({ steps, orgId, memberId, tourType, show, onD
 
   // ── 2. Position tooltip whenever step changes ─────────────────────────────
   useLayoutEffect(function () {
-    if (!active) return;
+  if (!active) return;
 
+  function measure() {
     if (isCenter) {
       setPos(null);
       setTimeout(function () { if (tooltipRef.current) tooltipRef.current.focus(); }, 30);
       return;
     }
 
-    var el = document.querySelector('[data-tour="' + step.target + '"]');
+var el = document.querySelector('[data-tour="' + step.target + '"]');
+console.log('Tour step', stepIdx, '| target:', step.target, '| el found:', el);
+console.log('ALL data-tour elements in DOM:', document.querySelectorAll('[data-tour]'));
     if (!el) { setPos(null); return; }
 
     el.scrollIntoView({ behavior: 'instant', block: 'center' });
@@ -98,10 +101,10 @@ export default function GuidedTour({ steps, orgId, memberId, tourType, show, onD
 
     var p = step.placement || 'auto';
     if (p === 'auto') {
-      if (vh - rect.bottom > 220)      p = 'bottom';
-      else if (rect.top > 220)          p = 'top';
+      if (vh - rect.bottom > 220)                p = 'bottom';
+      else if (rect.top > 220)                   p = 'top';
       else if (vw - rect.right > TOOLTIP_W + 40) p = 'right';
-      else                              p = 'left';
+      else                                        p = 'left';
     }
 
     var tooltipL;
@@ -131,7 +134,13 @@ export default function GuidedTour({ steps, orgId, memberId, tourType, show, onD
     var arrowOffset = Math.max(16, Math.min(TOOLTIP_W - 24, targetCX - tooltipL));
     setPos({ style: style, placement: p, arrowOffset: arrowOffset, rect: rect });
     setTimeout(function () { if (tooltipRef.current) tooltipRef.current.focus(); }, 30);
-  }, [stepIdx, active]);
+  }
+
+  // Delay to let OrgLayout's nav render into the DOM before querying
+  var timer = setTimeout(measure, 80);
+  return function () { clearTimeout(timer); };
+
+}, [stepIdx, active]);
 
   // ── 3. Keyboard navigation ────────────────────────────────────────────────
   useEffect(function () {
@@ -179,9 +188,9 @@ export default function GuidedTour({ steps, orgId, memberId, tourType, show, onD
     return Object.assign({}, base, { right: (0 - ARROW) + 'px', top: '50%', transform: 'translateY(-50%)', borderTop: ARROW + 'px solid transparent', borderBottom: ARROW + 'px solid transparent', borderLeft: ARROW + 'px solid #1E2845' });
   }
 
-  var tooltipStyle = isCenter
-    ? { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: TOOLTIP_W + 'px', zIndex: 10000 }
-    : (pos ? pos.style : { display: 'none' });
+var tooltipStyle = (isCenter || !pos)
+  ? { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: TOOLTIP_W + 'px', zIndex: 10000 }
+  : pos.style;
 
   var highlightRect = pos ? pos.rect : null;
   var arrowS = !isCenter && pos ? buildArrowStyle() : null;

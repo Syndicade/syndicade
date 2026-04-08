@@ -141,12 +141,12 @@ var ORG_TOUR_STEPS = [
     description: 'Post announcements that show up directly on your members\' unified dashboards.',
     placement: 'right'
   },
-  {
-    target: 'tour-public-page-nav',
-    title: 'Your public page',
-    description: 'Your organization\'s website is already live. Edit it anytime — no coding needed.',
-    placement: 'right'
-  },
+{
+  target: 'tour-public-page-nav',
+  title: 'Your public page',
+  description: 'Set up your organization\'s public website — add your logo, mission, events, and a contact form. No coding needed.',
+  placement: 'right'
+},
   {
     target: null,
     title: 'You\'re ready to go',
@@ -185,6 +185,7 @@ function OrganizationDashboard() {
 
   // ── TOUR STATE — triggers tour after wizard completes ─────────────────────
   var [showTour, setShowTour] = useState(false);
+  var [showCelebration, setShowCelebration] = useState(false);
 
   // Overview data
   var [overviewEvents, setOverviewEvents] = useState([]);
@@ -920,19 +921,19 @@ function OrganizationDashboard() {
 
   // ── Nav definition ────────────────────────────────────────────────────────
   var NAV_GROUPS = [
-    {
-      label: 'Workspace',
-      items: [
-        { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
-        { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'] },
-        { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'] },
-        { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'] },
-        { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
-        { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
-        { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
-        { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
-      ]
-    },
+{
+  label: 'Workspace',
+  items: [
+    { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
+    { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'], tourKey:'tour-events-nav' },
+    { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'], tourKey:'tour-announcements-nav' },
+    { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'], tourKey:'tour-members-nav' },
+    { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
+    { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
+    { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
+    { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
+  ]
+},
     {
       label: 'Tools',
       items: [
@@ -948,7 +949,7 @@ function OrganizationDashboard() {
         { id:'approvals',  label:'Approvals',   iconKey:'approvals', roles:['admin'], badge: pendingApprovalsCount },
         { id:'inbox',      label:'Inbox',        iconKey:'inbox',     roles:['admin'], badge: unreadInquiriesCount },
         { id:'analytics',  label:'Analytics',    iconKey:'analytics', roles:['admin'] },
-        { id:'publicpage', label:'Public Page',  iconKey:'pencil',    roles:['admin'] },
+        { id:'publicpage', label:'Public Page', iconKey:'pencil', roles:['admin'], tourKey:'tour-public-page-nav' },
       ]
     },
     {
@@ -1024,6 +1025,7 @@ function OrganizationDashboard() {
               <button
                 key={item.id}
                 onClick={function() { handleNavClick(item); }}
+                data-tour={item.tourKey || null}
                 style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px', borderRadius:'7px', fontSize: item.isSub ? '10px' : '11px', fontWeight:600, color:color, background:bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap' }}
                 aria-current={isActive ? 'page' : undefined}
               >
@@ -1401,7 +1403,7 @@ function OrganizationDashboard() {
           orgId={organizationId}
           tourType="org"
           show={showTour}
-          onDone={function() { setShowTour(false); }}
+          onDone={function() { setShowTour(false); setShowCelebration(true); }}
         />
       )}
 
@@ -1593,6 +1595,18 @@ function OrganizationDashboard() {
           }}
         />
       )}
+      {showCelebration && (
+  <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10001, padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
+    <div style={{ background:'#1A2035', border:'1px solid #2A3550', borderRadius:'16px', padding:'40px 32px', textAlign:'center', maxWidth:'360px', width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,0.5)' }}>
+      <img src="/mascot-onboarding.png" alt="" aria-hidden="true" style={{ width:'200px', height:'auto', margin:'0 auto 20px', display:'block' }} />
+      <h2 id="celebrate-title" style={{ fontSize:'20px', fontWeight:800, color:'#FFFFFF', marginBottom:'8px' }}>You are all set!</h2>
+      <p style={{ fontSize:'13px', color:'#CBD5E1', lineHeight:1.65, marginBottom:'24px' }}>Your organization is ready to go. Start by inviting your first members.</p>
+      <button onClick={function() { setShowCelebration(false); }} style={{ padding:'10px 28px', background:'#F5B731', color:'#0E1523', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:800, cursor:'pointer', width:'100%' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-yellow-400">
+        Let us go
+      </button>
+    </div>
+  </div>
+)}
     </>
   );
 }
