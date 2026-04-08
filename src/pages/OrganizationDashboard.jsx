@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
 import CreatePoll from '../components/CreatePoll';
 import CreateSignupForm from '../components/CreateSignupForm';
+import GuidedTour from '../components/GuidedTour';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -109,6 +110,50 @@ function PostitSkeleton() {
   );
 }
 
+// ── Org tour steps ────────────────────────────────────────────────────────────
+var ORG_TOUR_STEPS = [
+  {
+    target: null,
+    title: 'Welcome to your dashboard',
+    description: 'You\'re all set up. Let\'s take a 30-second tour so you can hit the ground running.'
+  },
+  {
+    target: 'tour-org-nav',
+    title: 'Your navigation',
+    description: 'Everything your organization needs is here — members, events, announcements, documents, and more.',
+    placement: 'right'
+  },
+  {
+    target: 'tour-members-nav',
+    title: 'Manage your members',
+    description: 'Invite people, assign admin roles, and see who\'s active in your organization.',
+    placement: 'right'
+  },
+  {
+    target: 'tour-events-nav',
+    title: 'Create your first event',
+    description: 'Schedule events, collect RSVPs, sell tickets, and track attendance — all in one place.',
+    placement: 'right'
+  },
+  {
+    target: 'tour-announcements-nav',
+    title: 'Keep members informed',
+    description: 'Post announcements that show up directly on your members\' unified dashboards.',
+    placement: 'right'
+  },
+  {
+    target: 'tour-public-page-nav',
+    title: 'Your public page',
+    description: 'Your organization\'s website is already live. Edit it anytime — no coding needed.',
+    placement: 'right'
+  },
+  {
+    target: null,
+    title: 'You\'re ready to go',
+    description: 'Start by inviting your first members. They\'ll get a welcome email and can join right away.'
+  }
+];
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 function OrganizationDashboard() {
   var params = useParams();
@@ -138,6 +183,9 @@ function OrganizationDashboard() {
   var [viewMode, setViewMode] = useState('admin');
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  // ── TOUR STATE — triggers tour after wizard completes ─────────────────────
+  var [showTour, setShowTour] = useState(false);
+
   // Overview data
   var [overviewEvents, setOverviewEvents] = useState([]);
   var [overviewAnnouncements, setOverviewAnnouncements] = useState([]);
@@ -164,7 +212,7 @@ function OrganizationDashboard() {
   var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   var [showCreatePoll, setShowCreatePoll] = useState(false);
   var [showCreateSignupForm, setShowCreateSignupForm] = useState(false);
-var [showInviteModal, setShowInviteModal] = useState(false);
+  var [showInviteModal, setShowInviteModal] = useState(false);
 
   // Approvals
   var [pendingApprovals, setPendingApprovals] = useState([]);
@@ -272,11 +320,8 @@ var [showInviteModal, setShowInviteModal] = useState(false);
         var readSet = new Set((reads.data || []).map(function(r) { return r.announcement_id; }));
         unread = annIds.length - readSet.size;
       }
-      // member RSVPs
       var rsvpRes = userId ? await supabase.from('event_rsvps').select('*', { count:'exact', head:true }).eq('member_id', userId).eq('status', 'going') : { count: 0 };
-      // member groups
       var grpRes = userId ? await supabase.from('org_group_members').select('*', { count:'exact', head:true }).eq('member_id', userId) : { count: 0 };
-
       setStats({
         totalMembers: results[0].count || 0,
         pendingInvites: results[1].count || 0,
@@ -293,7 +338,6 @@ var [showInviteModal, setShowInviteModal] = useState(false);
     try {
       var evRes = await supabase.from('events').select('id,title,start_time,end_time,location,event_type,description,recurrence_rule,parent_event_id,is_rescheduled,original_start_time,publish_to_discovery,publish_to_website,volunteer_signup,donation_dropoff,event_types,audience,languages,visibility,require_rsvp,virtual_link,full_address,city,state,zip_code,max_attendees,is_recurring,recurrence_end_date,is_paid,enable_check_in').eq('organization_id', organizationId).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true }).limit(3);
       setOverviewEvents(evRes.data || []);
-
       var annRes = await supabase.from('announcements').select('id,title,content,priority,created_at,is_pinned').eq('organization_id', organizationId).order('is_pinned', { ascending:false }).order('created_at', { ascending:false }).limit(3);
       setOverviewAnnouncements(annRes.data || []);
     } catch(err) { console.error(err); }
@@ -400,9 +444,7 @@ var [showInviteModal, setShowInviteModal] = useState(false);
         var r7 = await supabase.from('org_programs').select('id,name,description,status,audience').eq('organization_id', organizationId).order('sort_order', { ascending:true }).limit(6);
         result.items = r7.data || [];
       }
-      if (tab === 'chat') {
-        result.items = chatPreview;
-      }
+      if (tab === 'chat') { result.items = chatPreview; }
       if (tab === 'inbox') {
         var r8 = await supabase.from('contact_inquiries').select('id,name,email,message,is_read,created_at').eq('organization_id', organizationId).order('created_at', { ascending:false }).limit(5);
         result.items = r8.data || [];
@@ -554,7 +596,6 @@ var [showInviteModal, setShowInviteModal] = useState(false);
 
   // ── Generic preview panel wrapper ─────────────────────────────────────────
   function renderPreviewPanel(opts) {
-    // opts: { label, fullPagePath, iconPath, children, count }
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
         {/* Header */}
@@ -577,8 +618,6 @@ var [showInviteModal, setShowInviteModal] = useState(false);
             <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </button>
         </div>
-
-        {/* Content */}
         <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'10px', overflow:'hidden' }}>
           {previewLoading ? (
             <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'10px' }}>
@@ -924,7 +963,6 @@ var [showInviteModal, setShowInviteModal] = useState(false);
 
   function handleNavClick(item) {
     setMobileNavOpen(false);
-    // Billing stays external — it's a Stripe portal redirect
     if (item.externalLink) { navigate(item.externalLink); return; }
     setActiveTab(item.id);
   }
@@ -1008,31 +1046,20 @@ var [showInviteModal, setShowInviteModal] = useState(false);
   function renderOverview() {
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
-
-        {/* Board card: stats + announcements + events */}
         <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'16px' }}>
-
-          {/* Stats */}
           <div style={{ display:'flex', gap:'8px', marginBottom:'16px' }}>
-            {/* Members */}
             <button onClick={function() { navigate('/organizations/'+organizationId+'/members'); }} style={{ flex:1, background:isDark?'#0E1523':'#EFF6FF', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-opacity" aria-label="View members">
               <p style={{ fontSize:'8px', fontWeight:700, color:'#60A5FA', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>Members</p>
               <p style={{ fontSize:'20px', fontWeight:800, color:'#60A5FA' }}>{stats.totalMembers}</p>
             </button>
-
-            {/* Events or RSVPs */}
             <button onClick={function() { navigate('/organizations/'+organizationId+'/events'); }} style={{ flex:1, background:isDark?'#0E1523':'#F0FDF4', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-opacity" aria-label="View events">
               <p style={{ fontSize:'8px', fontWeight:700, color:'#34D399', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>{isAdmin ? 'Upcoming Events' : 'My RSVPs'}</p>
               <p style={{ fontSize:'20px', fontWeight:800, color:'#34D399' }}>{isAdmin ? stats.activeEvents : stats.myRsvps}</p>
             </button>
-
-            {/* Unread */}
             <button onClick={function() { navigate('/organizations/'+organizationId+'/announcements'); }} style={{ flex:1, background:isDark?'#0E1523':'#FFF7ED', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-opacity" aria-label="View announcements">
               <p style={{ fontSize:'8px', fontWeight:700, color:'#FB923C', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>Unread</p>
               <p style={{ fontSize:'20px', fontWeight:800, color:'#FB923C' }}>{stats.unreadAnnouncements}</p>
             </button>
-
-            {/* Invites or Groups */}
             {isAdmin ? (
               <button onClick={function() { setActiveTab('invite'); }} style={{ flex:1, background:isDark?'#0E1523':'#FFFBEB', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-opacity" aria-label="View pending invites">
                 <p style={{ fontSize:'8px', fontWeight:700, color:'#FBBF24', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>Pending Invites</p>
@@ -1186,12 +1213,11 @@ var [showInviteModal, setShowInviteModal] = useState(false);
           )}
         </div>
 
-        {/* Quick Actions (admin) / Shortcuts (member) — compact, stat-card sized */}
+        {/* Quick Actions */}
         <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'16px' }}>
           <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#F5B731', marginBottom:'10px' }}>
             {isAdmin ? 'Quick Actions' : 'Shortcuts'}
           </p>
-
           {isAdmin ? (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'6px' }}>
               {[
@@ -1199,14 +1225,11 @@ var [showInviteModal, setShowInviteModal] = useState(false);
                 { label:'Create Announcement', color:textSecondary, dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreateAnnouncement(true); } },
                 { label:'Create Poll',          color:textSecondary, dot:'#A78BFA', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreatePoll(true); }},
                 { label:'Create Sign-Up Form',  color:textSecondary, dot:'#818CF8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowCreateSignupForm(true); } },
-                { label:'Invite Members',  color:textSecondary, dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowInviteModal(true); } },
-                { label:'Create Program',  color:textSecondary, dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowProgramModal(true); setEditingProgram(null); setProgramForm({ name:'', description:'', audience:'', schedule:'', how_to_apply:'', contact_name:'', contact_email:'', status:'active', is_public:true }); } },
+                { label:'Invite Members',       color:textSecondary, dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowInviteModal(true); } },
+                { label:'Create Program',       color:textSecondary, dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, action: function() { setShowProgramModal(true); setEditingProgram(null); setProgramForm({ name:'', description:'', audience:'', schedule:'', how_to_apply:'', contact_name:'', contact_email:'', status:'active', is_public:true }); } },
               ].map(function(qa) {
                 return (
-                  <button key={qa.label} onClick={qa.action}
-                    style={{ background:qa.bg, border:'1px solid '+qa.borderClr, borderRadius:'8px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', width:'100%', textAlign:'left' }}
-                    className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-opacity"
-                  >
+                  <button key={qa.label} onClick={qa.action} style={{ background:qa.bg, border:'1px solid '+qa.borderClr, borderRadius:'8px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', width:'100%', textAlign:'left' }} className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-opacity">
                     <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:qa.dot, flexShrink:0, display:'inline-block' }} aria-hidden="true" />
                     <span style={{ fontSize:'11px', fontWeight:600, color:qa.color }}>{qa.label}</span>
                   </button>
@@ -1216,18 +1239,15 @@ var [showInviteModal, setShowInviteModal] = useState(false);
           ) : (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'6px' }}>
               {[
-                { label:'Browse Events',    dot:'#3B82F6', bg:'rgba(59,130,246,0.08)', borderClr:'rgba(59,130,246,0.2)', color:'#60A5FA', action: function() { navigate('/organizations/'+organizationId+'/events'); } },
-                { label:'Announcements',    dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/announcements'); } },
-                { label:'Active Polls',     dot:'#A78BFA', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/polls'); } },
-                { label:'Sign-Up Sheets',   dot:'#818CF8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/signup-forms'); } },
-                { label:'Documents',        dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/documents'); } },
-                { label:'My Profile',       dot:'#94A3B8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/profile'); } },
+                { label:'Browse Events',  dot:'#3B82F6', bg:'rgba(59,130,246,0.08)', borderClr:'rgba(59,130,246,0.2)', color:'#60A5FA', action: function() { navigate('/organizations/'+organizationId+'/events'); } },
+                { label:'Announcements', dot:'#F5B731', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/announcements'); } },
+                { label:'Active Polls',  dot:'#A78BFA', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/polls'); } },
+                { label:'Sign-Up Sheets',dot:'#818CF8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/signup-forms'); } },
+                { label:'Documents',     dot:'#4ADE80', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/organizations/'+organizationId+'/documents'); } },
+                { label:'My Profile',    dot:'#94A3B8', bg:isDark?'#0E1523':'#F8FAFC', borderClr:borderColor, color:textSecondary, action: function() { navigate('/profile'); } },
               ].map(function(sc) {
                 return (
-                  <button key={sc.label} onClick={sc.action}
-                    style={{ background:sc.bg, border:'1px solid '+sc.borderClr, borderRadius:'8px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', width:'100%', textAlign:'left' }}
-                    className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-opacity"
-                  >
+                  <button key={sc.label} onClick={sc.action} style={{ background:sc.bg, border:'1px solid '+sc.borderClr, borderRadius:'8px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', width:'100%', textAlign:'left' }} className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-opacity">
                     <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:sc.dot, flexShrink:0, display:'inline-block' }} aria-hidden="true" />
                     <span style={{ fontSize:'11px', fontWeight:600, color:sc.color }}>{sc.label}</span>
                   </button>
@@ -1255,8 +1275,7 @@ var [showInviteModal, setShowInviteModal] = useState(false);
             <h3 style={{ fontSize:'14px', fontWeight:700, color:textPrimary, marginBottom:'14px' }}>Upload Photo</h3>
             {photoError && <div style={{ marginBottom:'12px', padding:'10px 12px', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:'8px', fontSize:'13px', color:'#EF4444' }} role="alert">{photoError}</div>}
             <div style={{ display:'flex', gap:'12px', flexWrap:'wrap' }}>
-              <input type="text" placeholder="Caption (optional)" value={photoCaption} onChange={function(e) { setPhotoCaption(e.target.value); }} maxLength={200}
-                style={{ flex:1, minWidth:'200px', padding:'8px 12px', borderRadius:'8px', border:'1px solid '+borderColor, background:isDark?'#0E1523':'#F8FAFC', color:textPrimary, fontSize:'13px', outline:'none' }} />
+              <input type="text" placeholder="Caption (optional)" value={photoCaption} onChange={function(e) { setPhotoCaption(e.target.value); }} maxLength={200} style={{ flex:1, minWidth:'200px', padding:'8px 12px', borderRadius:'8px', border:'1px solid '+borderColor, background:isDark?'#0E1523':'#F8FAFC', color:textPrimary, fontSize:'13px', outline:'none' }} />
               <label htmlFor="photo-upload" style={{ display:'inline-flex', alignItems:'center', gap:'6px', padding:'8px 16px', borderRadius:'8px', fontWeight:700, fontSize:'13px', cursor: photoUploading ? 'not-allowed' : 'pointer', background: photoUploading ? elevatedBg : '#3B82F6', color: photoUploading ? textMuted : '#fff' }}>
                 {photoUploading ? 'Uploading...' : 'Upload Photo'}
                 <input id="photo-upload" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handlePhotoUpload} disabled={photoUploading} className="sr-only" aria-label="Choose a photo" />
@@ -1284,10 +1303,7 @@ var [showInviteModal, setShowInviteModal] = useState(false);
                   </button>
                   {photo.caption && <div style={{ padding:'6px 10px', background:cardBg }}><p style={{ fontSize:'11px', color:textSecondary, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{photo.caption}</p></div>}
                   {isAdmin && (
-                    <button onClick={function() { handleDeletePhoto(photo); }} disabled={deletingPhotoId === photo.id}
-                      style={{ position:'absolute', top:'8px', right:'8px', width:'26px', height:'26px', background:'#EF4444', color:'#fff', borderRadius:'50%', border:'none', cursor:'pointer', display:'none', alignItems:'center', justifyContent:'center', opacity:0 }}
-                      className="group-hover:flex group-hover:opacity-100 focus:flex focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-opacity"
-                      aria-label={'Delete photo' + (photo.caption ? ': '+photo.caption : '')}>
+                    <button onClick={function() { handleDeletePhoto(photo); }} disabled={deletingPhotoId === photo.id} style={{ position:'absolute', top:'8px', right:'8px', width:'26px', height:'26px', background:'#EF4444', color:'#fff', borderRadius:'50%', border:'none', cursor:'pointer', display:'none', alignItems:'center', justifyContent:'center', opacity:0 }} className="group-hover:flex group-hover:opacity-100 focus:flex focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-opacity" aria-label={'Delete photo' + (photo.caption ? ': '+photo.caption : '')}>
                       <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </button>
                   )}
@@ -1370,19 +1386,25 @@ var [showInviteModal, setShowInviteModal] = useState(false);
   }
 
   // ── Main render ───────────────────────────────────────────────────────────
-  // OrgLayout provides the page shell, org header, and nav.
-  // This component just renders its content section.
-  // It reads the URL path to know which tab to display when accessed at sub-routes.
   var currentPath = window.location.pathname;
   var pathBase = '/organizations/' + organizationId;
   var subPath = currentPath.replace(pathBase, '').replace(/^\//, '') || 'overview';
-  // Map sub-paths to internal tabs for sections that don't have dedicated page components
   var pathTabMap = { 'photos':'photos', 'approvals':'approvals', 'analytics':'analytics', 'settings':'settings', 'invite':'invite', '':'overview', 'overview':'overview' };
   var resolvedTab = pathTabMap[subPath] || 'overview';
 
   return (
     <>
-      {/* Overview content — shown at index route or overview sub-path */}
+      {/* ── Guided Tour — fires after wizard completes ── */}
+      {isAdmin && (
+        <GuidedTour
+          steps={ORG_TOUR_STEPS}
+          orgId={organizationId}
+          tourType="org"
+          show={showTour}
+          onDone={function() { setShowTour(false); }}
+        />
+      )}
+
       {resolvedTab === 'overview'   && renderOverview()}
       {resolvedTab === 'photos'     && renderPhotos()}
       {resolvedTab === 'approvals'  && isAdmin && renderApprovals()}
@@ -1427,65 +1449,66 @@ var [showInviteModal, setShowInviteModal] = useState(false);
       />
 
       <CreatePoll
-  isOpen={showCreatePoll}
-  onClose={function() { setShowCreatePoll(false); }}
-  onSuccess={function() { setShowCreatePoll(false); }}
-  organizationId={organizationId}
-  organizationName={organization ? organization.name : ''}
-/>
+        isOpen={showCreatePoll}
+        onClose={function() { setShowCreatePoll(false); }}
+        onSuccess={function() { setShowCreatePoll(false); }}
+        organizationId={organizationId}
+        organizationName={organization ? organization.name : ''}
+      />
 
-{showCreateSignupForm && (
-  <CreateSignupForm
-    organizationId={organizationId}
-    onClose={function() { setShowCreateSignupForm(false); }}
-    onFormCreated={function() { setShowCreateSignupForm(false); mascotSuccessToast('Sign-up form created!'); }}
-  />
-)}
+      {showCreateSignupForm && (
+        <CreateSignupForm
+          organizationId={organizationId}
+          onClose={function() { setShowCreateSignupForm(false); }}
+          onFormCreated={function() { setShowCreateSignupForm(false); mascotSuccessToast('Sign-up form created!'); }}
+        />
+      )}
 
-{showInviteModal && (
-  <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:50 }} role="dialog" aria-modal="true" aria-label="Invite member" onClick={function() { setShowInviteModal(false); }}>
-    <div style={{ width:'100%', maxWidth:'520px' }} onClick={function(e) { e.stopPropagation(); }}>
-      <InviteMember organizationId={organizationId} organizationName={organization ? organization.name : ''} onInviteSent={function() { fetchStats(currentUserId); setShowInviteModal(false); }} />
-    </div>
-  </div>
-)}
+      {showInviteModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:50 }} role="dialog" aria-modal="true" aria-label="Invite member" onClick={function() { setShowInviteModal(false); }}>
+          <div style={{ width:'100%', maxWidth:'520px' }} onClick={function(e) { e.stopPropagation(); }}>
+            <InviteMember organizationId={organizationId} organizationName={organization ? organization.name : ''} onInviteSent={function() { fetchStats(currentUserId); setShowInviteModal(false); }} />
+          </div>
+        </div>
+      )}
 
-{showProgramModal && (
-  <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowProgramModal(false); }}>
-    <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)', width:'100%', maxWidth:'512px', maxHeight:'90vh', overflowY:'auto' }} onClick={function(e) { e.stopPropagation(); }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 24px', borderBottom:'1px solid '+borderColor }}>
-        <h2 id="prog-modal-title" style={{ fontSize:'17px', fontWeight:800, color:textPrimary, margin:0 }}>Add Program</h2>
-        <button onClick={function() { setShowProgramModal(false); }} style={{ padding:'6px', borderRadius:'8px', background:'none', border:'none', cursor:'pointer', color:textMuted }} className="focus:outline-none focus:ring-2 focus:ring-gray-500" aria-label="Close modal"><Icon path={ICONS.x} className="h-5 w-5" /></button>
-      </div>
-      <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:'16px' }}>
-        <div>
-          <label htmlFor="dash-prog-name" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Program Name <span style={{ color:'#EF4444' }} aria-hidden="true">*</span></label>
-          <input id="dash-prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{name:e.target.value}); }); }} placeholder="e.g. After School Tutoring" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
+      {showProgramModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowProgramModal(false); }}>
+          <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)', width:'100%', maxWidth:'512px', maxHeight:'90vh', overflowY:'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 24px', borderBottom:'1px solid '+borderColor }}>
+              <h2 id="prog-modal-title" style={{ fontSize:'17px', fontWeight:800, color:textPrimary, margin:0 }}>Add Program</h2>
+              <button onClick={function() { setShowProgramModal(false); }} style={{ padding:'6px', borderRadius:'8px', background:'none', border:'none', cursor:'pointer', color:textMuted }} className="focus:outline-none focus:ring-2 focus:ring-gray-500" aria-label="Close modal"><Icon path={ICONS.x} className="h-5 w-5" /></button>
+            </div>
+            <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:'16px' }}>
+              <div>
+                <label htmlFor="dash-prog-name" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Program Name <span style={{ color:'#EF4444' }} aria-hidden="true">*</span></label>
+                <input id="dash-prog-name" type="text" value={programForm.name} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{name:e.target.value}); }); }} placeholder="e.g. After School Tutoring" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
+              </div>
+              <div>
+                <label htmlFor="dash-prog-desc" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Description</label>
+                <textarea id="dash-prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{description:e.target.value}); }); }} rows={3} placeholder="What does this program do?" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', resize:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label htmlFor="dash-prog-audience" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Who Is It For?</label>
+                <input id="dash-prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{audience:e.target.value}); }); }} placeholder="e.g. Youth ages 6-18" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label htmlFor="dash-prog-status" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Status</label>
+                <select id="dash-prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{status:e.target.value}); }); }} style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none' }} className="focus:ring-2 focus:ring-blue-500">
+                  <option value="active">Active</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:'12px', padding:'16px 24px', borderTop:'1px solid '+borderColor }}>
+              <button onClick={function() { setShowProgramModal(false); }} style={{ flex:1, padding:'10px', border:'1px solid '+borderColor, color:textSecondary, fontSize:'14px', fontWeight:600, borderRadius:'8px', background:'transparent', cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
+              <button onClick={saveProgram} disabled={programSaving} style={{ flex:1, padding:'10px', background:'#3B82F6', color:'#fff', fontSize:'14px', fontWeight:700, borderRadius:'8px', border:'none', cursor:programSaving?'not-allowed':'pointer', opacity:programSaving?0.6:1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">{programSaving ? 'Saving...' : 'Add Program'}</button>
+            </div>
+          </div>
         </div>
-        <div>
-          <label htmlFor="dash-prog-desc" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Description</label>
-          <textarea id="dash-prog-desc" value={programForm.description} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{description:e.target.value}); }); }} rows={3} placeholder="What does this program do?" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', resize:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label htmlFor="dash-prog-audience" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Who Is It For?</label>
-          <input id="dash-prog-audience" type="text" value={programForm.audience} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{audience:e.target.value}); }); }} placeholder="e.g. Youth ages 6-18" style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none', boxSizing:'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label htmlFor="dash-prog-status" style={{ display:'block', fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'6px' }}>Status</label>
-          <select id="dash-prog-status" value={programForm.status} onChange={function(e) { setProgramForm(function(p) { return Object.assign({},p,{status:e.target.value}); }); }} style={{ width:'100%', padding:'8px 12px', background:isDark?'#151B2D':'#F8FAFC', border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'14px', color:textPrimary, outline:'none' }} className="focus:ring-2 focus:ring-blue-500">
-            <option value="active">Active</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="closed">Closed</option>
-          </select>
-        </div>
-      </div>
-      <div style={{ display:'flex', gap:'12px', padding:'16px 24px', borderTop:'1px solid '+borderColor }}>
-        <button onClick={function() { setShowProgramModal(false); }} style={{ flex:1, padding:'10px', border:'1px solid '+borderColor, color:textSecondary, fontSize:'14px', fontWeight:600, borderRadius:'8px', background:'transparent', cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
-        <button onClick={saveProgram} disabled={programSaving} style={{ flex:1, padding:'10px', background:'#3B82F6', color:'#fff', fontSize:'14px', fontWeight:700, borderRadius:'8px', border:'none', cursor:programSaving?'not-allowed':'pointer', opacity:programSaving?0.6:1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">{programSaving ? 'Saving...' : 'Add Program'}</button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       {/* Reschedule modal */}
       {showRescheduleModal && rescheduleEvent && (
         <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="reschedule-title">
@@ -1559,9 +1582,16 @@ var [showInviteModal, setShowInviteModal] = useState(false);
         </div>
       )}
 
-      {/* Onboarding wizard */}
+      {/* ── Onboarding wizard ──
+          onComplete: mark org done locally + trigger the guided tour */}
       {organization && !organization.onboarding_completed && membership && membership.role === 'admin' && (
-        <OrgOnboardingWizard org={organization} onComplete={function() { setOrganization(function(prev) { return Object.assign({}, prev, { onboarding_completed:true }); }); }} />
+        <OrgOnboardingWizard
+          org={organization}
+          onComplete={function() {
+            setOrganization(function(prev) { return Object.assign({}, prev, { onboarding_completed: true }); });
+            setShowTour(true);
+          }}
+        />
       )}
     </>
   );
