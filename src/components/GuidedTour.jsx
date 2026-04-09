@@ -90,8 +90,6 @@ export default function GuidedTour({ steps, orgId, memberId, tourType, show, onD
     }
 
 var el = document.querySelector('[data-tour="' + step.target + '"]');
-console.log('Tour step', stepIdx, '| target:', step.target, '| el found:', el);
-console.log('ALL data-tour elements in DOM:', document.querySelectorAll('[data-tour]'));
     if (!el) { setPos(null); return; }
 
     el.scrollIntoView({ behavior: 'instant', block: 'center' });

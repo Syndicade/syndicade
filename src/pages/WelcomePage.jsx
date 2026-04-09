@@ -1,199 +1,519 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import toast from 'react-hot-toast';
+import { mascotSuccessToast } from '../components/MascotToast';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
 
-function Icon({ path, className = 'h-5 w-5', strokeWidth = 2 }) {
+// ---------------------------------------------------------------------------
+// Icon helper
+// ---------------------------------------------------------------------------
+function Icon({ d, size, color, strokeWidth, style }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      {Array.isArray(path)
-        ? path.map((d, i) => <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={d} />)
-        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={path} />}
+    <svg xmlns="http://www.w3.org/2000/svg" width={size || 20} height={size || 20}
+      viewBox="0 0 24 24" fill="none" stroke={color || 'currentColor'}
+      strokeWidth={strokeWidth || 2} strokeLinecap="round" strokeLinejoin="round"
+      style={style || {}} aria-hidden="true">
+      {Array.isArray(d)
+        ? d.map(function(p, i) { return <path key={i} d={p} />; })
+        : <path d={d} />}
     </svg>
   );
 }
 
-const ICONS = {
-  arrow:    'M13 7l5 5m0 0l-5 5m5-5H6',
-  building: ['M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
-  search:   'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  calendar: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  check:    'M5 13l4 4L19 7',
+var CHECK     = 'M5 13l4 4L19 7';
+var CHEVRON_R = 'M9 18l6-6-6-6';
+var CHEVRON_L = 'M15 18l-6-6 6-6';
+var SEARCH_D  = ['M21 21l-4.35-4.35', 'M17 11A6 6 0 105 11a6 6 0 0012 0z'];
+var ORG_ICON  = 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4';
+var BELL_ICON = ['M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9', 'M13.73 21a2 2 0 01-3.46 0'];
+var PIN_ICON  = ['M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z', 'M12 11.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z'];
+var LOCK_ICON = ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'];
+
+var INTERESTS = [
+  'Civic & Community', 'Arts & Culture', 'Sports & Fitness',
+  'Education', 'Faith & Spirituality', 'Environment',
+  'Health & Wellness', 'Technology', 'Volunteering', 'Youth & Family',
+  'Neighborhood', 'Seniors', 'Animals & Pets', 'Music',
+];
+
+var inputBase = {
+  width: '100%', padding: '11px 14px', background: '#1E2845',
+  border: '1px solid #2A3550', borderRadius: '8px', color: '#FFFFFF',
+  fontSize: '14px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.15s',
 };
 
-export default function WelcomePage() {
-  const navigate  = useNavigate();
-  const [user, setUser]   = useState(null);
-  const [orgs, setOrgs]   = useState([]);
-  const [loading, setLoading] = useState(true);
+// ---------------------------------------------------------------------------
+// Step dots
+// ---------------------------------------------------------------------------
+function StepDots({ current, total }) {
+  return (
+    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginBottom: '28px' }}
+      aria-label={'Step ' + current + ' of ' + total}>
+      {Array.from({ length: total }).map(function(_, i) {
+        var done = i + 1 < current; var active = i + 1 === current;
+        return <div key={i} aria-hidden="true" style={{ width: active ? '24px' : '8px', height: '8px', borderRadius: '4px', background: done ? '#22C55E' : active ? '#3B82F6' : '#2A3550', transition: 'all 0.3s' }} />;
+      })}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+// ---------------------------------------------------------------------------
+// STEP 1 — Interests
+// ---------------------------------------------------------------------------
+function StepInterests({ firstName, selected, onToggle, onNext, onSkip }) {
+  return (
+    <div>
+      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        {/* Bigger mascot */}
+        <img src="/mascot-onboarding.png" alt="" aria-hidden="true"
+          style={{ width: "260px", height: 'auto', display: 'block', margin: '0 auto 20px' }} />
+        <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#FFFFFF', margin: '0 0 8px' }}>
+          Welcome, {firstName}!
+        </h1>
+        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0 }}>
+          Select your interests so we can suggest organizations near you.
+        </p>
+      </div>
 
-      if (user) {
-        // Fetch orgs this member belongs to
-        const { data } = await supabase
-          .from('memberships')
-          .select('organization_id, role, organizations(id, name, location, type)')
-          .eq('member_id', user.id)
-          .eq('status', 'active');
-        setOrgs(data || []);
+      <div style={{ marginBottom: '28px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>
+          Your Interests
+          <span style={{ color: '#64748B', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: '11px', marginLeft: '6px' }}>(optional — pick any that apply)</span>
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }} role="group" aria-label="Interest categories">
+          {INTERESTS.map(function(interest) {
+            var sel = selected.includes(interest);
+            return (
+              <button key={interest} type="button" onClick={function() { onToggle(interest); }}
+                aria-pressed={sel}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ padding: '8px 16px', borderRadius: '99px', fontSize: '13px', fontWeight: 600, border: '1px solid ' + (sel ? '#3B82F6' : '#2A3550'), background: sel ? 'rgba(59,130,246,0.15)' : '#1E2845', color: sel ? '#3B82F6' : '#94A3B8', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                {sel && <Icon d={CHECK} size={11} color="#3B82F6" strokeWidth={3} />}
+                {interest}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <button onClick={onNext}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px 24px', background: '#3B82F6', color: '#FFFFFF', fontWeight: 800, fontSize: '15px', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+        Continue
+        <Icon d={CHEVRON_R} size={16} color="#FFFFFF" />
+      </button>
+
+      <button onClick={onSkip}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: '13px', padding: '12px', textAlign: 'center', width: '100%', textDecoration: 'underline', marginTop: '4px' }}
+        className="focus:outline-none focus:ring-2 focus:ring-gray-500 rounded">
+        Skip for now
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// STEP 2 — Find / follow orgs
+// ---------------------------------------------------------------------------
+function StepFindOrgs({ onFinish, onBack, userId, interests }) {
+  var [location, setLocation]           = useState('');
+  var [searchQuery, setSearchQuery]     = useState('');
+  var [searchResults, setSearchResults] = useState([]);
+  var [searching, setSearching]         = useState(false);
+  var [followedOrgs, setFollowedOrgs]   = useState({});
+  var [hasSearched, setHasSearched]     = useState(false);
+  var searchTimeout                     = useRef(null);
+
+  // Auto-search when location is entered
+  useEffect(function() {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    var combined = (location + ' ' + searchQuery).trim();
+    if (!combined) { setSearchResults([]); setHasSearched(false); return; }
+    searchTimeout.current = setTimeout(function() { runSearch(location.trim(), searchQuery.trim()); }, 400);
+    return function() { clearTimeout(searchTimeout.current); };
+  }, [location, searchQuery]);
+
+  async function runSearch(loc, query) {
+    setSearching(true);
+    setHasSearched(true);
+    try {
+      var conditions = [];
+
+      // Each word in location as OR against name + description
+      if (loc) {
+        loc.split(/[\s,]+/).filter(Boolean).forEach(function(word) {
+          if (word.length >= 2) {
+            conditions.push("name.ilike.%" + word + "%");
+            conditions.push("description.ilike.%" + word + "%");
+          }
+        });
       }
+
+      // Keyword as OR against name + description
+      if (query) {
+        query.split(/\s+/).filter(Boolean).forEach(function(word) {
+          if (word.length >= 2) {
+            conditions.push("name.ilike.%" + word + "%");
+            conditions.push("description.ilike.%" + word + "%");
+          }
+        });
+      }
+
+      // Always include interests as OR conditions
+      if (interests && interests.length > 0) {
+        interests.forEach(function(interest) {
+          var keyword = interest.split(" & ")[0].split(" ")[0];
+          conditions.push("name.ilike.%" + keyword + "%");
+          conditions.push("description.ilike.%" + keyword + "%");
+        });
+      }
+
+      if (conditions.length === 0) { setSearchResults([]); setSearching(false); return; }
+
+      // Deduplicate
+      conditions = conditions.filter(function(c, i) { return conditions.indexOf(c) === i; });
+
+      var result = await supabase
+        .from("organizations")
+        .select("id, name, type, logo_url, description")
+        .or(conditions.join(","))
+        .limit(10);
+
+      setSearchResults(result.data || []);
+    } catch (e) {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function handleFollow(org) {
+    if (!userId || followedOrgs[org.id] === 'followed' || followedOrgs[org.id] === 'loading') return;
+    setFollowedOrgs(function(prev) { return Object.assign({}, prev, { [org.id]: 'loading' }); });
+    try {
+      // org_followers columns: user_id + org_id (confirmed from DB)
+      var { error } = await supabase.from('org_followers').insert({
+        user_id: userId,
+        org_id: org.id,
+      });
+      // Ignore duplicate key error (user already follows this org)
+      if (error && error.code !== '23505') throw error;
+      setFollowedOrgs(function(prev) { return Object.assign({}, prev, { [org.id]: 'followed' }); });
+      mascotSuccessToast('Following ' + org.name + '!', 'Their public events will appear on your dashboard.');
+    } catch (err) {
+      toast.error('Could not follow ' + org.name + '. Please try again from their org page.');
+      setFollowedOrgs(function(prev) { var n = Object.assign({}, prev); delete n[org.id]; return n; });
+    }
+  }
+
+  var followedCount = Object.values(followedOrgs).filter(function(v) { return v === 'followed'; }).length;
+
+  return (
+    <div>
+      <div style={{ marginBottom: '20px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', margin: '0 0 6px' }}>
+          Find organizations near you
+        </h2>
+        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0 }}>
+          Enter your city or zip code to discover organizations based on your interests.
+        </p>
+      </div>
+
+      {/* Following vs Member explanation */}
+      <div style={{ background: '#151B2D', border: '1px solid #2A3550', borderRadius: '12px', padding: '14px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '140px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon d={BELL_ICON} size={14} color="#3B82F6" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 2px' }}>Following</p>
+              <p style={{ fontSize: '11px', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>See public events on your dashboard. Free and open.</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '140px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(34,197,94,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon d={ORG_ICON} size={14} color="#22C55E" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', margin: '0 0 2px' }}>Member</p>
+              <p style={{ fontSize: '11px', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>Full access — announcements, alerts, and private events.</p>
+            </div>
+          </div>
+        </div>
+        {/* Privacy note */}
+        <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid #2A3550' }}>
+          <Icon d={LOCK_ICON} size={13} color="#64748B" style={{ flexShrink: 0, marginTop: '1px' }} />
+          <p style={{ fontSize: '11px', color: '#64748B', margin: 0, lineHeight: 1.5 }}>
+            Some organizations keep their events private and do not appear in search. They may choose to restrict visibility to members only.
+          </p>
+        </div>
+      </div>
+
+      {/* Location input */}
+      <div style={{ marginBottom: '8px' }}>
+        <label htmlFor="location-input" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
+          Your City or Zip Code
+        </label>
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+            <Icon d={PIN_ICON} size={16} color="#64748B" />
+          </div>
+          <input
+            id="location-input"
+            type="text"
+            value={location}
+            onChange={function(e) { setLocation(e.target.value); }}
+            placeholder="e.g. Toledo, OH or 43604"
+            aria-label="Your city or zip code"
+            style={Object.assign({}, inputBase, { paddingLeft: '40px' })}
+            onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+            onBlur={function(e) { e.target.style.borderColor = '#2A3550'; }}
+          />
+        </div>
+      </div>
+
+      {/* Keyword search */}
+      <div style={{ marginBottom: '14px' }}>
+        <label htmlFor="keyword-input" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
+          Name or Keyword
+          <span style={{ color: '#64748B', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: '11px', marginLeft: '6px' }}>(optional)</span>
+        </label>
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+            <Icon d={SEARCH_D} size={16} color="#64748B" />
+          </div>
+          <input
+            id="keyword-input"
+            type="search"
+            value={searchQuery}
+            onChange={function(e) { setSearchQuery(e.target.value); }}
+            placeholder="e.g. youth sports, arts council..."
+            aria-label="Search by name or keyword"
+            style={Object.assign({}, inputBase, { paddingLeft: '40px', paddingRight: searching ? '40px' : '14px' })}
+            onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+            onBlur={function(e) { e.target.style.borderColor = '#2A3550'; }}
+          />
+          {searching && (
+            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="#3B82F6" strokeWidth="3" opacity="0.25" />
+                <path fill="#3B82F6" d="M4 12a8 8 0 018-8v8H4z" opacity="0.75" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Interest chips shown as active filters */}
+      {interests && interests.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '11px', color: '#64748B', alignSelf: 'center', marginRight: '2px' }}>Filtering by:</span>
+          {interests.slice(0, 4).map(function(interest) {
+            return (
+              <span key={interest} style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#3B82F6' }}>
+                {interest}
+              </span>
+            );
+          })}
+          {interests.length > 4 && (
+            <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, background: '#1E2845', border: '1px solid #2A3550', color: '#64748B' }}>
+              +{interests.length - 4} more
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Results */}
+      {searchResults.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', maxHeight: '320px', overflowY: 'auto' }}
+          role="list" aria-label="Organization search results">
+          {searchResults.map(function(org) {
+            var status = followedOrgs[org.id];
+            var isFollowed = status === 'followed';
+            var isLoading  = status === 'loading';
+            return (
+              <div key={org.id} role="listitem"
+                style={{ background: '#0E1523', border: '1px solid ' + (isFollowed ? 'rgba(34,197,94,0.3)' : '#2A3550'), borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#1E2845', border: '1px solid #2A3550', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                  {org.logo_url
+                    ? <img src={org.logo_url} alt="" aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: '15px', fontWeight: 700, color: '#64748B' }}>{(org.name || '?').charAt(0).toUpperCase()}</span>
+                  }
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{org.name}</p>
+                  <p style={{ fontSize: '12px', color: '#64748B', margin: 0, textTransform: 'capitalize' }}>
+                    {(org.type || '').replace(/_/g, ' ')}
+                    {org.location ? ' · ' + org.location : ''}
+                  </p>
+                </div>
+                {isFollowed ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '99px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)', flexShrink: 0 }}>
+                    <Icon d={CHECK} size={12} color="#22C55E" strokeWidth={3} />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#22C55E' }}>Following</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={function() { handleFollow(org); }}
+                    disabled={isLoading}
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '99px', background: '#1E2845', border: '1px solid #2A3550', color: '#CBD5E1', fontSize: '12px', fontWeight: 600, cursor: isLoading ? 'not-allowed' : 'pointer', transition: 'all 0.15s', flexShrink: 0 }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label={'Follow ' + org.name}
+                    onMouseEnter={function(e) { if (!isLoading) { e.currentTarget.style.borderColor = '#22C55E'; e.currentTarget.style.color = '#22C55E'; } }}
+                    onMouseLeave={function(e) { e.currentTarget.style.borderColor = '#2A3550'; e.currentTarget.style.color = '#CBD5E1'; }}>
+                    {isLoading
+                      ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" /><path fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" opacity="0.75" /></svg>
+                      : <Icon d={BELL_ICON} size={12} color="currentColor" strokeWidth={2} />
+                    }
+                    Follow
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No results */}
+      {hasSearched && !searching && searchResults.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '20px', background: '#0E1523', border: '1px solid #2A3550', borderRadius: '10px', marginBottom: '14px' }}>
+          <Icon d={SEARCH_D} size={28} color="#2A3550" style={{ margin: '0 auto 8px', display: 'block' }} />
+          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 4px' }}>No organizations found in that area yet.</p>
+          <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>You can always browse from the <a href="/explore" style={{ color: '#3B82F6' }}>Explore page</a> after setup.</p>
+        </div>
+      )}
+
+      {/* Empty prompt — nothing typed yet */}
+      {!hasSearched && !searching && (
+        <div style={{ textAlign: 'center', padding: '20px', background: '#0E1523', border: '1px dashed #2A3550', borderRadius: '10px', marginBottom: '14px' }}>
+          <Icon d={PIN_ICON} size={28} color="#2A3550" style={{ margin: '0 auto 8px', display: 'block' }} />
+          <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>Enter your city or zip above to find organizations near you.</p>
+        </div>
+      )}
+
+      {/* Followed count */}
+      {followedCount > 0 && (
+        <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Icon d={CHECK} size={14} color="#22C55E" strokeWidth={2.5} />
+          <p style={{ fontSize: '13px', color: '#22C55E', fontWeight: 600, margin: 0 }}>
+            Following {followedCount} {followedCount === 1 ? 'organization' : 'organizations'} — their public events will appear on your dashboard.
+          </p>
+        </div>
+      )}
+
+      <button onClick={onFinish}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px 24px', background: '#F5B731', color: '#0E1523', fontWeight: 800, fontSize: '15px', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
+        className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+        Go to My Dashboard
+        <Icon d={CHEVRON_R} size={16} color="#0E1523" />
+      </button>
+
+      <button onClick={onBack}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '13px', fontWeight: 600, padding: '10px', width: '100%', marginTop: '4px' }}
+        className="focus:outline-none focus:ring-2 focus:ring-gray-500 rounded" aria-label="Go back">
+        <Icon d={CHEVRON_L} size={14} color="#64748B" />
+        Back
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main WelcomePage
+// ---------------------------------------------------------------------------
+export default function WelcomePage() {
+  var navigate = useNavigate();
+  var [member, setMember]       = useState(null);
+  var [loading, setLoading]     = useState(true);
+  var [step, setStep]           = useState(1);
+  var [interests, setInterests] = useState([]);
+
+  useEffect(function() { fetchMember(); }, []);
+
+  async function fetchMember() {
+    try {
+      var { data: { user } } = await supabase.auth.getUser();
+      if (!user) { navigate('/login', { replace: true }); return; }
+      var { data } = await supabase.from('members').select('*').eq('user_id', user.id).single();
+      setMember(data || { user_id: user.id, first_name: 'there' });
+    } catch (e) {
+      setMember({ first_name: 'there' });
+    } finally {
       setLoading(false);
     }
-    load();
-  }, []);
+  }
 
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  function toggleInterest(interest) {
+    setInterests(function(prev) {
+      return prev.includes(interest)
+        ? prev.filter(function(i) { return i !== interest; })
+        : prev.concat([interest]);
+    });
+  }
+
+  async function handleInterestsContinue() {
+    if (interests.length > 0 && member && member.user_id) {
+      try {
+        await supabase.from('members').update({ interests: interests }).eq('user_id', member.user_id);
+      } catch (e) { /* non-blocking */ }
+    }
+    setStep(2);
+  }
+
+  async function handleFinish() {
+    if (member && member.user_id) {
+      await supabase.from('members').update({ onboarding_completed: true }).eq('user_id', member.user_id);
+    }
+    navigate('/dashboard', { replace: true });
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d1526' }}>
-        <div className="text-center">
-          <svg className="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" aria-label="Loading">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          <p className="text-slate-400 text-sm">Loading your account…</p>
-        </div>
+      <div style={{ minHeight: '100vh', background: '#0E1523', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        role="status" aria-label="Loading">
+        <img src="/mascot-loading.png" alt="" aria-hidden="true" style={{ width: '160px' }} />
       </div>
     );
   }
 
+  var firstName = member ? (member.first_name || 'there') : 'there';
+
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ background: '#0d1526', fontFamily: "'DM Sans', system-ui, sans-serif" }}
-    >
-      <a
-        href="#welcome-main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-400 focus:text-slate-900 focus:rounded-lg focus:font-semibold focus:outline-none"
-      >
-        Skip to content
-      </a>
+    <div style={{ minHeight: '100vh', background: '#0E1523', display: 'flex', flexDirection: 'column' }}>
+      <Header />
 
-      <div className="w-full max-w-md">
+      <main id="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '16px', textAlign: 'center' }}>
+          Getting Started
+        </p>
 
-        {/* Brand */}
-        <div className="text-center mb-8">
-          <div className="text-2xl font-black text-white mb-1">
-            Syndi<span className="text-amber-400">cade</span>
-          </div>
+        <StepDots current={step} total={2} />
+
+        <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '20px', padding: '36px', width: '100%', maxWidth: '540px' }}>
+          {step === 1 && (
+            <StepInterests
+              firstName={firstName}
+              selected={interests}
+              onToggle={toggleInterest}
+              onNext={handleInterestsContinue}
+              onSkip={function() { setStep(2); }}
+            />
+          )}
+          {step === 2 && (
+            <StepFindOrgs
+              onFinish={handleFinish}
+              onBack={function() { setStep(1); }}
+              userId={member ? member.user_id : null}
+              interests={interests}
+            />
+          )}
         </div>
+      </main>
 
-        {/* Card */}
-        <main
-          id="welcome-main"
-          className="rounded-2xl border border-white/10 overflow-hidden"
-          style={{ background: '#111d35' }}
-        >
-          {/* Card top */}
-          <div className="p-8 pb-6 border-b border-white/10" style={{ background: '#0a1220' }}>
-            {/* Avatar */}
-            <div
-              className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-black mx-auto mb-5"
-              aria-hidden="true"
-            >
-              {firstName[0].toUpperCase()}
-            </div>
-            <h1 className="text-2xl font-black text-white text-center mb-2">
-              Welcome, {firstName}!
-            </h1>
-            <p className="text-slate-400 text-sm text-center">
-              You're now part of the Syndicade community.
-            </p>
-          </div>
-
-          {/* Orgs section */}
-          <div className="p-6">
-            {orgs.length > 0 ? (
-              <>
-                <p
-                  className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4"
-                  id="orgs-label"
-                >
-                  You belong to {orgs.length} organization{orgs.length !== 1 ? 's' : ''}
-                </p>
-                <ul role="list" aria-labelledby="orgs-label" className="space-y-3 mb-6">
-                  {orgs.map(m => (
-                    <li key={m.organization_id}>
-                      <button
-                        onClick={() => navigate(`/organizations/${m.organization_id}`)}
-                        className="w-full flex items-center gap-4 p-4 rounded-xl border border-blue-800/50 text-left transition-all hover:border-blue-600/70 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                        style={{ background: 'rgba(30,58,138,0.2)' }}
-                        aria-label={`Go to ${m.organizations?.name}`}
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-                          <Icon path={ICONS.building} className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-white truncate">{m.organizations?.name}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">
-                            {m.organizations?.type}{m.organizations?.location ? ` · ${m.organizations.location}` : ''}
-                          </div>
-                        </div>
-                        <span
-                          className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
-                          style={{ background: 'rgba(37,99,235,0.3)', color: '#93c5fd' }}
-                        >
-                          {m.role}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <div className="text-center py-6 mb-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
-                  style={{ background: 'rgba(255,255,255,0.05)' }}
-                  aria-hidden="true"
-                >
-                  <Icon path={ICONS.building} className="h-6 w-6 text-slate-400" />
-                </div>
-                <p className="text-white font-semibold text-sm mb-1">No organizations yet</p>
-                <p className="text-slate-400 text-xs">Search below to find and join one.</p>
-              </div>
-            )}
-
-            {/* Divider */}
-            <div className="flex items-center gap-3 mb-4" role="separator">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-xs text-slate-500">Discover more</span>
-              <div className="flex-1 h-px bg-white/10" />
-            </div>
-
-            {/* Search */}
-            <button
-              onClick={() => navigate('/discover')}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-white/15 text-slate-400 hover:text-white hover:border-white/30 transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 mb-2"
-              style={{ background: '#0d1526' }}
-              aria-label="Search for organizations to join"
-            >
-              <Icon path={ICONS.search} className="h-4 w-4 flex-shrink-0" />
-              <span className="text-sm">Search for organizations to join…</span>
-            </button>
-
-            <p className="text-xs text-slate-500 text-center mt-3 leading-relaxed">
-              You can also ask an admin for an invite link, or browse public organizations in your area.
-            </p>
-          </div>
-
-          {/* Actions */}
-          <div className="px-6 pb-6 flex gap-3">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 flex items-center justify-center gap-2 text-sm"
-              aria-label="Continue to your dashboard"
-            >
-              Continue to dashboard
-              <Icon path={ICONS.arrow} className="h-4 w-4" />
-            </button>
-          </div>
-        </main>
-      </div>
+      <Footer />
     </div>
   );
 }
