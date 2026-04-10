@@ -107,18 +107,19 @@ function AppShell({ session }) {
 
   // Pages that manage their own Header/Footer — suppress global chrome
   // /welcome is NOT here — WelcomePage renders its own Header + Footer
-  var hideChrome = (
-    path === '/' ||
-    path === '/home' ||
-    path === '/about' ||
-    path === '/login' ||
-    path === '/signup' ||
-    path === '/pricing' ||
-    path === '/features' ||
-    path === '/onboarding' ||
-    path.startsWith('/org/')
-  );
-
+var hideChrome = (
+  path === '/' ||
+  path === '/home' ||
+  path === '/about' ||
+  path === '/login' ||
+  path === '/signup' ||
+  path === '/pricing' ||
+  path === '/features' ||
+  path === '/onboarding' ||
+  path === '/discover' ||
+  path === '/explore' ||
+  path.startsWith('/org/')
+);
   return (
     <div className="min-h-screen bg-gray-50" style={{ display: 'flex', flexDirection: 'column' }}>
       {!hideChrome && <Header />}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import toast from 'react-hot-toast'
+import { mascotSuccessToast } from '../components/MascotToast'
 import CreateOrganization from '../components/CreateOrganization'
 import CreateEvent from '../components/CreateEvent.jsx'
 import MySignups from '../components/MySignups'
@@ -110,6 +111,29 @@ function IconBuilding() {
     </svg>
   )
 }
+function IconBookmark() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+    </svg>
+  )
+}
+function IconCompass() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/>
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+    </svg>
+  )
+}
+function IconMap() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/>
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+    </svg>
+  )
+}
 
 // ─── Card type config ─────────────────────────────────────────────────────────
 var CARD_TYPES = {
@@ -118,7 +142,226 @@ var CARD_TYPES = {
   document:     { label: 'DOCUMENT',      bg: '#EDE7F6', tack: '#4527A0', tagBg: '#7E57C2', tagText: '#FFFFFF', Icon: IconDocument },
 }
 
-// ─── Post-it Card — content drives height ─────────────────────────────────────
+// ─── Tour step info ───────────────────────────────────────────────────────────
+var TOUR_STEPS_INFO = [
+  {
+    title: 'Your Stats at a Glance',
+    desc: 'See how many organizations you belong to, upcoming events, and unread announcements — all in one place.',
+  },
+  {
+    title: 'Your Activity Board',
+    desc: 'Announcements, events, and documents from all your organizations appear here as Post-it cards. Filter by type or org, mark items important, or dismiss what you\'ve seen.',
+  },
+  {
+    title: 'Following',
+    desc: 'Follow organizations you\'re interested in — even without being a member. Their public events will appear in your board below.',
+  },
+  {
+    title: 'My Organizations',
+    desc: 'Quick access to every organization you\'re a member of. Red badges show unread announcements. Click any org to jump to its dashboard.',
+  },
+  {
+    title: 'My Sign-Ups',
+    desc: 'All volunteer slots and event sign-up forms you\'ve committed to, tracked right here so nothing slips through the cracks.',
+  },
+]
+
+// ─── Tour Overlay ─────────────────────────────────────────────────────────────
+function TourOverlay({ step, steps, refs, onNext, onSkip }) {
+  var current = steps[step]
+  var [pos, setPos] = useState({ top: '50%', left: '50%', transform: 'translate(-50%,-50%)' })
+
+  useEffect(function() {
+    if (!current) return
+    var el = refs[step] && refs[step].current
+    if (!el) return
+
+    // Scroll element into view first
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    // Save original styles
+    var origBoxShadow = el.style.boxShadow
+    var origPosition = el.style.position
+    var origZIndex = el.style.zIndex
+    var origBorderRadius = el.style.borderRadius
+    var origOutline = el.style.outline
+
+    // Apply spotlight highlight
+    el.style.position = 'relative'
+    el.style.zIndex = '1001'
+    el.style.boxShadow = '0 0 0 3px #F5B731'
+    el.style.borderRadius = '12px'
+    el.style.outline = 'none'
+
+    // Position tooltip after scroll settles
+    var timer = setTimeout(function() {
+      if (!el) return
+      var r = el.getBoundingClientRect()
+      var vw = window.innerWidth
+      var vh = window.innerHeight
+      var tipW = 308
+      var tipH = 195
+
+      var tipTop, tipLeft
+
+      // Prefer below, then above, then center
+      if (r.bottom + tipH + 16 < vh) {
+        tipTop = r.bottom + 12
+      } else if (r.top - tipH - 12 > 0) {
+        tipTop = r.top - tipH - 12
+      } else {
+        tipTop = vh / 2 - tipH / 2
+      }
+
+      tipLeft = r.left + r.width / 2 - tipW / 2
+      tipLeft = Math.max(16, Math.min(tipLeft, vw - tipW - 16))
+      tipTop = Math.max(16, Math.min(tipTop, vh - tipH - 16))
+
+      setPos({ top: tipTop + 'px', left: tipLeft + 'px' })
+    }, 450)
+
+    return function() {
+      clearTimeout(timer)
+      el.style.boxShadow = origBoxShadow
+      el.style.position = origPosition
+      el.style.zIndex = origZIndex
+      el.style.borderRadius = origBorderRadius
+      el.style.outline = origOutline
+    }
+  }, [step])
+
+  if (!current) return null
+
+  var isLast = step === steps.length - 1
+
+  return (
+    <>
+      {/* Dim overlay */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(14,21,35,0.72)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Tooltip card */}
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-label={'Tour step ' + (step + 1) + ' of ' + steps.length + ': ' + current.title}
+        style={{
+          position: 'fixed', zIndex: 1002,
+          width: '308px',
+          background: '#1A2035',
+          border: '1px solid #F5B731',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+          top: pos.top, left: pos.left,
+          transform: pos.transform || 'none',
+        }}
+      >
+        {/* Step indicator + skip */}
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px'}}>
+          <span style={{fontSize: '10px', fontWeight: 700, color: '#F5B731', letterSpacing: '3px', textTransform: 'uppercase'}}>
+            STEP {step + 1} OF {steps.length}
+          </span>
+          <button
+            onClick={onSkip}
+            aria-label="Skip tour"
+            style={{background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px'}}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Skip
+          </button>
+        </div>
+
+        <h3 style={{fontSize: '15px', fontWeight: 700, color: '#FFFFFF', marginBottom: '8px', margin: '0 0 8px'}}>{current.title}</h3>
+        <p style={{fontSize: '13px', color: '#94A3B8', lineHeight: 1.6, marginBottom: '16px', margin: '0 0 16px'}}>{current.desc}</p>
+
+        {/* Footer: dots + next button */}
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+          <div style={{display: 'flex', gap: '4px'}} aria-hidden="true">
+            {steps.map(function(_, i) {
+              return (
+                <div
+                  key={i}
+                  style={{
+                    width: i === step ? '16px' : '5px',
+                    height: '5px',
+                    borderRadius: '99px',
+                    background: i === step ? '#F5B731' : '#2A3550',
+                    transition: 'all 0.2s ease',
+                  }}
+                />
+              )
+            })}
+          </div>
+          <button
+            onClick={onNext}
+            autoFocus
+            style={{padding: '8px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'}}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            {isLast ? 'Finish' : 'Next'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Tour End Modal ───────────────────────────────────────────────────────────
+function TourEndModal({ onClose }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tour-end-title"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1050,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(14,21,35,0.85)',
+        padding: '24px',
+      }}
+    >
+      <div style={{
+        background: '#1A2035',
+        border: '1px solid #2A3550',
+        borderRadius: '16px',
+        padding: '40px 36px',
+        maxWidth: '400px',
+        width: '100%',
+        textAlign: 'center',
+      }}>
+        <img
+          src="/mascot-onboarding.png"
+          alt=""
+          aria-hidden="true"
+          style={{width: '200px', height: 'auto', margin: '0 auto 20px', display: 'block'}}
+        />
+        <h2 id="tour-end-title" style={{fontSize: '22px', fontWeight: 800, color: '#FFFFFF', marginBottom: '10px'}}>
+          You're all set!
+        </h2>
+        <p style={{fontSize: '14px', color: '#94A3B8', lineHeight: 1.65, marginBottom: '28px'}}>
+          You know your way around the board. Explore your organizations, follow new ones, and stay on top of what matters.
+        </p>
+        <button
+          onClick={onClose}
+          autoFocus
+          style={{padding: '12px 32px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer'}}
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          Get Started
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Post-it Feed Card ────────────────────────────────────────────────────────
 function FeedCard({ item, onDismiss, onToggleImportant, isImportant }) {
   var type = CARD_TYPES[item.type] || CARD_TYPES.event
   var Icon = type.Icon
@@ -129,18 +372,15 @@ function FeedCard({ item, onDismiss, onToggleImportant, isImportant }) {
       style={{
         background: type.bg,
         borderRadius: '3px',
-        // Top padding makes room for the tack that sits at top:-6px
         padding: '16px 12px 12px',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        // Lined-paper texture
         backgroundImage: 'repeating-linear-gradient(transparent,transparent 22px,rgba(0,0,0,0.05) 23px)',
         backgroundPositionY: '34px',
         boxShadow: isImportant
           ? 'inset 0 0 0 2px #F5B731, 0 3px 12px rgba(245,183,49,0.15)'
           : '0 1px 4px rgba(0,0,0,0.08)',
-        // Width is controlled by the column container
       }}
     >
       {/* Tack */}
@@ -171,27 +411,28 @@ function FeedCard({ item, onDismiss, onToggleImportant, isImportant }) {
             </span>
           )}
         </div>
-        {/* Hover-revealed action buttons */}
         <div style={{display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0}} className="card-actions">
-          <button onClick={function(e) { e.stopPropagation(); onToggleImportant(item.id) }}
-            aria-label={isImportant ? 'Remove important flag' : 'Mark as important'} title={isImportant ? 'Remove important' : 'Mark important'}
+          <button
+            onClick={function(e) { e.stopPropagation(); onToggleImportant(item.id) }}
+            aria-label={isImportant ? 'Remove important flag' : 'Mark as important'}
+            title={isImportant ? 'Remove important' : 'Mark important'}
             style={{width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: '3px', cursor: 'pointer', background: isImportant ? 'rgba(245,183,49,0.3)' : 'rgba(0,0,0,0.09)', color: isImportant ? '#D97706' : '#6B7280'}}
             className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
           ><IconStar filled={isImportant} /></button>
-          <button onClick={function(e) { e.stopPropagation(); onDismiss(item.id) }}
-            aria-label={'Dismiss: ' + item.title} title="Dismiss"
+          <button
+            onClick={function(e) { e.stopPropagation(); onDismiss(item.id) }}
+            aria-label={'Dismiss: ' + item.title}
+            title="Dismiss"
             style={{width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: '3px', cursor: 'pointer', background: 'rgba(0,0,0,0.09)', color: '#6B7280'}}
             className="focus:outline-none focus:ring-2 focus:ring-red-400"
           ><IconX /></button>
         </div>
       </div>
 
-      {/* Title — no line clamp; full content shows, card grows to fit */}
       <div style={{fontSize: '13px', fontWeight: 700, color: '#111827', lineHeight: 1.45, marginBottom: '10px'}}>
         {item.title}
       </div>
 
-      {/* Footer pinned to bottom of whatever height the card ends up */}
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.07)', gap: '4px', marginTop: 'auto'}}>
         <span style={{fontSize: '10px', fontWeight: 700, color: type.tagBg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1}}>
           {item.organizationName}
@@ -242,7 +483,11 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange, isDark }) {
 
   return (
     <div ref={ref} style={{position: 'relative'}}>
-      <button onClick={function() { setOpen(function(v) { return !v }) }} aria-haspopup="listbox" aria-expanded={open} aria-label={'Filter by organization: ' + selectedName}
+      <button
+        onClick={function() { setOpen(function(v) { return !v }) }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={'Filter by organization: ' + selectedName}
         style={{display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 11px', borderRadius: '99px', border: '1px solid ' + (isFiltered ? '#3B82F6' : border), background: isFiltered ? 'rgba(59,130,246,0.1)' : 'transparent', cursor: 'pointer', fontSize: '12px', fontWeight: isFiltered ? 700 : 500, color: isFiltered ? '#3B82F6' : textMuted, whiteSpace: 'nowrap'}}
         className="focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
@@ -253,7 +498,11 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange, isDark }) {
           {[{ id: 'all', name: 'All Organizations' }, ...organizations].map(function(org) {
             var isSel = selectedOrgId === org.id
             return (
-              <button key={org.id} role="option" aria-selected={isSel} onClick={function() { onChange(org.id); setOpen(false) }}
+              <button
+                key={org.id}
+                role="option"
+                aria-selected={isSel}
+                onClick={function() { onChange(org.id); setOpen(false) }}
                 style={{display: 'block', width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: '6px', border: 'none', background: isSel ? 'rgba(59,130,246,0.12)' : 'transparent', color: isSel ? '#3B82F6' : textPrimary, fontSize: '13px', fontWeight: isSel ? 700 : 400, cursor: 'pointer'}}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
               >{org.name}</button>
@@ -283,7 +532,11 @@ function ShowCountDropdown({ value, onChange, isDark }) {
 
   return (
     <div ref={ref} style={{position: 'relative'}}>
-      <button onClick={function() { setOpen(function(v) { return !v }) }} aria-haspopup="listbox" aria-expanded={open} aria-label={'Items to show: ' + (value === 0 ? 'all' : value)}
+      <button
+        onClick={function() { setOpen(function(v) { return !v }) }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={'Items to show: ' + (value === 0 ? 'all' : value)}
         style={{display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '99px', border: '1px solid ' + border, background: 'transparent', cursor: 'pointer', fontSize: '12px', fontWeight: 500, color: textMuted, whiteSpace: 'nowrap'}}
         className="focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
@@ -294,7 +547,11 @@ function ShowCountDropdown({ value, onChange, isDark }) {
           {options.map(function(opt) {
             var isSel = value === opt.value
             return (
-              <button key={opt.value} role="option" aria-selected={isSel} onClick={function() { onChange(opt.value); setOpen(false) }}
+              <button
+                key={opt.value}
+                role="option"
+                aria-selected={isSel}
+                onClick={function() { onChange(opt.value); setOpen(false) }}
                 style={{display: 'block', width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: '6px', border: 'none', background: isSel ? 'rgba(59,130,246,0.12)' : 'transparent', color: isSel ? '#3B82F6' : textPrimary, fontSize: '13px', fontWeight: isSel ? 700 : 400, cursor: 'pointer'}}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
               >{opt.label}</button>
@@ -307,11 +564,7 @@ function ShowCountDropdown({ value, onChange, isDark }) {
 }
 
 // ─── 3-column masonry feed ────────────────────────────────────────────────────
-// Distributes items round-robin across 3 explicit column divs.
-// Each column is a separate flex container — no CSS columns, no bleed.
-// paddingTop on each column gives the tacks visible space above the first card.
 function MasonryFeed({ items, onDismiss, onToggleImportant, importantActivities }) {
-  // Split into 3 columns: 0→col0, 1→col1, 2→col2, 3→col0, ...
   var col0 = [], col1 = [], col2 = []
   items.forEach(function(item, i) {
     if (i % 3 === 0) col0.push(item)
@@ -337,18 +590,13 @@ function MasonryFeed({ items, onDismiss, onToggleImportant, importantActivities 
   var colStyle = {
     flex: '1 1 0',
     minWidth: 0,
-    // paddingTop gives the tacks above each first card visible space
     paddingTop: '10px',
     display: 'flex',
     flexDirection: 'column',
   }
 
   return (
-    <div
-      role="list"
-      aria-label="Board activity feed"
-      style={{display: 'flex', gap: '14px', alignItems: 'flex-start'}}
-    >
+    <div role="list" aria-label="Board activity feed" style={{display: 'flex', gap: '14px', alignItems: 'flex-start'}}>
       <div style={colStyle}>{renderCol(col0)}</div>
       <div style={colStyle}>{renderCol(col1)}</div>
       <div style={colStyle}>{renderCol(col2)}</div>
@@ -361,6 +609,7 @@ function UnifiedDashboard() {
   var { isDark } = useTheme()
   var navigate = useNavigate()
 
+  // ── Existing state ──
   var [organizations, setOrganizations] = useState([])
   var [myGroups, setMyGroups] = useState([])
   var [activities, setActivities] = useState([])
@@ -383,6 +632,24 @@ function UnifiedDashboard() {
   var [showCount, setShowCount] = useState(10)
   var [notifCount, setNotifCount] = useState(0)
 
+  // ── New state ──
+  var [followedOrgs, setFollowedOrgs] = useState([])
+  var [followedEvents, setFollowedEvents] = useState([])
+  var [unfollowingId, setUnfollowingId] = useState(null)
+
+  // ── Tour state ──
+  var [tourStep, setTourStep] = useState(-1)   // -1 = inactive
+  var [showTourEnd, setShowTourEnd] = useState(false)
+
+  // ── Tour refs (one per step) ──
+  var statsRef = useRef(null)
+  var feedRef = useRef(null)
+  var followingRef = useRef(null)
+  var orgsRef = useRef(null)
+  var signupsRef = useRef(null)
+  var tourRefs = [statsRef, feedRef, followingRef, orgsRef, signupsRef]
+
+  // ── Theme ──
   var pageBg = isDark ? '#0E1523' : '#F8FAFC'
   var cardBg = isDark ? '#1A2035' : '#FFFFFF'
   var border = isDark ? '#2A3550' : '#E2E8F0'
@@ -392,6 +659,7 @@ function UnifiedDashboard() {
   var ORG_COLORS = ['#3B82F6', '#8B5CF6', '#F5B731', '#22C55E', '#EF4444', '#EC4899']
   var GROUP_COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
+  // ── Auth + data load ──
   useEffect(function() {
     var sub = supabase.auth.onAuthStateChange(function(event, session) {
       if (event === 'SIGNED_IN' && session) fetchDashboardData()
@@ -406,6 +674,16 @@ function UnifiedDashboard() {
     return function() { sub.data.subscription?.unsubscribe() }
   }, [])
 
+  // ── Auto-start tour once loading is done ──
+  useEffect(function() {
+    if (loading) return
+    var done = localStorage.getItem('ud_tour_done')
+    if (!done) {
+      var timer = setTimeout(function() { setTourStep(0) }, 900)
+      return function() { clearTimeout(timer) }
+    }
+  }, [loading])
+
   async function fetchDashboardData() {
     try {
       setLoading(true); setError(null)
@@ -417,7 +695,12 @@ function UnifiedDashboard() {
       var profileRes = await supabase.from('members').select('full_name').eq('id', user.id).single()
       if (profileRes.data) setMemberName(profileRes.data.full_name || '')
 
-      var orgsRes = await supabase.from('memberships').select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)').eq('member_id', user.id).eq('status', 'active').order('joined_date', { ascending: false })
+      var orgsRes = await supabase
+        .from('memberships')
+        .select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)')
+        .eq('member_id', user.id)
+        .eq('status', 'active')
+        .order('joined_date', { ascending: false })
       if (orgsRes.error) throw orgsRes.error
 
       var orgsWithStats = await Promise.all((orgsRes.data || []).map(async function(membership) {
@@ -444,9 +727,40 @@ function UnifiedDashboard() {
       var notifRes = await supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('member_id', user.id).eq('is_read', false)
       if (notifRes.count !== null) setNotifCount(notifRes.count)
 
+      // ── Followed orgs ──
+      var followRes = await supabase
+        .from('org_followers')
+        .select('org_id, organizations (id, name, logo_url, type, description)')
+        .eq('user_id', user.id)
+      var followedOrgData = (followRes.data || []).map(function(f) { return f.organizations }).filter(Boolean)
+      setFollowedOrgs(followedOrgData)
+
+      // ── Events from followed orgs ──
+      if (followedOrgData.length > 0) {
+        var followedOrgIds = followedOrgData.map(function(o) { return o.id })
+        var followedEvtRes = await supabase
+          .from('events')
+          .select('id, title, start_time, location, organization:organizations (id, name)')
+          .in('organization_id', followedOrgIds)
+          .gte('start_time', new Date().toISOString())
+          .eq('visibility', 'public')
+          .order('start_time', { ascending: true })
+          .limit(6)
+        setFollowedEvents(followedEvtRes.data || [])
+      } else {
+        setFollowedEvents([])
+      }
+
       var orgIds = orgsWithStats.map(function(o) { return o.id })
       if (orgIds.length > 0) {
-        var evtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name, type)').in('organization_id', orgIds).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members']).order('start_time', { ascending: true }).limit(5)
+        var evtRes = await supabase
+          .from('events')
+          .select('id, title, start_time, location, organization:organizations (id, name, type)')
+          .in('organization_id', orgIds)
+          .gte('start_time', new Date().toISOString())
+          .in('visibility', ['public', 'members'])
+          .order('start_time', { ascending: true })
+          .limit(5)
         setUpcomingEvents(evtRes.data || [])
 
         var annFeed = await supabase.from('announcements').select('id, title, created_at, priority, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('created_at', { ascending: false }).limit(30)
@@ -491,7 +805,7 @@ function UnifiedDashboard() {
     var updated = [...dismissedActivities, id]
     setDismissedActivities(updated)
     localStorage.setItem('dismissedActivities', JSON.stringify(updated))
-    toast.success('Removed from board.')
+    mascotSuccessToast('Removed from board.')
   }
 
   function handleToggleImportant(id) {
@@ -500,9 +814,50 @@ function UnifiedDashboard() {
       : [...importantActivities, id]
     setImportantActivities(updated)
     localStorage.setItem('importantActivities', JSON.stringify(updated))
-    toast.success(updated.includes(id) ? 'Marked as important.' : 'Removed important flag.')
+    mascotSuccessToast(updated.includes(id) ? 'Marked as important.' : 'Removed important flag.')
   }
 
+  async function handleUnfollow(orgId, orgName) {
+    var userRes = await supabase.auth.getUser()
+    var user = userRes.data.user
+    if (!user) return
+    setUnfollowingId(orgId)
+    var { error: err } = await supabase
+      .from('org_followers')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+    setUnfollowingId(null)
+    if (err) {
+      toast.error('Failed to unfollow.')
+    } else {
+      setFollowedOrgs(function(prev) { return prev.filter(function(o) { return o.id !== orgId }) })
+      setFollowedEvents(function(prev) { return prev.filter(function(e) { return e.organization && e.organization.id !== orgId }) })
+      mascotSuccessToast('Unfollowed ' + (orgName || 'organization') + '.')
+    }
+  }
+
+  // ── Tour handlers ──
+  function handleTourNext() {
+    if (tourStep < TOUR_STEPS_INFO.length - 1) {
+      setTourStep(function(s) { return s + 1 })
+    } else {
+      setTourStep(-1)
+      setShowTourEnd(true)
+      localStorage.setItem('ud_tour_done', '1')
+    }
+  }
+
+  function handleTourSkip() {
+    setTourStep(-1)
+    localStorage.setItem('ud_tour_done', '1')
+  }
+
+  function handleRestartTour() {
+    setTourStep(0)
+  }
+
+  // ── Feed filtering ──
   var visibleActivities = activities.filter(function(a) { return !dismissedActivities.includes(a.id) })
   var filteredFeed = visibleActivities.filter(function(a) {
     return (activeFilter === 'all' || a.type === activeFilter) && (orgFilter === 'all' || a.organizationId === orgFilter)
@@ -513,10 +868,10 @@ function UnifiedDashboard() {
     if (ai !== bi) return ai - bi
     return new Date(b.timestamp) - new Date(a.timestamp)
   })
-  // Only ever render exactly these items — no bleed possible
   var displayedFeed = showCount === 0 ? sortedFeed : sortedFeed.slice(0, showCount)
   var totalUnread = organizations.reduce(function(sum, org) { return sum + (org.unreadCount || 0) }, 0)
 
+  // ── Full-page error ──
   if (!loading && error) {
     return (
       <div style={{minHeight: '100vh', background: pageBg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "'Inter',system-ui,sans-serif"}}>
@@ -539,23 +894,49 @@ function UnifiedDashboard() {
         .feed-card-wrap:focus-within .card-actions { opacity: 1; }
       `}</style>
 
+      {/* Tour overlay — rendered when a step is active */}
+      {tourStep >= 0 && (
+        <TourOverlay
+          step={tourStep}
+          steps={TOUR_STEPS_INFO}
+          refs={tourRefs}
+          onNext={handleTourNext}
+          onSkip={handleTourSkip}
+        />
+      )}
+
+      {/* Tour completion modal */}
+      {showTourEnd && (
+        <TourEndModal onClose={function() { setShowTourEnd(false) }} />
+      )}
+
       <main role="main" style={{maxWidth: '1280px', margin: '0 auto', padding: '28px 24px', display: 'grid', gridTemplateColumns: '1fr 288px', gap: '28px', alignItems: 'start'}}>
 
         {/* ── Left column ───────────────────────────────────────────────── */}
         <div>
           {/* Welcome */}
-          <div style={{marginBottom: '20px'}}>
-            <p style={{fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '3px'}}>WELCOME BACK</p>
-            <h1 style={{fontSize: '24px', fontWeight: 800, color: textPrimary, margin: 0}}>
-              {loading ? 'Loading…' : memberName ? memberName.split(' ')[0] + "'s Board" : 'My Board'}
-            </h1>
-            <p style={{fontSize: '12px', color: textMuted, marginTop: '3px'}}>
-              Updates from your {organizations.length} organization{organizations.length !== 1 ? 's' : ''}
-            </p>
+          <div style={{marginBottom: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px'}}>
+            <div>
+              <p style={{fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '3px'}}>WELCOME BACK</p>
+              <h1 style={{fontSize: '24px', fontWeight: 800, color: textPrimary, margin: 0}}>
+                {loading ? 'Loading…' : memberName ? memberName.split(' ')[0] + "'s Board" : 'My Board'}
+              </h1>
+              <p style={{fontSize: '12px', color: textMuted, marginTop: '3px'}}>
+                Updates from your {organizations.length} organization{organizations.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              onClick={handleRestartTour}
+              aria-label="Take the guided tour of your dashboard"
+              style={{flexShrink: 0, marginTop: '4px', fontSize: '12px', fontWeight: 600, color: textMuted, background: 'transparent', border: '1px solid ' + border, borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap'}}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Take the tour
+            </button>
           </div>
 
-          {/* Stat cards */}
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px'}}>
+          {/* Stat cards — tour step 0 */}
+          <div ref={statsRef} style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px'}}>
             <StatCard label="ORGS"       value={organizations.length}  Icon={IconOrgs}     statBg="#1D3461" statColor="#60A5FA" loading={loading} isDark={isDark} />
             <StatCard label="EVENTS"     value={upcomingEvents.length} Icon={IconCalendar} statBg="#1B3A2F" statColor="#4ADE80" loading={loading} isDark={isDark} />
             <StatCard label="VOLUNTEERS" value={0}                     Icon={IconHeart}    statBg="#2D1B4E" statColor="#C084FC" loading={loading} isDark={isDark} />
@@ -573,7 +954,11 @@ function UnifiedDashboard() {
               ].map(function(tab) {
                 var isActive = activeFilter === tab.key
                 return (
-                  <button key={tab.key} role="tab" aria-selected={isActive} onClick={function() { setActiveFilter(tab.key) }}
+                  <button
+                    key={tab.key}
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={function() { setActiveFilter(tab.key) }}
                     style={{padding: '5px 12px', borderRadius: '99px', border: '1px solid ' + (isActive ? '#F5B731' : border), background: isActive ? '#F5B731' : 'transparent', color: isActive ? '#0E1523' : textSecondary, fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: 'pointer'}}
                     className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   >{tab.label}</button>
@@ -584,7 +969,8 @@ function UnifiedDashboard() {
             <OrgFilterDropdown organizations={organizations} selectedOrgId={orgFilter} onChange={setOrgFilter} isDark={isDark} />
             <div style={{flex: 1}} />
             {dismissedActivities.length > 0 && (
-              <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); toast.success('Board restored.') }}
+              <button
+                onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }}
                 style={{fontSize: '11px', fontWeight: 600, color: textMuted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap'}}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >Restore {dismissedActivities.length} hidden</button>
@@ -592,8 +978,8 @@ function UnifiedDashboard() {
             <ShowCountDropdown value={showCount} onChange={setShowCount} isDark={isDark} />
           </div>
 
-          {/* Feed area — 24px top margin gives the tack pins room without clipping */}
-          <div style={{marginTop: '24px'}}>
+          {/* Feed — tour step 1 */}
+          <div ref={feedRef} style={{marginTop: '24px'}}>
             {loading ? (
               <div style={{display: 'flex', gap: '14px', alignItems: 'flex-start'}}>
                 {[0,1,2].map(function(col) {
@@ -602,7 +988,7 @@ function UnifiedDashboard() {
                     <div key={col} style={{flex: '1 1 0', minWidth: 0, paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '14px'}}>
                       {heights.map(function(h, i) {
                         return (
-                          <div key={i} style={{background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + border, borderRadius: '6px', padding: '14px', height: h + 'px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                          <div key={i} style={{background: cardBg, border: '1px solid ' + border, borderRadius: '6px', padding: '14px', height: h + 'px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
                             <Skel w="60px" h="16px" isDark={isDark} radius="3px" />
                             <Skel h="12px" isDark={isDark} />
                             <Skel w="75%" h="12px" isDark={isDark} />
@@ -642,11 +1028,15 @@ function UnifiedDashboard() {
           {!loading && sortedFeed.length > 0 && showCount !== 0 && sortedFeed.length > showCount && (
             <p style={{fontSize: '12px', color: textMuted, textAlign: 'center', marginTop: '16px'}}>
               Showing {displayedFeed.length} of {sortedFeed.length} items —{' '}
-              <button onClick={function() { setShowCount(0) }} style={{background: 'none', border: 'none', color: '#3B82F6', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">show all</button>
+              <button
+                onClick={function() { setShowCount(0) }}
+                style={{background: 'none', border: 'none', color: '#3B82F6', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0}}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              >show all</button>
             </p>
           )}
 
-          {/* Upcoming Events */}
+          {/* Upcoming Events — from member orgs */}
           {!loading && upcomingEvents.length > 0 && (
             <section aria-labelledby="events-strip-heading" style={{marginTop: '36px'}}>
               <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px'}}>
@@ -657,7 +1047,10 @@ function UnifiedDashboard() {
                 {upcomingEvents.slice(0, 4).map(function(event) {
                   var d = new Date(event.start_time)
                   return (
-                    <Link key={event.id} to={'/organizations/' + event.organization.id + '/events'} aria-label={'Event: ' + event.title}
+                    <Link
+                      key={event.id}
+                      to={'/organizations/' + event.organization.id + '/events'}
+                      aria-label={'Event: ' + event.title}
                       style={{display: 'flex', alignItems: 'center', gap: '14px', background: cardBg, border: '1px solid ' + border, borderRadius: '10px', padding: '10px 14px', textDecoration: 'none'}}
                       className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
@@ -676,23 +1069,96 @@ function UnifiedDashboard() {
               </div>
             </section>
           )}
+
+          {/* ── Events from Orgs You Follow ── */}
+          {!loading && followedOrgs.length > 0 && (
+            <section aria-labelledby="followed-events-heading" style={{marginTop: '36px'}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px'}}>
+                <h2 id="followed-events-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', margin: 0}}>FROM ORGS YOU FOLLOW</h2>
+                <Link to="/explore" style={{fontSize: '12px', fontWeight: 600, color: '#3B82F6', textDecoration: 'none'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">Discover more</Link>
+              </div>
+
+              {followedEvents.length === 0 ? (
+                <div style={{padding: '20px', background: cardBg, border: '1px dashed ' + border, borderRadius: '10px', textAlign: 'center'}}>
+                  <p style={{fontSize: '13px', color: textMuted, margin: 0}}>No upcoming public events from your followed organizations.</p>
+                </div>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '6px'}}>
+                  {followedEvents.map(function(event) {
+                    var d = new Date(event.start_time)
+                    return (
+                      <Link
+                        key={event.id}
+                        to={'/events/' + event.id}
+                        aria-label={'Public event: ' + event.title + ' from ' + (event.organization ? event.organization.name : '')}
+                        style={{display: 'flex', alignItems: 'center', gap: '14px', background: cardBg, border: '1px solid ' + border, borderRadius: '10px', padding: '10px 14px', textDecoration: 'none'}}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <div style={{flexShrink: 0, width: '40px', textAlign: 'center', background: isDark ? '#1E2845' : '#F1F5F9', borderRadius: '7px', padding: '5px 0'}}>
+                          <div style={{fontSize: '9px', fontWeight: 700, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: '1px'}}>{d.toLocaleDateString('en-US', { month: 'short' })}</div>
+                          <div style={{fontSize: '18px', fontWeight: 800, color: textPrimary, lineHeight: 1}}>{d.getDate()}</div>
+                        </div>
+                        <div style={{flex: 1, minWidth: 0}}>
+                          <p style={{fontSize: '13px', fontWeight: 600, color: textPrimary, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{event.title}</p>
+                          <p style={{fontSize: '11px', color: textMuted, margin: 0}}>
+                            {event.organization ? event.organization.name : ''}{event.location ? ' · ' + event.location : ''}
+                          </p>
+                        </div>
+                        <span style={{fontSize: '11px', color: textMuted, flexShrink: 0}}>{d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Prompt to follow orgs if none followed and member of orgs */}
+          {!loading && followedOrgs.length === 0 && organizations.length > 0 && (
+            <section aria-labelledby="follow-prompt-heading" style={{marginTop: '36px'}}>
+              <div style={{padding: '20px 24px', background: cardBg, border: '1px dashed ' + border, borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap'}}>
+                <div style={{color: '#8B5CF6', opacity: 0.8}}><IconBookmark /></div>
+                <div style={{flex: 1, minWidth: 0}}>
+                  <p id="follow-prompt-heading" style={{fontSize: '13px', fontWeight: 700, color: textPrimary, margin: '0 0 2px'}}>Follow organizations</p>
+                  <p style={{fontSize: '12px', color: textMuted, margin: 0}}>Follow local nonprofits and see their public events here, even without being a member.</p>
+                </div>
+                <button
+                  onClick={function() { navigate('/explore') }}
+                  style={{padding: '7px 16px', background: '#8B5CF6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0}}
+                  className="focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  Explore organizations
+                </button>
+              </div>
+            </section>
+          )}
         </div>
 
         {/* ── Right sidebar ──────────────────────────────────────────────── */}
         <aside role="complementary" aria-label="Dashboard sidebar" style={{display: 'flex', flexDirection: 'column', gap: '18px'}}>
 
-          {/* My Organizations */}
-          <section aria-labelledby="orgs-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', padding: '18px'}}>
+          {/* My Organizations — tour step 3 */}
+          <section ref={orgsRef} aria-labelledby="orgs-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', padding: '18px'}}>
             <h2 id="orgs-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '14px'}}>MY ORGANIZATIONS</h2>
             {loading ? (
-              [1,2,3].map(function(i) { return (<div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}><Skel w="36px" h="36px" isDark={isDark} radius="8px" /><div style={{flex: 1}}><Skel w="80%" h="12px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="45%" h="10px" isDark={isDark} /></div></div></div>) })
+              [1,2,3].map(function(i) {
+                return (
+                  <div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
+                    <Skel w="36px" h="36px" isDark={isDark} radius="8px" />
+                    <div style={{flex: 1}}><Skel w="80%" h="12px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="45%" h="10px" isDark={isDark} /></div></div>
+                  </div>
+                )
+              })
             ) : organizations.length === 0 ? (
               <p style={{fontSize: '13px', color: textMuted, textAlign: 'center', padding: '12px 0'}}>No organizations yet.</p>
             ) : (
               organizations.map(function(org, idx) {
                 var color = ORG_COLORS[idx % ORG_COLORS.length]
                 return (
-                  <Link key={org.id} to={'/organizations/' + org.id} aria-label={'Go to ' + org.name}
+                  <Link
+                    key={org.id}
+                    to={'/organizations/' + org.id}
+                    aria-label={'Go to ' + org.name}
                     style={{display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 8px', borderRadius: '8px', marginBottom: '2px', textDecoration: 'none'}}
                     className={'focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isDark ? 'hover:bg-white hover:bg-opacity-5' : 'hover:bg-gray-50')}
                   >
@@ -716,7 +1182,9 @@ function UnifiedDashboard() {
                 )
               })
             )}
-            <button onClick={function() { setShowCreateModal(true) }} aria-label="Create a new organization"
+            <button
+              onClick={function() { setShowCreateModal(true) }}
+              aria-label="Create a new organization"
               style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '10px', padding: '8px 12px', background: 'transparent', border: '1px dashed ' + border, borderRadius: '8px', width: '100%', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: textMuted}}
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -724,11 +1192,107 @@ function UnifiedDashboard() {
             </button>
           </section>
 
+          {/* Following — tour step 2 */}
+          <section ref={followingRef} aria-labelledby="following-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', padding: '18px'}}>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px'}}>
+              <h2 id="following-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', margin: 0}}>FOLLOWING</h2>
+              <Link
+                to="/explore"
+                aria-label="Discover organizations to follow"
+                style={{fontSize: '12px', fontWeight: 600, color: '#8B5CF6', textDecoration: 'none'}}
+                className="focus:outline-none focus:ring-2 focus:ring-purple-500 rounded"
+              >
+                Explore
+              </Link>
+            </div>
+
+            {loading ? (
+              [1,2].map(function(i) {
+                return (
+                  <div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
+                    <Skel w="32px" h="32px" isDark={isDark} radius="8px" />
+                    <div style={{flex: 1}}><Skel w="75%" h="12px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="45%" h="10px" isDark={isDark} /></div></div>
+                    <Skel w="24px" h="24px" isDark={isDark} radius="6px" />
+                  </div>
+                )
+              })
+            ) : followedOrgs.length === 0 ? (
+              <div style={{textAlign: 'center', padding: '10px 0', color: textMuted}}>
+                <div style={{opacity: 0.35, margin: '0 auto 10px', width: 'fit-content'}}><IconCompass /></div>
+                <p style={{fontSize: '12px', lineHeight: 1.55, marginBottom: '12px'}}>Follow organizations to see their public events on your board.</p>
+                <Link
+                  to="/explore"
+                  style={{display: 'inline-block', padding: '6px 14px', background: 'rgba(139,92,246,0.12)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '8px', fontSize: '12px', fontWeight: 600, textDecoration: 'none'}}
+                  className="focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  Find organizations
+                </Link>
+              </div>
+            ) : (
+              followedOrgs.map(function(org, idx) {
+                var color = ORG_COLORS[idx % ORG_COLORS.length]
+                var isUnfollowing = unfollowingId === org.id
+                return (
+                  <div
+                    key={org.id}
+                    style={{display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', borderBottom: idx < followedOrgs.length - 1 ? '1px solid ' + border : 'none', marginBottom: idx < followedOrgs.length - 1 ? '6px' : 0}}
+                  >
+                    <Link
+                      to={'/organizations/' + org.id}
+                      aria-label={'View ' + org.name + ' public page'}
+                      style={{display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', flex: 1, minWidth: 0}}
+                      className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
+                    >
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt={org.name + ' logo'} style={{width: '32px', height: '32px', borderRadius: '7px', objectFit: 'cover', flexShrink: 0}} />
+                      ) : (
+                        <div style={{width: '32px', height: '32px', borderRadius: '7px', flexShrink: 0, background: color, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700}}>
+                          {getInitials(org.name)}
+                        </div>
+                      )}
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <p style={{fontSize: '12px', fontWeight: 600, color: textPrimary, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{org.name}</p>
+                        <p style={{fontSize: '11px', color: textMuted, margin: 0, textTransform: 'capitalize'}}>{org.type || 'organization'}</p>
+                      </div>
+                    </Link>
+                    <button
+                      onClick={function() { handleUnfollow(org.id, org.name) }}
+                      disabled={isUnfollowing}
+                      aria-label={'Unfollow ' + org.name}
+                      title={'Unfollow ' + org.name}
+                      style={{
+                        flexShrink: 0,
+                        width: '26px', height: '26px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: '1px solid ' + border,
+                        borderRadius: '6px',
+                        background: 'transparent',
+                        color: isUnfollowing ? textMuted : '#EF4444',
+                        cursor: isUnfollowing ? 'not-allowed' : 'pointer',
+                        opacity: isUnfollowing ? 0.5 : 1,
+                      }}
+                      className="focus:outline-none focus:ring-2 focus:ring-red-400"
+                    >
+                      <IconX />
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </section>
+
           {/* My Groups */}
           <section aria-labelledby="groups-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', padding: '18px'}}>
             <h2 id="groups-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '14px'}}>MY GROUPS</h2>
             {loading ? (
-              [1,2].map(function(i) { return (<div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}><Skel w="32px" h="32px" isDark={isDark} radius="6px" /><div style={{flex: 1}}><Skel w="70%" h="12px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="50%" h="10px" isDark={isDark} /></div></div></div>) })
+              [1,2].map(function(i) {
+                return (
+                  <div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
+                    <Skel w="32px" h="32px" isDark={isDark} radius="6px" />
+                    <div style={{flex: 1}}><Skel w="70%" h="12px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="50%" h="10px" isDark={isDark} /></div></div>
+                  </div>
+                )
+              })
             ) : myGroups.length === 0 ? (
               <div style={{textAlign: 'center', padding: '8px 0', color: textMuted}}>
                 <div style={{opacity: 0.35, margin: '0 auto 8px', width: 'fit-content'}}><IconGroup /></div>
@@ -738,7 +1302,10 @@ function UnifiedDashboard() {
               myGroups.map(function(group, idx) {
                 var color = GROUP_COLORS[idx % GROUP_COLORS.length]
                 return (
-                  <Link key={group.id} to={'/organizations/' + group.organization_id + '?tab=groups'} aria-label={'Go to ' + group.name + ' group'}
+                  <Link
+                    key={group.id}
+                    to={'/organizations/' + group.organization_id + '?tab=groups'}
+                    aria-label={'Go to ' + group.name + ' group'}
                     style={{display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 8px', borderRadius: '8px', marginBottom: '2px', textDecoration: 'none'}}
                     className={'focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isDark ? 'hover:bg-white hover:bg-opacity-5' : 'hover:bg-gray-50')}
                   >
@@ -763,17 +1330,33 @@ function UnifiedDashboard() {
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px'}}>
               <h2 id="chats-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', margin: 0}}>RECENT CHATS</h2>
               {organizations.length > 0 && (
-                <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} aria-label="Open chat" style={{background: 'transparent', border: 'none', cursor: 'pointer', color: '#3B82F6', fontSize: '12px', fontWeight: 600}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">View all</button>
+                <button
+                  onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }}
+                  aria-label="Open chat"
+                  style={{background: 'transparent', border: 'none', cursor: 'pointer', color: '#3B82F6', fontSize: '12px', fontWeight: 600}}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                >View all</button>
               )}
             </div>
             {loading ? (
-              [1,2].map(function(i) { return (<div key={i} style={{display: 'flex', gap: '10px', marginBottom: '12px'}}><Skel w="26px" h="26px" isDark={isDark} radius="50%" /><div style={{flex: 1}}><Skel w="60%" h="11px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="85%" h="10px" isDark={isDark} /></div></div></div>) })
+              [1,2].map(function(i) {
+                return (
+                  <div key={i} style={{display: 'flex', gap: '10px', marginBottom: '12px'}}>
+                    <Skel w="26px" h="26px" isDark={isDark} radius="50%" />
+                    <div style={{flex: 1}}><Skel w="60%" h="11px" isDark={isDark} /><div style={{marginTop: '5px'}}><Skel w="85%" h="10px" isDark={isDark} /></div></div>
+                  </div>
+                )
+              })
             ) : recentChats.length === 0 ? (
               <div style={{textAlign: 'center', padding: '8px 0', color: textMuted}}>
                 <div style={{opacity: 0.35, margin: '0 auto 8px', width: 'fit-content'}}><IconChat /></div>
                 <p style={{fontSize: '12px', marginBottom: '12px'}}>No messages yet.</p>
                 {organizations.length > 0 && (
-                  <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} style={{padding: '6px 14px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Start Chatting</button>
+                  <button
+                    onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }}
+                    style={{padding: '6px 14px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'}}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >Start Chatting</button>
                 )}
               </div>
             ) : (
@@ -782,13 +1365,19 @@ function UnifiedDashboard() {
                 var orgId = msg.chat_channels ? msg.chat_channels.organization_id : null
                 var orgName = (msg.chat_channels && msg.chat_channels.organizations) ? msg.chat_channels.organizations.name : ''
                 return (
-                  <button key={msg.id} onClick={function() { if (orgId) navigate('/organizations/' + orgId + '/chat') }} aria-label={'Open ' + channelName + ' channel'}
+                  <button
+                    key={msg.id}
+                    onClick={function() { if (orgId) navigate('/organizations/' + orgId + '/chat') }}
+                    aria-label={'Open ' + channelName + ' channel'}
                     style={{display: 'flex', gap: '10px', alignItems: 'flex-start', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', padding: '7px 8px', borderRadius: '8px', marginBottom: '2px', textAlign: 'left'}}
                     className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <div style={{width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0, background: '#3B82F6', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><IconChat /></div>
                     <div style={{flex: 1, minWidth: 0}}>
-                      <p style={{fontSize: '12px', fontWeight: 700, color: textPrimary, margin: 0}}>#{channelName}{orgName && <span style={{fontWeight: 400, color: textMuted}}> · {orgName}</span>}</p>
+                      <p style={{fontSize: '12px', fontWeight: 700, color: textPrimary, margin: 0}}>
+                        #{channelName}
+                        {orgName && <span style={{fontWeight: 400, color: textMuted}}> · {orgName}</span>}
+                      </p>
                       <p style={{fontSize: '11px', color: textMuted, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{msg.content || '(message)'}</p>
                     </div>
                     <span style={{fontSize: '10px', color: textMuted, flexShrink: 0}}>{timeAgo(msg.created_at)}</span>
@@ -798,8 +1387,8 @@ function UnifiedDashboard() {
             )}
           </section>
 
-          {/* My Sign-Ups */}
-          <section aria-labelledby="signups-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', overflow: 'hidden'}}>
+          {/* My Sign-Ups — tour step 4 */}
+          <section ref={signupsRef} aria-labelledby="signups-heading" style={{background: cardBg, border: '1px solid ' + border, borderRadius: '12px', overflow: 'hidden'}}>
             <div style={{padding: '18px 18px 0'}}>
               <h2 id="signups-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '0'}}>MY SIGN-UPS</h2>
             </div>
@@ -809,9 +1398,19 @@ function UnifiedDashboard() {
         </aside>
       </main>
 
-      <CreateOrganization isOpen={showCreateModal} onClose={function() { setShowCreateModal(false) }} onSuccess={function() { fetchDashboardData(); setShowCreateModal(false) }} />
+      <CreateOrganization
+        isOpen={showCreateModal}
+        onClose={function() { setShowCreateModal(false) }}
+        onSuccess={function() { fetchDashboardData(); setShowCreateModal(false) }}
+      />
       {selectedOrgForEvent && (
-        <CreateEvent isOpen={showCreateEvent} onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null) }} onSuccess={fetchDashboardData} organizationId={selectedOrgForEvent.id} organizationName={selectedOrgForEvent.name} />
+        <CreateEvent
+          isOpen={showCreateEvent}
+          onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null) }}
+          onSuccess={fetchDashboardData}
+          organizationId={selectedOrgForEvent.id}
+          organizationName={selectedOrgForEvent.name}
+        />
       )}
     </div>
   )

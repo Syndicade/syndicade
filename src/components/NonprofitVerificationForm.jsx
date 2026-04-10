@@ -239,7 +239,7 @@ export default function NonprofitVerificationForm({ organizationId, onSubmitted 
   return (
     <div>
       <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '20px', lineHeight: 1.6 }}>
-        Verified 501(c)(3) organizations appear on the public discovery board and receive one additional free month on any plan. Provide your EIN, upload your IRS determination letter, or both.
+        Verified 501(c)(3) organizations receive a 30-day free trial and access to the Community Board. Provide your EIN, upload your IRS determination letter, or bot.
       </p>
 
       {/* EIN field */}

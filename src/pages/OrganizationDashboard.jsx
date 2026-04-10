@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
-import OrgOnboardingWizard from '../components/OrgOnboardingWizard';
 import OrganizationSettings from '../components/OrganizationSettings';
 import InviteMember from '../components/InviteMember';
 import CreateEvent from '../components/CreateEvent';
@@ -186,6 +185,16 @@ function OrganizationDashboard() {
   // ── TOUR STATE — triggers tour after wizard completes ─────────────────────
   var [showTour, setShowTour] = useState(false);
   var [showCelebration, setShowCelebration] = useState(false);
+
+
+  // ── Detect ?tour=1 from CreateOrganization wizard ──
+useEffect(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('tour') === '1') {
+    setShowTour(true);
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}, []);
 
   // Overview data
   var [overviewEvents, setOverviewEvents] = useState([]);
@@ -1584,31 +1593,45 @@ function OrganizationDashboard() {
         </div>
       )}
 
-      {/* ── Onboarding wizard ──
-          onComplete: mark org done locally + trigger the guided tour */}
-      {organization && !organization.onboarding_completed && membership && membership.role === 'admin' && (
-        <OrgOnboardingWizard
-          org={organization}
-          onComplete={function() {
-            setOrganization(function(prev) { return Object.assign({}, prev, { onboarding_completed: true }); });
-            setShowTour(true);
-          }}
-        />
-      )}
       {showCelebration && (
-  <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10001, padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
-    <div style={{ background:'#1A2035', border:'1px solid #2A3550', borderRadius:'16px', padding:'40px 32px', textAlign:'center', maxWidth:'360px', width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,0.5)' }}>
-      <img src="/mascot-onboarding.png" alt="" aria-hidden="true" style={{ width:'200px', height:'auto', margin:'0 auto 20px', display:'block' }} />
-      <h2 id="celebrate-title" style={{ fontSize:'20px', fontWeight:800, color:'#FFFFFF', marginBottom:'8px' }}>You are all set!</h2>
-      <p style={{ fontSize:'13px', color:'#CBD5E1', lineHeight:1.65, marginBottom:'24px' }}>Your organization is ready to go. Start by inviting your first members.</p>
-      <button onClick={function() { setShowCelebration(false); }} style={{ padding:'10px 28px', background:'#F5B731', color:'#0E1523', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:800, cursor:'pointer', width:'100%' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-yellow-400">
-        Let us go
-      </button>
-    </div>
-  </div>
-)}
-    </>
-  );
-}
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10001, padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
+          <div style={{ background:'#1A2035', border:'1px solid #2A3550', borderRadius:'16px', padding:'32px', maxWidth:'400px', width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,0.5)' }}>
+            <img src="/mascot-onboarding.png" alt="" aria-hidden="true" style={{ width:'160px', height:'auto', margin:'0 auto 16px', display:'block' }} />
+            <h2 id="celebrate-title" style={{ fontSize:'20px', fontWeight:800, color:'#FFFFFF', marginBottom:'8px', textAlign:'center' }}>You're all set!</h2>
+            <p style={{ fontSize:'13px', color:'#CBD5E1', lineHeight:1.65, marginBottom:'20px', textAlign:'center' }}>
+              What do you want to do first?
+            </p>
+            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+              {[
+                { key:'event',        label:'Create an Event',       desc:'Schedule your first meeting or activity', color:'#3B82F6', path:'/organizations/'+organizationId+'/events?create=true' },
+                { key:'invite',       label:'Invite Members',        desc:'Add people to your organization by email',  color:'#22C55E', path:'/organizations/'+organizationId+'/members?invite=true' },
+                { key:'announcement', label:'Post an Announcement',  desc:'Share news or a welcome message',           color:'#F5B731', path:'/organizations/'+organizationId+'/announcements?create=true' },
+                { key:'dashboard',    label:'Explore My Dashboard',  desc:'See everything your org has to offer',      color:'#8B5CF6', path:'/organizations/'+organizationId },
+              ].map(function(a) {
+                return (
+                  <button
+                    key={a.key}
+                    onClick={function() { setShowCelebration(false); navigate(a.path); }}
+                    style={{ background:'#151B2D', border:'1px solid #2A3550', borderRadius:'10px', padding:'12px 14px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'12px', width:'100%' }}
+                    onMouseEnter={function(e) { e.currentTarget.style.borderColor=a.color; }}
+                    onMouseLeave={function(e) { e.currentTarget.style.borderColor='#2A3550'; }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    aria-label={a.label}
+                  >
+                    <div style={{ flex:1 }}>
+                      <p style={{ fontSize:'13px', fontWeight:700, color:'#FFFFFF', margin:'0 0 2px' }}>{a.label}</p>
+                      <p style={{ fontSize:'12px', color:'#64748B', margin:0 }}>{a.desc}</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      </>
+    );
+  }
 
 export default OrganizationDashboard;
