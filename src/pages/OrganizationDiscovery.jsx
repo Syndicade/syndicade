@@ -444,19 +444,13 @@ export default function OrganizationDiscovery() {
     </div>
   );
 
-  if (sessionLoading) return null;
-
-  if (!session) {
-    return (
-      <>
-        <Header />
-        <main id="main-content">
-          {pageContent}
-        </main>
-        <Footer />
-      </>
-    );
-  }
-
-  return pageContent;
+ return (
+  <>
+    <Header />
+    <main id="main-content">
+      {pageContent}
+    </main>
+    <Footer />
+  </>
+);
 }
