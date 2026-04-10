@@ -1447,7 +1447,7 @@ function UnifiedDashboard() {
   isOpen={showInviteMember}
   onClose={function() { setShowInviteMember(false); }}
  currentUserId={currentUserId}
-  adminOrgs={organizations.filter(function(o) { return o.userRole === 'admin'; })}
+  adminOrgs={organizations.filter(function(o) { return o.role === 'admin'; })}
 />
 
 <InviteOrgModal
