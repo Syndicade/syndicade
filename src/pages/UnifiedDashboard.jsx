@@ -7,6 +7,9 @@ import { mascotSuccessToast } from '../components/MascotToast'
 import CreateOrganization from '../components/CreateOrganization'
 import CreateEvent from '../components/CreateEvent.jsx'
 import MySignups from '../components/MySignups'
+import InviteMemberModal from '../components/InviteMemberModal';
+import InviteOrgModal from '../components/InviteOrgModal';
+import { UserPlus, Building2 } from 'lucide-react';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function IconOrgs() {
@@ -626,6 +629,7 @@ function UnifiedDashboard() {
   var [showCreateModal, setShowCreateModal] = useState(false)
   var [showCreateEvent, setShowCreateEvent] = useState(false)
   var [selectedOrgForEvent, setSelectedOrgForEvent] = useState(null)
+  var [currentUserId, setCurrentUserId] = useState(null)
   var [memberName, setMemberName] = useState('')
   var [activeFilter, setActiveFilter] = useState('all')
   var [orgFilter, setOrgFilter] = useState('all')
@@ -636,6 +640,8 @@ function UnifiedDashboard() {
   var [followedOrgs, setFollowedOrgs] = useState([])
   var [followedEvents, setFollowedEvents] = useState([])
   var [unfollowingId, setUnfollowingId] = useState(null)
+  var [showInviteMember, setShowInviteMember] = useState(false);
+  var [showInviteOrg, setShowInviteOrg] = useState(false);
 
   // ── Tour state ──
   var [tourStep, setTourStep] = useState(-1)   // -1 = inactive
@@ -690,6 +696,7 @@ function UnifiedDashboard() {
       var userRes = await supabase.auth.getUser()
       if (userRes.error) throw userRes.error
       var user = userRes.data.user
+      setCurrentUserId(user.id)
       if (!user) { setLoading(false); return }
 
       var profileRes = await supabase.from('members').select('full_name').eq('id', user.id).single()
@@ -925,15 +932,39 @@ function UnifiedDashboard() {
                 Updates from your {organizations.length} organization{organizations.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <button
-              onClick={handleRestartTour}
-              aria-label="Take the guided tour of your dashboard"
-              style={{flexShrink: 0, marginTop: '4px', fontSize: '12px', fontWeight: 600, color: textMuted, background: 'transparent', border: '1px solid ' + border, borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap'}}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Take the tour
-            </button>
-          </div>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0}}>
+  <button
+    onClick={handleRestartTour}
+    aria-label="Take the guided tour of your dashboard"
+    style={{marginTop: '4px', fontSize: '12px', fontWeight: 600, color: textMuted, background: 'transparent', border: '1px solid #2A3550', padding: '5px 14px', borderRadius: '8px', cursor: 'pointer'}}
+    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+  >
+    Take the tour
+  </button>
+
+  {/* Invite buttons */}
+  <div style={{display: 'flex', gap: '8px'}}>
+    <button
+      onClick={function() { setShowInviteMember(true); }}
+      className="flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+      style={{fontSize: '12px', fontWeight: 600, color: '#3B82F6', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', padding: '5px 12px', borderRadius: '8px', whiteSpace: 'nowrap', cursor: 'pointer'}}
+      aria-label="Invite a member to your organization"
+    >
+      <UserPlus size={13} aria-hidden="true" />
+      Invite Member
+    </button>
+    <button
+      onClick={function() { setShowInviteOrg(true); }}
+      className="flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg"
+      style={{fontSize: '12px', fontWeight: 600, color: '#8B5CF6', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', padding: '5px 12px', borderRadius: '8px', whiteSpace: 'nowrap', cursor: 'pointer'}}
+      aria-label="Invite an organization to Syndicade"
+    >
+      <Building2 size={13} aria-hidden="true" />
+      Invite Org
+    </button>
+  </div>
+  </div>
+</div>
 
           {/* Stat cards — tour step 0 */}
           <div ref={statsRef} style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px'}}>
@@ -1412,6 +1443,18 @@ function UnifiedDashboard() {
           organizationName={selectedOrgForEvent.name}
         />
       )}
+      <InviteMemberModal
+  isOpen={showInviteMember}
+  onClose={function() { setShowInviteMember(false); }}
+ currentUserId={currentUserId}
+  adminOrgs={organizations.filter(function(o) { return o.userRole === 'admin'; })}
+/>
+
+<InviteOrgModal
+  isOpen={showInviteOrg}
+  onClose={function() { setShowInviteOrg(false); }}
+/>
+
     </div>
   )
 }
