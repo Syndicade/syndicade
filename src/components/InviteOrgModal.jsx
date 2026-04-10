@@ -1,59 +1,23 @@
-import { useState, useEffect } from 'react';
-import { X, Building2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import toast from 'react-hot-toast';
-import { mascotSuccessToast } from './MascotToast';
+import { useState } from 'react';
+import { X, Building2, Copy, Check } from 'lucide-react';
+
+var INVITE_LINK = 'https://syndicade-git-main-syndicades-projects.vercel.app/signup';
+var INVITE_TEXT = "Hi! I wanted to reach out because I think Syndicade would be a great fit for your organization. It's an all-in-one platform built specifically for nonprofits and community groups — manage your members, post events, send announcements, and get discovered by people in your area looking to get involved. It's free to try and takes minutes to set up. I'd love to see you on there!";
 
 export default function InviteOrgModal({ isOpen, onClose }) {
-  var [orgName, setOrgName] = useState('');
-  var [contactName, setContactName] = useState('');
-  var [email, setEmail] = useState('');
-  var [message, setMessage] = useState('');
-  var [submitting, setSubmitting] = useState(false);
-  var [emailError, setEmailError] = useState('');
+  var [linkCopied, setLinkCopied] = useState(false);
+  var [textCopied, setTextCopied] = useState(false);
 
-  useEffect(function() {
-    if (isOpen) {
-      setOrgName('');
-      setContactName('');
-      setEmail('');
-      setMessage('');
-      setEmailError('');
-    }
-  }, [isOpen]);
-
-  function validateEmail(val) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  function copyLink() {
+    navigator.clipboard.writeText(INVITE_LINK);
+    setLinkCopied(true);
+    setTimeout(function() { setLinkCopied(false); }, 2000);
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setEmailError('');
-
-    if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      var { error } = await supabase.from('marketing_contacts').insert({
-        name: contactName.trim(),
-        email: email.trim().toLowerCase(),
-        organization: orgName.trim(),
-        message: message.trim() || 'Invited via Syndicade member dashboard'
-      });
-
-      if (error) throw error;
-
-      mascotSuccessToast('Invitation sent!', orgName + ' will receive an email about joining Syndicade.');
-      onClose();
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to send invitation. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+  function copyText() {
+    navigator.clipboard.writeText(INVITE_TEXT + '\n\n' + INVITE_LINK);
+    setTextCopied(true);
+    setTimeout(function() { setTextCopied(false); }, 2000);
   }
 
   if (!isOpen) return null;
@@ -99,143 +63,99 @@ export default function InviteOrgModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="px-6 py-5 flex flex-col gap-4">
+        <div className="px-6 py-5 flex flex-col gap-5">
 
-            <p className="text-sm" style={{color: '#94A3B8'}}>
-              Know an organization that should be on Syndicade? We'll reach out and introduce them to the platform.
+          <p className="text-sm" style={{color: '#94A3B8'}}>
+            Know a nonprofit or community group that should be on Syndicade? Share this with them.
+          </p>
+
+          {/* Link copy */}
+          <div>
+            <p
+              className="text-xs font-semibold uppercase mb-2"
+              style={{color: '#F5B731', letterSpacing: '4px'}}
+            >
+              Invite Link
             </p>
-
-            {/* Org Name */}
-            <div>
-              <label
-                htmlFor="invite-org-name"
-                className="block text-xs font-semibold uppercase tracking-widest mb-2"
-                style={{color: '#F5B731', letterSpacing: '4px'}}
+            <div
+              className="flex items-center gap-2 rounded-lg px-4 py-2.5"
+              style={{background: '#0E1523', border: '1px solid #2A3550'}}
+            >
+              <span
+                className="flex-1 text-sm truncate"
+                style={{color: '#64748B'}}
               >
-                Organization Name
-              </label>
-              <input
-                id="invite-org-name"
-                type="text"
-                value={orgName}
-                onChange={function(e) { setOrgName(e.target.value); }}
-                placeholder="Toledo Food Bank"
-                required
-                aria-required="true"
-                className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{background: '#0E1523', border: '1px solid #2A3550', color: '#CBD5E1'}}
-              />
+                {INVITE_LINK}
+              </span>
+              <button
+                onClick={copyLink}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500 shrink-0"
+                style={{
+                  background: linkCopied ? 'rgba(34,197,94,0.15)' : 'rgba(139,92,246,0.15)',
+                  color: linkCopied ? '#22C55E' : '#8B5CF6',
+                  border: '1px solid ' + (linkCopied ? 'rgba(34,197,94,0.3)' : 'rgba(139,92,246,0.3)')
+                }}
+                aria-label="Copy invite link"
+              >
+                {linkCopied
+                  ? <><Check size={12} aria-hidden="true" /> Copied</>
+                  : <><Copy size={12} aria-hidden="true" /> Copy</>
+                }
+              </button>
             </div>
+          </div>
 
-            {/* Contact Name */}
-            <div>
-              <label
-                htmlFor="invite-contact-name"
-                className="block text-xs font-semibold uppercase tracking-widest mb-2"
-                style={{color: '#F5B731', letterSpacing: '4px'}}
+          {/* Message copy */}
+          <div>
+            <p
+              className="text-xs font-semibold uppercase mb-2"
+              style={{color: '#F5B731', letterSpacing: '4px'}}
+            >
+              Ready-to-send Message
+            </p>
+            <div
+              className="rounded-lg px-4 py-3"
+              style={{background: '#0E1523', border: '1px solid #2A3550'}}
+            >
+              <p
+                className="text-sm leading-relaxed mb-3"
+                style={{color: '#CBD5E1'}}
               >
-                Contact Name
-              </label>
-              <input
-                id="invite-contact-name"
-                type="text"
-                value={contactName}
-                onChange={function(e) { setContactName(e.target.value); }}
-                placeholder="Jane Smith"
-                required
-                aria-required="true"
-                className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{background: '#0E1523', border: '1px solid #2A3550', color: '#CBD5E1'}}
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label
-                htmlFor="invite-org-email"
-                className="block text-xs font-semibold uppercase tracking-widest mb-2"
-                style={{color: '#F5B731', letterSpacing: '4px'}}
-              >
-                Contact Email
-              </label>
-              <input
-                id="invite-org-email"
-                type="email"
-                value={email}
-                onChange={function(e) { setEmail(e.target.value); setEmailError(''); }}
-                placeholder="jane@toledofoodbank.org"
-                required
-                aria-required="true"
-                aria-describedby={emailError ? 'invite-org-email-error' : undefined}
-                className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{background: '#0E1523', border: '1px solid ' + (emailError ? '#EF4444' : '#2A3550'), color: '#CBD5E1'}}
-              />
-              {emailError && (
-                <p
-                  id="invite-org-email-error"
-                  role="alert"
-                  className="mt-1 text-xs"
-                  style={{color: '#EF4444'}}
-                >
-                  {emailError}
-                </p>
-              )}
-            </div>
-
-            {/* Message */}
-            <div>
-              <label
-                htmlFor="invite-org-message"
-                className="block text-xs font-semibold uppercase tracking-widest mb-2"
-                style={{color: '#F5B731', letterSpacing: '4px'}}
-              >
-                Message
-                <span className="ml-1 normal-case font-normal" style={{color: '#64748B', letterSpacing: '0'}}>
-                  (optional)
-                </span>
-              </label>
-              <textarea
-                id="invite-org-message"
-                value={message}
-                onChange={function(e) { setMessage(e.target.value); }}
-                placeholder="Why should they join Syndicade? What's your connection to this org?"
-                rows={3}
-                maxLength={400}
-                className="w-full rounded-lg px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{background: '#0E1523', border: '1px solid #2A3550', color: '#CBD5E1'}}
-              />
-              <p className="mt-1 text-right text-xs" style={{color: '#64748B'}}>
-                {message.length}/400
+                {INVITE_TEXT}
               </p>
+              <button
+                onClick={copyText}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                style={{
+                  background: textCopied ? 'rgba(34,197,94,0.15)' : 'rgba(139,92,246,0.15)',
+                  color: textCopied ? '#22C55E' : '#8B5CF6',
+                  border: '1px solid ' + (textCopied ? 'rgba(34,197,94,0.3)' : 'rgba(139,92,246,0.3)')
+                }}
+                aria-label="Copy full invite message"
+              >
+                {textCopied
+                  ? <><Check size={12} aria-hidden="true" /> Copied</>
+                  : <><Copy size={12} aria-hidden="true" /> Copy Message + Link</>
+                }
+              </button>
             </div>
-
           </div>
 
-          {/* Footer */}
-          <div
-            className="flex items-center justify-end gap-3 px-6 py-4 border-t"
-            style={{borderColor: '#2A3550'}}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex justify-end px-6 py-4 border-t"
+          style={{borderColor: '#2A3550'}}
+        >
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-lg text-sm font-semibold border focus:outline-none focus:ring-2 focus:ring-gray-500"
+            style={{background: 'transparent', borderColor: '#2A3550', color: '#94A3B8'}}
           >
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border focus:outline-none focus:ring-2 focus:ring-gray-500"
-              style={{background: 'transparent', borderColor: '#2A3550', color: '#94A3B8'}}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{background: '#8B5CF6', color: '#FFFFFF'}}
-            >
-              {submitting ? 'Sending...' : 'Send Invitation'}
-            </button>
-          </div>
-        </form>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );

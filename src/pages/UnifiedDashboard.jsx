@@ -1443,11 +1443,9 @@ function UnifiedDashboard() {
           organizationName={selectedOrgForEvent.name}
         />
       )}
-      <InviteMemberModal
+<InviteMemberModal
   isOpen={showInviteMember}
   onClose={function() { setShowInviteMember(false); }}
- currentUserId={currentUserId}
-  adminOrgs={organizations.filter(function(o) { return o.role === 'admin'; })}
 />
 
 <InviteOrgModal
