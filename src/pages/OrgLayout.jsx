@@ -3,6 +3,10 @@ import { useParams, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import { Mail } from 'lucide-react';
+import useOrgAccess from '../hooks/useOrgAccess';
+import SubscriptionBanner from '../components/SubscriptionBanner';
+import OrgUnavailable from '../pages/OrgUnavailable';
+import OrgIced from '../pages/OrgIced';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -115,6 +119,10 @@ function OrgLayout() {
   var [pendingCount, setPendingCount] = useState(0);
   var [unreadCount, setUnreadCount] = useState(0);
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  var access = useOrgAccess(organizationId);
+  var accessStatus = access.status;
+  var accessDaysLeft = access.daysLeft;
 
   var isAdmin = !!(membership && membership.role === 'admin' && viewMode === 'admin');
 
@@ -229,9 +237,25 @@ function OrgLayout() {
     );
   }
 
+  // ── Access gates ──────────────────────────────────────────────────────────────
+  // Iced — admin sees iced screen
+  if (!access.loading && accessStatus === 'iced' && isAdmin) {
+    return <OrgIced orgName={organization && organization.name} orgId={organizationId} />;
+  }
+  // Expired or iced — non-admin members see unavailable page
+  if (!access.loading && (accessStatus === 'expired' || accessStatus === 'iced') && !isAdmin) {
+    return <OrgUnavailable orgName={organization && organization.name} />;
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>
+      <SubscriptionBanner
+        status={accessStatus}
+        daysLeft={accessDaysLeft}
+        orgId={organizationId}
+        isAdmin={isAdmin}
+      />
       <div style={{ padding:'20px 8px' }}>
         <div style={{ maxWidth:'1600px', margin:'0 auto' }}>
 
@@ -302,7 +326,7 @@ function OrgLayout() {
 
             {/* PAGE CONTENT via Outlet */}
             <main style={{ flex:1, minWidth:0 }} role="main">
-              <Outlet context={{ organization:organization, membership:membership, isAdmin:isAdmin, viewMode:viewMode, organizationId:organizationId }} />
+              <Outlet context={{ organization:organization, membership:membership, isAdmin:isAdmin, viewMode:viewMode, organizationId:organizationId, accessStatus:accessStatus }} />
             </main>
 
           </div>

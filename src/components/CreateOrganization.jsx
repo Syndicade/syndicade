@@ -448,7 +448,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
       var slug=generateSlug(data.name)
       var {data:existing}=await supabase.from('organizations').select('slug').eq('slug',slug).maybeSingle()
       if(existing) slug=slug+'-'+Math.random().toString(36).substring(2,6)
-      var {data:newOrg,error:orgErr}=await supabase.from('organizations').insert([{name:data.name.trim(),type:data.type,description:data.description.trim(),website:data.website.trim()||null,created_by:user.id,slug:slug,settings:{}}]).select().single()
+      var {data:newOrg,error:orgErr}=await supabase.from('organizations').insert([{name:data.name.trim(),type:data.type,description:data.description.trim(),website:data.website.trim()||null,created_by:user.id,slug:slug,settings:{},trial_started_at:new Date().toISOString(),trial_length_days:14,account_status:'active'}]).select().single()
       if(orgErr) throw orgErr
       var {error:memErr}=await supabase.from('memberships').insert([{member_id:user.id,organization_id:newOrg.id,role:'admin',status:'active',approved_date:new Date().toISOString()}])
       if(memErr) throw memErr

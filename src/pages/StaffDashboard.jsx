@@ -632,7 +632,7 @@ supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('
     var status = action === 'approve' ? 'approved' : 'rejected';
     var { error } = await supabase.from('nonprofit_verifications').update({ status: status, reviewed_at: new Date().toISOString() }).eq('id', id);
     if (error) { toast.error('Failed.'); setActionLoading(null); return; }
-    if (action === 'approve') await supabase.from('organizations').update({ is_verified_nonprofit: true }).eq('id', orgId);
+    if (action === 'approve') await supabase.from('organizations').update({ is_verified_nonprofit: true, trial_length_days: 30 }).eq('id', orgId);
     await logAction('verification_' + action, 'verification', id, { organization_id: orgId });
     toast.success(action === 'approve' ? 'Nonprofit verified.' : 'Rejected.');
     setActionLoading(null); loadPendingVerifications(); loadMetrics();
