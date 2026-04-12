@@ -17,8 +17,10 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import ContentEditor from '../components/ContentEditor';
 import StaffFinancials from '../components/StaffFinancials';
+import StaffPromoCodes from '../components/StaffPromoCodes';
+import StaffGoals from '../components/StaffGoals';
 import {
-  Users, Building2, DollarSign, ShieldCheck, TrendingUp, AlertTriangle,
+  Users, Building2, DollarSign, ShieldCheck, Tag, TrendingUp, AlertTriangle,
   Calendar, Activity, Clock, CheckCircle, XCircle, RefreshCw, ChevronDown,
   MapPin, BarChart2, UserX, Zap, Search, KeyRound, Ban, ChevronRight, X,
   FileText, Download, Receipt, PlusCircle, Trash2,
@@ -838,7 +840,9 @@ export default function StaffDashboard() {
     { key: 'members',    label: 'Members',         icon: Users },
     { key: 'orgs',       label: 'Organizations',   icon: Building2 },
     { key: 'content',    label: 'Content',         icon: FileText },
-    { key: 'financials', label: 'Financials',      icon: Receipt },
+    { key: 'financials',   label: 'Financials',   icon: Receipt },
+    { key: 'promo_codes',  label: 'Promo Codes',  icon: Tag },
+    { key: 'goals',        label: 'Goals',        icon: TrendingUp },
   ];
 
   useEffect(function () {
@@ -903,7 +907,9 @@ export default function StaffDashboard() {
         {activeTab === 'members'    && <MembersTab />}
         {activeTab === 'orgs'       && <OrgsTab />}
         {activeTab === 'content'    && <ContentEditor staffUserId={staffMember?.user_id} />}
-        {activeTab === 'financials' && <StaffFinancials staffUserId={staffMember?.user_id} />}
+        {activeTab === 'financials'  && <StaffFinancials staffUserId={staffMember?.user_id} />}
+        {activeTab === 'promo_codes' && <StaffPromoCodes />}
+        {activeTab === 'goals'       && <StaffGoals />}
       </main>
     </div>
   );
