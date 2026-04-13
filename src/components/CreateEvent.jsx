@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from './MascotToast';
+import usePlanLimits from '../hooks/usePlanLimits';
+import { Lock } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 var EVENT_TYPES = [
@@ -330,6 +332,16 @@ function CheckoutFieldRow({ field, index, onChange, onRemove, canRemove }) {
 // ── Main Component ───────────────────────────────────────────────────────────
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent }) {
   var [activeTab, setActiveTab] = useState('details');
+  var planData = usePlanLimits(organizationId);
+var isAllowed = planData ? planData.isAllowed : function() { return false; };
+var canSellTickets = isAllowed('can_sell_tickets');
+var [orgIsVerified, setOrgIsVerified] = useState(false);
+
+useEffect(function() {
+  if (!organizationId) return;
+  supabase.from('organizations').select('is_verified_nonprofit').eq('id', organizationId).single()
+    .then(function(r) { if (r.data) setOrgIsVerified(r.data.is_verified_nonprofit || false); });
+}, [organizationId]);
 
   var [form, setForm] = useState({
     title:'', description:'', eventType:'in-person', isMultiDay:false,
@@ -1226,9 +1238,22 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     );
   }
 
-  function renderTicketing() {
+function renderTicketing() {
+  if (!canSellTickets) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+        <div className="w-14 h-14 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center mb-4">
+          <Lock size={22} className="text-blue-500" aria-hidden="true" />
+        </div>
+        <h3 className="text-base font-bold text-gray-900 mb-2">Paid ticketing is available on Growth</h3>
+        <p className="text-sm text-gray-500 mb-6 max-w-xs leading-relaxed">
+          Upgrade to Growth to sell tickets with early bird pricing, custom checkout fields, and zero platform fees.
+        </p>
+        <p className="text-xs text-gray-400">Free events don't require ticketing — only paid events need Growth.</p>
+      </div>
+    );
+  }
+  // ... rest of existing renderTicketing code unchanged
 
         {/* Paid Event toggle */}
         <div className={'flex items-center justify-between p-4 rounded-xl border '+(isPaid?'border-yellow-400 bg-yellow-50':'border-gray-200 bg-white')}>
@@ -1292,11 +1317,8 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                 Add Custom Field
               </button>
             </div>
-
           </div>
         )}
-      </div>
-    );
   }
 
   function renderPublishing() {
@@ -1309,7 +1331,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
           <div className="space-y-3">
             {/* Discover page */}
-            <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 '+(publishToDiscovery?'border-green-400 bg-green-50':'border-gray-200 bg-white')}>
+            <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (!orgIsVerified ? 'border-gray-200 bg-gray-50 opacity-60' : publishToDiscovery ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white')}>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">Discover Events page</p>
                 <p className="text-xs text-gray-500 mt-0.5">Visible to anyone browsing public events at <span className="font-mono">/discover</span>. Your org must be a verified nonprofit to appear here.</p>
@@ -1320,7 +1342,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
                   </p>
                 )}
               </div>
-              <Toggle checked={publishToDiscovery} onChange={function(){ setPublishToDiscovery(!publishToDiscovery); }} id="pub-discovery" label="Show on Discover Events page"/>
+              <Toggle checked={publishToDiscovery} onChange={function(){ if (orgIsVerified) setPublishToDiscovery(!publishToDiscovery); }} id="pub-discovery" label="Show on Discover Events page" disabled={!orgIsVerified}/>
             </div>
 
             {/* Org website */}

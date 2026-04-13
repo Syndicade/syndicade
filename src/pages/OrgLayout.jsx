@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
-import { Mail } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import useOrgAccess from '../hooks/useOrgAccess';
 import SubscriptionBanner from '../components/SubscriptionBanner';
 import OrgUnavailable from '../pages/OrgUnavailable';
 import OrgIced from '../pages/OrgIced';
+import usePlanLimits from '../hooks/usePlanLimits';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
@@ -16,6 +17,25 @@ function Icon({ path, className, strokeWidth }) {
         ? path.map(function(d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={d} />; })
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth || 2} d={path} />}
     </svg>
+  );
+}
+
+// ── Locked nav badge ──────────────────────────────────────────────────────────
+function LockedNavBadge({ requiredPlan }) {
+  var label = requiredPlan === 'pro' ? 'Pro' : requiredPlan === 'verified' ? 'Verified' : 'Growth';
+  var colors = {
+    growth:   { bg:'rgba(59,130,246,0.15)',  border:'rgba(59,130,246,0.3)',  text:'#3B82F6' },
+    pro:      { bg:'rgba(139,92,246,0.15)',  border:'rgba(139,92,246,0.3)',  text:'#8B5CF6' },
+    verified: { bg:'rgba(34,197,94,0.15)',   border:'rgba(34,197,94,0.3)',   text:'#22C55E' },
+  };
+  var c = colors[requiredPlan] || colors.growth;
+  return (
+    <span
+      style={{ background:c.bg, border:'1px solid '+c.border, color:c.text, fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', marginLeft:'4px', textTransform:'uppercase', letterSpacing:'0.5px', lineHeight:1, flexShrink:0 }}
+      aria-hidden="true"
+    >
+      {label}
+    </span>
   );
 }
 
@@ -45,24 +65,22 @@ var ICONS = {
 };
 
 // ── Nav groups ────────────────────────────────────────────────────────────────
-// tourKey: the data-tour attribute value for guided tour targeting.
-// Only add tourKey to items that are tour steps — leave others undefined.
 function buildNavGroups(organizationId, pendingCount, unreadCount) {
   var base = '/organizations/' + organizationId;
   return [
-{
-  label: 'Workspace',
-  items: [
-    { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
-    { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'], tourKey:'tour-events-nav' },
-    { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'], tourKey:'tour-announcements-nav' },
-    { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'], tourKey:'tour-members-nav' },
-    { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
-    { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
-    { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
-    { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
-  ]
-},
+    {
+      label: 'Workspace',
+      items: [
+        { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
+        { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'], tourKey:'tour-events-nav' },
+        { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'], tourKey:'tour-announcements-nav' },
+        { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'], tourKey:'tour-members-nav' },
+        { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
+        { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
+        { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
+        { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
+      ]
+    },
     {
       label: 'Tools',
       items: [
@@ -77,15 +95,15 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       items: [
         { id:'approvals',    label:'Approvals',    iconKey:'approvals', route:'approvals',    path: base + '/approvals',    badge: pendingCount },
         { id:'inbox',        label:'Inbox',        iconKey:'inbox',     route:'inbox',        path: base + '/inbox',        badge: unreadCount },
-        { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics' },
-        { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey: 'tour-public-page-nav', adminOnly: true },
-        { id:'email-blasts', label:'Email Blasts', iconKey:'email',     route:'email-blasts', path: base + '/email-blasts', adminOnly: true },
+        { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics',    lock:'growth' },
+        { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey:'tour-public-page-nav', adminOnly: true },
+        { id:'email-blasts', label:'Email Blasts', iconKey:'email',     route:'email-blasts', path: base + '/email-blasts', adminOnly: true, lock:'growth' },
       ]
     },
     {
       label: 'Platform',
       items: [
-        { id:'community-board', label:'Community Board', iconKey:'pinboard', route:'community-board', path: base + '/community-board', isPurple: true },
+        { id:'community-board', label:'Community Board', iconKey:'pinboard', route:'community-board', path: base + '/community-board', isPurple: true, lock:'verified' },
         { id:'settings',        label:'Settings',        iconKey:'settings', route:'settings',        path: base + '/settings' },
         { id:'billing',         label:'Billing',         iconKey:'billing',  route:'billing',         path: base + '/billing', isSub: true, adminOnly: true },
       ]
@@ -119,10 +137,14 @@ function OrgLayout() {
   var [pendingCount, setPendingCount] = useState(0);
   var [unreadCount, setUnreadCount] = useState(0);
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
+  var [lockedNavTarget, setLockedNavTarget] = useState(null);
 
   var access = useOrgAccess(organizationId);
   var accessStatus = access.status;
   var accessDaysLeft = access.daysLeft;
+
+  var planData = usePlanLimits(organizationId);
+  var isAllowed = planData ? planData.isAllowed : function() { return false; };
 
   var isAdmin = !!(membership && membership.role === 'admin' && viewMode === 'admin');
 
@@ -165,9 +187,7 @@ function OrgLayout() {
   function isActive(item) {
     var base = '/organizations/' + organizationId;
     var pathname = location.pathname.replace(/\/$/, '');
-    if (item.route === '') {
-      return pathname === base;
-    }
+    if (item.route === '') return pathname === base;
     return pathname === base + '/' + item.route || pathname.startsWith(base + '/' + item.route + '/');
   }
 
@@ -187,20 +207,69 @@ function OrgLayout() {
           <p style={{ fontSize:'8px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#2A3550', padding:'8px 10px 3px' }}>{group.label}</p>
           {visibleItems.map(function(item) {
             var active = isActive(item);
-            var color = item.isPurple ? '#A78BFA' : active ? '#3B82F6' : textMuted;
-            var bg = active ? 'rgba(59,130,246,0.12)' : 'transparent';
+
+            // ── Lock logic ──────────────────────────────────────────────────
+            var isLocked = false;
+            var lockReason = null;
+            if (item.lock === 'growth') {
+              isLocked = !isAllowed('has_full_analytics');
+              lockReason = isLocked ? 'growth' : null;
+            } else if (item.lock === 'pro') {
+              isLocked = !isAllowed('has_ai_assistant');
+              lockReason = isLocked ? 'pro' : null;
+            } else if (item.lock === 'verified') {
+              isLocked = !(organization && organization.is_verified_nonprofit);
+              lockReason = isLocked ? 'verified' : null;
+            }
+
+            var color = isLocked
+              ? '#3A4A65'
+              : (item.isPurple ? '#A78BFA' : active ? '#3B82F6' : textMuted);
+            var bg = active && !isLocked ? 'rgba(59,130,246,0.12)' : 'transparent';
+
             return (
               <button
                 key={item.id}
-                onClick={function() { setMobileNavOpen(false); navigate(item.path); }}
+                onClick={function() {
+                  if (isLocked) { setLockedNavTarget(lockReason); return; }
+                  setMobileNavOpen(false);
+                  navigate(item.path);
+                }}
                 data-tour={item.tourKey || undefined}
-                style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px', borderRadius:'7px', fontSize: item.isSub ? '11px' : '12px', fontWeight:600, color:color, background:bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap' }}
-                aria-current={active ? 'page' : undefined}
+                style={{
+                  display:'flex', alignItems:'center', gap:'8px',
+                  padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px',
+                  borderRadius:'7px',
+                  fontSize: item.isSub ? '11px' : '12px',
+                  fontWeight: 600,
+                  color: color,
+                  background: bg,
+                  border:'none', cursor:'pointer', width:'100%', textAlign:'left',
+                  position:'relative', whiteSpace:'nowrap',
+                  opacity: isLocked ? 0.55 : 1,
+                }}
+                aria-current={active && !isLocked ? 'page' : undefined}
+                aria-disabled={isLocked || undefined}
+                aria-label={isLocked
+                  ? (item.label + ' — ' + (lockReason === 'verified' ? 'available to verified nonprofits' : 'available on ' + (lockReason || 'Growth') + ' plan'))
+                  : item.label
+                }
               >
                 <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:color }} />
-                <span>{item.label}</span>
-                {item.badge > 0 && (
-                  <span style={{ position:'absolute', right:'8px', background: item.id === 'inbox' ? '#EF4444' : '#F5B731', color: item.id === 'inbox' ? '#fff' : '#1A0000', fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px' }} aria-label={item.badge + ' pending'}>
+                <span style={{ flex:1 }}>{item.label}</span>
+
+                {isLocked && (
+                  <Lock size={10} style={{ color:'#3A4A65', flexShrink:0 }} aria-hidden="true" />
+                )}
+                {isLocked && lockReason && (
+                  <LockedNavBadge requiredPlan={lockReason} />
+                )}
+
+                {!isLocked && item.badge > 0 && (
+                  <span
+                    style={{ position:'absolute', right:'8px', background: item.id === 'inbox' ? '#EF4444' : '#F5B731', color: item.id === 'inbox' ? '#fff' : '#1A0000', fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px' }}
+                    aria-label={item.badge + ' pending'}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -237,12 +306,10 @@ function OrgLayout() {
     );
   }
 
-  // ── Access gates ──────────────────────────────────────────────────────────────
-  // Iced — admin sees iced screen
+  // ── Access gates ───────────────────────────────────────────────────────────
   if (!access.loading && accessStatus === 'iced' && isAdmin) {
     return <OrgIced orgName={organization && organization.name} orgId={organizationId} />;
   }
-  // Expired or iced — non-admin members see unavailable page
   if (!access.loading && (accessStatus === 'expired' || accessStatus === 'iced') && !isAdmin) {
     return <OrgUnavailable orgName={organization && organization.name} />;
   }
@@ -300,7 +367,6 @@ function OrgLayout() {
                 <span style={{ fontSize:'11px', color:textMuted, fontWeight:600 }}>Member</span>
               </div>
             )}
-            {/* Mobile hamburger */}
             <button
               onClick={function() { setMobileNavOpen(!mobileNavOpen); }}
               style={{ background:'none', border:'1px solid '+borderColor, borderRadius:'8px', padding:'6px', cursor:'pointer', color:textSecondary }}
@@ -311,10 +377,10 @@ function OrgLayout() {
             </button>
           </div>
 
-          {/* Main layout: nav + content */}
+          {/* Main layout */}
           <div style={{ display:'flex', gap:'16px', alignItems:'flex-start' }}>
 
-            {/* LEFT NAV (desktop) */}
+            {/* LEFT NAV */}
             <aside
               data-tour="tour-org-nav"
               style={{ width:'240px', flexShrink:0, background:sectionBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'10px 8px', display:'flex', flexDirection:'column', gap:'1px', position:'sticky', top:'20px' }}
@@ -324,7 +390,7 @@ function OrgLayout() {
               {renderNav()}
             </aside>
 
-            {/* PAGE CONTENT via Outlet */}
+            {/* PAGE CONTENT */}
             <main style={{ flex:1, minWidth:0 }} role="main">
               <Outlet context={{ organization:organization, membership:membership, isAdmin:isAdmin, viewMode:viewMode, organizationId:organizationId, accessStatus:accessStatus }} />
             </main>
@@ -332,6 +398,64 @@ function OrgLayout() {
           </div>
         </div>
       </div>
+
+      {/* ── Locked nav upgrade modal ── */}
+      {lockedNavTarget && (
+        <div
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:60 }}
+          role="dialog" aria-modal="true" aria-labelledby="lock-modal-title"
+          onClick={function() { setLockedNavTarget(null); }}
+        >
+          <div
+            style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', width:'100%', maxWidth:'380px', padding:'24px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}
+            onClick={function(e) { e.stopPropagation(); }}
+          >
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' }}>
+              <div style={{ width:'36px', height:'36px', borderRadius:'10px', background: lockedNavTarget === 'verified' ? 'rgba(34,197,94,0.1)' : lockedNavTarget === 'pro' ? 'rgba(139,92,246,0.1)' : 'rgba(59,130,246,0.1)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <Lock size={18} style={{ color: lockedNavTarget === 'verified' ? '#22C55E' : lockedNavTarget === 'pro' ? '#8B5CF6' : '#3B82F6' }} aria-hidden="true" />
+              </div>
+              <h2 id="lock-modal-title" style={{ fontSize:'15px', fontWeight:800, color:textPrimary, margin:0 }}>
+                {lockedNavTarget === 'verified' ? 'Verified Nonprofits Only' : lockedNavTarget === 'pro' ? 'Available on Pro' : 'Available on Growth'}
+              </h2>
+            </div>
+            <p style={{ fontSize:'13px', color:textSecondary, lineHeight:1.6, marginBottom:'20px' }}>
+              {lockedNavTarget === 'verified'
+                ? 'This feature is available to verified 501(c)(3) organizations. Submit your EIN to get verified.'
+                : lockedNavTarget === 'pro'
+                  ? 'Upgrade to Pro to unlock the AI content assistant and priority support.'
+                  : 'Upgrade to Growth to unlock analytics, email blasts, paid ticketing, and more.'
+              }
+            </p>
+            <div style={{ display:'flex', gap:'10px' }}>
+              {lockedNavTarget !== 'verified' && (
+                <button
+                  onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/billing'); }}
+                  style={{ flex:1, padding:'10px', background:'#3B82F6', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }}
+                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  View Plans
+                </button>
+              )}
+              {lockedNavTarget === 'verified' && (
+                <button
+                  onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/settings'); }}
+                  style={{ flex:1, padding:'10px', background:'#22C55E', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  Get Verified
+                </button>
+              )}
+              <button
+                onClick={function() { setLockedNavTarget(null); }}
+                style={{ padding:'10px 16px', background:'transparent', color:textMuted, border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'13px', fontWeight:600, cursor:'pointer' }}
+                className="focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile nav drawer */}
       {mobileNavOpen && (
