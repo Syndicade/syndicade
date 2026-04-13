@@ -230,11 +230,11 @@ function OrgLayout() {
             return (
               <button
                 key={item.id}
-                onClick={function() {
-                  if (isLocked) { setLockedNavTarget(lockReason); return; }
-                  setMobileNavOpen(false);
-                  navigate(item.path);
-                }}
+onClick={function() {
+  if (isLocked && lockReason === 'verified') { setLockedNavTarget(lockReason); return; }
+  setMobileNavOpen(false);
+  navigate(item.path);
+}}
                 data-tour={item.tourKey || undefined}
                 style={{
                   display:'flex', alignItems:'center', gap:'8px',

@@ -12,7 +12,7 @@ var PRICE_IDS = {
   pro_year:      'price_1TFCJyKcdErNqbVNoBIkHrAJ',
 }
 
-var TRIAL_DAYS = 30
+var TRIAL_DAYS = 14
 
 async function sbGet(path, serviceKey, supabaseUrl) {
   var res = await fetch(supabaseUrl + '/rest/v1' + path, {

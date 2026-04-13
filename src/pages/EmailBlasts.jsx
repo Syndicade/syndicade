@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
@@ -8,13 +8,13 @@ import NewsletterBuilder from '../components/NewsletterBuilder';
 import {
   Mail, Send, FileText, Clock, Users, ChevronDown,
   Plus, Trash2, Edit2, X, AlertCircle, CheckCircle,
-  Eye, Save, BarChart2, Layout, TrendingUp
+  Eye, Save, BarChart2, Layout, TrendingUp, Lock, ArrowRight
 } from 'lucide-react';
 
 // ── Plan limits ───────────────────────────────────────────────────────────────
 var PLAN_LIMITS = {
-  starter: 100,
-  growth: Infinity,
+  starter: 0,
+  growth: 500,
   pro: Infinity
 };
 
@@ -80,10 +80,16 @@ function UsageBar({ used, limit }) {
           <div className="h-2 rounded-full transition-all duration-500" style={{ width: pct + '%', background: color }} />
         </div>
       )}
+      {!isUnlimited && pct >= 80 && pct < 100 && (
+        <p className="text-xs text-yellow-400 mt-2 flex items-center gap-1">
+          <AlertCircle size={12} aria-hidden="true" />
+          {limit - used} emails remaining this month.
+        </p>
+      )}
       {!isUnlimited && pct >= 90 && (
         <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
           <AlertCircle size={12} aria-hidden="true" />
-          Approaching monthly limit. Upgrade for unlimited sends.
+          Approaching monthly limit. Upgrade to Pro for unlimited sends.
         </p>
       )}
     </div>
@@ -180,7 +186,6 @@ function HistoryRow({ blast, blastStats, planKey, onViewAnalytics }) {
       <td className="px-4 py-3">
         <p className="text-sm font-semibold text-white truncate max-w-[240px]">{blast.subject}</p>
         {blast.template_name && <p className="text-xs text-[#64748B] mt-0.5">Template: {blast.template_name}</p>}
-        {/* Inline summary stats for Growth/Pro */}
         {isGrowthPlus && stats && (
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             <span className="flex items-center gap-1 text-xs text-green-400">
@@ -232,6 +237,7 @@ export default function EmailBlasts() {
   var organization = context ? context.organization : null;
   var organizationId = organization ? organization.id : null;
   var isAdmin = context ? context.isAdmin : false;
+  var navigate = useNavigate();
 
   var [tab, setTab] = useState('compose');
   var [loading, setLoading] = useState(true);
@@ -260,7 +266,7 @@ export default function EmailBlasts() {
   var [showConfirm, setShowConfirm] = useState(false);
   var [analyticsBlast, setAnalyticsBlast] = useState(null);
 
-  var planLimit = PLAN_LIMITS[planKey] || 100;
+  var planLimit = PLAN_LIMITS[planKey] !== undefined ? PLAN_LIMITS[planKey] : 0;
   var remainingEmails = planLimit === Infinity ? Infinity : Math.max(0, planLimit - usedThisMonth);
   var isGrowthPlus = planKey === 'growth' || planKey === 'pro';
 
@@ -396,9 +402,10 @@ export default function EmailBlasts() {
     } finally { setSending(false); }
   }
 
-  var canSend = subject.trim() && body.trim() && !sending && (planLimit === Infinity || usedThisMonth < planLimit);
+  var canSend = subject.trim() && body.trim() && !sending && isGrowthPlus && (planLimit === Infinity || usedThisMonth < planLimit);
   var recipientEstimate = audience === 'admins_only' ? 'Admins only' : memberCount + ' active member' + (memberCount !== 1 ? 's' : '');
 
+  // ── Access guard: admin only ──────────────────────────────────────────────
   if (!isAdmin) {
     return (
       <main className="flex-1 p-6 bg-[#0E1523] min-h-screen flex items-center justify-center">
@@ -411,6 +418,125 @@ export default function EmailBlasts() {
     );
   }
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <main className="flex-1 bg-[#0E1523] min-h-screen" aria-label="Email Blasts loading">
+        <div className="bg-[#151B2D] border-b border-[#2A3550] px-6 py-5">
+          <Skeleton className="h-5 w-24 mb-2" />
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="p-6 max-w-3xl mx-auto space-y-4">
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-48" />
+          <Skeleton className="h-10 w-32 ml-auto" />
+        </div>
+      </main>
+    );
+  }
+
+  // ── Plan gate: Starter — render page dimmed with overlay modal ───────────
+  if (planKey === 'starter') {
+    return (
+      <main className="flex-1 bg-[#0E1523] min-h-screen" aria-label="Email Blasts">
+        {/* Page header */}
+        <div className="bg-[#151B2D] border-b border-[#2A3550] px-6 py-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-xs font-700 uppercase tracking-widest text-[#F5B731] mb-1">Communications</p>
+              <h1 className="text-2xl font-800 text-white">Email Blasts</h1>
+              <p className="text-sm text-[#94A3B8] mt-0.5">Send announcements and updates directly to your members.</p>
+            </div>
+          </div>
+          {/* Tabs — dimmed */}
+          <div className="flex mt-5 border-b border-[#2A3550] opacity-40 pointer-events-none select-none" aria-hidden="true">
+            {[
+              { key: 'compose', label: 'Compose', Icon: Mail },
+              { key: 'newsletter', label: 'Newsletter', Icon: Layout },
+              { key: 'templates', label: 'Templates', Icon: FileText },
+              { key: 'history', label: 'Send History', Icon: Clock },
+            ].map(function(t) {
+              return (
+                <div key={t.key} className={'flex items-center gap-2 px-4 py-2.5 text-sm font-600 border-b-2 -mb-px ' + (t.key === 'compose' ? 'border-blue-500 text-blue-400' : 'border-transparent text-[#64748B]')}>
+                  <t.Icon size={14} />
+                  {t.label}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Dimmed page body + overlay */}
+        <div className="relative">
+          {/* Dimmed background content — non-interactive */}
+          <div className="p-6 opacity-20 pointer-events-none select-none" aria-hidden="true">
+            <div className="max-w-3xl mx-auto space-y-5">
+              <div className="h-12 bg-[#1A2035] border border-[#2A3550] rounded-lg" />
+              <div className="h-12 bg-[#1A2035] border border-[#2A3550] rounded-lg" />
+              <div className="h-48 bg-[#1A2035] border border-[#2A3550] rounded-lg" />
+              <div className="flex justify-between">
+                <div className="flex gap-2">
+                  <div className="h-10 w-24 bg-[#1A2035] border border-[#2A3550] rounded-lg" />
+                  <div className="h-10 w-36 bg-[#1A2035] border border-[#2A3550] rounded-lg" />
+                </div>
+                <div className="h-10 w-28 bg-blue-500 bg-opacity-30 rounded-lg" />
+              </div>
+            </div>
+          </div>
+
+          {/* Upgrade overlay */}
+          <div className="absolute inset-0 flex items-start justify-center pt-16 px-4" style={{ background: 'rgba(14,21,35,0.7)' }}>
+            <div className="w-full max-w-md bg-[#1A2035] border border-[#2A3550] rounded-2xl p-8 shadow-2xl">
+
+              <div className="w-14 h-14 rounded-2xl bg-[#1E2845] border border-[#2A3550] flex items-center justify-center mx-auto mb-5" aria-hidden="true">
+                <Lock size={24} className="text-[#64748B]" />
+              </div>
+
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-700 uppercase tracking-widest bg-blue-500 bg-opacity-15 border border-blue-500 border-opacity-30 text-blue-400 mb-4">
+                Available on Growth
+              </span>
+
+              <h2 className="text-xl font-800 text-white mb-2">Email Blasts &amp; Newsletter Builder</h2>
+              <p className="text-sm text-[#94A3B8] mb-6 leading-relaxed">
+                Send announcements, updates, and beautifully designed newsletters directly to your members.
+              </p>
+
+              <ul className="text-left space-y-3 mb-8" role="list" aria-label="Features included with Growth">
+                {[
+                  { icon: Send,     text: 'Email blasts to all members or admins — up to 500/month' },
+                  { icon: Layout,   text: 'Drag-and-drop newsletter builder with 11 block types' },
+                  { icon: BarChart2,text: 'Open rates, click rates, and bounce tracking per campaign' },
+                  { icon: FileText, text: 'Reusable templates for announcements, events, and more' },
+                ].map(function(item, i) {
+                  return (
+                    <li key={i} className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-[#1E2845] flex items-center justify-center flex-shrink-0 mt-0.5" aria-hidden="true">
+                        <item.icon size={13} className="text-blue-400" />
+                      </div>
+                      <span className="text-sm text-[#CBD5E1]">{item.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <button
+                onClick={function() { navigate('/organizations/' + organizationId + '/billing'); }}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-colors"
+              >
+                Upgrade to Growth
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+              <p className="text-xs text-[#64748B] mt-3 text-center">$39/mo — or $390/yr (2 months free)</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Full page (Growth / Pro) ──────────────────────────────────────────────
   return (
     <main className="flex-1 bg-[#0E1523] min-h-screen" aria-label="Email Blasts">
 
@@ -422,15 +548,15 @@ export default function EmailBlasts() {
             <h1 className="text-2xl font-800 text-white">Email Blasts</h1>
             <p className="text-sm text-[#94A3B8] mt-0.5">Send announcements and updates directly to your members.</p>
           </div>
-          {loading ? <Skeleton className="h-16 w-52" /> : <UsageBar used={usedThisMonth} limit={planLimit} />}
+          <UsageBar used={usedThisMonth} limit={planLimit} />
         </div>
 
         {/* Tabs */}
         <div className="flex mt-5 border-b border-[#2A3550]" role="tablist" aria-label="Email blast sections">
           {[
-            { key: 'compose',    label: 'Compose',     Icon: Mail },
-            { key: 'newsletter', label: 'Newsletter',  Icon: Layout },
-            { key: 'templates',  label: 'Templates',   Icon: FileText },
+            { key: 'compose',    label: 'Compose',      Icon: Mail },
+            { key: 'newsletter', label: 'Newsletter',   Icon: Layout },
+            { key: 'templates',  label: 'Templates',    Icon: FileText },
             { key: 'history',    label: 'Send History', Icon: Clock }
           ].map(function(t) {
             var active = tab === t.key;
@@ -458,7 +584,15 @@ export default function EmailBlasts() {
                 <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-semibold text-red-400">Monthly limit reached</p>
-                  <p className="text-xs text-red-400 text-opacity-80 mt-0.5">You've used all {planLimit} emails for this month. Upgrade to Growth or Pro for unlimited sends.</p>
+                  <p className="text-xs text-red-400 text-opacity-80 mt-0.5">
+                    You've used all {planLimit} emails for this month. Upgrade to Pro for unlimited sends.
+                  </p>
+                  <button
+                    onClick={function() { navigate('/organizations/' + organizationId + '/billing'); }}
+                    className="mt-2 text-xs font-semibold text-blue-400 hover:text-blue-300 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  >
+                    View upgrade options
+                  </button>
                 </div>
               </div>
             )}
@@ -547,9 +681,7 @@ export default function EmailBlasts() {
                   <Plus size={13} aria-hidden="true" />New Template
                 </button>
               </div>
-              {loading ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1,2,3].map(function(i) { return <Skeleton key={i} className="h-36" />; })}</div>
-              ) : customTemplates.length === 0 ? (
+              {customTemplates.length === 0 ? (
                 <div className="text-center py-12 bg-[#1A2035] border border-[#2A3550] rounded-xl">
                   <FileText size={36} className="text-[#2A3550] mx-auto mb-3" aria-hidden="true" />
                   <h3 className="text-sm font-700 text-white mb-1">No saved templates yet</h3>
@@ -570,9 +702,7 @@ export default function EmailBlasts() {
         {/* ── HISTORY TAB ───────────────────────────────────────────────── */}
         {tab === 'history' && (
           <div>
-            {loading ? (
-              <div className="space-y-3">{[1,2,3,4].map(function(i) { return <Skeleton key={i} className="h-14" />; })}</div>
-            ) : blastHistory.length === 0 ? (
+            {blastHistory.length === 0 ? (
               <div className="text-center py-16 bg-[#1A2035] border border-[#2A3550] rounded-xl">
                 <BarChart2 size={40} className="text-[#2A3550] mx-auto mb-3" aria-hidden="true" />
                 <h3 className="text-sm font-700 text-white mb-1">No emails sent yet</h3>
