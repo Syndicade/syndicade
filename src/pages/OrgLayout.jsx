@@ -71,14 +71,14 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
     {
       label: 'Workspace',
       items: [
-        { id:'overview',      label:'Overview',      iconKey:'overview',  roles:['admin','member'] },
-        { id:'events',        label:'Events',        iconKey:'calendar',  roles:['admin','member'], tourKey:'tour-events-nav' },
-        { id:'announcements', label:'Announcements', iconKey:'megaphone', roles:['admin','member'], tourKey:'tour-announcements-nav' },
-        { id:'members',       label:'Members',       iconKey:'members',   roles:['admin','member'], tourKey:'tour-members-nav' },
-        { id:'groups',        label:'Groups',        iconKey:'members',   roles:['admin','member'], externalLink: '/organizations/'+organizationId+'/groups' },
-        { id:'chat',          label:'Chat',          iconKey:'chat',      roles:['admin','member'] },
-        { id:'documents',     label:'Documents',     iconKey:'folder',    roles:['admin','member'] },
-        { id:'photos',        label:'Photos',        iconKey:'photo',     roles:['admin','member'] },
+        { id:'overview',      label:'Overview',      iconKey:'overview',  route:'',              path: base,                      roles:['admin','member'] },
+        { id:'events',        label:'Events',        iconKey:'calendar',  route:'events',        path: base + '/events',          roles:['admin','member'], tourKey:'tour-events-nav' },
+        { id:'announcements', label:'Announcements', iconKey:'megaphone', route:'announcements', path: base + '/announcements',   roles:['admin','member'], tourKey:'tour-announcements-nav' },
+        { id:'members',       label:'Members',       iconKey:'members',   route:'members',       path: base + '/members',         roles:['admin','member'], tourKey:'tour-members-nav' },
+        { id:'groups',        label:'Groups',        iconKey:'groups',    route:'groups',        path: base + '/groups',          roles:['admin','member'] },
+        { id:'chat',          label:'Chat',          iconKey:'chat',      route:'chat',          path: base + '/chat',            roles:['admin','member'] },
+        { id:'documents',     label:'Documents',     iconKey:'folder',    route:'documents',     path: base + '/documents',       roles:['admin','member'] },
+        { id:'photos',        label:'Photos',        iconKey:'photo',     route:'photos',        path: base + '/photos',          roles:['admin','member'] },
       ]
     },
     {
@@ -204,7 +204,7 @@ function OrgLayout() {
       if (visibleItems.length === 0) return null;
       return (
         <div key={group.label}>
-          <p style={{ fontSize:'8px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#2A3550', padding:'8px 10px 3px' }}>{group.label}</p>
+          <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#FFFFFF', padding:'8px 10px 3px' }}>{group.label}</p>
           {visibleItems.map(function(item) {
             var active = isActive(item);
 
@@ -230,11 +230,15 @@ function OrgLayout() {
             return (
               <button
                 key={item.id}
-onClick={function() {
-  if (isLocked && lockReason === 'verified') { setLockedNavTarget(lockReason); return; }
-  setMobileNavOpen(false);
-  navigate(item.path);
-}}
+                onClick={function() {
+                  // Only 'verified' lock shows a popup — all others navigate normally
+                  if (isLocked && lockReason === 'verified') {
+                    setLockedNavTarget(lockReason);
+                    return;
+                  }
+                  setMobileNavOpen(false);
+                  if (item.path) navigate(item.path);
+                }}
                 data-tour={item.tourKey || undefined}
                 style={{
                   display:'flex', alignItems:'center', gap:'8px',
@@ -246,12 +250,12 @@ onClick={function() {
                   background: bg,
                   border:'none', cursor:'pointer', width:'100%', textAlign:'left',
                   position:'relative', whiteSpace:'nowrap',
-                  opacity: isLocked ? 0.55 : 1,
+                  opacity: isLocked && lockReason === 'verified' ? 0.55 : 1,
                 }}
                 aria-current={active && !isLocked ? 'page' : undefined}
-                aria-disabled={isLocked || undefined}
-                aria-label={isLocked
-                  ? (item.label + ' — ' + (lockReason === 'verified' ? 'available to verified nonprofits' : 'available on ' + (lockReason || 'Growth') + ' plan'))
+                aria-disabled={isLocked && lockReason === 'verified' ? true : undefined}
+                aria-label={isLocked && lockReason === 'verified'
+                  ? (item.label + ' — available to verified nonprofits')
                   : item.label
                 }
               >

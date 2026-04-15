@@ -333,15 +333,16 @@ function CheckoutFieldRow({ field, index, onChange, onRemove, canRemove }) {
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent }) {
   var [activeTab, setActiveTab] = useState('details');
   var planData = usePlanLimits(organizationId);
-var isAllowed = planData ? planData.isAllowed : function() { return false; };
-var canSellTickets = isAllowed('can_sell_tickets');
-var [orgIsVerified, setOrgIsVerified] = useState(false);
+  var isAllowed = planData ? planData.isAllowed : function() { return false; };
+  var canSellTickets = isAllowed('can_sell_tickets');
+  var isGrowthPlus = planData && (planData.plan === 'growth' || planData.plan === 'pro');
+  var [orgIsVerified, setOrgIsVerified] = useState(false);
 
-useEffect(function() {
-  if (!organizationId) return;
-  supabase.from('organizations').select('is_verified_nonprofit').eq('id', organizationId).single()
-    .then(function(r) { if (r.data) setOrgIsVerified(r.data.is_verified_nonprofit || false); });
-}, [organizationId]);
+  useEffect(function() {
+    if (!organizationId) return;
+    supabase.from('organizations').select('is_verified_nonprofit').eq('id', organizationId).single()
+      .then(function(r) { if (r.data) setOrgIsVerified(r.data.is_verified_nonprofit || false); });
+  }, [organizationId]);
 
   var [form, setForm] = useState({
     title:'', description:'', eventType:'in-person', isMultiDay:false,
@@ -393,6 +394,7 @@ useEffect(function() {
   // Publishing tab
   var [publishToDiscovery, setPublishToDiscovery] = useState(false);
   var [publishToWebsite, setPublishToWebsite] = useState(false);
+  var [isFeatured, setIsFeatured] = useState(false);
 
   // Details tab
   var [flierFile, setFlierFile] = useState(null);
@@ -453,6 +455,7 @@ useEffect(function() {
     setDonationDropoff(editingEvent.donation_dropoff||false);
     setPublishToDiscovery(editingEvent.publish_to_discovery||false);
     setPublishToWebsite(editingEvent.publish_to_website||false);
+    setIsFeatured(editingEvent.is_featured||false);
 
     var wasPaid = editingEvent.is_paid||false;
     setIsPaid(wasPaid);
@@ -512,7 +515,7 @@ useEffect(function() {
     setWeeklyDays([1]); setDailyInterval(1); setWeekdaysOnly(false); setRecurrenceEndDate('');
     setEventTypes([]); setAudience([]); setLanguages([]); setEventTags([]);
     setVolunteerSignup(false); setDonationDropoff(false);
-    setPublishToDiscovery(false); setPublishToWebsite(false);
+    setPublishToDiscovery(false); setPublishToWebsite(false); setIsFeatured(false);
     setFlierFile(null);
     setIsPaid(false); setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields());
     setError(null);
@@ -643,6 +646,17 @@ useEffect(function() {
         if (tt.early_bird_ends_at && !tt.early_bird_price) { toast.error('Ticket type '+(ti+1)+': early bird needs a price'); setActiveTab('ticketing'); return; }
         if (tt.early_bird_price && parseFloat(tt.early_bird_price)>=parseFloat(tt.price)) { toast.error('Ticket type '+(ti+1)+': early bird price must be less than regular price'); setActiveTab('ticketing'); return; }
       }
+
+      var planTicketMax = planData && planData.plan === 'pro' ? 500 : 200;
+      for (var qi = 0; qi < ticketTypes.length; qi++) {
+        var ttQty = parseInt(ticketTypes[qi].quantity_available);
+        if (ttQty && ttQty > planTicketMax) {
+          toast.error('Ticket type "' + (ticketTypes[qi].name || ('Type ' + (qi + 1))) + '" exceeds your plan limit of ' + planTicketMax + ' tickets per event.');
+          setActiveTab('ticketing');
+          return;
+        }
+      }
+
       for (var fi=0; fi<checkoutFields.length; fi++) {
         var cf = checkoutFields[fi];
         if (!cf.label.trim()) { toast.error('Checkout field '+(fi+1)+' needs a label'); setActiveTab('ticketing'); return; }
@@ -719,7 +733,8 @@ useEffect(function() {
         volunteer_signup:volunteerSignup, donation_dropoff:donationDropoff,
         is_public:form.visibility==='public'||publishToDiscovery,
         publish_to_discovery:publishToDiscovery, publish_to_website:publishToWebsite,
-        is_paid:isPaid, enable_check_in:form.enableCheckIn,
+        is_paid:isPaid, is_featured:isGrowthPlus?isFeatured:false,
+        enable_check_in:form.enableCheckIn,
         approval_status:approvalStatus, flier_url:flierUrl,
       };
 
@@ -789,7 +804,7 @@ useEffect(function() {
   function tabHasContent(tabId) {
     if (tabId==='audience') return eventTypes.length>0||audience.length>0||languages.length>0||eventTags.length>0||volunteerSignup||donationDropoff;
     if (tabId==='ticketing') return isPaid;
-    if (tabId==='publishing') return publishToDiscovery||publishToWebsite;
+    if (tabId==='publishing') return publishToDiscovery||publishToWebsite||isFeatured;
     if (tabId==='settings') return isRecurring||form.visibility!=='members'||form.requireRSVP||form.maxAttendees;
     return false;
   }
@@ -884,7 +899,7 @@ useEffect(function() {
           </div>
         </div>
 
-        {/* Timezone — directly under schedule */}
+        {/* Timezone */}
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-900">Event Timezone</span>
@@ -1238,25 +1253,38 @@ useEffect(function() {
     );
   }
 
-function renderTicketing() {
-  if (!canSellTickets) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-        <div className="w-14 h-14 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center mb-4">
-          <Lock size={22} className="text-blue-500" aria-hidden="true" />
+  function renderTicketing() {
+    if (!canSellTickets) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+            style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)' }}>
+            <Lock size={22} color="#3B82F6" aria-hidden="true" />
+          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold mb-3"
+            style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#3B82F6', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            Growth Plan
+          </span>
+          <h3 className="text-base font-bold text-gray-900 mb-2">Sell tickets to your events</h3>
+          <p className="text-sm text-gray-500 mb-6 max-w-xs leading-relaxed">
+            Upgrade to Growth to sell tickets with early bird pricing, custom checkout fields, and zero platform fees.
+          </p>
+          <a href={'/organizations/' + organizationId + '/billing'}
+            className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg font-semibold text-sm bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            Upgrade to Growth
+          </a>
+          <p className="text-xs text-gray-400 mt-4">Free events don't require ticketing — only paid events need Growth.</p>
         </div>
-        <h3 className="text-base font-bold text-gray-900 mb-2">Paid ticketing is available on Growth</h3>
-        <p className="text-sm text-gray-500 mb-6 max-w-xs leading-relaxed">
-          Upgrade to Growth to sell tickets with early bird pricing, custom checkout fields, and zero platform fees.
-        </p>
-        <p className="text-xs text-gray-400">Free events don't require ticketing — only paid events need Growth.</p>
-      </div>
-    );
-  }
-  // ... rest of existing renderTicketing code unchanged
+      );
+    }
+
+    var planTicketLimit = planData && planData.plan === 'pro' ? 500 : 200;
+
+    return (
+      <div className="space-y-6">
 
         {/* Paid Event toggle */}
-        <div className={'flex items-center justify-between p-4 rounded-xl border '+(isPaid?'border-yellow-400 bg-yellow-50':'border-gray-200 bg-white')}>
+        <div className={'flex items-center justify-between p-4 rounded-xl border ' + (isPaid ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white')}>
           <div>
             <p className="font-semibold text-gray-900 text-sm">Paid Event</p>
             <p className="text-xs text-gray-500 mt-0.5">Require payment to RSVP. Syndicade takes no cut — Stripe fees only.</p>
@@ -1279,12 +1307,36 @@ function renderTicketing() {
 
             {/* Ticket Types */}
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Ticket Types</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Ticket Types</p>
+                <span className="text-xs text-gray-400">Plan limit: {planTicketLimit} tickets per type</span>
+              </div>
               <div className="space-y-3" role="list" aria-label="Ticket types">
                 {ticketTypes.map(function(tt, i){
+                  var qty = parseInt(tt.quantity_available) || 0;
+                  var overLimit = qty > 0 && qty > planTicketLimit;
+                  var nearLimit = qty > 0 && qty > Math.floor(planTicketLimit * 0.8) && qty <= planTicketLimit;
                   return (
                     <div key={i} role="listitem">
                       <TicketTypeRow ticket={tt} index={i} onChange={handleTicketTypeChange} onRemove={removeTicketType} canRemove={ticketTypes.length > 1}/>
+                      {overLimit && (
+                        <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg" role="alert">
+                          <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5"/>
+                          <p className="text-xs text-red-700 font-medium">
+                            {planData && planData.plan === 'pro'
+                              ? 'Pro plan maximum is 500 tickets per event. Contact us for larger events.'
+                              : 'Growth plan maximum is 200 tickets per event. Upgrade to Pro for up to 500.'}
+                          </p>
+                        </div>
+                      )}
+                      {nearLimit && (
+                        <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5"/>
+                          <p className="text-xs text-amber-700 font-medium">
+                            Approaching your plan limit of {planTicketLimit} tickets per event.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1301,7 +1353,7 @@ function renderTicketing() {
             {/* Checkout Fields */}
             <div>
               <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Checkout Fields</p>
-              <p className="text-xs text-gray-500 mb-3">These fields are collected from buyers before payment. Toggle required, remove defaults, or add custom fields.</p>
+              <p className="text-xs text-gray-500 mb-3">Collected from buyers before payment. Toggle required, remove defaults, or add custom fields.</p>
               <div className="space-y-3" role="list" aria-label="Checkout fields">
                 {checkoutFields.map(function(cf, i){
                   return (
@@ -1317,8 +1369,12 @@ function renderTicketing() {
                 Add Custom Field
               </button>
             </div>
+
           </div>
         )}
+
+      </div>
+    );
   }
 
   function renderPublishing() {
@@ -1330,6 +1386,51 @@ function renderTicketing() {
           <p className="text-xs text-gray-500 mb-4">Choose where this event is visible beyond your member list.</p>
 
           <div className="space-y-3">
+
+            {/* Featured event — Growth+ only */}
+            {isGrowthPlus ? (
+              <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (isFeatured ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white')}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="font-semibold text-gray-900 text-sm">Feature this event</p>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
+                      style={{ background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#B45309' }}>
+                      $15/week
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">Your event gets a highlighted border and Featured badge on the public Discover page.</p>
+                  {isFeatured && (
+                    <p className="text-xs text-yellow-700 font-medium mt-1.5 flex items-center gap-1">
+                      <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="h-3.5 w-3.5"/>
+                      Will appear as featured on the Discover page
+                    </p>
+                  )}
+                </div>
+                <Toggle checked={isFeatured} onChange={function(){ setIsFeatured(!isFeatured); }} id="is-featured" label="Feature this event"/>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between p-4 rounded-xl border border-gray-200 bg-gray-50 gap-4"
+                style={{ opacity: 0.7 }}
+                aria-label="Feature this event — available on Growth plan">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="font-semibold text-gray-500 text-sm">Feature this event</p>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                      style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#3B82F6' }}>
+                      <Lock size={10} aria-hidden="true"/>
+                      Growth
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400">Highlighted border and Featured badge on the public Discover page. Available on Growth and above.</p>
+                </div>
+                <div className="flex-shrink-0" aria-hidden="true">
+                  <div className="w-11 h-6 rounded-full bg-gray-200 relative cursor-not-allowed">
+                    <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow"/>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Discover page */}
             <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (!orgIsVerified ? 'border-gray-200 bg-gray-50 opacity-60' : publishToDiscovery ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white')}>
               <div className="flex-1">
@@ -1342,11 +1443,11 @@ function renderTicketing() {
                   </p>
                 )}
               </div>
-              <Toggle checked={publishToDiscovery} onChange={function(){ if (orgIsVerified) setPublishToDiscovery(!publishToDiscovery); }} id="pub-discovery" label="Show on Discover Events page" disabled={!orgIsVerified}/>
+              <Toggle checked={publishToDiscovery} onChange={function(){ if (orgIsVerified) setPublishToDiscovery(!publishToDiscovery); }} id="pub-discovery" label="Show on Discover Events page"/>
             </div>
 
             {/* Org website */}
-            <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 '+(publishToWebsite?'border-green-400 bg-green-50':'border-gray-200 bg-white')}>
+            <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (publishToWebsite ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white')}>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">Organization website</p>
                 <p className="text-xs text-gray-500 mt-0.5">Appears on your org's public website page so visitors can see upcoming events.</p>
@@ -1359,10 +1460,11 @@ function renderTicketing() {
               </div>
               <Toggle checked={publishToWebsite} onChange={function(){ setPublishToWebsite(!publishToWebsite); }} id="pub-website" label="Show on organization's website"/>
             </div>
+
           </div>
         </div>
 
-        {!publishToDiscovery && !publishToWebsite && (
+        {!publishToDiscovery && !publishToWebsite && !isFeatured && (
           <div className="flex flex-col items-center justify-center py-8 text-center bg-gray-50 rounded-xl border border-gray-200">
             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3" aria-hidden="true">
               <Icon path="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" className="h-6 w-6 text-gray-400"/>
@@ -1440,7 +1542,7 @@ function renderTicketing() {
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
           <div className="flex gap-2">
-            {TABS.map(function(tab, i){
+            {TABS.map(function(tab){
               var isActive = activeTab===tab.id;
               return (
                 <button
