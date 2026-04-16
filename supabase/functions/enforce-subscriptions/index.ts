@@ -4,7 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
-const FROM_ADDRESS = 'Syndicade <noreply@syndicade.com>';
+const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -70,6 +70,33 @@ serve(async (req) => {
       const msLeft = trialEnd.getTime() - now.getTime();
       const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
       const daysPast = Math.floor((now.getTime() - trialEnd.getTime()) / (1000 * 60 * 60 * 24));
+
+      // ── Pro upsell — Day 2 of trial ──────────────────────────────────────
+      const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysLeft > 0 && daysSinceStart >= 1) {
+        const eventType = 'pro_upsell_day2';
+        const alreadyDone = await alreadySent(org.id, eventType);
+        if (!alreadyDone && org.contact_email) {
+          // Generate token and store it
+          const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+          await supabase.from('pro_upsell_tokens').insert({
+            organization_id: org.id,
+            token: token
+          });
+          const activateUrl = 'https://syndicade.org/activate-pro?token=' + token + '&org=' + org.id;
+          await sendEmail(
+            org.contact_email,
+            'Unlock everything — upgrade to Pro free for 30 days',
+            '<p>Hi ' + org.name + ',</p>' +
+            '<p>You\'re 2 days into your Syndicade trial — great start! We\'d love to show you what <strong>Pro</strong> can do.</p>' +
+            '<p>For a limited time, you can activate a <strong>free 30-day Pro trial</strong> — no credit card required. Get unlimited emails, AI content assistant, custom domain, and priority support.</p>' +
+            '<p><a href="' + activateUrl + '" style="background:#F5B731;color:#111827;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Activate Free Pro Trial</a></p>' +
+            '<p>This link is unique to your account and expires with your trial.</p>' +
+            '<p>— The Syndicade Team</p>'
+          );
+          await logEvent(org.id, eventType, 'pro_upsell_day2');
+        }
+      }
 
       // ── Countdown emails (before expiry) ──────────────────────────────────
       if (daysLeft > 0 && COUNTDOWN_DAYS.includes(daysLeft)) {

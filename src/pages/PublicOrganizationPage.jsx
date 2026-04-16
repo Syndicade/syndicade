@@ -198,7 +198,7 @@ if (org.contact_email) {
 }
 
 // ── New Website Builder Public Page ──────────────────────────────────────────
-function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announcements, blocks, activePageSlug }) {
+function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announcements, blocks, activePageSlug, brandingVisible }) {
   var primary = siteConfig.primary_color || '#3B82F6';
   var secondary = siteConfig.secondary_color || '#1E40AF';
   var headerDark = siteConfig.header_style === 'dark';
@@ -347,9 +347,23 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           </a>
         )}
         <p style={{ color: headerDark ? '#6b7280' : '#9ca3af', fontSize: '13px' }}>
-          {'© ' + new Date().getFullYear() + ' ' + org.name + '. Powered by Syndicade.'}
-        </p>
+  {'© ' + new Date().getFullYear() + ' ' + org.name + '.'}
+</p>
       </div>
+      {brandingVisible && (
+  <div style={{ borderTop: '1px solid ' + (headerDark ? '#374151' : '#e5e7eb'), padding: '12px', textAlign: 'center' }}>
+    <a
+      href="https://syndicade.org"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ fontSize: '18px', color: '#9ca3af', textDecoration: 'none' }}
+      aria-label="Powered by Syndicade - opens in new tab"
+      className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+    >
+      Powered by <span style={{ color: headerDark ? '#ffffff' : '#111827', fontWeight: 700 }}>Syndi</span><span style={{ color: '#F5B731', fontWeight: 700 }}>cade</span>
+    </a>
+  </div>
+)}
     </footer>
   );
 
@@ -682,6 +696,7 @@ export default function PublicOrganizationPage() {
   var [joinLoading, setJoinLoading] = useState(false);
   var [joinError, setJoinError] = useState(null);
   var [joinSuccess, setJoinSuccess] = useState(false);
+  var [brandingVisible, setBrandingVisible] = useState(true);
 
   useEffect(function() { fetchAll(); }, [slug]);
 
@@ -696,6 +711,18 @@ export default function PublicOrganizationPage() {
         .single();
       if (orgError) throw orgError;
       setOrganization(org);
+      // Check branding visibility
+supabase
+  .from('subscriptions')
+  .select('plan')
+  .eq('organization_id', org.id)
+  .eq('status', 'active')
+  .maybeSingle()
+  .then(function(result) {
+    var plan = result.data ? result.data.plan : 'starter';
+    var noBranding = plan === 'pro' || org.branding_removed === true;
+    setBrandingVisible(!noBranding);
+  });
 
       var [configRes, pagesRes, navRes, eventsRes, announcementsRes, photosRes, blocksRes] = await Promise.allSettled([
         supabase.from('org_site_config').select('*').eq('organization_id', org.id).maybeSingle(),
@@ -834,6 +861,7 @@ async function handleJoinSubmit(e) {
           announcements={announcements}
           blocks={blocks}
           activePageSlug={pageSlug || null}
+          brandingVisible={brandingVisible}
         />
         {lightboxPhoto && (
           <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Photo lightbox" onClick={closeLightbox}>
