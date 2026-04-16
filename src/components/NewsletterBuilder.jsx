@@ -776,6 +776,30 @@ export default function NewsletterBuilder({organization,planKey,organizationId,u
           <option value="all_members">All Members</option>
           <option value="admins_only">Admins Only</option>
         </select>
+        {planKey === 'growth' && (
+  <div
+    role="status"
+    aria-label={'Email usage: ' + usedThisMonth + ' of ' + planLimit + ' emails used this month'}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '6px 12px',
+      borderRadius: '8px',
+      border: '1px solid ' + (atLimit ? 'rgba(239,68,68,0.4)' : usedThisMonth >= planLimit * 0.8 ? 'rgba(245,183,49,0.4)' : t.border),
+      background: atLimit ? 'rgba(239,68,68,0.08)' : usedThisMonth >= planLimit * 0.8 ? 'rgba(245,183,49,0.08)' : t.cardBg,
+      fontSize: '12px',
+      fontWeight: 600,
+      color: atLimit ? '#EF4444' : usedThisMonth >= planLimit * 0.8 ? '#F5B731' : t.textMuted,
+      flexShrink: 0,
+      whiteSpace: 'nowrap'
+    }}
+  >
+    <Mail size={12} aria-hidden="true" />
+    {usedThisMonth + ' / ' + planLimit + ' emails'}
+    {atLimit && <span style={{ fontWeight: 700 }}> — Limit reached</span>}
+  </div>
+)}
         <button onClick={openTestConfirm} disabled={blocks.length===0||sendingTest} aria-label="Send test email"
           style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',background:'transparent',border:'1px solid '+t.border,borderRadius:'8px',color:t.textMuted,fontSize:'13px',fontWeight:600,cursor:'pointer',opacity:blocks.length===0||sendingTest?0.4:1}}>
           {sendingTest?<div style={{width:'14px',height:'14px',border:'2px solid currentColor',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} aria-hidden="true" />:<Mail size={14} aria-hidden="true" />}

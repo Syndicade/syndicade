@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
 import EmailAnalyticsModal from '../components/EmailAnalyticsModal';
 import NewsletterBuilder from '../components/NewsletterBuilder';
+import { getEmailUsage, MONTHLY_EMAIL_LIMIT } from '../lib/emailUtils';
 import {
   Mail, Send, FileText, Clock, Users, ChevronDown,
   Plus, Trash2, Edit2, X, AlertCircle, CheckCircle,
