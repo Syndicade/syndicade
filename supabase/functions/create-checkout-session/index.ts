@@ -4,12 +4,12 @@ var corsHeaders = {
 }
 
 var PRICE_IDS = {
-  starter_month: 'price_1TFCIVKcdErNqbVNe5SnUUGX',
-  starter_year:  'price_1TFCIVKcdErNqbVNdJCM0hQh',
-  growth_month:  'price_1TFCIrKcdErNqbVNmgbJAIpo',
-  growth_year:   'price_1TFCJEKcdErNqbVNyXCfyuit',
-  pro_month:     'price_1TFCJfKcdErNqbVNZTSGeAaH',
-  pro_year:      'price_1TFCJyKcdErNqbVNoBIkHrAJ',
+  starter_month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
+  starter_year:  'price_1TMnuAKMpHjSZayWbYHYUoS8',
+  growth_month:  'price_1TMnuAKMpHjSZayWrkMIfcsJ',
+  growth_year:   'price_1TMnu9KMpHjSZayW67fBSDzC',
+  pro_month:     'price_1TMnu8KMpHjSZayWRcSF5Qez',
+  pro_year:      'price_1TMnu7KMpHjSZayW34qmec4T',
 }
 
 var TRIAL_DAYS = 14
@@ -209,8 +209,8 @@ Deno.serve(async function(req) {
     var priceId = PRICE_IDS[plan + '_' + interval]
     if (!priceId) throw new Error('Invalid plan')
 
-    var successUrl = body.success_url || 'https://syndicade-git-main-syndicades-projects.vercel.app/organizations/' + org_id + '/billing?billing=success'
-    var cancelUrl  = body.cancel_url  || 'https://syndicade-git-main-syndicades-projects.vercel.app/organizations/' + org_id + '/billing?billing=cancelled'
+    var successUrl = body.success_url || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
+var cancelUrl  = body.cancel_url  || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=cancelled'
 
     // ── Calculate trial days (promo code can extend trial) ───────────────────
     var trialDays = TRIAL_DAYS

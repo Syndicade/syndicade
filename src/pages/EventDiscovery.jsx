@@ -11,6 +11,8 @@ import Footer from '../components/Footer';
 import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 
+var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE';
 var PAGE_SIZE = 20;
 
 var SORT_OPTIONS = [
@@ -391,6 +393,26 @@ export default function EventDiscovery() {
       setRsvpSuccess(true);
       setGuestInfo({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
       toast.success('RSVP submitted successfully!');
+      var eventDate = new Date(selectedEvent.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+      var eventTime = new Date(selectedEvent.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+      fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({
+          type: 'guest_rsvp_confirmation',
+          data: {
+            guestEmail: guestInfo.email.toLowerCase().trim(),
+            guestName: guestInfo.name.trim(),
+            guestCount: parseInt(guestInfo.guestCount) || 1,
+            eventTitle: selectedEvent.title,
+            orgName: selectedEvent.org_name || '',
+            orgLogoUrl: selectedEvent.org_logo_url || '',
+            eventDate: eventDate + ' at ' + eventTime,
+            eventLocation: selectedEvent.is_virtual ? 'Virtual Event' : (selectedEvent.location || ''),
+            eventUrl: window.location.origin + '/events/' + selectedEvent.id,
+          },
+        }),
+      });
       setTimeout(function () { setGuestRSVPModal(false); setRsvpSuccess(false); }, 3000);
     } catch (err) {
       toast.error(err.message);

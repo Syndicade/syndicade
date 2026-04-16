@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast } from '../components/MascotToast';
 
 function Icon({ path, className }) {
   return (
@@ -26,33 +28,33 @@ var PLANS = [
   {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 14.99,
-    annualPrice: 149.88,
-    annualMonthly: 12.49,
+    monthlyPrice: 19.99,
+    annualPrice: 199.90,
+    annualMonthly: 16.66,
     members: 50,
-    storage: '5 GB',
-    features: ['Events, polls, surveys, announcements', 'Document library', 'Member directory & sign-up forms', 'RSVP & check-in', 'Recurring events', 'orgname.syndicade.com subdomain'],
+    storage: '2 GB',
+    features: ['Events, polls, surveys, announcements', 'Document library', 'Member directory & sign-up forms', 'RSVP & check-in', 'Recurring events', 'orgname.syndicade.org subdomain'],
   },
   {
     id: 'growth',
     name: 'Growth',
-    monthlyPrice: 29.00,
-    annualPrice: 290.00,
-    annualMonthly: 24.17,
+    monthlyPrice: 39.00,
+    annualPrice: 390.00,
+    annualMonthly: 32.50,
     members: 150,
-    storage: '15 GB',
+    storage: '10 GB',
     popular: true,
-    features: ['Everything in Starter', 'Payment processing (0% platform fee)', 'Basic analytics & reports', 'Email notifications', 'Raffle & event planning tools'],
+    features: ['Everything in Starter', 'Paid event tickets', 'Email blasts & newsletter builder', 'Full analytics & reports', 'Membership dues collection', 'Admin inbox'],
   },
   {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 59.00,
-    annualPrice: 590.00,
-    annualMonthly: 49.17,
+    monthlyPrice: 69.00,
+    annualPrice: 690.00,
+    annualMonthly: 57.50,
     members: 300,
-    storage: '50 GB',
-    features: ['Everything in Growth', 'Custom domain', 'Remove Syndicade branding', 'Advanced analytics & exports', 'Email marketing blasts'],
+    storage: '30 GB',
+    features: ['Everything in Growth', 'Custom domain included', 'Remove Syndicade branding', 'Unlimited email blasts', 'AI content assistant', 'Priority support'],
   },
 ];
 
@@ -64,14 +66,15 @@ var STATUS_LABELS = {
   incomplete:{ label: 'Incomplete',  color: 'bg-yellow-100 text-yellow-800'},
 };
 
-function Skeleton({ className }) {
-  return <div className={'animate-pulse rounded bg-gray-200 ' + (className || '')} aria-hidden="true" />;
+function Skeleton({ className, isDark }) {
+  return <div className={'animate-pulse rounded ' + (isDark ? 'bg-[#2A3550]' : 'bg-gray-200') + ' ' + (className || '')} aria-hidden="true" />;
 }
 
 function BillingPage() {
   var { organizationId } = useParams();
   var navigate = useNavigate();
   var [searchParams] = useSearchParams();
+  var { isDark } = useTheme();
 
   var [subscription, setSubscription] = useState(null);
   var [loading, setLoading] = useState(true);
@@ -86,7 +89,7 @@ function BillingPage() {
   useEffect(function() {
     var billing = searchParams.get('billing');
     if (billing === 'success') {
-      toast.success('Subscription started! Welcome to Syndicade.');
+      mascotSuccessToast('Subscription started!', 'Welcome to Syndicade.');
       loadData();
     } else if (billing === 'cancelled') {
       toast('Checkout cancelled.');
@@ -172,16 +175,26 @@ function BillingPage() {
   var periodEnds = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
   var daysLeftInTrial = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / (1000 * 60 * 60 * 24))) : 0;
 
+  // Theme classes
+  var pageBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-50';
+  var cardBg = isDark ? 'bg-[#1A2035]' : 'bg-white';
+  var cardBorder = isDark ? 'border-[#2A3550]' : 'border-gray-200';
+  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
+  var textSecondary = isDark ? 'text-[#CBD5E1]' : 'text-gray-600';
+  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-gray-400';
+  var textTertiary = isDark ? 'text-[#64748B]' : 'text-gray-400';
+  var skeletonClass = isDark ? 'bg-[#2A3550]' : 'bg-gray-200';
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className={'min-h-screen py-8 ' + pageBg}>
         <div className="max-w-5xl mx-auto px-4 space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-40 w-full rounded-xl" />
-          <div className="grid grid-cols-3 gap-4">
-            <Skeleton className="h-96 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
+          <div className={'animate-pulse rounded h-6 w-16 ' + skeletonClass} aria-hidden="true" />
+          <div className={'animate-pulse rounded-xl h-32 w-full ' + skeletonClass} aria-hidden="true" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={'animate-pulse rounded-xl h-96 ' + skeletonClass} aria-hidden="true" />
+            <div className={'animate-pulse rounded-xl h-96 ' + skeletonClass} aria-hidden="true" />
+            <div className={'animate-pulse rounded-xl h-96 ' + skeletonClass} aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -189,29 +202,32 @@ function BillingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className={'min-h-screen py-8 ' + pageBg}>
       <div className="max-w-5xl mx-auto px-4 space-y-8">
 
         {/* Header */}
         <div>
           <button
-            onClick={function() { navigate('/organizations/' + organizationId); }}
-            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            onClick={function() { navigate(-1); }}
+            className={'text-sm flex items-center gap-1 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded ' + textSecondary + ' hover:' + (isDark ? 'text-white' : 'text-gray-900')}
+            aria-label="Go back"
           >
             <Icon path={ICONS.back} className="h-4 w-4" />
-            Back to Dashboard
+            Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Billing & Subscription</h1>
-          <p className="text-gray-500 text-sm mt-1">{orgName}</p>
+          <h1 className={'text-2xl font-bold ' + textPrimary}>Billing & Subscription</h1>
+          <p className={'text-sm mt-1 ' + textSecondary}>{orgName}</p>
         </div>
 
         {/* Current subscription status */}
         {subscription && (
-          <div className={'p-5 rounded-xl border-2 ' + (subscription.status === 'past_due' ? 'border-red-300 bg-red-50' : 'border-blue-200 bg-blue-50')}>
+          <div className={'p-5 rounded-xl border-2 ' + (subscription.status === 'past_due'
+            ? (isDark ? 'border-red-800 bg-red-900/20' : 'border-red-300 bg-red-50')
+            : (isDark ? 'border-blue-800 bg-blue-900/20' : 'border-blue-200 bg-blue-50'))}>
             <div className="flex items-start justify-between flex-wrap gap-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-base font-bold text-gray-900">
+                  <span className={'text-base font-bold ' + textPrimary}>
                     {currentPlan ? currentPlan.name : 'Unknown'} Plan
                   </span>
                   <span className={'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ' + (statusInfo ? statusInfo.color : '')}>
@@ -220,31 +236,30 @@ function BillingPage() {
                 </div>
 
                 {subscription.status === 'trialing' && trialEnds && (
-                  <p className="text-sm text-blue-700 flex items-center gap-1">
+                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-blue-400' : 'text-blue-700')}>
                     <Icon path={ICONS.clock} className="h-4 w-4" />
                     {daysLeftInTrial > 0 ? daysLeftInTrial + ' days left in your free trial' : 'Trial ending soon'}
                     {' · No credit card required yet'}
                   </p>
                 )}
                 {subscription.status === 'active' && periodEnds && (
-                  <p className="text-sm text-gray-600">
+                  <p className={'text-sm ' + textSecondary}>
                     {'Renews ' + periodEnds.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                     {subscription.cancel_at_period_end ? ' · Cancels at end of period' : ''}
                   </p>
                 )}
                 {subscription.status === 'past_due' && (
-                  <p className="text-sm text-red-700 flex items-center gap-1">
+                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-red-400' : 'text-red-700')}>
                     <Icon path={ICONS.alert} className="h-4 w-4" />
                     Payment failed. Please update your payment method.
                   </p>
                 )}
 
-                {/* Manage Subscription button */}
                 <div className="mt-3">
                   <button
                     onClick={handleManageSubscription}
                     disabled={checkoutLoading === 'portal'}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                    className={'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 ' + (isDark ? 'bg-[#2A3550] hover:bg-[#1E2845] text-white focus:ring-[#3B82F6]' : 'bg-gray-900 hover:bg-gray-700 text-white focus:ring-gray-500')}
                     aria-label="Manage subscription in Stripe portal"
                   >
                     <Icon path={ICONS.settings} className="h-4 w-4" />
@@ -254,11 +269,11 @@ function BillingPage() {
               </div>
 
               <div className="text-right flex-shrink-0">
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
+                <p className={'text-xs uppercase tracking-wide font-semibold ' + textMuted}>
                   {subscription.billing_interval === 'year' ? 'Annual billing' : 'Monthly billing'}
                 </p>
                 {currentPlan && (
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className={'text-lg font-bold ' + textPrimary}>
                     {'$' + (subscription.billing_interval === 'year' ? currentPlan.annualPrice.toFixed(2) + '/yr' : currentPlan.monthlyPrice.toFixed(2) + '/mo')}
                   </p>
                 )}
@@ -269,12 +284,12 @@ function BillingPage() {
 
         {/* Trial callout for no subscription */}
         {!subscription && (
-          <div className="p-5 rounded-xl border-2 border-yellow-300 bg-yellow-50">
+          <div className={'p-5 rounded-xl border-2 ' + (isDark ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')}>
             <div className="flex items-center gap-3">
-              <Icon path={ICONS.star} className="h-6 w-6 text-yellow-500 flex-shrink-0" />
+              <Icon path={ICONS.star} className={'h-6 w-6 flex-shrink-0 ' + (isDark ? 'text-yellow-400' : 'text-yellow-500')} />
               <div>
-                <p className="font-bold text-gray-900">Start your 30-day free trial</p>
-                <p className="text-sm text-gray-600 mt-0.5">No credit card required. Full access to all features during your trial.</p>
+                <p className={'font-bold ' + textPrimary}>Start your 14-day free trial</p>
+                <p className={'text-sm mt-0.5 ' + textSecondary}>No credit card required. Full access to all features during your trial.</p>
               </div>
             </div>
           </div>
@@ -282,17 +297,17 @@ function BillingPage() {
 
         {/* Billing interval toggle */}
         <div className="flex items-center justify-center gap-3">
-          <span className={'text-sm font-medium ' + (billingInterval === 'month' ? 'text-gray-900' : 'text-gray-400')}>Monthly</span>
+          <span className={'text-sm font-medium ' + (billingInterval === 'month' ? textPrimary : textMuted)}>Monthly</span>
           <button
             onClick={function() { setBillingInterval(billingInterval === 'month' ? 'year' : 'month'); }}
             role="switch"
             aria-checked={billingInterval === 'year'}
             aria-label="Toggle annual billing"
-            className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : 'bg-gray-300')}
+            className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : (isDark ? 'bg-[#2A3550]' : 'bg-gray-300'))}
           >
             <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (billingInterval === 'year' ? 'left-[26px]' : 'left-0.5')} aria-hidden="true" />
           </button>
-          <span className={'text-sm font-medium ' + (billingInterval === 'year' ? 'text-gray-900' : 'text-gray-400')}>
+          <span className={'text-sm font-medium ' + (billingInterval === 'year' ? textPrimary : textMuted)}>
             Annual
             <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">2 months free</span>
           </span>
@@ -310,7 +325,7 @@ function BillingPage() {
               <div
                 key={plan.id}
                 role="listitem"
-                className={'relative flex flex-col rounded-xl border-2 overflow-hidden ' + (plan.popular ? 'border-blue-500' : 'border-gray-200') + (isCurrent ? ' ring-2 ring-green-400' : '')}
+                className={'relative flex flex-col rounded-xl border-2 overflow-hidden ' + (plan.popular ? 'border-blue-500' : (isDark ? 'border-[#2A3550]' : 'border-gray-200')) + (isCurrent ? ' ring-2 ring-green-400' : '')}
               >
                 {plan.popular && (
                   <div className="bg-blue-500 text-white text-xs font-bold text-center py-1.5 tracking-wide uppercase">
@@ -323,22 +338,22 @@ function BillingPage() {
                   </div>
                 )}
 
-                <div className="bg-white p-6 flex flex-col flex-1">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">{plan.name}</h3>
-                  <p className="text-xs text-gray-500 mb-4">Up to {plan.members} members · {plan.storage} storage</p>
+                <div className={(isDark ? 'bg-[#1A2035]' : 'bg-white') + ' p-6 flex flex-col flex-1'}>
+                  <h3 className={'text-lg font-bold mb-1 ' + textPrimary}>{plan.name}</h3>
+                  <p className={'text-xs mb-4 ' + textMuted}>Up to {plan.members} members · {plan.storage} storage</p>
 
                   <div className="mb-4">
-                    <span className="text-3xl font-extrabold text-gray-900">{'$' + price.toFixed(2)}</span>
-                    <span className="text-sm text-gray-500">/mo</span>
+                    <span className={'text-3xl font-extrabold ' + textPrimary}>{'$' + price.toFixed(2)}</span>
+                    <span className={'text-sm ' + textSecondary}>/mo</span>
                     {totalPrice && (
-                      <p className="text-xs text-gray-400 mt-0.5">{'$' + totalPrice.toFixed(2) + ' billed annually'}</p>
+                      <p className={'text-xs mt-0.5 ' + textTertiary}>{'$' + totalPrice.toFixed(2) + ' billed annually'}</p>
                     )}
                   </div>
 
                   <ul className="space-y-2 mb-6 flex-1" aria-label={plan.name + ' features'}>
                     {plan.features.map(function(feature, i) {
                       return (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                        <li key={i} className={'flex items-start gap-2 text-sm ' + textSecondary}>
                           <Icon path={ICONS.check} className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
                           {feature}
                         </li>
@@ -353,7 +368,7 @@ function BillingPage() {
                       ? 'bg-green-100 text-green-700 border border-green-300 focus:ring-green-500'
                       : plan.popular
                         ? 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-500'
-                        : 'bg-gray-900 hover:bg-gray-800 text-white focus:ring-gray-500'
+                        : (isDark ? 'bg-[#2A3550] hover:bg-[#1E2845] text-white focus:ring-blue-500' : 'bg-gray-900 hover:bg-gray-800 text-white focus:ring-gray-500')
                     )}
                     aria-label={isCurrent ? 'Current plan' : 'Start ' + plan.name + ' plan'}
                   >
@@ -366,10 +381,10 @@ function BillingPage() {
         </div>
 
         {/* Fine print */}
-        <div className="text-center space-y-1 pb-8">
-          <p className="text-xs text-gray-400">30-day free trial on all plans. No credit card required to start.</p>
-          <p className="text-xs text-gray-400">0% platform fee on all payments. Stripe processing fees apply.</p>
-          <p className="text-xs text-gray-400">Verified 501(c)(3) nonprofits receive 1 additional free month.</p>
+        <div className={'text-center space-y-1 pb-8'}>
+          <p className={'text-xs ' + textTertiary}>14-day free trial on all plans. No credit card required to start.</p>
+          <p className={'text-xs ' + textTertiary}>No revenue cut on payments. Stripe processing fees apply.</p>
+          <p className={'text-xs ' + textTertiary}>Verified 501(c)(3) nonprofits receive an additional free month.</p>
         </div>
 
       </div>

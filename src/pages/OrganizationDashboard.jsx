@@ -1000,7 +1000,7 @@ function OrganizationDashboard() {
       adminOnly: true,
       items: [
         { id:'approvals',  label:'Approvals',   iconKey:'approvals', roles:['admin'], badge: pendingApprovalsCount },
-        { id:'inbox', label:'Inbox', iconKey:'inbox', roles:['admin'], badge: unreadInquiriesCount },  
+        { id:'inbox', label:'Inbox', iconKey:'inbox', roles:['admin'], badge: unreadInquiriesCount, lock:'growth' }, 
         { id:'analytics',  label:'Analytics',    iconKey:'analytics', roles:['admin'], lock:'growth' },
         { id:'publicpage', label:'Public Page',  iconKey:'pencil',    roles:['admin'], tourKey:'tour-public-page-nav' },
       ]
@@ -1087,7 +1087,7 @@ function OrganizationDashboard() {
       if (visibleItems.length === 0) return null;
       return (
         <div key={group.label}>
-          <p style={{ fontSize:'8px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#2A3550', padding:'8px 10px 3px' }}>{group.label}</p>
+          <p style={{ fontSize:'11px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#FFFFFF', padding:'8px 10px 3px' }}>{group.label}</p>
           {visibleItems.map(function(item) {
             var isActive = activeTab === item.id;
             var lockState = getNavLockState(item);
@@ -1096,7 +1096,7 @@ function OrganizationDashboard() {
 
             var color = isLocked
               ? '#3A4A65'
-              : (item.isPurple ? '#A78BFA' : isActive ? '#3B82F6' : textMuted);
+              : (item.isPurple ? '#A78BFA' : isActive ? '#FFFFFF' : textMuted);
             var bg = isActive && !isLocked ? 'rgba(59,130,246,0.12)' : 'transparent';
 
             return (
@@ -1109,9 +1109,9 @@ function OrganizationDashboard() {
                 data-tour={item.tourKey || null}
                 style={{
                   display:'flex', alignItems:'center', gap:'8px',
-                  padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px',
+                  padding: item.isSub ? '8px 10px 8px 26px' : '8px 10px',
                   borderRadius:'7px',
-                  fontSize: item.isSub ? '10px' : '11px',
+                  fontSize: item.isSub ? '15px' : '16px',
                   fontWeight: 600,
                   color: color,
                   background: bg,
@@ -1126,7 +1126,7 @@ function OrganizationDashboard() {
                   : item.label
                 }
               >
-                <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:color }} />
+               <Icon path={ICONS[item.iconKey]} className="h-4 w-4" style={{ flexShrink:0, color:color }} />
                 <span style={{ flex:1 }}>{item.label}</span>
 
                 {/* Lock icon for locked items */}
@@ -1846,7 +1846,7 @@ function OrganizationDashboard() {
                   >
                     <div style={{ flex:1 }}>
                       <p style={{ fontSize:'13px', fontWeight:700, color:'#FFFFFF', margin:'0 0 2px' }}>{a.label}</p>
-                      <p style={{ fontSize:'12px', color:'#64748B', margin:0 }}>{a.desc}</p>
+                      <p style={{ fontSize:'12px', color: isDark ? '#FFFFFF' : '#475569', margin:0 }}>{a.desc}</p>
                     </div>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                   </button>

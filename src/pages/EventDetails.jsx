@@ -169,6 +169,11 @@ function EventDetails() {
   var [showEditModal, setShowEditModal] = useState(false);
   var [editScope, setEditScope] = useState(null);
   var [showAttendanceReport, setShowAttendanceReport] = useState(false);
+var [isMember, setIsMember] = useState(false);
+var [guestRsvpCount, setGuestRsvpCount] = useState(0);
+var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '' });
+var [guestRsvpLoading, setGuestRsvpLoading] = useState(false);
+var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
 
   var fetchEvent = async function() {
     try {
@@ -198,8 +203,17 @@ function EventDetails() {
         var { data: membership } = await supabase
           .from('memberships').select('role')
           .eq('member_id', user.id).eq('organization_id', eventData.organization_id).eq('status', 'active').single();
-        if (membership && membership.role === 'admin') setIsAdmin(true);
+        if (membership) {
+          setIsMember(true);
+          if (membership.role === 'admin') setIsAdmin(true);
+        }
       }
+
+      var { count: guestCount } = await supabase
+        .from('guest_rsvps')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', eventId);
+      setGuestRsvpCount(guestCount || 0);
 
       var { data: rsvpData } = await supabase
         .from('event_rsvps')
@@ -314,7 +328,7 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
             var lineItems = purchases.map(function(p) {
               return { name: p.ticket_type_name, quantity: p.quantity, unit_price: p.unit_price, total_amount: p.total_amount };
             });
-            await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+            await fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
               body: JSON.stringify({
@@ -338,7 +352,7 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
               }),
             });
           } else {
-            await fetch(SUPABASE_URL + '/functions/v1/send-email', {
+            await fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
               body: JSON.stringify({
@@ -370,6 +384,56 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
       toast.error('Failed to update RSVP. Please try again.');
     } finally {
       setRsvpLoading(false);
+    }
+  };
+
+  var submitGuestRsvp = async function(e) {
+    e.preventDefault();
+    if (!guestInfo.name.trim() || !guestInfo.email.trim()) { toast.error('Name and email are required'); return; }
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(guestInfo.email)) { toast.error('Please enter a valid email address'); return; }
+    setGuestRsvpLoading(true);
+    try {
+      var { error: rsvpErr } = await supabase.from('guest_rsvps').insert([{
+        event_id: eventId,
+        guest_name: guestInfo.name.trim(),
+        guest_email: guestInfo.email.toLowerCase().trim(),
+        guest_phone: guestInfo.phone.trim() || null,
+        status: 'going',
+        guest_count: 1,
+      }]);
+      if (rsvpErr) {
+        if (rsvpErr.code === '23505') { toast.error('You have already RSVP\'d to this event'); return; }
+        throw rsvpErr;
+      }
+      setGuestRsvpSuccess(true);
+      setGuestRsvpCount(function(prev) { return prev + 1; });
+      var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+      var eventTime = new Date(event.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+      var orgName = organization ? organization.name : '';
+      var orgLogoUrl = organization ? (organization.logo_url || '') : '';
+      await fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({
+          type: 'guest_rsvp_confirmation',
+          data: {
+            guestEmail: guestInfo.email.toLowerCase().trim(),
+            guestName: guestInfo.name.trim(),
+            guestCount: 1,
+            eventTitle: event.title,
+            orgName: orgName,
+            orgLogoUrl: orgLogoUrl,
+            eventDate: eventDate + ' at ' + eventTime,
+            eventLocation: event.is_virtual ? 'Virtual Event' : (event.location || ''),
+            eventUrl: window.location.href,
+          },
+        }),
+      });
+    } catch (err) {
+      toast.error('Failed to submit RSVP. Please try again.');
+    } finally {
+      setGuestRsvpLoading(false);
     }
   };
 
@@ -755,10 +819,10 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
                 <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Capacity</p>
                 <div className="flex items-center justify-between">
                   <p className="text-[#CBD5E1]">
-                    <span className="text-2xl font-extrabold text-white">{counts.going}</span>
+                    <span className="text-2xl font-extrabold text-white">{counts.going + guestRsvpCount}</span>
                     <span className="text-[#94A3B8]"> / {event.max_attendees} spots filled</span>
                   </p>
-                  {counts.going >= event.max_attendees && (
+                  {(counts.going + guestRsvpCount) >= event.max_attendees && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900 text-red-300">Event Full</span>
                   )}
                 </div>
@@ -783,8 +847,8 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
           {/* Right column */}
           <div className="space-y-6">
 
-            {/* RSVP / Ticket card */}
-            {!isPastEvent && currentUser && (
+            {/* RSVP / Ticket card — members only */}
+            {!isPastEvent && currentUser && isMember && (
               <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
                 {isPaidEvent ? (
                   <>
@@ -909,8 +973,8 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
               </div>
             )}
 
-            {/* Response counts */}
-            <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
+            {/* Response counts — members only */}
+            {isMember && <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
               <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Responses</p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -926,10 +990,10 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
                   <span className="font-bold text-red-400">{counts.not_going}</span>
                 </div>
               </div>
-            </div>
+            </div>} 
 
-            {/* Going list */}
-            {counts.going > 0 && (
+            {/* Going list — members only */}
+            {isMember && counts.going > 0 && (
               <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
                 <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>
                   {(isPaidEvent?'Attending (':'Going (') + counts.going + ')'}
@@ -954,6 +1018,65 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
               </div>
             )}
 
+{/* Guest RSVP — for non-members on free public events */}
+            {!isPastEvent && !isMember && !isPaidEvent && (
+              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
+                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>RSVP to this Event</p>
+                {guestRsvpSuccess ? (
+                  <div className="text-center py-4" role="status">
+                    <div className="w-12 h-12 rounded-full bg-[#1B3A2F] border border-green-700 flex items-center justify-center mx-auto mb-3">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <p className="text-white font-bold text-base mb-1">You're on the list!</p>
+                    <p className="text-[#94A3B8] text-sm">A confirmation has been sent to {guestInfo.email}.</p>
+                  </div>
+                ) : (
+                  <form onSubmit={submitGuestRsvp} noValidate>
+                    <div className="space-y-3">
+                      {[
+                        { id:'gr-name',  label:'Full Name',        type:'text',  key:'name',  required:true,  placeholder:'Jane Doe' },
+                        { id:'gr-email', label:'Email Address',    type:'email', key:'email', required:true,  placeholder:'jane@example.com' },
+                        { id:'gr-phone', label:'Phone (optional)', type:'tel',   key:'phone', required:false, placeholder:'(555) 123-4567' },
+                      ].map(function(f) {
+                        return (
+                          <div key={f.id}>
+                            <label htmlFor={f.id} className="block text-xs font-semibold text-[#CBD5E1] mb-1.5">
+                              {f.label}{f.required && <span className="text-red-400 ml-1" aria-hidden="true">*</span>}
+                            </label>
+                            <input
+                              id={f.id} type={f.type} required={f.required}
+                              value={guestInfo[f.key]}
+                              placeholder={f.placeholder}
+                              onChange={function(e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function(p) { return Object.assign({}, p, u); }); }}
+                              className="w-full px-3 py-2.5 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              aria-required={f.required}
+                            />
+                          </div>
+                        );
+                      })}
+                      <button type="submit" disabled={guestRsvpLoading}
+                        className="w-full px-4 py-3 bg-blue-500 text-white font-bold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] disabled:opacity-50 flex items-center justify-center gap-2">
+                        {guestRsvpLoading ? (
+                          <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Submitting...</>
+                        ) : 'RSVP to this Event'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* Paid event prompt for non-members */}
+            {!isPastEvent && !isMember && isPaidEvent && (
+              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6 text-center">
+                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Tickets</p>
+                <p className="text-[#CBD5E1] text-sm mb-4">You need to be a member of this organization to purchase tickets.</p>
+                <Link to="/signup" className="inline-block px-5 py-2.5 bg-blue-500 text-white font-semibold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+                  Join to Get Tickets
+                </Link>
+              </div>
+            )}
+            
           </div>
         </div>
       </div>

@@ -21,8 +21,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // While Resend is in test mode, all emails go to this address only.
 // Once you verify syndicade.com at resend.com/domains, update FROM_ADDRESS
 // and remove the TEST_MODE override.
-const FROM_ADDRESS = 'onboarding@resend.dev';
-const TEST_MODE = true; // set to false after domain verification
+const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>';
+const TEST_MODE = false; // set to false after domain verification
 const TEST_RECIPIENT = 'grades_path9i@icloud.com';
 
 const NUDGE_DAYS = [7, 14, 30];
