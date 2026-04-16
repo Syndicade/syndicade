@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast } from './MascotToast';
 import usePlanLimits from '../hooks/usePlanLimits';
 import { Lock } from 'lucide-react';
+import { getStorageUsage } from '../lib/storageUtils';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 var EVENT_TYPES = [
@@ -694,6 +695,15 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
       var flierUrl = null;
       if (flierFile) {
+        var storageCheck = await getStorageUsage(organizationId);
+        if (storageCheck && storageCheck.isBlocked) {
+          toast.error('Storage limit reached. Upgrade your plan to upload images.');
+          setLoading(false);
+          return;
+        }
+        if (storageCheck && storageCheck.isWarning) {
+          toast('Storage is above 90% — consider upgrading soon.', { icon: null });
+        }
         if (flierFile.size > 5*1024*1024) { toast.error('File must be under 5MB'); setLoading(false); return; }
         var fileExt = flierFile.name.split('.').pop();
         var fileName = organizationId+'/'+Date.now()+'.'+fileExt;

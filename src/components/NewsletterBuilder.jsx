@@ -11,6 +11,7 @@ import {
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from './MascotToast';
 import { supabase } from '../lib/supabase';
+import { getStorageUsage } from '../lib/storageUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THEME TOKENS
@@ -357,13 +358,21 @@ function ImageUploadField({ value, onChange, organizationId, label, t }) {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
     if (file.size > 10*1024*1024) { toast.error('Image must be under 10MB'); return; }
+    var storageCheck = await getStorageUsage(organizationId);
+    if (storageCheck && storageCheck.isBlocked) {
+      toast.error('Storage limit reached. Upgrade your plan to upload images.');
+      return;
+    }
+    if (storageCheck && storageCheck.isWarning) {
+      toast('Storage is above 90% — consider upgrading soon.', { icon: null });
+    }
     setUploading(true);
     try {
       var ext = file.name.split('.').pop();
-      var path = 'email-images/' + (organizationId||'shared') + '/' + genId() + '.' + ext;
-      var { error } = await supabase.storage.from('documents').upload(path, file, { upsert:true });
-      if (error) throw error;
-      var { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
+     var path = (organizationId||'shared') + '/' + genId() + '.' + ext;
+var { error } = await supabase.storage.from('newsletter-images').upload(path, file, { upsert:true });
+if (error) throw error;
+var { data: urlData } = supabase.storage.from('newsletter-images').getPublicUrl(path);
       onChange(urlData.publicUrl);
       mascotSuccessToast('Image uploaded!');
     } catch (err) { toast.error('Upload failed: '+err.message);

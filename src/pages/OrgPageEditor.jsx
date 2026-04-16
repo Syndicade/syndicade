@@ -19,6 +19,7 @@ import {
 } from '../components/OrgTemplates';
 import { renderBlock } from '../components/BlockRenderer';
 import WebsiteSetupWizard from '../components/WebsiteSetupWizard';
+import { getStorageUsage } from '../lib/storageUtils';
 
 var PREVIEW_WIDTH = 1280;
 
@@ -492,9 +493,17 @@ export default function OrgPageEditor() {
     } catch(err){ toast.error('Failed to load organization'); } finally { setLoading(false); }
   }
 
-  async function uploadImage(file,type) {
+async function uploadImage(file,type) {
     if (file.size>5*1024*1024){toast.error('Image must be under 5MB');return;}
     if (!file.type.startsWith('image/')){toast.error('File must be an image');return;}
+    var storageCheck = await getStorageUsage(organizationId);
+    if (storageCheck && storageCheck.isBlocked) {
+      toast.error('Storage limit reached. Upgrade your plan to upload images.');
+      return;
+    }
+    if (storageCheck && storageCheck.isWarning) {
+      toast('Storage is above 90% — consider upgrading soon.', { icon: null });
+    }
     setUploadingLogo(true);
     try {
       var ext=file.name.split('.').pop();
