@@ -9,12 +9,16 @@
  * 3. Orgs        — search, view, manually adjust plan
  * 4. Content     — zero-code content editing
  * 5. Financials  — revenue, expenses, and tax summary
+ * 6. Promo Codes — discount code management
+ * 7. Goals       — revenue goals and simulator
+ * 8. Contacts    — marketing contacts from landing page
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast } from '../components/MascotToast';
 import ContentEditor from '../components/ContentEditor';
 import StaffFinancials from '../components/StaffFinancials';
 import StaffPromoCodes from '../components/StaffPromoCodes';
@@ -23,7 +27,7 @@ import {
   Users, Building2, DollarSign, ShieldCheck, Tag, TrendingUp, AlertTriangle,
   Calendar, Activity, Clock, CheckCircle, XCircle, RefreshCw, ChevronDown,
   MapPin, BarChart2, UserX, Zap, Search, KeyRound, Ban, ChevronRight, X,
-  FileText, Download, Receipt, PlusCircle, Trash2,
+  FileText, Download, Receipt, PlusCircle, Trash2, Mail, MessageSquare,
 } from 'lucide-react';
 
 // ─── Plan config ──────────────────────────────────────────────────────────────
@@ -217,7 +221,7 @@ function MemberDrawer({ member, onClose, onAction }) {
           <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-4 space-y-2">
             <div className="flex justify-between text-[13px]"><span className="text-[#64748B]">Joined</span><span className="text-[#CBD5E1]">{member.joined_date ? new Date(member.joined_date).toLocaleDateString() : '—'}</span></div>
             <div className="flex justify-between text-[13px]"><span className="text-[#64748B]">Member #</span><span className="text-[#CBD5E1] font-600">{'#' + (member.member_number || '—')}</span></div>
-<div className="flex justify-between text-[13px]"><span className="text-[#64748B]">Phone</span><span className="text-[#CBD5E1]">{member.phone || '—'}</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#64748B]">Phone</span><span className="text-[#CBD5E1]">{member.phone || '—'}</span></div>
             <div className="flex justify-between text-[13px]"><span className="text-[#64748B]">Organizations</span><span className="text-[#CBD5E1]">{memberships.length}</span></div>
           </div>
           {/* Tools */}
@@ -386,7 +390,7 @@ function MembersTab() {
   var [searched, setSearched] = useState(false);
   var [selected, setSelected] = useState(null);
 
-async function handleSearch(e) {
+  async function handleSearch(e) {
     if (e && e.preventDefault) e.preventDefault();
     if (!query.trim()) return;
     setLoading(true); setSearched(true);
@@ -395,7 +399,7 @@ async function handleSearch(e) {
       .select('user_id, first_name, last_name, phone, joined_date, is_staff, account_status, member_number');
     if (isNumber) {
       q = q.eq('member_number', parseInt(query.trim()));
-} else {
+    } else {
       var words = query.trim().split(/\s+/);
       var filters = [];
       words.forEach(function(word) {
@@ -435,7 +439,7 @@ async function handleSearch(e) {
                 return (
                   <div key={m.user_id} role="listitem" className="flex items-center gap-4 px-6 py-4 border-b border-[#2A3550] last:border-b-0 hover:bg-[#1E2845] transition-colors">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-700 flex-shrink-0 bg-[#1D3461] text-blue-400" aria-hidden="true">{(m.first_name?.[0] || '') + (m.last_name?.[0] || '')}</div>
-<div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
                       <p className="text-[14px] text-white font-600">
                         {m.first_name} {m.last_name}
                         {m.is_staff && <span className="ml-2 text-[10px] font-700 text-purple-400 bg-[#2D1B4E] px-1.5 py-0.5 rounded-full">Staff</span>}
@@ -536,6 +540,195 @@ function OrgsTab() {
   );
 }
 
+// ─── Contacts tab ─────────────────────────────────────────────────────────────
+function ContactsTab() {
+  var [contacts, setContacts] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [search, setSearch] = useState('');
+
+  useEffect(function () {
+    loadContacts();
+  }, []);
+
+  function loadContacts() {
+    setLoading(true);
+    supabase
+      .from('marketing_contacts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(function (result) {
+        if (result.error) {
+          toast.error('Failed to load contacts.');
+        } else {
+          setContacts(result.data || []);
+        }
+        setLoading(false);
+      });
+  }
+
+  function handleExportCSV() {
+    var rows = [['Name', 'Email', 'Organization', 'Message', 'Date']];
+    contacts.forEach(function (c) {
+      rows.push([
+        '"' + (c.name || '').replace(/"/g, '""') + '"',
+        '"' + (c.email || '').replace(/"/g, '""') + '"',
+        '"' + (c.organization || '').replace(/"/g, '""') + '"',
+        '"' + (c.message || '').replace(/"/g, '""') + '"',
+        c.created_at ? new Date(c.created_at).toLocaleDateString() : '',
+      ]);
+    });
+    var csv = rows.map(function (r) { return r.join(','); }).join('\n');
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'syndicade_contacts.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    mascotSuccessToast('CSV exported!', contacts.length + ' contacts downloaded.');
+  }
+
+  var filtered = contacts.filter(function (c) {
+    var q = search.toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.organization || '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-extrabold text-white">Marketing Contacts</h2>
+          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+            {loading ? '—' : contacts.length + ' total contact' + (contacts.length !== 1 ? 's' : '') + ' from the landing page'}
+          </p>
+        </div>
+        <button
+          onClick={handleExportCSV}
+          disabled={loading || contacts.length === 0}
+          className="flex items-center gap-2 px-4 py-2 bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-[13px] font-600 rounded-lg hover:bg-[#1E2845] hover:border-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0E1523] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Export contacts as CSV"
+        >
+          <Download size={14} aria-hidden="true" />
+          Export CSV
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-5">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" aria-hidden="true" />
+        <label htmlFor="contacts-search" className="sr-only">Search contacts</label>
+        <input
+          id="contacts-search"
+          type="search"
+          value={search}
+          onChange={function (e) { setSearch(e.target.value); }}
+          placeholder="Search by name, email, or organization..."
+          className="w-full pl-9 pr-4 py-2.5 bg-[#1A2035] border border-[#2A3550] rounded-xl text-[14px] text-white placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+      </div>
+
+      {/* Skeletons */}
+      {loading && (
+        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl overflow-hidden" aria-busy="true" aria-label="Loading contacts">
+          <TableSkeleton />
+        </div>
+      )}
+
+      {/* Empty state — no contacts at all */}
+      {!loading && contacts.length === 0 && (
+        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl">
+          <EmptyState
+            icon={Mail}
+            title="No contacts yet"
+            description="Contacts will appear here when people submit the landing page form."
+          />
+        </div>
+      )}
+
+      {/* Empty state — search has no results */}
+      {!loading && contacts.length > 0 && filtered.length === 0 && (
+        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl">
+          <div className="px-6 py-12 text-center">
+            <Search size={36} className="text-[#2A3550] mx-auto mb-3" aria-hidden="true" />
+            <p className="text-white font-700 text-[15px] mb-1">No contacts match your search</p>
+            <p className="text-[13px] text-[#64748B] mb-4">Try a different name, email, or organization.</p>
+            <button
+              onClick={function () { setSearch(''); }}
+              className="px-4 py-2 bg-blue-500 text-white text-[13px] font-700 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]"
+            >
+              Clear search
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && filtered.length > 0 && (
+        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl overflow-hidden" role="region" aria-label="Marketing contacts table">
+          <div className="px-6 py-3 border-b border-[#2A3550] flex items-center justify-between">
+            <span className="text-[12px] text-[#64748B]">
+              {search ? filtered.length + ' of ' + contacts.length + ' contacts' : contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '')}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]" role="table">
+              <thead>
+                <tr className="bg-[#1E2845] border-b border-[#2A3550]" role="row">
+                  <th className="text-left px-6 py-3 text-[11px] font-700 uppercase tracking-widest text-[#F5B731]" scope="col">Name</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-700 uppercase tracking-widest text-[#F5B731]" scope="col">Email</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-700 uppercase tracking-widest text-[#F5B731]" scope="col">Organization</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-700 uppercase tracking-widest text-[#F5B731]" scope="col">Message</th>
+                  <th className="text-left px-6 py-3 text-[11px] font-700 uppercase tracking-widest text-[#F5B731]" scope="col">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(function (c, idx) {
+                  return (
+                    <tr
+                      key={c.id}
+                      className={'border-t border-[#2A3550] hover:bg-[#1E2845] transition-colors ' + (idx % 2 === 0 ? 'bg-[#1A2035]' : 'bg-[#151B2D]')}
+                      role="row"
+                    >
+                      <td className="px-6 py-4 text-white font-600 whitespace-nowrap">{c.name || '—'}</td>
+                      <td className="px-6 py-4">
+                        <a
+                          href={'mailto:' + c.email}
+                          className="text-blue-400 hover:text-blue-300 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                          aria-label={'Send email to ' + (c.name || c.email)}
+                        >
+                          {c.email || '—'}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 text-[#CBD5E1]">{c.organization || '—'}</td>
+                      <td className="px-6 py-4 text-[#94A3B8] max-w-xs">
+                        {c.message
+                          ? <span className="line-clamp-2" title={c.message}>{c.message}</span>
+                          : <span className="text-[#64748B]">—</span>
+                        }
+                      </td>
+                      <td className="px-6 py-4 text-[#64748B] whitespace-nowrap">
+                        {c.created_at
+                          ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'
+                        }
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 function OverviewTab() {
   var [loading, setLoading] = useState(true);
@@ -577,9 +770,9 @@ function OverviewTab() {
     var [mr, or, sr, er, mw, mm] = await Promise.all([
       supabase.from('members').select('user_id', { count: 'exact', head: true }),
       orgQuery,
-     supabase.from('subscriptions').select('organization_id, plan, status, trial_ends_at, current_period_end'),
+      supabase.from('subscriptions').select('organization_id, plan, status, trial_ends_at, current_period_end'),
       supabase.from('events').select('id', { count: 'exact', head: true }),
-supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('joined_date', weekAgo),
+      supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('joined_date', weekAgo),
       supabase.from('members').select('user_id', { count: 'exact', head: true }).gte('joined_date', monthAgo),
     ]);
     var allOrgs = or.data || [];
@@ -836,13 +1029,14 @@ export default function StaffDashboard() {
   var [activeTab, setActiveTab] = useState('overview');
 
   var TABS = [
-    { key: 'overview',   label: 'Overview',       icon: BarChart2 },
-    { key: 'members',    label: 'Members',         icon: Users },
-    { key: 'orgs',       label: 'Organizations',   icon: Building2 },
-    { key: 'content',    label: 'Content',         icon: FileText },
-    { key: 'financials',   label: 'Financials',   icon: Receipt },
-    { key: 'promo_codes',  label: 'Promo Codes',  icon: Tag },
-    { key: 'goals',        label: 'Goals',        icon: TrendingUp },
+    { key: 'overview',    label: 'Overview',       icon: BarChart2 },
+    { key: 'members',     label: 'Members',         icon: Users },
+    { key: 'orgs',        label: 'Organizations',   icon: Building2 },
+    { key: 'content',     label: 'Content',         icon: FileText },
+    { key: 'financials',  label: 'Financials',      icon: Receipt },
+    { key: 'promo_codes', label: 'Promo Codes',     icon: Tag },
+    { key: 'goals',       label: 'Goals',           icon: TrendingUp },
+    { key: 'contacts',    label: 'Contacts',        icon: Mail },
   ];
 
   useEffect(function () {
@@ -903,13 +1097,14 @@ export default function StaffDashboard() {
 
       {/* Content */}
       <main className="max-w-[1600px] mx-auto px-6 py-8" role="main">
-        {activeTab === 'overview'   && <OverviewTab />}
-        {activeTab === 'members'    && <MembersTab />}
-        {activeTab === 'orgs'       && <OrgsTab />}
-        {activeTab === 'content'    && <ContentEditor staffUserId={staffMember?.user_id} />}
+        {activeTab === 'overview'    && <OverviewTab />}
+        {activeTab === 'members'     && <MembersTab />}
+        {activeTab === 'orgs'        && <OrgsTab />}
+        {activeTab === 'content'     && <ContentEditor staffUserId={staffMember?.user_id} />}
         {activeTab === 'financials'  && <StaffFinancials staffUserId={staffMember?.user_id} />}
         {activeTab === 'promo_codes' && <StaffPromoCodes />}
         {activeTab === 'goals'       && <StaffGoals />}
+        {activeTab === 'contacts'    && <ContactsTab />}
       </main>
     </div>
   );
