@@ -405,6 +405,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     mailing_address: '', mailing_city: '', mailing_state: '', mailing_zip: '',
     service_categories: [], languages: [], keywords: [],
     discovery_about: '',
+    allow_following: true,
     search_tags: [],
     enable_donations: false,
     donation_suggested_amount: '',
@@ -454,6 +455,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         languages:             data.languages || [],
         keywords:              data.keywords || [],
         discovery_about:       data.discovery_about || '',
+        allow_following: data.allow_following !== false,
         search_tags:           data.search_tags || [],
         enable_donations:      data.enable_donations || false,
         donation_suggested_amount: data.donation_suggested_amount || '',
@@ -506,6 +508,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         languages:             form.languages,
         keywords:              form.keywords,
         discovery_about:       form.discovery_about.trim() || null,
+        allow_following: form.allow_following,
         search_tags:           form.search_tags,
         enable_donations:             form.enable_donations,
         donation_suggested_amount:    form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
@@ -738,6 +741,18 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                       </div>
                     );
                   })}
+                  <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 text-sm">Allow Following</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Let people follow your organization from the Discover page and their dashboard. Followers see your public events and announcements.</p>
+                    </div>
+                    <Toggle
+                      checked={form.allow_following}
+                      onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{allow_following:!prev.allow_following}); }); }}
+                      id="allow-following-toggle"
+                      label={form.allow_following ? 'Disable following' : 'Enable following'}
+                    />
+                  </div>
                 </div>
               </section>
             )}

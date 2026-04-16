@@ -186,9 +186,6 @@ function SortablePageItem({ page, isExpanded, onToggleExpand, navCount, NAV_LIMI
         {/* Row 2: slug + nav label + toggles + actions */}
         <div className="flex items-center gap-2 px-2 pb-2 pl-6">
           <p className={'text-[10px] w-16 truncate flex-shrink-0 ' + tc}>/{page.page_key}</p>
-          <input type="text" value={page.nav_label} onChange={function(e){onNavLabelChange(page.id,e.target.value);}}
-            placeholder="Nav label" aria-label={'Nav label for ' + page.title}
-            className={inp + ' flex-1 ' + (d?'text-[#CBD5E1]':'text-gray-700')} maxLength={20} />
           {/* Nav toggle */}
           <div className={'flex items-center gap-1 flex-shrink-0 relative ' + (navAtLimit?'group':'')}>
             <span className={'text-[10px] ' + tc}>Nav</span>
@@ -388,7 +385,7 @@ export default function OrgPageEditor() {
   async function handlePageDragEnd(ev) {
     var active=ev.active, over=ev.over;
     if (!over||active.id===over.id) return;
-    var aps = sitePages.filter(function(p){return p.is_enabled;});
+    var aps=sitePages.filter(function(p){return p.is_enabled && p.page_key !== 'home';});
     var oi=aps.findIndex(function(p){return p.id===active.id;}), ni=aps.findIndex(function(p){return p.id===over.id;});
     if (oi===-1||ni===-1) return;
     var next=aps.slice(); var mv=next.splice(oi,1)[0]; next.splice(ni,0,mv);
@@ -415,8 +412,9 @@ export default function OrgPageEditor() {
   }
   function handlePageTitleChange(pageId,title) {
     var nk=slugify(title);
-    setSitePages(function(prev){return prev.map(function(p){return p.id===pageId?Object.assign({},p,{title:title,page_key:nk}):p;});});
-    savePageDebounced(pageId,{title:title,page_key:nk});
+    var nl=title.slice(0,20);
+    setSitePages(function(prev){return prev.map(function(p){return p.id===pageId?Object.assign({},p,{title:title,page_key:nk,nav_label:nl}):p;});});
+    savePageDebounced(pageId,{title:title,page_key:nk,nav_label:nl});
   }
   function handlePageNavLabelChange(pageId,label) {
     setSitePages(function(prev){return prev.map(function(p){return p.id===pageId?Object.assign({},p,{nav_label:label}):p;});});
@@ -1025,6 +1023,22 @@ async function uploadImage(file,type) {
                         </div>
                       );
                     })()}
+
+            {/* Block editor for home page */}
+            {(function(){
+              var homePage = sitePages.find(function(p){ return p.page_key === 'home'; });
+              if (!homePage) return null;
+              return (
+                <div className={'mt-4 border-t pt-4 ' + borderL}>
+                  <p className={'text-xs font-bold uppercase tracking-[3px] mb-3 ' + tTer}>Page Blocks</p>
+                  <BlockEditor
+                    organizationId={organizationId}
+                    pages={[homePage]}
+                    onBlocksChange={function(up){ setSiteBlocks(up); }}
+                  />
+                </div>
+              );
+            })()}
 
                     {/* ADDITIONAL PAGES — draggable, always shown, toggle disabled on Starter */}
                     {(function(){

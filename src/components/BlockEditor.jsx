@@ -1306,9 +1306,6 @@ function SortableBlock({ block, index, totalBlocks, expandedBlock, setExpandedBl
         <button onClick={function() { setExpandedBlock(isExpanded ? null : block.id); }}
           className="flex-1 flex items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
           aria-expanded={isExpanded} aria-label={'Toggle ' + blockLabel(block.block_type) + ' block editor'}>
-          <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
-            <Icon path={BLOCK_CATEGORIES.flatMap(function(cat) { return cat.blocks; }).find(function(b) { return b.type === block.block_type; })?.icon || 'M4 6h16M4 12h16M4 18h7'} className="h-4 w-4 text-gray-400" />
-          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-gray-900">{blockLabel(block.block_type)}</p>
             {!block.is_visible && <span className="text-xs text-gray-400">Hidden</span>}

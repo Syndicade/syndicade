@@ -49,6 +49,7 @@ import FeaturesPage from './pages/FeaturesPage';
 import BillingPage from './pages/BillingPage';
 import NotFound from './pages/NotFound';
 import ActivateProTrial from './pages/ActivateProTrial';
+import AcceptInvite from './pages/AcceptInvite';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -142,6 +143,7 @@ var hideChrome = (
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/activate-pro" element={<ActivateProTrial />} />
             <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
 
             {/* ── Discovery ──────────────────────────────────────── */}
             <Route path="/discover" element={<EventDiscovery />} />

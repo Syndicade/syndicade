@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import OrganizationSettings from '../components/OrganizationSettings';
 import InviteMember from '../components/InviteMember';
+import OrgInviteMemberModal from '../components/OrgInviteMemberModal';
 import CreateEvent from '../components/CreateEvent';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
@@ -223,6 +224,7 @@ function OrganizationDashboard() {
   var [error, setError] = useState(null);
   var [viewMode, setViewMode] = useState('admin');
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
+  var [showInviteModal, setShowInviteModal] = useState(false);
 
   // ── Locked nav prompt state ───────────────────────────────────────────────
   // null | 'growth' | 'pro' | 'verified'
@@ -267,7 +269,6 @@ function OrganizationDashboard() {
   var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   var [showCreatePoll, setShowCreatePoll] = useState(false);
   var [showCreateSignupForm, setShowCreateSignupForm] = useState(false);
-  var [showInviteModal, setShowInviteModal] = useState(false);
 
   // Approvals
   var [pendingApprovals, setPendingApprovals] = useState([]);
@@ -1096,7 +1097,7 @@ function OrganizationDashboard() {
 
             var color = isLocked
               ? '#3A4A65'
-              : (item.isPurple ? '#A78BFA' : isActive ? '#FFFFFF' : textMuted);
+              : (item.isPurple ? '#A78BFA' : isActive ? '#3B82F6' : textMuted);
             var bg = isActive && !isLocked ? 'rgba(59,130,246,0.12)' : 'transparent';
 
             return (
@@ -1701,12 +1702,13 @@ function OrganizationDashboard() {
         />
       )}
 
-      {showInviteModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:50 }} role="dialog" aria-modal="true" aria-label="Invite member" onClick={function() { setShowInviteModal(false); }}>
-          <div style={{ width:'100%', maxWidth:'520px' }} onClick={function(e) { e.stopPropagation(); }}>
-            <InviteMember organizationId={organizationId} organizationName={organization ? organization.name : ''} onInviteSent={function() { fetchStats(currentUserId); setShowInviteModal(false); }} />
-          </div>
-        </div>
+            <OrgInviteMemberModal
+          isOpen={showInviteModal}
+          onClose={function() { setShowInviteModal(false); }}
+          organizationId={organizationId}
+          organizationName={organization ? organization.name : ''}
+          currentUserId={currentUserId}
+        />
       )}
 
       {showProgramModal && (
