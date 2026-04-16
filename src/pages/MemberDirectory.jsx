@@ -1,31 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 import MemberCard from '../components/MemberCard';
-import PageHeader from '../components/PageHeader';
+import usePlanLimits from '../hooks/usePlanLimits';
 import toast from 'react-hot-toast';
-
-function Icon({ path, className }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      {Array.isArray(path)
-        ? path.map(function(d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d} />; })
-        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />}
-    </svg>
-  );
-}
-
-var ICONS = {
-  search:  'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  users:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-  x:       'M6 18L18 6M6 6l12 12',
-  alert:   ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
-  check:   'M5 13l4 4L19 7',
-  mail:    'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
-  dollar:  ['M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
-  clock:   'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-  tag:     ['M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z'],
-};
+import { mascotSuccessToast } from '../components/MascotToast';
 
 var UNIT_OPTIONS = [
   { label: 'Days',   value: 'days'   },
@@ -64,19 +44,22 @@ function getDuesStatus(membership) {
   return 'paid';
 }
 
-function CardSkeleton() {
+function CardSkeleton({ isDark }) {
+  var shimmer = isDark ? 'bg-[#2A3550]' : 'bg-gray-200';
+  var shimmerLight = isDark ? 'bg-[#1E2845]' : 'bg-gray-100';
+  var card = isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200';
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 animate-pulse">
+    <div className={'border rounded-xl p-4 animate-pulse ' + card}>
       <div className="flex items-start gap-4">
-        <div className="w-14 h-14 rounded-full bg-gray-200 flex-shrink-0" />
+        <div className={'w-14 h-14 rounded-full flex-shrink-0 ' + shimmer} />
         <div className="flex-1 space-y-2">
-          <div className="h-4 w-32 bg-gray-200 rounded" />
-          <div className="h-3 w-20 bg-gray-100 rounded-full" />
-          <div className="h-3 w-40 bg-gray-100 rounded" />
+          <div className={'h-4 w-32 rounded ' + shimmer} />
+          <div className={'h-3 w-20 rounded-full ' + shimmerLight} />
+          <div className={'h-3 w-40 rounded ' + shimmerLight} />
         </div>
-        <div className="h-9 w-16 bg-gray-100 rounded-lg flex-shrink-0" />
+        <div className={'h-9 w-16 rounded-lg flex-shrink-0 ' + shimmerLight} />
       </div>
-      <div className="mt-3 h-8 bg-gray-50 rounded-lg border border-gray-100" />
+      <div className={'mt-3 h-8 rounded-lg border ' + shimmerLight + ' ' + (isDark ? 'border-[#2A3550]' : 'border-gray-100')} />
     </div>
   );
 }
@@ -91,24 +74,17 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
 
   var selectedTier = tiers.find(function(t) { return t.id === selectedTierId; }) || null;
 
-  // When a tier is selected, sync quick months to tier duration
   function selectTier(tier) {
     setSelectedTierId(tier.id);
     setQuickMonths(tier.duration_months || 12);
     setUseCustom(false);
   }
 
-  function clearTier() {
-    setSelectedTierId(null);
-  }
+  function clearTier() { setSelectedTierId(null); }
 
-  var activeMonths = useCustom
-    ? unitToMonths(customValue, customUnit)
-    : quickMonths;
-
+  var activeMonths = useCustom ? unitToMonths(customValue, customUnit) : quickMonths;
   var until = addMonthsToDate(new Date(), activeMonths);
   var untilStr = until.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
   var previewAmount = selectedTier && selectedTier.dues_amount != null ? selectedTier.dues_amount : null;
 
   useEffect(function() {
@@ -116,10 +92,6 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
     document.addEventListener('keydown', onKey);
     return function() { document.removeEventListener('keydown', onKey); };
   }, [onClose]);
-
-  function handleConfirm() {
-    onConfirm({ months: activeMonths, tierId: selectedTierId, amount: previewAmount });
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="mark-paid-title">
@@ -131,7 +103,6 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
           <strong className="text-gray-700">{member.displayName}</strong>
         </p>
 
-        {/* Tier selection */}
         {tiers.length > 0 && (
           <div className="mb-5">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Membership Tier <span className="font-normal normal-case text-gray-400">(optional)</span></p>
@@ -148,7 +119,7 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
                     <span className={'font-medium ' + (isSelected ? 'text-blue-700' : 'text-gray-700')}>{tier.name}</span>
                     <span className="text-xs text-gray-400">
                       {tier.dues_amount != null ? '$' + Number(tier.dues_amount).toFixed(2) + ' · ' : ''}
-                      {tier.duration_months + (tier.duration_months === 1 ? ' mo' : ' mo')}
+                      {tier.duration_months + ' mo'}
                     </span>
                   </button>
                 );
@@ -157,11 +128,8 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
           </div>
         )}
 
-        {/* Duration section */}
         <div className="mb-5">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Duration</p>
-
-          {/* Quick picks */}
           <div className="grid grid-cols-4 gap-1.5 mb-3">
             {QUICK_PICKS.map(function(pick) {
               var isActive = !useCustom && quickMonths === pick.months;
@@ -177,8 +145,6 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
               );
             })}
           </div>
-
-          {/* Custom toggle */}
           <button
             onClick={function() { setUseCustom(!useCustom); }}
             className={'w-full px-3 py-2 rounded-lg border text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (useCustom ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50')}
@@ -186,13 +152,10 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
           >
             {useCustom ? 'Custom duration' : '+ Custom duration'}
           </button>
-
           {useCustom && (
             <div className="mt-2 flex gap-2">
               <input
-                type="number"
-                min="1"
-                value={customValue}
+                type="number" min="1" value={customValue}
                 onChange={function(e) { setCustomValue(e.target.value); }}
                 className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Custom duration amount"
@@ -209,7 +172,6 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
           )}
         </div>
 
-        {/* Preview */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">Paid through</span>
@@ -228,7 +190,7 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
             Cancel
           </button>
           <button
-            onClick={handleConfirm}
+            onClick={function() { onConfirm({ months: activeMonths, tierId: selectedTierId, amount: previewAmount }); }}
             className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-colors"
           >
             Confirm Paid
@@ -240,53 +202,38 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
 }
 
 // ── Dues Row ──────────────────────────────────────────────────────────────────
-function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, toggling }) {
+function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, toggling, isDark }) {
   var status = getDuesStatus(membership);
   var until = membership.dues_paid_until ? new Date(membership.dues_paid_until) : null;
   var untilStr = until ? until.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   var amount = membership.dues_amount;
   var tier = tiers.find(function(t) { return t.id === membership.tier_id; }) || null;
 
-  var rowBg = status === 'paid'
-    ? 'bg-green-50 border-green-100'
-    : status === 'expired'
-      ? 'bg-orange-50 border-orange-100'
-      : 'bg-yellow-50 border-yellow-100';
+  var rowBg = isDark
+    ? (status === 'paid' ? 'bg-green-900/20 border-green-800/40' : status === 'expired' ? 'bg-orange-900/20 border-orange-800/40' : 'bg-yellow-900/20 border-yellow-800/40')
+    : (status === 'paid' ? 'bg-green-50 border-green-100' : status === 'expired' ? 'bg-orange-50 border-orange-100' : 'bg-yellow-50 border-yellow-100');
 
   return (
     <div className={'flex items-center justify-between px-4 py-2 border-t flex-wrap gap-2 ' + rowBg}>
       <div className="flex items-center gap-2 flex-wrap">
         {status === 'paid' && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-            <Icon path={ICONS.check} className="h-3 w-3" />
-            Paid
-          </span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">Paid</span>
         )}
         {status === 'expired' && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
-            <Icon path={ICONS.clock} className="h-3 w-3" />
-            Expired
-          </span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">Expired</span>
         )}
         {status === 'unpaid' && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-            <Icon path={ICONS.dollar} className="h-3 w-3" />
-            Unpaid
-          </span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Unpaid</span>
         )}
         {tier && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-            <Icon path={ICONS.tag} className="h-3 w-3" />
-            {tier.name}
-          </span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">{tier.name}</span>
         )}
-        <span className="text-xs text-gray-400">
+        <span className={'text-xs ' + (isDark ? 'text-[#64748B]' : 'text-gray-400')}>
           {amount ? '$' + Number(amount).toFixed(2) : ''}
           {untilStr && status === 'paid' ? (amount ? ' · ' : '') + 'Through ' + untilStr : ''}
           {untilStr && status === 'expired' ? (amount ? ' · ' : '') + 'Expired ' + untilStr : ''}
         </span>
       </div>
-
       {isAdmin && (
         <div className="flex items-center gap-2">
           {status !== 'paid' ? (
@@ -302,7 +249,7 @@ function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, togglin
             <button
               onClick={onMarkUnpaid}
               disabled={toggling}
-              className="text-xs font-semibold px-3 py-1 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 transition-colors disabled:opacity-50"
+              className={'text-xs font-semibold px-3 py-1 rounded-lg border transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 ' + (isDark ? 'border-[#2A3550] text-[#94A3B8] hover:bg-[#1E2845]' : 'border-gray-300 text-gray-500 hover:bg-gray-100')}
               aria-label={membership.displayName + ': mark as unpaid'}
             >
               {toggling ? 'Saving...' : 'Mark Unpaid'}
@@ -314,10 +261,42 @@ function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, togglin
   );
 }
 
+// ── Role Row ──────────────────────────────────────────────────────────────────
+function RoleRow({ member, adminAtCap, editorAtCap, onRoleChange, changingRoleId, isDark }) {
+  var isChanging = changingRoleId === member.user_id;
+  return (
+    <div className={'flex items-center gap-2 px-4 py-2 border-t ' + (isDark ? 'border-[#2A3550] bg-[#151B2D]' : 'border-gray-100 bg-gray-50')}>
+      <label htmlFor={'role-' + member.user_id} className={'text-xs font-medium ' + (isDark ? 'text-[#64748B]' : 'text-gray-500')}>
+        Role:
+      </label>
+      <select
+        id={'role-' + member.user_id}
+        value={member.role}
+        disabled={isChanging}
+        onChange={function(e) { onRoleChange(member, e.target.value); }}
+        className={'text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ' + (isDark ? 'bg-[#1A2035] border-[#2A3550] text-white' : 'bg-white border-gray-200 text-gray-700')}
+        aria-label={'Change role for ' + member.displayName}
+      >
+        <option value="member">Member</option>
+        <option value="editor" disabled={editorAtCap && member.role !== 'editor'}>
+          {'Editor' + (editorAtCap && member.role !== 'editor' ? ' (limit reached)' : '')}
+        </option>
+        <option value="admin" disabled={adminAtCap && member.role !== 'admin'}>
+          {'Administrator' + (adminAtCap && member.role !== 'admin' ? ' (limit reached)' : '')}
+        </option>
+        <option value="guest">Guest</option>
+      </select>
+      {isChanging && <span className={'text-xs ' + (isDark ? 'text-[#64748B]' : 'text-gray-400')}>Saving...</span>}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 function MemberDirectory() {
   var params = useParams();
   var organizationId = params.organizationId;
+  var { isDark } = useTheme();
+  var outletContext = useOutletContext();
 
   var [members, setMembers] = useState([]);
   var [filteredMembers, setFilteredMembers] = useState([]);
@@ -325,11 +304,12 @@ function MemberDirectory() {
   var [tiers, setTiers] = useState([]);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
-  var [isAdmin, setIsAdmin] = useState(false);
+  var isAdmin = outletContext ? outletContext.isAdmin : false;
   var [currentUserId, setCurrentUserId] = useState(null);
   var [organizationName, setOrganizationName] = useState('');
   var [collectDues, setCollectDues] = useState(true);
   var [togglingId, setTogglingId] = useState(null);
+  var [changingRoleId, setChangingRoleId] = useState(null);
   var [sendingReminder, setSendingReminder] = useState(false);
   var [markPaidTarget, setMarkPaidTarget] = useState(null);
 
@@ -337,6 +317,30 @@ function MemberDirectory() {
   var [roleFilter, setRoleFilter] = useState('all');
   var [tagFilter, setTagFilter] = useState('all');
   var [duesFilter, setDuesFilter] = useState('all');
+
+  // Plan limits
+  var { limits } = usePlanLimits(organizationId);
+  var memberLimit = limits ? limits.members : null;
+  var memberCount = members.length;
+  var memberPercent = memberLimit ? Math.min(Math.round((memberCount / memberLimit) * 100), 100) : 0;
+  var isOverLimit = memberLimit !== null && memberCount > memberLimit;
+  var overageCount = isOverLimit ? memberCount - memberLimit : 0;
+
+  var adminCount = members.filter(function(m) { return m.role === 'admin'; }).length;
+  var editorCount = members.filter(function(m) { return m.role === 'editor'; }).length;
+  var adminLimit = limits ? limits.admin_limit : null;
+  var editorLimit = limits ? limits.editor_limit : null;
+  var adminAtCap = adminLimit !== null && adminCount >= adminLimit;
+  var editorAtCap = editorLimit !== null && editorCount >= editorLimit;
+
+  // Theme tokens
+  var pageBg     = isDark ? 'bg-[#0E1523]'     : 'bg-gray-50';
+  var cardBg     = isDark ? 'bg-[#1A2035]'     : 'bg-white';
+  var cardBorder = isDark ? 'border-[#2A3550]' : 'border-gray-200';
+  var textPrimary   = isDark ? 'text-white'     : 'text-gray-900';
+  var textMuted     = isDark ? 'text-[#94A3B8]' : 'text-gray-500';
+  var inputBg    = isDark ? 'bg-[#1A2035] border-[#2A3550] text-white placeholder-[#64748B]' : 'bg-white border-gray-300 text-gray-900';
+  var labelText  = isDark ? 'text-[#94A3B8]'   : 'text-gray-500';
 
   useEffect(function() {
     if (organizationId) loadData();
@@ -368,7 +372,6 @@ function MemberDirectory() {
 
       setOrganizationName(orgResult.data.name);
       setCollectDues(orgResult.data.collect_dues !== false);
-      setIsAdmin(membershipResult.data && ['admin', 'owner'].includes(membershipResult.data.role));
       setOrgTags(tagsResult.data || []);
       setTiers(tiersResult.data || []);
 
@@ -434,6 +437,33 @@ function MemberDirectory() {
     setFilteredMembers(result);
   }
 
+  async function handleRoleChange(member, newRole) {
+    if (newRole === 'admin' && adminAtCap && member.role !== 'admin') {
+      toast.error('Admin limit reached for your plan. Upgrade to add more admins.');
+      return;
+    }
+    if (newRole === 'editor' && editorAtCap && member.role !== 'editor') {
+      toast.error('Editor limit reached for your plan. Upgrade to add more editors.');
+      return;
+    }
+    setChangingRoleId(member.user_id);
+    try {
+      var result = await supabase.from('memberships').update({ role: newRole }).eq('id', member.membership_id);
+      if (result.error) throw result.error;
+      setMembers(function(prev) {
+        return prev.map(function(m) {
+          return m.user_id === member.user_id ? Object.assign({}, m, { role: newRole }) : m;
+        });
+      });
+      mascotSuccessToast('Role updated for ' + member.displayName + '.');
+    } catch (err) {
+      console.error('Role change error:', err);
+      toast.error('Failed to update role.');
+    } finally {
+      setChangingRoleId(null);
+    }
+  }
+
   async function handleConfirmMarkPaid(membership, opts) {
     setMarkPaidTarget(null);
     setTogglingId(membership.user_id);
@@ -466,7 +496,7 @@ function MemberDirectory() {
         });
       });
 
-      toast.success(membership.displayName + ' marked as paid through ' + until.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+      mascotSuccessToast(membership.displayName + ' marked as paid through ' + until.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + '.');
     } catch (err) {
       console.error('Mark paid error:', err);
       toast.error('Failed to update dues status.');
@@ -488,7 +518,7 @@ function MemberDirectory() {
           return m;
         });
       });
-      toast.success(membership.displayName + ' marked as unpaid');
+      mascotSuccessToast(membership.displayName + ' marked as unpaid.');
     } catch (err) {
       console.error('Mark unpaid error:', err);
       toast.error('Failed to update dues status.');
@@ -516,13 +546,7 @@ function MemberDirectory() {
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
             type: 'dues_reminder',
-            data: {
-              memberEmail: member.email,
-              memberName: member.displayName,
-              orgName: organizationName,
-              duesAmount: member.dues_amount,
-              message: null,
-            },
+            data: { memberEmail: member.email, memberName: member.displayName, orgName: organizationName, duesAmount: member.dues_amount, message: null },
           }),
         });
         if (response.ok) { successCount++; } else { failCount++; }
@@ -533,9 +557,9 @@ function MemberDirectory() {
     setSendingReminder(false);
 
     if (successCount > 0 && failCount === 0) {
-      toast.success('Reminder sent to ' + successCount + ' ' + (successCount === 1 ? 'member' : 'members') + '.');
+      mascotSuccessToast('Reminder sent to ' + successCount + ' ' + (successCount === 1 ? 'member' : 'members') + '.');
     } else if (successCount > 0) {
-      toast.success(successCount + ' sent, ' + failCount + ' failed.');
+      mascotSuccessToast(successCount + ' sent, ' + failCount + ' failed.');
     } else {
       toast.error('Failed to send reminders.');
     }
@@ -553,20 +577,20 @@ function MemberDirectory() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={'min-h-screen ' + pageBg}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
-            <div className="h-7 w-32 bg-gray-200 rounded mb-2" />
-            <div className="h-4 w-48 bg-gray-100 rounded" />
+          <div className={'rounded-xl border p-6 animate-pulse ' + cardBg + ' ' + cardBorder}>
+            <div className={'h-7 w-32 rounded mb-2 ' + (isDark ? 'bg-[#2A3550]' : 'bg-gray-200')} />
+            <div className={'h-4 w-24 rounded ' + (isDark ? 'bg-[#1E2845]' : 'bg-gray-100')} />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse space-y-3">
-            <div className="h-10 bg-gray-100 rounded-lg" />
+          <div className={'rounded-xl border p-6 animate-pulse space-y-3 ' + cardBg + ' ' + cardBorder}>
+            <div className={'h-10 rounded-lg ' + (isDark ? 'bg-[#1E2845]' : 'bg-gray-100')} />
             <div className="grid grid-cols-4 gap-3">
-              {[1,2,3,4].map(function(i) { return <div key={i} className="h-10 bg-gray-100 rounded-lg" />; })}
+              {[1,2,3,4].map(function(i) { return <div key={i} className={'h-10 rounded-lg ' + (isDark ? 'bg-[#1E2845]' : 'bg-gray-100')} />; })}
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {[1,2,3,4].map(function(i) { return <CardSkeleton key={i} />; })}
+            {[1,2,3,4].map(function(i) { return <CardSkeleton key={i} isDark={isDark} />; })}
           </div>
         </div>
       </div>
@@ -575,11 +599,10 @@ function MemberDirectory() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className={'min-h-screen flex items-center justify-center p-4 ' + pageBg}>
         <div className="text-center max-w-md">
-          <Icon path={ICONS.alert} className="h-12 w-12 text-red-300 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-1">Failed to Load Members</h3>
-          <p className="text-gray-500 text-sm mb-6">{error}</p>
+          <h3 className={'text-lg font-semibold mb-1 ' + textPrimary}>Failed to Load Members</h3>
+          <p className={'text-sm mb-6 ' + textMuted}>{error}</p>
           <button onClick={function() { setError(null); loadData(); }} className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
             Try Again
           </button>
@@ -589,75 +612,166 @@ function MemberDirectory() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={'min-h-screen ' + pageBg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-        <PageHeader
-          title="Members"
-          subtitle={filteredMembers.length + ' ' + (filteredMembers.length === 1 ? 'member' : 'members') + (searchQuery ? ' matching "' + searchQuery + '"' : '') + (duesFilter !== 'all' ? ' · dues: ' + duesFilter : '')}
-          icon={<Icon path={ICONS.users} className="h-7 w-7 text-blue-600" />}
-          organizationName={organizationName}
-          organizationId={organizationId}
-          backTo={'/organizations/' + organizationId}
-          backLabel="Back to Dashboard"
-        />
+        {/* Page title */}
+        <div>
+          <h1 className={'text-2xl font-bold ' + textPrimary}>Members</h1>
+          <p className={'text-sm mt-1 ' + textMuted}>
+            {filteredMembers.length + ' ' + (filteredMembers.length === 1 ? 'member' : 'members')}
+            {searchQuery ? ' matching "' + searchQuery + '"' : ''}
+            {duesFilter !== 'all' ? ' · dues: ' + duesFilter : ''}
+          </p>
+        </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className={'rounded-xl border p-5 space-y-4 ' + cardBg + ' ' + cardBorder}>
 
-          {isAdmin && collectDues && unpaidCount > 0 && (
-            <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg" role="region" aria-label="Dues reminder">
-              <div className="flex items-center gap-2">
-                <Icon path={ICONS.dollar} className="h-4 w-4 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-800">
-                  {unpaidCount + ' ' + (unpaidCount === 1 ? 'member has' : 'members have') + ' outstanding dues'}
-                </span>
+          {/* Member count progress bar */}
+          {isAdmin && memberLimit !== null && (
+            <div
+              className={'flex items-center gap-3 p-3 border rounded-lg ' + (isOverLimit || memberPercent >= 90 ? (isDark ? 'bg-red-900/20 border-red-800/40' : 'bg-red-50 border-red-200') : memberPercent >= 80 ? (isDark ? 'bg-amber-900/20 border-amber-800/40' : 'bg-amber-50 border-amber-200') : (isDark ? 'bg-blue-900/20 border-blue-800/40' : 'bg-blue-50 border-blue-100'))}
+              role="status"
+              aria-label={'Member usage: ' + memberCount + ' of ' + memberLimit}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className={'text-xs font-semibold ' + (isOverLimit || memberPercent >= 90 ? 'text-red-600' : memberPercent >= 80 ? 'text-amber-600' : (isDark ? 'text-blue-400' : 'text-blue-700'))}>
+                    {memberCount + ' / ' + memberLimit + ' members'}
+                    {isOverLimit ? (' — ' + overageCount + ' over limit') : ''}
+                  </span>
+                  <span className={'text-xs ' + (isOverLimit || memberPercent >= 90 ? 'text-red-500' : memberPercent >= 80 ? 'text-amber-500' : (isDark ? 'text-blue-400' : 'text-blue-500'))}>
+                    {memberPercent + '%'}
+                  </span>
+                </div>
+                <div className={'w-full rounded-full h-1.5 ' + (isDark ? 'bg-[#2A3550]' : 'bg-gray-200')} role="progressbar" aria-valuenow={memberPercent} aria-valuemin={0} aria-valuemax={100}>
+                  <div
+                    className={'h-1.5 rounded-full transition-all ' + (isOverLimit || memberPercent >= 90 ? 'bg-red-500' : memberPercent >= 80 ? 'bg-amber-500' : 'bg-blue-500')}
+                    style={{ width: memberPercent + '%' }}
+                  />
+                </div>
               </div>
+              {isOverLimit && (
+                <a
+                  href={'/organizations/' + organizationId + '/billing'}
+                  className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+                  aria-label="Upgrade plan to add more members"
+                >
+                  Upgrade
+                </a>
+              )}
+            </div>
+          )}
+
+{isAdmin && isOverLimit && (
+  <div
+    className={'flex items-start justify-between gap-3 p-3 rounded-lg border ' + (isDark ? 'bg-red-900/20 border-red-800/40' : 'bg-red-50 border-red-200')}
+    role="alert"
+    aria-label="Member overage billing notice"
+  >
+    <div>
+      <p className={'text-sm font-semibold ' + (isDark ? 'text-red-400' : 'text-red-700')}>
+        {'You have ' + overageCount + ' ' + (overageCount === 1 ? 'member' : 'members') + ' over your plan limit of ' + memberLimit + '.'}
+      </p>
+      <p className={'text-xs mt-0.5 ' + (isDark ? 'text-red-400/70' : 'text-red-600')}>
+        {'You are being charged $' + overageCount + '/mo in overage fees. Upgrade to include them in your plan.'}
+      </p>
+    </div>
+    <a
+      href={'/organizations/' + organizationId + '/billing'}
+      className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
+    >
+      Upgrade
+    </a>
+  </div>
+)}
+
+          {/* Role cap indicators */}
+          {isAdmin && (adminLimit !== null || editorLimit !== null) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {adminLimit !== null && (
+                <span
+                  className={'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ' + (adminAtCap ? 'bg-red-50 border-red-200 text-red-700' : (isDark ? 'bg-[#2D1B4E] border-purple-800/40 text-purple-400' : 'bg-purple-50 border-purple-200 text-purple-700'))}
+                  aria-label={'Admin role usage: ' + adminCount + ' of ' + adminLimit}
+                >
+                  {adminCount + ' / ' + adminLimit + ' admins'}
+                  {adminAtCap && <span className="ml-0.5 font-bold">· at limit</span>}
+                </span>
+              )}
+              {editorLimit !== null && (
+                <span
+                  className={'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ' + (editorAtCap ? 'bg-red-50 border-red-200 text-red-700' : (isDark ? 'bg-[#1D3461] border-blue-800/40 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-700'))}
+                  aria-label={'Editor role usage: ' + editorCount + ' of ' + editorLimit}
+                >
+                  {editorCount + ' / ' + editorLimit + ' editors'}
+                  {editorAtCap && <span className="ml-0.5 font-bold">· at limit</span>}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Dues reminder banner */}
+          {isAdmin && collectDues && unpaidCount > 0 && (
+            <div
+              className={'flex items-center justify-between p-3 rounded-lg border ' + (isDark ? 'bg-yellow-900/20 border-yellow-800/40' : 'bg-yellow-50 border-yellow-200')}
+              role="region"
+              aria-label="Dues reminder"
+            >
+              <span className={'text-sm font-medium ' + (isDark ? 'text-yellow-300' : 'text-yellow-800')}>
+                {unpaidCount + ' ' + (unpaidCount === 1 ? 'member has' : 'members have') + ' outstanding dues'}
+              </span>
               <button
                 onClick={handleSendReminders}
                 disabled={sendingReminder}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-1 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-1 transition-colors disabled:opacity-50"
                 aria-label={'Send dues reminder to ' + unpaidCount + ' unpaid members'}
               >
-                <Icon path={ICONS.mail} className="h-3.5 w-3.5" />
                 {sendingReminder ? 'Sending...' : 'Send Reminder'}
               </button>
             </div>
           )}
 
-          <div className={'grid grid-cols-1 gap-3 ' + (collectDues ? 'md:grid-cols-4' : 'md:grid-cols-3')}>
-            <div className="relative">
-              <label htmlFor="member-search" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Search</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
-                </div>
-                <input id="member-search" type="text" placeholder="Name, email, location..." value={searchQuery} onChange={function(e) { setSearchQuery(e.target.value); }} className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
-              </div>
+          {/* Filters */}
+          <div className={'grid grid-cols-1 gap-3 ' + (isAdmin ? (collectDues ? 'md:grid-cols-4' : 'md:grid-cols-3') : '')}>
+            <div>
+              <label htmlFor="member-search" className={'block text-xs font-bold uppercase tracking-wide mb-1.5 ' + labelText}>Search</label>
+              <input
+                id="member-search"
+                type="text"
+                placeholder="Name, email, location..."
+                value={searchQuery}
+                onChange={function(e) { setSearchQuery(e.target.value); }}
+                className={'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ' + inputBg}
+              />
             </div>
 
+          {isAdmin && (
             <div>
-              <label htmlFor="role-filter" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Role</label>
-              <select id="role-filter" value={roleFilter} onChange={function(e) { setRoleFilter(e.target.value); }} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <label htmlFor="role-filter" className={'block text-xs font-bold uppercase tracking-wide mb-1.5 ' + labelText}>Role</label>
+              <select id="role-filter" value={roleFilter} onChange={function(e) { setRoleFilter(e.target.value); }} className={'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ' + inputBg}>
                 <option value="all">All Roles</option>
                 <option value="admin">Administrators</option>
-                <option value="moderator">Moderators</option>
+                <option value="editor">Editors</option>
                 <option value="member">Members</option>
                 <option value="guest">Guests</option>
               </select>
             </div>
+            )}
 
+           {isAdmin && (
             <div>
-              <label htmlFor="tag-filter" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Tag</label>
-              <select id="tag-filter" value={tagFilter} onChange={function(e) { setTagFilter(e.target.value); }} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" disabled={orgTags.length === 0}>
+              <label htmlFor="tag-filter" className={'block text-xs font-bold uppercase tracking-wide mb-1.5 ' + labelText}>Tag</label>
+              <select id="tag-filter" value={tagFilter} onChange={function(e) { setTagFilter(e.target.value); }} className={'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ' + inputBg} disabled={orgTags.length === 0}>
                 <option value="all">All Tags</option>
                 {orgTags.map(function(tag) { return <option key={tag.id} value={tag.id}>{tag.name}</option>; })}
               </select>
             </div>
+            )}
 
-            {collectDues && (
+          {isAdmin && collectDues && (
               <div>
-                <label htmlFor="dues-filter" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Dues Status</label>
-                <select id="dues-filter" value={duesFilter} onChange={function(e) { setDuesFilter(e.target.value); }} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <label htmlFor="dues-filter" className={'block text-xs font-bold uppercase tracking-wide mb-1.5 ' + labelText}>Dues Status</label>
+                <select id="dues-filter" value={duesFilter} onChange={function(e) { setDuesFilter(e.target.value); }} className={'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ' + inputBg}>
                   <option value="all">All Members</option>
                   <option value="paid">Paid</option>
                   <option value="unpaid">Unpaid / Expired</option>
@@ -667,21 +781,24 @@ function MemberDirectory() {
           </div>
 
           {hasFilters && (
-            <button onClick={handleClearFilters} className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors">
-              <Icon path={ICONS.x} className="h-3.5 w-3.5" />
-              Clear All Filters
+            <button
+              onClick={handleClearFilters}
+              className={'inline-flex items-center px-3 py-2 text-xs font-semibold rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 ' + (isDark ? 'text-[#94A3B8] border-[#2A3550] hover:text-red-400 hover:border-red-800 hover:bg-red-900/20' : 'text-gray-500 border-gray-200 hover:text-red-600 hover:border-red-200 hover:bg-red-50')}
+            >
+              Clear Filters
             </button>
           )}
         </div>
 
         {filteredMembers.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-            <Icon path={ICONS.users} className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-gray-700 mb-1">No Members Found</h3>
-            <p className="text-gray-500 text-sm mb-6">{hasFilters ? 'No members match your current filters.' : 'This organization has no members yet.'}</p>
+          <div className={'text-center py-16 rounded-xl border ' + cardBg + ' ' + cardBorder}>
+            <h3 className={'text-lg font-semibold mb-1 ' + textPrimary}>No Members Found</h3>
+            <p className={'text-sm mb-6 ' + textMuted}>{hasFilters ? 'No members match your current filters.' : 'This organization has no members yet.'}</p>
             {hasFilters && (
-              <button onClick={handleClearFilters} className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.x} className="h-4 w-4" />
+              <button
+                onClick={handleClearFilters}
+                className={'px-5 py-2.5 border font-semibold rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors ' + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845]' : 'border-gray-300 text-gray-700 hover:bg-gray-50')}
+              >
                 Clear Filters
               </button>
             )}
@@ -690,10 +807,21 @@ function MemberDirectory() {
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" role="list" aria-label="Organization members">
               {filteredMembers.map(function(member) {
-                var showDuesRow = collectDues && (isAdmin || member.user_id === currentUserId);
+                var showDuesRow = collectDues && isAdmin;
+                var showRoleRow = isAdmin && member.user_id !== currentUserId;
                 return (
-                  <div key={member.user_id} role="listitem" className="flex flex-col rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                  <div key={member.user_id} role="listitem" className={'flex flex-col rounded-xl overflow-hidden border shadow-sm ' + cardBorder}>
                     <MemberCard member={member} role={member.role} organizationId={organizationId} isAdmin={isAdmin} />
+                    {showRoleRow && (
+                      <RoleRow
+                        member={member}
+                        adminAtCap={adminAtCap}
+                        editorAtCap={editorAtCap}
+                        onRoleChange={handleRoleChange}
+                        changingRoleId={changingRoleId}
+                        isDark={isDark}
+                      />
+                    )}
                     {showDuesRow && (
                       <DuesRow
                         membership={member}
@@ -702,13 +830,14 @@ function MemberDirectory() {
                         onMarkPaid={function() { setMarkPaidTarget(member); }}
                         onMarkUnpaid={function() { handleMarkUnpaid(member); }}
                         toggling={togglingId === member.user_id}
+                        isDark={isDark}
                       />
                     )}
                   </div>
                 );
               })}
             </div>
-            <p className="text-center text-xs text-gray-400 pb-4">
+            <p className={'text-center text-xs pb-4 ' + textMuted}>
               {'Showing ' + filteredMembers.length + ' of ' + members.length + ' member' + (members.length !== 1 ? 's' : '')}
             </p>
           </>

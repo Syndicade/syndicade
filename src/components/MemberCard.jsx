@@ -22,12 +22,12 @@ function getAvatarColor(name) {
 }
 
 function getRoleDisplay(role) {
-  var map = { admin: 'Administrator', moderator: 'Moderator', member: 'Member', guest: 'Guest' };
+  var map = { admin: 'Administrator', editor: 'Editor', member: 'Member', guest: 'Guest' };
   return map[role] || role;
 }
 
 function getRoleBadgeColor(role) {
-  var map = { admin: 'bg-purple-100 text-purple-800', moderator: 'bg-blue-100 text-blue-800', member: 'bg-gray-100 text-gray-800', guest: 'bg-yellow-100 text-yellow-800' };
+  var map = { admin: 'bg-purple-100 text-purple-800', editor: 'bg-blue-100 text-blue-800', member: 'bg-gray-100 text-gray-800', guest: 'bg-yellow-100 text-yellow-800' };
   return map[role] || 'bg-gray-100 text-gray-800';
 }
 

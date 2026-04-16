@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import usePlanLimits from '../hooks/usePlanLimits';
+import { Lock } from 'lucide-react';
 
 function Icon({ path, className }) {
   return (
@@ -230,6 +232,55 @@ export default function MembershipTiers({ organizationId }) {
   var [editTarget, setEditTarget] = useState(null);
   var [deleteTarget, setDeleteTarget] = useState(null);
   var [showCreate, setShowCreate] = useState(false);
+  var { plan } = usePlanLimits(organizationId);
+  var isGrowthPlus = plan === 'growth' || plan === 'pro';
+
+  if (!isGrowthPlus) {
+  return (
+    <div className="relative" style={{ minHeight: '60vh' }}>
+      <div className="opacity-20 pointer-events-none select-none" aria-hidden="true">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">Membership Tiers</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Define tiers with preset dues amounts and durations.</p>
+          </div>
+        </div>
+        <ul className="space-y-2">
+          {['General', 'Senior', 'Student'].map(function(n) {
+            return <li key={n} className="h-14 bg-gray-100 border border-gray-200 rounded-lg" />;
+          })}
+        </ul>
+      </div>
+      <div className="absolute inset-0 flex items-start justify-center pt-16 px-4" style={{ background: 'rgba(14,21,35,0.6)' }}>
+        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-8 max-w-md w-full text-center" role="region" aria-label="Feature locked">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+            <Lock size={20} color="#8B5CF6" aria-hidden="true" />
+          </div>
+          <span className="inline-block text-xs font-bold uppercase tracking-widest mb-3 px-3 py-1 rounded-full" style={{ background: 'rgba(139,92,246,0.15)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.3)' }}>
+            Available on Growth
+          </span>
+          <h2 className="text-xl font-bold text-white mb-2">Membership Tiers</h2>
+          <p className="text-sm mb-6" style={{ color: '#94A3B8' }}>
+            Create paid and free membership levels, set renewal schedules, and collect dues — all in one place.
+          </p>
+          <ul className="text-left text-sm mb-6 space-y-2" style={{ color: '#CBD5E1' }}>
+            {['Create unlimited membership tiers', 'Set monthly or annual dues', 'Collect payments via Stripe', 'Track member payment status'].map(function(item) {
+              return (
+                <li key={item} className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" aria-hidden="true" />
+                  {item}
+                </li>
+              );
+            })}
+          </ul>
+          <a href="billing" className="block w-full py-3 rounded-lg font-semibold text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" style={{ background: '#3B82F6' }}>
+            Upgrade to Growth →
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   useEffect(function() {
     if (organizationId) fetchTiers();

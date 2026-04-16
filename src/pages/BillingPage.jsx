@@ -81,6 +81,7 @@ function BillingPage() {
   var [checkoutLoading, setCheckoutLoading] = useState(null);
   var [billingInterval, setBillingInterval] = useState('month');
   var [orgName, setOrgName] = useState('');
+  var [memberCount, setMemberCount] = useState(0);
 
   useEffect(function() {
     if (organizationId) loadData();
@@ -103,6 +104,12 @@ function BillingPage() {
         supabase.from('organizations').select('name').eq('id', organizationId).single(),
         supabase.from('subscriptions').select('*').eq('organization_id', organizationId).maybeSingle(),
       ]);
+      var memberCountResult = await supabase
+  .from('memberships')
+  .select('id', { count: 'exact', head: true })
+  .eq('organization_id', organizationId)
+  .eq('status', 'active');
+setMemberCount(memberCountResult.count || 0);
       if (orgResult.data) setOrgName(orgResult.data.name);
       setSubscription(subResult.data || null);
     } catch (err) {
@@ -174,6 +181,9 @@ function BillingPage() {
   var trialEnds = subscription?.trial_ends_at ? new Date(subscription.trial_ends_at) : null;
   var periodEnds = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
   var daysLeftInTrial = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / (1000 * 60 * 60 * 24))) : 0;
+  var planMemberLimit = currentPlan ? currentPlan.members : null;
+  var memberOverage = planMemberLimit !== null && memberCount > planMemberLimit ? memberCount - planMemberLimit : 0;
+  var overageCost = memberOverage * 1;
 
   // Theme classes
   var pageBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-50';
@@ -254,6 +264,17 @@ function BillingPage() {
                     Payment failed. Please update your payment method.
                   </p>
                 )}
+
+{memberOverage > 0 && (
+  <div className={'mt-3 p-3 rounded-lg border ' + (isDark ? 'bg-red-900/20 border-red-800/40' : 'bg-red-50 border-red-200')}>
+    <p className={'text-sm font-semibold ' + (isDark ? 'text-red-400' : 'text-red-700')}>
+      {'Member overage: ' + memberOverage + ' ' + (memberOverage === 1 ? 'member' : 'members') + ' over plan limit'}
+    </p>
+    <p className={'text-xs mt-0.5 ' + (isDark ? 'text-red-400/70' : 'text-red-600')}>
+      {'$' + overageCost + '/mo extra · $1 per member over your ' + planMemberLimit + '-member limit. Upgrade to avoid overage charges.'}
+    </p>
+  </div>
+)}
 
                 <div className="mt-3">
                   <button
