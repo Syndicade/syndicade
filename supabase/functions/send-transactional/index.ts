@@ -6,12 +6,42 @@ const corsHeaders = {
 }
 
 const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>'
+const ICS_BASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co/functions/v1/event-ics'
 
 function brandFooter() {
   return (
     '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
-    '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
+    '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <a href="https://syndicade.org" style="text-decoration:none;"><span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></a></p>' +
     '</td></tr>'
+  )
+}
+
+function toGCalDate(iso: string) {
+  return iso.replace(/[-:]/g, '').replace(/\.\d{3}/, '').replace('Z', 'Z')
+}
+
+function calendarButton(eventId: string | undefined, title: string, startISO: string, endISO: string, location: string) {
+  if (!eventId || !startISO) return ''
+  var start = toGCalDate(startISO)
+  var end = toGCalDate(endISO || startISO)
+  var gcUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+    '&text=' + encodeURIComponent(title || '') +
+    '&dates=' + start + '/' + end +
+    (location ? '&location=' + encodeURIComponent(location) : '')
+  var outlookUrl = 'https://outlook.live.com/calendar/0/deeplink/compose?rru=addevent' +
+    '&subject=' + encodeURIComponent(title || '') +
+    '&startdt=' + encodeURIComponent(startISO) +
+    '&enddt=' + encodeURIComponent(endISO || startISO) +
+    (location ? '&location=' + encodeURIComponent(location) : '')
+  var icsUrl = ICS_BASE_URL + '?event_id=' + eventId
+  return (
+    '<div style="text-align:center;margin:16px 0 0;">' +
+    '<p style="font-size:12px;color:#6b7280;margin:0 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Add to Calendar</p>' +
+    '<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">' +
+    '<a href="' + gcUrl + '" target="_blank" style="display:inline-block;padding:8px 16px;background:#f9fafb;border:1px solid #e5e7eb;color:#374151;font-size:13px;font-weight:600;border-radius:8px;text-decoration:none;">Google Calendar</a>' +
+    '<a href="' + outlookUrl + '" target="_blank" style="display:inline-block;padding:8px 16px;background:#f9fafb;border:1px solid #e5e7eb;color:#374151;font-size:13px;font-weight:600;border-radius:8px;text-decoration:none;">Outlook</a>' +
+    '<a href="' + icsUrl + '" style="display:inline-block;padding:8px 16px;background:#f9fafb;border:1px solid #e5e7eb;color:#374151;font-size:13px;font-weight:600;border-radius:8px;text-decoration:none;">Download .ics</a>' +
+    '</div></div>'
   )
 }
 
@@ -47,9 +77,10 @@ function buildRsvpConfirmation(data: any) {
     '<tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventDate + '</td></tr>' +
     (data.eventLocation ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Location</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventLocation + '</td></tr>' : '') +
     '</table>' +
-    '<p style="text-align:center;margin:0 0 8px;">' +
+    '<p style="text-align:center;margin:0 0 0px;">' +
     '<a href="' + data.eventUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">View Event Details</a>' +
     '</p>' +
+    calendarButton(data.eventId, data.eventTitle, data.startISO, data.endISO, data.eventLocation) +
     '</td></tr>' +
     brandFooter()
   return { subject, html: wrapEmail(inner) }
@@ -85,9 +116,10 @@ function buildTicketConfirmation(data: any) {
     (data.eventLocation ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Location</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventLocation + '</td></tr>' : '') +
     '</table>' +
     lineItemsHtml +
-    '<p style="text-align:center;margin:0 0 8px;">' +
+    '<p style="text-align:center;margin:0 0 0px;">' +
     '<a href="' + data.eventUrl + '" style="display:inline-block;padding:12px 28px;background:#F5B731;color:#0E1523;font-size:14px;font-weight:800;border-radius:8px;text-decoration:none;">View Event Details</a>' +
     '</p>' +
+    calendarButton(data.eventId, data.eventTitle, data.startISO, data.endISO, data.eventLocation) +
     '</td></tr>' +
     brandFooter()
   return { subject, html: wrapEmail(inner) }
@@ -107,9 +139,10 @@ function buildGuestRsvpConfirmation(data: any) {
     (data.guestCount && data.guestCount > 1 ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Guests</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.guestCount + ' people</td></tr>' : '') +
     '</table>' +
     '<p style="font-size:13px;color:#6b7280;text-align:center;margin:0 0 16px;">Organized by ' + (data.orgName || 'the hosting organization') + '</p>' +
-    '<p style="text-align:center;margin:0 0 8px;">' +
+    '<p style="text-align:center;margin:0 0 0px;">' +
     '<a href="' + data.eventUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">View Event Details</a>' +
     '</p>' +
+    calendarButton(data.eventId, data.eventTitle, data.startISO, data.endISO, data.eventLocation) +
     '</td></tr>' +
     brandFooter()
   return { subject, html: wrapEmail(inner) }
