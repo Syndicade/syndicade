@@ -395,6 +395,7 @@ export default function EventDiscovery() {
       toast.success('RSVP submitted successfully!');
       var eventDate = new Date(selectedEvent.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
       var eventTime = new Date(selectedEvent.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+      console.log('DEBUG selectedEvent.id:', selectedEvent.id);
       fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
@@ -410,6 +411,7 @@ export default function EventDiscovery() {
             eventDate: eventDate + ' at ' + eventTime,
             eventLocation: selectedEvent.is_virtual ? 'Virtual Event' : (selectedEvent.location || ''),
             eventUrl: window.location.origin + '/events/' + selectedEvent.id,
+                      eventId: selectedEvent.id,
           },
         }),
       });
