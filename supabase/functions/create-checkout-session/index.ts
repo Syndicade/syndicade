@@ -6,10 +6,11 @@ var corsHeaders = {
 var PRICE_IDS = {
   starter_month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
   starter_year:  'price_1TMnuAKMpHjSZayWbYHYUoS8',
-  growth_month:  'price_1TMnuAKMpHjSZayWrkMIfcsJ',
+  growth_month:  'price_1TOKEKKMpHjSZayWoryYepSM',
   growth_year:   'price_1TMnu9KMpHjSZayW67fBSDzC',
   pro_month:     'price_1TMnu8KMpHjSZayWRcSF5Qez',
   pro_year:      'price_1TMnu7KMpHjSZayW34qmec4T',
+  student_month: 'price_1TOKB2KMpHjSZayWoq7QSqOA',
 }
 
 var TRIAL_DAYS = 14

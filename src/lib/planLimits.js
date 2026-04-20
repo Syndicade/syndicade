@@ -18,6 +18,7 @@ export var PLAN_LIMITS = {
     has_full_analytics: false,
     featured_placements_per_year: 0,
     storage_addon_available: false,
+    can_pause: false,
   },
   growth: {
     members: 150,
@@ -38,6 +39,7 @@ export var PLAN_LIMITS = {
     has_full_analytics: true,
     featured_placements_per_year: 0,
     storage_addon_available: true,
+    can_pause: false,
   },
   pro: {
     members: 300,
@@ -58,5 +60,53 @@ export var PLAN_LIMITS = {
     has_full_analytics: true,
     featured_placements_per_year: 1,
     storage_addon_available: true,
-  }
+    can_pause: false,
+  },
+  student: {
+    members: 50,
+    storage_gb: 2,
+    pages: 1,
+    admin_limit: 3,
+    editor_limit: 2,
+    email_sends_per_month: 0,
+    ticket_limit_per_event: 0,
+    can_blast_email: false,
+    can_use_newsletter: false,
+    can_collect_dues: false,
+    can_sell_tickets: false,
+    can_connect_custom_domain: false,
+    can_remove_branding: false,
+    has_ai_assistant: false,
+    has_priority_support: false,
+    has_full_analytics: false,
+    featured_placements_per_year: 0,
+    storage_addon_available: false,
+    can_pause: true,
+    pause_months_per_year: 6,
+  },
+};
+
+export var STRIPE_PRICE_IDS = {
+  starter: {
+    month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
+    year: 'price_1TMnuAKMpHjSZayWbYHYUoS8',
+  },
+  growth: {
+    month: 'price_1TOKEKKMpHjSZayWoryYepSM',
+    year: 'price_1TMnu9KMpHjSZayW67fBSDzC',
+  },
+  pro: {
+    month: 'price_1TMnu8KMpHjSZayWRcSF5Qez',
+    year: 'price_1TMnu7KMpHjSZayW34qmec4T',
+  },
+  student: {
+    month: 'price_1TOKB2KMpHjSZayWoq7QSqOA',
+  },
+};
+
+export var PLAN_DISPLAY = {
+  starter: { label: 'Starter', monthly: 29.99, annual: 299.90, effectiveMonthly: 24.99 },
+  growth: { label: 'Growth', monthly: 49.99, annual: 499.90, effectiveMonthly: 41.66 },
+  pro: { label: 'Pro', monthly: 69.99, annual: 699.90, effectiveMonthly: 58.32 },
+  student: { label: 'Student', monthly: 19.99, annual: null, effectiveMonthly: 19.99 },
 };

@@ -128,20 +128,40 @@ serve(async (req) => {
         .single()
 
       if (subRecord) {
-        var status = subscription.status
-        var priceId = subscription.items?.data?.[0]?.price?.id
-        var planName = 'starter'
-        if (priceId && priceId.includes('growth')) planName = 'growth'
-        else if (priceId && priceId.includes('pro')) planName = 'pro'
+var status = subscription.status
+var priceId = subscription.items?.data?.[0]?.price?.id
+var stripeSubId = subscription.id
 
-        await supabase.from('subscriptions').update({
-          status: status,
-          plan: planName,
-          current_period_end: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000).toISOString()
-            : null,
-          updated_at: new Date().toISOString(),
-        }).eq('stripe_customer_id', customerId)
+var PRICE_TO_PLAN: Record<string, string> = {
+  'price_1TMnuAKMpHjSZayWhfMtS8AB': 'starter',
+  'price_1TMnuAKMpHjSZayWbYHYUoS8': 'starter',
+  'price_1TOKEKKMpHjSZayWoryYepSM': 'growth',
+  'price_1TMnu9KMpHjSZayW67fBSDzC': 'growth',
+  'price_1TMnu8KMpHjSZayWRcSF5Qez': 'pro',
+  'price_1TMnu7KMpHjSZayW34qmec4T': 'pro',
+  'price_1TOKB2KMpHjSZayWoq7QSqOA': 'student',
+}
+var planName = (priceId && PRICE_TO_PLAN[priceId]) || 'starter'
+
+var billingInterval = 'month'
+var yearlyPrices = [
+  'price_1TMnuAKMpHjSZayWbYHYUoS8',
+  'price_1TMnu9KMpHjSZayW67fBSDzC',
+  'price_1TMnu7KMpHjSZayW34qmec4T',
+]
+if (priceId && yearlyPrices.includes(priceId)) billingInterval = 'year'
+
+await supabase.from('subscriptions').update({
+  status: status,
+  plan: planName,
+  billing_interval: billingInterval,
+  stripe_subscription_id: stripeSubId,
+  stripe_price_id: priceId || null,
+  current_period_end: subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null,
+  updated_at: new Date().toISOString(),
+}).eq('stripe_customer_id', customerId)
       }
     }
 

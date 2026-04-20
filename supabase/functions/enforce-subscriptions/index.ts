@@ -174,6 +174,138 @@ serve(async (req) => {
         // Update account_status to iced
         await supabase.from('organizations').update({ account_status: 'iced' }).eq('id', org.id);
       }
+      // ── Student plan pause activation ─────────────────────────────────────
+      if (org.account_status !== 'paused') {
+        const { data: pauseOrg } = await supabase
+          .from('organizations')
+          .select('pause_starts_at, pause_months_used_this_year, pause_year, edu_email_verified')
+          .eq('id', org.id)
+          .maybeSingle();
+
+        if (pauseOrg && pauseOrg.pause_starts_at) {
+          const pauseStart = new Date(pauseOrg.pause_starts_at);
+          if (pauseStart <= now) {
+            // Check 6-month annual limit
+            const currentYear = now.getFullYear();
+            var monthsUsed = (pauseOrg.pause_year === currentYear ? pauseOrg.pause_months_used_this_year : 0) || 0;
+            if (monthsUsed < 6) {
+              // Pause the Stripe subscription
+              const { data: subRow } = await supabase
+                .from('subscriptions')
+                .select('stripe_subscription_id, stripe_customer_id')
+                .eq('organization_id', org.id)
+                .eq('status', 'active')
+                .maybeSingle();
+
+              if (subRow && subRow.stripe_subscription_id) {
+                try {
+                  await fetch('https://api.stripe.com/v1/subscriptions/' + subRow.stripe_subscription_id, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': 'Bearer ' + Deno.env.get('STRIPE_SECRET_KEY'),
+                      'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                      'pause_collection[behavior]': 'void',
+                    }).toString(),
+                  });
+                } catch (stripeErr) {
+                  console.error('Stripe pause error:', stripeErr);
+                }
+              }
+
+              await supabase.from('organizations').update({
+                account_status: 'paused',
+                pause_year: currentYear,
+              }).eq('id', org.id);
+
+              await logEvent(org.id, 'student_pause_activated');
+
+              if (org.contact_email) {
+                await sendEmail(
+                  org.contact_email,
+                  'Your Syndicade account is now paused',
+                  '<p>Hi ' + org.name + ',</p>' +
+                  '<p>Your account has been paused as requested. You won\'t be charged while your account is paused.</p>' +
+                  '<p>Your data is safe and waiting for you. Log in any time to resume your account.</p>' +
+                  '<p><a href="https://syndicade.org" style="background:#3B82F6;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Resume My Account</a></p>' +
+                  '<p>— The Syndicade Team</p>'
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // ── Student plan pause resume ──────────────────────────────────────────
+      if (org.account_status === 'paused') {
+        const { data: pauseOrg } = await supabase
+          .from('organizations')
+          .select('pause_starts_at, pause_resumes_at, pause_months_used_this_year, pause_year')
+          .eq('id', org.id)
+          .maybeSingle();
+
+        if (pauseOrg && pauseOrg.pause_resumes_at) {
+          const resumeDate = new Date(pauseOrg.pause_resumes_at);
+          if (resumeDate <= now) {
+            // Calculate months paused
+            var monthsPaused = 0;
+            if (pauseOrg.pause_starts_at) {
+              var pausedMs = resumeDate.getTime() - new Date(pauseOrg.pause_starts_at).getTime();
+              monthsPaused = Math.ceil(pausedMs / (1000 * 60 * 60 * 24 * 30));
+            }
+
+            const currentYear = now.getFullYear();
+            var monthsUsed = (pauseOrg.pause_year === currentYear ? pauseOrg.pause_months_used_this_year : 0) || 0;
+
+            // Resume Stripe subscription
+            const { data: subRow } = await supabase
+              .from('subscriptions')
+              .select('stripe_subscription_id')
+              .eq('organization_id', org.id)
+              .maybeSingle();
+
+            if (subRow && subRow.stripe_subscription_id) {
+              try {
+                await fetch('https://api.stripe.com/v1/subscriptions/' + subRow.stripe_subscription_id, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': 'Bearer ' + Deno.env.get('STRIPE_SECRET_KEY'),
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                  },
+                  body: new URLSearchParams({
+                    'pause_collection': '',
+                  }).toString(),
+                });
+              } catch (stripeErr) {
+                console.error('Stripe resume error:', stripeErr);
+              }
+            }
+
+            await supabase.from('organizations').update({
+              account_status: 'subscribed',
+              pause_starts_at: null,
+              pause_resumes_at: null,
+              pause_scheduled_at: null,
+              pause_months_used_this_year: monthsUsed + monthsPaused,
+              pause_year: currentYear,
+            }).eq('id', org.id);
+
+            await logEvent(org.id, 'student_pause_resumed');
+
+            if (org.contact_email) {
+              await sendEmail(
+                org.contact_email,
+                'Welcome back — your Syndicade account is active',
+                '<p>Hi ' + org.name + ',</p>' +
+                '<p>Your account has been resumed and billing is active again. Welcome back!</p>' +
+                '<p><a href="https://syndicade.org" style="background:#22C55E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Go to My Dashboard</a></p>' +
+                '<p>— The Syndicade Team</p>'
+              );
+            }
+          }
+        }
+      }
     }
 
     return new Response(JSON.stringify({ ok: true, processed: orgs?.length || 0 }), {
