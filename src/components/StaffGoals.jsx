@@ -11,12 +11,18 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 var PLAN_PRICES = {
-  starter: { monthly: 19.99, annual_mo: 16.66 },
-  growth:  { monthly: 39.00, annual_mo: 32.50 },
-  pro:     { monthly: 69.00, annual_mo: 57.50 }
+  starter: { monthly: 29.99, annual_mo: 24.99 },
+  growth:  { monthly: 49.99, annual_mo: 41.66 },
+  pro:     { monthly: 69.99, annual_mo: 58.32 },
+  student: { monthly: 19.99, annual_mo: 19.99 },
 };
 
-var PLAN_COLORS = { starter: '#3B82F6', growth: '#8B5CF6', pro: '#F5B731' };
+var PLAN_COLORS = {
+  starter: '#3B82F6',
+  growth:  '#8B5CF6',
+  pro:     '#F5B731',
+  student: '#22C55E',
+};
 
 var MILESTONES = [
   { label: 'Break-even (~3 Starter orgs)', target: 47,    type: 'mrr' },
@@ -55,6 +61,8 @@ function goalBarColor(pct) {
 function subMRR(sub) {
   var p = PLAN_PRICES[sub.plan];
   if (!p) return 0;
+  // Student is always monthly-only
+  if (sub.plan === 'student') return p.monthly;
   return sub.billing_interval === 'annual' ? p.annual_mo : p.monthly;
 }
 
@@ -87,8 +95,8 @@ export default function StaffGoals() {
   var [historyData, setHistoryData] = useState([]);
   var [infra,       setInfra]       = useState({ supabase_cost: 25, vercel_cost: 20, resend_cost: 0, other_cost: 0 });
   var [monthlyGoal, setMonthlyGoal] = useState(5000);
-  var [proj,        setProj]        = useState({ starter: 0, growth: 0, pro: 0, tickets: 0 });
-  var [period,      setPeriod]      = useState('monthly'); // monthly | quarterly | yearly
+  var [proj,        setProj]        = useState({ starter: 0, growth: 0, pro: 0, student: 0, tickets: 0 });
+  var [period,      setPeriod]      = useState('monthly');
   var [savingKey,   setSavingKey]   = useState(null);
 
   useEffect(function () { loadAll(); }, []);
@@ -127,7 +135,7 @@ export default function StaffGoals() {
     if (map['revenue_monthly_goal']) setMonthlyGoal(parseFloat(map['revenue_monthly_goal']));
   }
 
-async function saveContent(key, value) {
+  async function saveContent(key, value) {
     setSavingKey(key);
     var { data: { user } } = await supabase.auth.getUser();
 
@@ -163,7 +171,6 @@ async function saveContent(key, value) {
     if (error) { toast.error('Failed to save.'); } else { mascotSuccessToast('Saved.'); }
   }
 
-  // Build 12-month history from subscription created_at / canceled_at
   function buildHistory(rows) {
     var now = new Date();
     var months = [];
@@ -172,7 +179,7 @@ async function saveContent(key, value) {
       var end   = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
       var mrr   = 0;
       rows.forEach(function (sub) {
-        var created   = new Date(sub.created_at);
+        var created  = new Date(sub.created_at);
         var canceled = sub.canceled_at ? new Date(sub.canceled_at) : null;
         var activeInMonth = created <= end && (!canceled || canceled > start);
         if (activeInMonth) mrr += subMRR(sub);
@@ -193,6 +200,7 @@ async function saveContent(key, value) {
       starter: { count: 0, mrr: 0, mo: 0, yr: 0 },
       growth:  { count: 0, mrr: 0, mo: 0, yr: 0 },
       pro:     { count: 0, mrr: 0, mo: 0, yr: 0 },
+      student: { count: 0, mrr: 0, mo: 0, yr: 0 },
     };
     subs.forEach(function (sub) {
       var rev = subMRR(sub);
@@ -201,8 +209,13 @@ async function saveContent(key, value) {
       if (!b) return;
       b.count++;
       b.mrr += rev;
-      var isAnnual = sub.billing_interval === 'annual' || sub.interval === 'annual';
-      if (isAnnual) { b.yr++; } else { b.mo++; }
+      // Student is always monthly — no annual option
+      if (sub.plan === 'student') {
+        b.mo++;
+      } else {
+        var isAnnual = sub.billing_interval === 'annual' || sub.interval === 'annual';
+        if (isAnnual) { b.yr++; } else { b.mo++; }
+      }
     });
     return { total: Math.round(total * 100) / 100, byPlan: byPlan };
   }
@@ -221,12 +234,12 @@ async function saveContent(key, value) {
   var projAdded = proj.starter * PLAN_PRICES.starter.monthly
                 + proj.growth  * PLAN_PRICES.growth.monthly
                 + proj.pro     * PLAN_PRICES.pro.monthly
+                + proj.student * PLAN_PRICES.student.monthly
                 + proj.tickets;
   var projTotal  = mrrData.total + projAdded;
   var projNet    = projTotal - totalInfra;
   var projMargin = projTotal > 0 ? Math.round((projNet / projTotal) * 100) : 0;
 
-  // Insights
   function getInsights() {
     var list = [];
     var gShare  = mrrData.total > 0 ? Math.round((mrrData.byPlan.growth.mrr / mrrData.total) * 100) : 0;
@@ -241,7 +254,10 @@ async function saveContent(key, value) {
       list.push(fmt(gap) + ' away from your ' + fmt(monthlyGoal) + ' goal. Adding ' + gNeeded + ' Growth or ' + pNeeded + ' Pro orgs would get you there.');
     }
     if (mrrData.byPlan.pro.count > 0 && mrrData.byPlan.starter.count > 0) {
-      list.push('Pro subscriptions generate ' + fmt(PLAN_PRICES.pro.monthly) + '/org — Starter requires 3.5x more customers for equivalent revenue.');
+      list.push('Pro subscriptions generate ' + fmt(PLAN_PRICES.pro.monthly) + '/org — Starter requires 2.3x more customers for equivalent revenue.');
+    }
+    if (mrrData.byPlan.student.count > 0) {
+      list.push('Student plan has ' + mrrData.byPlan.student.count + ' org' + (mrrData.byPlan.student.count !== 1 ? 's' : '') + ' generating ' + fmtDecimal(mrrData.byPlan.student.mrr) + ' MRR. These are upgrade candidates once they graduate.');
     }
     if (margin < 0) {
       list.push('Infrastructure costs currently exceed revenue. You need ' + Math.ceil(totalInfra / PLAN_PRICES.starter.monthly) + ' Starter orgs just to break even on infra.');
@@ -249,7 +265,7 @@ async function saveContent(key, value) {
     return list;
   }
 
-  // ── Skeleton pieces ────────────────────────────────────────────────────────
+  // ── Skeleton ───────────────────────────────────────────────────────────────
 
   function KpiSkeleton() {
     return (
@@ -259,8 +275,6 @@ async function saveContent(key, value) {
       </div>
     );
   }
-
-  // ── KPI card ───────────────────────────────────────────────────────────────
 
   function KpiCard(props) {
     var label = props.label;
@@ -293,8 +307,6 @@ async function saveContent(key, value) {
           <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>Revenue Goals</h2>
           <p style={{ fontSize: '13px', color: '#64748B', margin: '4px 0 0' }}>Live MRR, projections, milestones, and growth tracking.</p>
         </div>
-
-        {/* Period toggle */}
         <div style={{ display: 'flex', gap: '4px', background: '#1A2035', border: '1px solid #2A3550', borderRadius: '8px', padding: '3px' }} role="group" aria-label="Select time period">
           {['monthly', 'quarterly', 'yearly'].map(function (p) {
             var on = period === p;
@@ -303,11 +315,7 @@ async function saveContent(key, value) {
                 key={p}
                 onClick={function () { setPeriod(p); }}
                 aria-pressed={on}
-                style={{
-                  padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                  background: on ? '#3B82F6' : 'transparent',
-                  color: on ? '#FFFFFF' : '#64748B'
-                }}
+                style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? '#3B82F6' : 'transparent', color: on ? '#FFFFFF' : '#64748B' }}
               >
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
@@ -322,40 +330,11 @@ async function saveContent(key, value) {
           [1,2,3,4,5].map(function (i) { return <KpiSkeleton key={i} />; })
         ) : (
           <>
-            <KpiCard
-              label={periodLabel + ' Revenue'}
-              value={fmtDecimal(mrrData.total * periodMultiplier)}
-              sub={'actual from subscriptions'}
-              color="#3B82F6"
-              icon={DollarSign}
-            />
-            <KpiCard
-              label="ARR"
-              value={fmtDecimal(mrrData.total * 12)}
-              sub="MRR × 12"
-              color="#8B5CF6"
-              icon={TrendingUp}
-            />
-            <KpiCard
-              label={'Net / ' + periodLabel}
-              value={fmtDecimal(netMRR * periodMultiplier)}
-              sub={'after $' + Math.round(totalInfra) + '/mo infra'}
-              color={netMRR >= 0 ? '#22C55E' : '#EF4444'}
-              icon={Minus}
-            />
-            <KpiCard
-              label="Margin"
-              value={margin + '%'}
-              color={margin >= 70 ? '#22C55E' : margin >= 40 ? '#F5B731' : '#EF4444'}
-              icon={Percent}
-            />
-            <KpiCard
-              label="Active Orgs"
-              value={totalOrgs}
-              sub={'paying subscribers'}
-              color="#F5B731"
-              icon={Users}
-            />
+            <KpiCard label={periodLabel + ' Revenue'} value={fmtDecimal(mrrData.total * periodMultiplier)} sub={'actual from subscriptions'} color="#3B82F6" icon={DollarSign} />
+            <KpiCard label="ARR" value={fmtDecimal(mrrData.total * 12)} sub="MRR × 12" color="#8B5CF6" icon={TrendingUp} />
+            <KpiCard label={'Net / ' + periodLabel} value={fmtDecimal(netMRR * periodMultiplier)} sub={'after $' + Math.round(totalInfra) + '/mo infra'} color={netMRR >= 0 ? '#22C55E' : '#EF4444'} icon={Minus} />
+            <KpiCard label="Margin" value={margin + '%'} color={margin >= 70 ? '#22C55E' : margin >= 40 ? '#F5B731' : '#EF4444'} icon={Percent} />
+            <KpiCard label="Active Orgs" value={totalOrgs} sub={'paying subscribers'} color="#F5B731" icon={Users} />
           </>
         )}
       </div>
@@ -363,15 +342,11 @@ async function saveContent(key, value) {
       {/* ── Monthly goal + progress ── */}
       <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
-            Monthly Revenue Goal
-          </p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>Monthly Revenue Goal</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ fontSize: '13px', color: '#64748B' }}>$</span>
             <input
-              type="number"
-              min="0"
-              value={monthlyGoal}
+              type="number" min="0" value={monthlyGoal}
               onChange={function (e) { setMonthlyGoal(parseFloat(e.target.value) || 0); }}
               onBlur={function () { saveContent('revenue_monthly_goal', monthlyGoal); }}
               aria-label="Monthly revenue goal in dollars"
@@ -380,14 +355,7 @@ async function saveContent(key, value) {
             <span style={{ fontSize: '11px', color: '#64748B' }}>{savingKey === 'revenue_monthly_goal' ? 'saving…' : ''}</span>
           </div>
         </div>
-        <div
-          style={{ background: '#0E1523', borderRadius: '99px', height: '10px', overflow: 'hidden' }}
-          role="progressbar"
-          aria-valuenow={goalPct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={'Revenue goal progress: ' + goalPct + '%'}
-        >
+        <div style={{ background: '#0E1523', borderRadius: '99px', height: '10px', overflow: 'hidden' }} role="progressbar" aria-valuenow={goalPct} aria-valuemin={0} aria-valuemax={100} aria-label={'Revenue goal progress: ' + goalPct + '%'}>
           <div style={{ width: goalPct + '%', height: '100%', background: goalBarColor(goalPct), borderRadius: '99px', transition: 'width 0.6s ease' }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
@@ -399,17 +367,16 @@ async function saveContent(key, value) {
       {/* ── Plan breakdown + Infra costs ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
 
-        {/* Plan breakdown */}
+        {/* Plan breakdown — all 4 plans */}
         <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>
-            Plan Breakdown
-          </p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>Plan Breakdown</p>
           {loading ? (
-            [1,2,3].map(function (i) { return <div key={i} style={{ height: '56px', background: '#0E1523', borderRadius: '8px', marginBottom: '8px' }} />; })
+            [1,2,3,4].map(function (i) { return <div key={i} style={{ height: '56px', background: '#0E1523', borderRadius: '8px', marginBottom: '8px' }} />; })
           ) : (
-            ['starter', 'growth', 'pro'].map(function (plan) {
+            ['starter', 'growth', 'pro', 'student'].map(function (plan) {
               var d = mrrData.byPlan[plan];
               var pct = mrrData.total > 0 ? Math.round((d.mrr / mrrData.total) * 100) : 0;
+              var isStudent = plan === 'student';
               return (
                 <div key={plan} style={{ padding: '11px 14px', background: '#0E1523', borderRadius: '8px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
@@ -426,7 +393,7 @@ async function saveContent(key, value) {
                     <div style={{ width: pct + '%', height: '100%', background: PLAN_COLORS[plan], borderRadius: '99px' }} />
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
-                    {d.mo} monthly · {d.yr} annual · {pct}% of MRR
+                    {isStudent ? (d.count + ' monthly · monthly only') : (d.mo + ' monthly · ' + d.yr + ' annual')} · {pct}% of MRR
                   </div>
                 </div>
               );
@@ -436,14 +403,12 @@ async function saveContent(key, value) {
 
         {/* Infrastructure costs */}
         <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>
-            Infrastructure Costs
-          </p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>Infrastructure Costs</p>
           {[
-            { key: 'supabase_cost', label: 'Supabase',  dbKey: 'infra_cost_supabase' },
-            { key: 'vercel_cost',   label: 'Vercel',    dbKey: 'infra_cost_vercel' },
-            { key: 'resend_cost',   label: 'Resend',    dbKey: 'infra_cost_resend' },
-            { key: 'other_cost',    label: 'Other',     dbKey: 'infra_cost_other' },
+            { key: 'supabase_cost', label: 'Supabase', dbKey: 'infra_cost_supabase' },
+            { key: 'vercel_cost',   label: 'Vercel',   dbKey: 'infra_cost_vercel' },
+            { key: 'resend_cost',   label: 'Resend',   dbKey: 'infra_cost_resend' },
+            { key: 'other_cost',    label: 'Other',    dbKey: 'infra_cost_other' },
           ].map(function (row) {
             return (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
@@ -451,8 +416,7 @@ async function saveContent(key, value) {
                 <span style={{ fontSize: '12px', color: '#64748B' }}>$</span>
                 <input
                   id={'infra-' + row.key}
-                  type="text" inputMode="numeric"
-                  min="0"
+                  type="text" inputMode="numeric" min="0"
                   value={infra[row.key]}
                   onChange={function (e) {
                     var k = row.key;
@@ -480,9 +444,7 @@ async function saveContent(key, value) {
 
       {/* ── MRR history chart ── */}
       <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 16px' }}>
-          MRR — Last 12 Months
-        </p>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 16px' }}>MRR — Last 12 Months</p>
         {loading ? (
           <div style={{ height: '200px', background: '#0E1523', borderRadius: '8px' }} aria-label="Loading chart" role="status" />
         ) : (
@@ -503,19 +465,16 @@ async function saveContent(key, value) {
 
       {/* ── Projection simulator ── */}
       <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 4px' }}>
-          Revenue Projection Simulator
-        </p>
-        <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 16px' }}>
-          Model growth scenarios on top of actual data. Sliders use monthly billing rates.
-        </p>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 4px' }}>Revenue Projection Simulator</p>
+        <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 16px' }}>Model growth scenarios on top of actual data. Sliders use monthly billing rates.</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
           {[
-            { key: 'starter', label: 'Additional Starter Orgs',  max: 500, rate: PLAN_PRICES.starter.monthly, prefix: '' },
-            { key: 'growth',  label: 'Additional Growth Orgs',   max: 300, rate: PLAN_PRICES.growth.monthly,  prefix: '' },
-            { key: 'pro',     label: 'Additional Pro Orgs',      max: 200, rate: PLAN_PRICES.pro.monthly,     prefix: '' },
-            { key: 'tickets', label: 'Est. Ticket Fees / month', max: 5000, rate: 1, prefix: '$' },
+            { key: 'starter', label: 'Additional Starter Orgs',  max: 500,  rate: PLAN_PRICES.starter.monthly, prefix: '' },
+            { key: 'growth',  label: 'Additional Growth Orgs',   max: 300,  rate: PLAN_PRICES.growth.monthly,  prefix: '' },
+            { key: 'pro',     label: 'Additional Pro Orgs',      max: 200,  rate: PLAN_PRICES.pro.monthly,     prefix: '' },
+            { key: 'student', label: 'Additional Student Orgs',  max: 200,  rate: PLAN_PRICES.student.monthly, prefix: '' },
+            { key: 'tickets', label: 'Est. Ticket Fees / month', max: 5000, rate: 1,                           prefix: '$' },
           ].map(function (s) {
             var added = s.key === 'tickets' ? proj[s.key] : proj[s.key] * s.rate;
             return (
@@ -533,10 +492,7 @@ async function saveContent(key, value) {
                 </div>
                 <input
                   id={'proj-' + s.key}
-                  type="range"
-                  min="0"
-                  max={s.max}
-                  value={proj[s.key]}
+                  type="range" min="0" max={s.max} value={proj[s.key]}
                   onChange={function (e) {
                     var k = s.key;
                     var v = parseInt(e.target.value);
@@ -553,12 +509,9 @@ async function saveContent(key, value) {
           })}
         </div>
 
-        {/* Projection result */}
         {projAdded > 0 && (
           <div style={{ marginTop: '18px', padding: '14px 18px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '10px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 10px' }}>
-              Projected Outcome (Monthly)
-            </p>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 10px' }}>Projected Outcome (Monthly)</p>
             <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '2px' }}>Projected MRR</div>
@@ -583,19 +536,14 @@ async function saveContent(key, value) {
 
       {/* ── Milestone tracker ── */}
       <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>
-          Milestones
-        </p>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 14px' }}>Milestones</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           {MILESTONES.map(function (m) {
             var achieved = m.type === 'mrr' ? mrrData.total >= m.target : totalOrgs >= m.target;
             var current  = m.type === 'mrr' ? mrrData.total : totalOrgs;
             var pct      = Math.min(100, Math.round((current / m.target) * 100));
             return (
-              <div
-                key={m.label}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 13px', background: '#0E1523', borderRadius: '8px', border: '1px solid ' + (achieved ? 'rgba(34,197,94,0.2)' : '#1E2845') }}
-              >
+              <div key={m.label} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 13px', background: '#0E1523', borderRadius: '8px', border: '1px solid ' + (achieved ? 'rgba(34,197,94,0.2)' : '#1E2845') }}>
                 {achieved
                   ? <CheckCircle size={16} color="#22C55E" aria-label="Achieved" style={{ flexShrink: 0, marginTop: '1px' }} />
                   : <Circle     size={16} color="#2A3550" aria-label="Not yet achieved" style={{ flexShrink: 0, marginTop: '1px' }} />
@@ -621,9 +569,7 @@ async function saveContent(key, value) {
       {/* ── Insights ── */}
       {!loading && getInsights().length > 0 && (
         <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '12px', padding: '20px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px' }}>
-            Insights
-          </p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px' }}>Insights</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {getInsights().map(function (insight, i) {
               return (

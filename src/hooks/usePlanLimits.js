@@ -7,7 +7,7 @@ import { PLAN_LIMITS } from '../lib/planLimits';
  *
  * Returns:
  *   loading         — bool
- *   plan            — 'starter' | 'growth' | 'pro'
+ *   plan            — 'starter' | 'growth' | 'pro' | 'student'
  *   limits          — PLAN_LIMITS[plan] object
  *   usage           — { members, storage_bytes, pages, admins, editors, email_sends }
  *   isAllowed(key)  — bool (e.g. isAllowed('can_sell_tickets'))
@@ -49,8 +49,10 @@ export default function usePlanLimits(organizationId) {
           .maybeSingle();
 
         var currentPlan = (sub && sub.plan) ? sub.plan.toLowerCase() : 'starter';
-        if (!PLAN_LIMITS[currentPlan]) currentPlan = 'starter';
-        var currentLimits = PLAN_LIMITS[currentPlan];
+        // Student plan uses starter limits — fall back to starter if unrecognized
+        var limitsKey = currentPlan === 'student' ? 'starter' : currentPlan;
+        if (!PLAN_LIMITS[limitsKey]) limitsKey = 'starter';
+        var currentLimits = PLAN_LIMITS[limitsKey];
 
         // 2. Count active members
         var { count: memberCount } = await supabase
@@ -101,7 +103,7 @@ export default function usePlanLimits(organizationId) {
           setUsage({
             members: memberCount || 0,
             storage_bytes: storageBytes,
-            pages: 0, // page count not tracked yet — placeholder
+            pages: 0,
             admins: adminCount || 0,
             editors: editorCount || 0,
             email_sends: emailCount || 0,

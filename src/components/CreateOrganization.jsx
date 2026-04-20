@@ -50,19 +50,25 @@ var SERVICE_CATEGORIES = [
 
 var PLANS = [
   {
-    key: 'starter', name: 'Starter', monthly: 19.99, annual: 199.90, annualPerMonth: 16.66,
+    key: 'starter', name: 'Starter', monthly: 29.99, annual: 299.90, annualPerMonth: 24.99,
     members: 50, storage: '2 GB', color: '#3B82F6',
     features: ['Up to 50 members','Events, RSVP & check-in','Announcements & documents','Polls, surveys & sign-up forms','Chat & notifications','Free events only','1 scrollable public page','orgname.syndicade.com subdomain'],
   },
   {
-    key: 'growth', name: 'Growth', monthly: 39, annual: 390, annualPerMonth: 32.50,
+    key: 'growth', name: 'Growth', monthly: 49.99, annual: 499.90, annualPerMonth: 41.66,
     members: 150, storage: '10 GB', color: '#F5B731', popular: true,
     features: ['Up to 150 members','Everything in Starter','Paid event tickets ($1/ticket fee)','Membership dues collection','Email blasts & newsletter builder','Full analytics & revenue reports','7 public pages','Custom domain add-on ($50/yr)'],
   },
   {
-    key: 'pro', name: 'Pro', monthly: 69, annual: 690, annualPerMonth: 57.50,
+    key: 'pro', name: 'Pro', monthly: 69.99, annual: 699.90, annualPerMonth: 58.32,
     members: 300, storage: '30 GB', color: '#8B5CF6',
     features: ['Up to 300 members','Everything in Growth','Unlimited pages','Custom domain — included','Remove Syndicade branding','AI content assistant','Unlimited email blasts','1 free featured event/year'],
+  },
+  {
+    key: 'student', name: 'Student', monthly: 19.99, annual: null, annualPerMonth: null,
+    members: 50, storage: '2 GB', color: '#22C55E',
+    features: ['Same features as Starter','Monthly billing only','Pause up to 6 months/year','Verified .edu email required'],
+    monthlyOnly: true,
   },
 ]
 
@@ -319,6 +325,37 @@ function Step3({ data, onChange, onNext, onBack, saving, orgId }) {
 // ─── STEP 4 ───────────────────────────────────────────────────────────────────
 function Step4({ onNext, onBack, selectedPlan, onSelectPlan }) {
   var [annual, setAnnual] = useState(false)
+  var [eduEmail, setEduEmail] = useState('')
+  var [eduEmailError, setEduEmailError] = useState('')
+
+  var isStudentSelected = selectedPlan === 'student'
+
+  function validateEduEmail(email) {
+    if (!email || !email.trim()) return 'A .edu email address is required for the Student plan.'
+    if (!email.toLowerCase().trim().endsWith('.edu')) return 'Must be a valid .edu email address.'
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email.trim())) return 'Enter a valid email address.'
+    return ''
+  }
+
+  function handleSelectPlan(planKey) {
+    onSelectPlan(planKey)
+    if (planKey !== 'student') {
+      setEduEmail('')
+      setEduEmailError('')
+    }
+  }
+
+  function handleNext() {
+    if (!selectedPlan) { toast.error('Please select a plan to continue.'); return }
+    if (isStudentSelected) {
+      var err = validateEduEmail(eduEmail)
+      setEduEmailError(err)
+      if (err) return
+    }
+    onNext(isStudentSelected ? { annual: false, eduEmail: eduEmail.trim().toLowerCase() } : { annual: annual, eduEmail: null })
+  }
+
   return (
     <div>
       <div style={{marginBottom:'20px'}}>
@@ -326,53 +363,105 @@ function Step4({ onNext, onBack, selectedPlan, onSelectPlan }) {
         <h2 style={{fontSize:'20px',fontWeight:800,color:'#FFFFFF',marginBottom:'6px'}}>Choose Your Plan</h2>
         <p style={{fontSize:'13px',color:'#94A3B8'}}>All plans include a 14-day free trial — no credit card required.</p>
       </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',marginBottom:'20px'}}>
-        <span style={{fontSize:'13px',fontWeight:annual?400:700,color:annual?'#64748B':'#FFFFFF'}}>Monthly</span>
-        <button type="button" onClick={function(){setAnnual(function(v){return !v})}} role="switch" aria-checked={annual} aria-label="Toggle annual billing for 2 months free" style={{width:'44px',height:'24px',borderRadius:'12px',border:'none',cursor:'pointer',background:annual?'#F5B731':'#2A3550',position:'relative',flexShrink:0,transition:'background 0.2s'}} className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2">
-          <div style={{width:'18px',height:'18px',borderRadius:'50%',background:'#FFFFFF',position:'absolute',top:'3px',left:annual?'23px':'3px',transition:'left 0.2s'}} aria-hidden="true" />
-        </button>
-        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-          <span style={{fontSize:'13px',fontWeight:annual?700:400,color:annual?'#FFFFFF':'#64748B'}}>Annual</span>
-          <span style={{fontSize:'10px',fontWeight:700,padding:'2px 7px',borderRadius:'99px',background:'rgba(245,183,49,0.15)',color:'#F5B731',border:'1px solid rgba(245,183,49,0.3)'}}>2 months free</span>
+
+      {/* Annual / Monthly toggle — hidden for student plan */}
+      {!isStudentSelected && (
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',marginBottom:'20px'}}>
+          <span style={{fontSize:'13px',fontWeight:annual?400:700,color:annual?'#64748B':'#FFFFFF'}}>Monthly</span>
+          <button type="button" onClick={function(){setAnnual(function(v){return !v})}} role="switch" aria-checked={annual} aria-label="Toggle annual billing for 2 months free" style={{width:'44px',height:'24px',borderRadius:'12px',border:'none',cursor:'pointer',background:annual?'#F5B731':'#2A3550',position:'relative',flexShrink:0,transition:'background 0.2s'}} className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2">
+            <div style={{width:'18px',height:'18px',borderRadius:'50%',background:'#FFFFFF',position:'absolute',top:'3px',left:annual?'23px':'3px',transition:'left 0.2s'}} aria-hidden="true" />
+          </button>
+          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+            <span style={{fontSize:'13px',fontWeight:annual?700:400,color:annual?'#FFFFFF':'#64748B'}}>Annual</span>
+            <span style={{fontSize:'10px',fontWeight:700,padding:'2px 7px',borderRadius:'99px',background:'rgba(245,183,49,0.15)',color:'#F5B731',border:'1px solid rgba(245,183,49,0.3)'}}>2 months free</span>
+          </div>
         </div>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:'10px',marginBottom:'16px'}}>
+      )}
+
+      <div style={{display:'flex',flexDirection:'column',gap:'10px',marginBottom:'16px'}} role="radiogroup" aria-label="Select a plan">
         {PLANS.map(function(plan){
-          var isSelected=selectedPlan===plan.key
-          var priceLabel=annual?plan.annualPerMonth.toFixed(2)+'/mo':plan.monthly.toFixed(2)+'/mo'
-          var billedLabel=annual?'Billed $'+plan.annual.toFixed(2)+'/yr':'Billed monthly'
+          var isSelected = selectedPlan === plan.key
+          var isStudent = plan.key === 'student'
+          var priceLabel = isStudent ? plan.monthly.toFixed(2)+'/mo' : (annual ? plan.annualPerMonth.toFixed(2)+'/mo' : plan.monthly.toFixed(2)+'/mo')
+          var billedLabel = isStudent ? 'Monthly only · pause up to 6 mo/yr' : (annual ? 'Billed $'+plan.annual.toFixed(2)+'/yr' : 'Billed monthly')
+
           return (
-            <div key={plan.key} style={{background:'#1A2035',border:'2px solid '+(isSelected?plan.color:plan.popular&&!isSelected?'rgba(245,183,49,0.3)':'#2A3550'),borderRadius:'12px',padding:'16px',cursor:'pointer',transition:'border-color 0.15s',position:'relative'}} onClick={function(){onSelectPlan(plan.key)}} onKeyDown={function(e){if(e.key==='Enter'||e.key===' ')onSelectPlan(plan.key)}} tabIndex={0} role="radio" aria-checked={isSelected} aria-label={plan.name+' plan, $'+priceLabel}>
-              {plan.popular&&<span style={{position:'absolute',top:'-1px',right:'16px',background:'#F5B731',color:'#0E1523',fontSize:'9px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase',padding:'3px 10px',borderRadius:'0 0 6px 6px'}}>MOST POPULAR</span>}
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'12px'}}>
-                <div>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'2px'}}>
-                    <div style={{width:'10px',height:'10px',borderRadius:'50%',background:isSelected?plan.color:'#2A3550',border:'2px solid '+(isSelected?plan.color:'#64748B'),transition:'all 0.15s'}} aria-hidden="true" />
-                    <span style={{fontSize:'15px',fontWeight:800,color:'#FFFFFF'}}>{plan.name}</span>
+            <div key={plan.key}>
+              <div
+                style={{background:'#1A2035',border:'2px solid '+(isSelected?plan.color:plan.popular&&!isSelected?'rgba(245,183,49,0.3)':isStudent?'rgba(34,197,94,0.2)':'#2A3550'),borderRadius:'12px',padding:'16px',cursor:'pointer',transition:'border-color 0.15s',position:'relative'}}
+                onClick={function(){handleSelectPlan(plan.key)}}
+                onKeyDown={function(e){if(e.key==='Enter'||e.key===' ')handleSelectPlan(plan.key)}}
+                tabIndex={0}
+                role="radio"
+                aria-checked={isSelected}
+                aria-label={plan.name+' plan, $'+priceLabel+(isStudent?' — requires .edu email':'')}
+              >
+                {plan.popular && (
+                  <span style={{position:'absolute',top:'-1px',right:'16px',background:'#F5B731',color:'#0E1523',fontSize:'9px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase',padding:'3px 10px',borderRadius:'0 0 6px 6px'}}>MOST POPULAR</span>
+                )}
+                {isStudent && (
+                  <span style={{position:'absolute',top:'-1px',right:'16px',background:'#22C55E',color:'#0E1523',fontSize:'9px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase',padding:'3px 10px',borderRadius:'0 0 6px 6px'}}>STUDENT</span>
+                )}
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'12px'}}>
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'2px'}}>
+                      <div style={{width:'10px',height:'10px',borderRadius:'50%',background:isSelected?plan.color:'#2A3550',border:'2px solid '+(isSelected?plan.color:'#64748B'),transition:'all 0.15s'}} aria-hidden="true" />
+                      <span style={{fontSize:'15px',fontWeight:800,color:'#FFFFFF'}}>{plan.name}</span>
+                    </div>
+                    <span style={{fontSize:'11px',color:'#64748B',marginLeft:'18px'}}>{plan.members} members · {plan.storage} storage</span>
                   </div>
-                  <span style={{fontSize:'11px',color:'#64748B',marginLeft:'18px'}}>{plan.members} members · {plan.storage} storage</span>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:'20px',fontWeight:800,color:isSelected?plan.color:'#FFFFFF'}}>${priceLabel}</div>
+                    <div style={{fontSize:'10px',color:'#64748B'}}>{billedLabel}</div>
+                  </div>
                 </div>
-                <div style={{textAlign:'right'}}>
-                  <div style={{fontSize:'20px',fontWeight:800,color:isSelected?plan.color:'#FFFFFF'}}>${priceLabel}</div>
-                  <div style={{fontSize:'10px',color:'#64748B'}}>{billedLabel}</div>
+                <div style={{display:'flex',flexDirection:'column',gap:'4px',marginLeft:'18px'}}>
+                  {plan.features.slice(0,isSelected?plan.features.length:4).map(function(f,i){return(
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',color:isSelected?'#CBD5E1':'#64748B'}}>
+                      <span style={{color:isSelected?plan.color:'#2A3550',flexShrink:0}}><IconCheck /></span>{f}
+                    </div>
+                  )})}
+                  {!isSelected&&plan.features.length>4&&<span style={{fontSize:'11px',color:'#64748B',marginLeft:'19px'}}>+ {plan.features.length-4} more features</span>}
                 </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:'4px',marginLeft:'18px'}}>
-                {plan.features.slice(0,isSelected?plan.features.length:4).map(function(f,i){return(
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',color:isSelected?'#CBD5E1':'#64748B'}}>
-                    <span style={{color:isSelected?plan.color:'#2A3550',flexShrink:0}}><IconCheck /></span>{f}
-                  </div>
-                )})}
-                {!isSelected&&plan.features.length>4&&<span style={{fontSize:'11px',color:'#64748B',marginLeft:'19px'}}>+ {plan.features.length-4} more features</span>}
-              </div>
+
+              {/* .edu email input — shown inline below student card when selected */}
+              {isSelected && isStudent && (
+                <div style={{background:'rgba(34,197,94,0.05)',border:'1px solid rgba(34,197,94,0.2)',borderTop:'none',borderRadius:'0 0 10px 10px',padding:'14px 16px'}}>
+                  <label htmlFor="edu-email" style={{display:'block',fontSize:'11px',fontWeight:700,color:'#22C55E',textTransform:'uppercase',letterSpacing:'3px',marginBottom:'6px'}}>
+                    .edu Email Address <span style={{color:'#EF4444'}} aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="edu-email"
+                    type="email"
+                    value={eduEmail}
+                    onChange={function(e){
+                      setEduEmail(e.target.value)
+                      if (eduEmailError) setEduEmailError(validateEduEmail(e.target.value))
+                    }}
+                    onFocus={function(e){e.target.style.borderColor='#22C55E'}}
+                    onBlur={function(e){e.target.style.borderColor=eduEmailError?'#EF4444':'#2A3550'}}
+                    placeholder="you@university.edu"
+                    aria-required="true"
+                    aria-describedby={eduEmailError ? 'edu-email-error' : 'edu-email-hint'}
+                    style={{width:'100%',padding:'10px 14px',background:'#1E2845',border:'1px solid '+(eduEmailError?'#EF4444':'#2A3550'),borderRadius:'8px',color:'#FFFFFF',fontSize:'14px',outline:'none',boxSizing:'border-box',fontFamily:"'Inter','Segoe UI',system-ui,sans-serif"}}
+                  />
+                  {eduEmailError ? (
+                    <p id="edu-email-error" role="alert" style={{marginTop:'5px',fontSize:'12px',color:'#EF4444'}}>{eduEmailError}</p>
+                  ) : (
+                    <p id="edu-email-hint" style={{marginTop:'5px',fontSize:'11px',color:'#64748B'}}>Must end in .edu. Used to verify student status.</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
+
       <p style={{fontSize:'11px',color:'#64748B',textAlign:'center',marginBottom:'16px'}}>No credit card required for trial. No platform fee on dues or donations — Stripe pass-through only.</p>
       <div style={{display:'flex',gap:'12px'}}>
         <button type="button" onClick={onBack} style={{padding:'12px 20px',background:'transparent',color:'#94A3B8',border:'1px solid #2A3550',borderRadius:'10px',fontSize:'14px',fontWeight:600,cursor:'pointer'}} className="focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">Back</button>
-        <button type="button" onClick={onNext} disabled={!selectedPlan} style={{flex:1,padding:'12px',background:selectedPlan?'#3B82F6':'#1E2845',color:'#FFFFFF',border:'none',borderRadius:'10px',fontSize:'14px',fontWeight:700,cursor:selectedPlan?'pointer':'not-allowed',opacity:selectedPlan?1:0.5,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label={selectedPlan?'Continue with '+selectedPlan+' plan':'Select a plan to continue'}>
+        <button type="button" onClick={handleNext} disabled={!selectedPlan} style={{flex:1,padding:'12px',background:selectedPlan?'#3B82F6':'#1E2845',color:'#FFFFFF',border:'none',borderRadius:'10px',fontSize:'14px',fontWeight:700,cursor:selectedPlan?'pointer':'not-allowed',opacity:selectedPlan?1:0.5,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label={selectedPlan?'Continue with '+selectedPlan+' plan':'Select a plan to continue'}>
           Start Free Trial{selectedPlan&&<IconChevronRight />}
         </button>
       </div>
@@ -479,14 +568,18 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
     finally{setSaving(false)}
   }
 
-  async function handleStep4Next() {
+  async function handleStep4Next(planOptions) {
     if(!data.selected_plan){toast.error('Please select a plan to continue.');return}
-    await supabase.from('organizations').update({onboarding_completed:true}).eq('id',createdOrgId)
+    var updates = { onboarding_completed: true }
+    if (data.selected_plan === 'student' && planOptions && planOptions.eduEmail) {
+      updates.edu_email = planOptions.eduEmail
+      updates.edu_email_verified = false
+    }
+    await supabase.from('organizations').update(updates).eq('id',createdOrgId)
     mascotSuccessToast(data.name+' is ready!','Your organization has been created.')
     setStep(5)
   }
 
-  // Step 5 done — close wizard, navigate to org with ?tour=1
   function handleStep5Next() {
     var orgId=createdOrgId; var orgName=data.name
     resetState(); onClose()

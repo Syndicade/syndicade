@@ -182,21 +182,37 @@ export default function LandingPage() {
     navigate('/pricing');
   }
 
-  async function handleContactSubmit(e) {
-    e.preventDefault();
-    if (!contactForm.name || !contactForm.email || !contactForm.message) return;
-    try {
-      setContactLoading(true);
-      var result = await supabase.from('marketing_contacts').insert([contactForm]);
-      if (result.error) throw result.error;
-      setContactStatus('success');
-      setContactForm({ name: '', email: '', organization: '', message: '' });
-    } catch (_) {
-      setContactStatus('error');
-    } finally {
-      setContactLoading(false);
-    }
+async function handleContactSubmit(e) {
+  e.preventDefault();
+  if (!contactForm.name || !contactForm.email || !contactForm.message) return;
+  try {
+    setContactLoading(true);
+    var result = await supabase.from('marketing_contacts').insert([contactForm]);
+    if (result.error) throw result.error;
+
+    // Send email notification to hello@syndicade.org
+await supabase.functions.invoke('send-email', {
+  body: {
+    to: 'hello@syndicade.org',
+    subject: 'New Contact Form Submission — ' + contactForm.name,
+    html: '<p><strong>Name:</strong> ' + contactForm.name + '</p>' +
+          '<p><strong>Email:</strong> ' + contactForm.email + '</p>' +
+          (contactForm.organization ? '<p><strong>Organization:</strong> ' + contactForm.organization + '</p>' : '') +
+          '<p><strong>Message:</strong></p><p>' + contactForm.message + '</p>',
+  },
+  headers: {
+    Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE'
   }
+});
+
+    setContactStatus('success');
+    setContactForm({ name: '', email: '', organization: '', message: '' });
+  } catch (_) {
+    setContactStatus('error');
+  } finally {
+    setContactLoading(false);
+  }
+}
 
   var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
   var sectionBg     = isDark ? '#151B2D' : '#FFFFFF';
@@ -209,50 +225,65 @@ export default function LandingPage() {
   var navBg         = scrolled ? (isDark ? 'rgba(14,21,35,0.96)' : 'rgba(248,250,252,0.97)') : (isDark ? '#0E1523' : '#FFFFFF');
 
   // Pricing data
-  var PLANS = [
-    {
-      name: 'Starter',
-      monthlyPrice: '$19.99',
-      annualPrice: '$16.66',
-      annualTotal: '$199.90/yr',
-      meta: '50 members · 2 GB storage · 1 page',
-      tagline: 'Events, RSVP, recurring events, polls, surveys, announcements, document library, sign-up forms, programs, chat, donation pages, and your orgname.syndicade.com subdomain.',
-      btnBg: '#0E1523',
-      btnColor: '#F5B731',
-      tack: '#D4A017',
-      cardBgColor: '#FEF9C3',
-      nameColor: '#92700A',
-      pop: false,
-    },
-    {
-      name: 'Growth',
-      monthlyPrice: '$39',
-      annualPrice: '$32.50',
-      annualTotal: '$390/yr',
-      meta: '150 members · 10 GB storage · 7 pages',
-      tagline: 'Everything in Starter + paid event tickets (flat $1/ticket, no revenue cut), membership dues, email blasts + newsletter builder (500/mo), full analytics, and admin inbox.',
-      btnBg: '#3B82F6',
-      btnColor: 'white',
-      tack: '#1D4ED8',
-      cardBgColor: '#DBEAFE',
-      nameColor: '#1E40AF',
-      pop: true,
-    },
-    {
-      name: 'Pro',
-      monthlyPrice: '$69',
-      annualPrice: '$57.50',
-      annualTotal: '$690/yr',
-      meta: '300 members · 30 GB storage · Unlimited pages',
-      tagline: 'Everything in Growth + custom domain (included), remove Syndicade branding (included), unlimited email blasts, AI content assistant, and priority support.',
-      btnBg: '#16A34A',
-      btnColor: 'white',
-      tack: '#16A34A',
-      cardBgColor: '#DCFCE7',
-      nameColor: '#166534',
-      pop: false,
-    },
-  ];
+var PLANS = [
+  {
+    name: 'Starter',
+    monthlyPrice: '$29.99',
+    annualPrice: '$24.99',
+    annualTotal: '$299.90/yr',
+    meta: '50 members · 2 GB storage · 1 page',
+    tagline: 'Events, RSVP, recurring events, polls, surveys, announcements, document library, sign-up forms, programs, chat, donation pages, and your orgname.syndicade.com subdomain.',
+    btnBg: '#0E1523',
+    btnColor: '#F5B731',
+    tack: '#D4A017',
+    cardBgColor: '#FEF9C3',
+    nameColor: '#92700A',
+    pop: false,
+  },
+  {
+    name: 'Growth',
+    monthlyPrice: '$49.99',
+    annualPrice: '$41.66',
+    annualTotal: '$499.90/yr',
+    meta: '150 members · 10 GB storage · 7 pages',
+    tagline: 'Everything in Starter + paid event tickets (flat $1/ticket, no revenue cut), membership dues, email blasts + newsletter builder (500/mo), full analytics, and admin inbox.',
+    btnBg: '#3B82F6',
+    btnColor: 'white',
+    tack: '#1D4ED8',
+    cardBgColor: '#DBEAFE',
+    nameColor: '#1E40AF',
+    pop: true,
+  },
+  {
+    name: 'Pro',
+    monthlyPrice: '$69.99',
+    annualPrice: '$58.32',
+    annualTotal: '$699.90/yr',
+    meta: '300 members · 30 GB storage · Unlimited pages',
+    tagline: 'Everything in Growth + custom domain (included), remove Syndicade branding (included), unlimited email blasts, AI content assistant, and priority support.',
+    btnBg: '#16A34A',
+    btnColor: 'white',
+    tack: '#16A34A',
+    cardBgColor: '#DCFCE7',
+    nameColor: '#166534',
+    pop: false,
+  },
+  {
+  name: 'Student',
+  monthlyPrice: '$19.99',
+  annualPrice: null,
+  annualTotal: null,
+  meta: '50 members · 2 GB storage · Monthly only',
+  tagline: 'Same features as Starter. For student organizations and campus groups. Requires a verified .edu email address. Pause up to 6 months per year.',
+  btnBg: '#EA580C',
+  btnColor: 'white',
+  tack: '#C2410C',
+  cardBgColor: '#FEF3C7',
+  nameColor: '#92400E',
+  pop: false,
+  studentOnly: true,
+},
+];
 
   return (
     <div style={{ background: pageBg, minHeight: '100vh', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: textPrimary, transition: 'background 0.2s, color 0.2s' }}>
@@ -341,7 +372,7 @@ export default function LandingPage() {
               <div style={{ maxWidth: '520px', marginLeft: 'auto' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', color: '#F5B731', marginBottom: '20px' }}>
                   <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F5B731', display: 'inline-block' }} />
-                  Starts at $19.99/mo · 14-day free trial
+                  Starts at $29.99/mo · 14-day free trial
                 </div>
 
                 <h1 id="hero-heading" style={{ fontSize: 'clamp(32px, 4.5vw, 52px)', fontWeight: 800, lineHeight: 1.15, marginBottom: '18px', color: textPrimary }}>
@@ -388,7 +419,7 @@ export default function LandingPage() {
         <div style={{ background: '#0E1523', borderTop: '1px solid #2A3550', borderBottom: '1px solid #2A3550' }}>
           <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             {[
-              { val: '$19.99/mo', label: 'Starting price' },
+              { val: '$29.99/mo', label: 'Starting price' },
               { val: '14 days',   label: 'Free trial, no card needed' },
               { val: '$1/ticket',  label: 'Flat fee on paid events (no % cut)' },
               { val: '0',         label: 'Ads. Ever.' },
@@ -707,11 +738,11 @@ export default function LandingPage() {
             </div>
 
             {/* Pricing cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px', justifyItems: 'center' }}>
               {PLANS.map(function(plan) {
-                var displayPrice = billingInterval === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+                var displayPrice = (plan.studentOnly || billingInterval === 'monthly') ? plan.monthlyPrice : plan.annualPrice;
                 return (
-                  <div key={plan.name} style={{ background: plan.cardBgColor, borderRadius: '4px', padding: '24px', position: 'relative', marginTop: '12px', boxShadow: plan.pop ? '4px 6px 20px rgba(0,0,0,0.22)' : '3px 4px 12px rgba(0,0,0,0.15)', backgroundImage: 'repeating-linear-gradient(transparent, transparent 23px, rgba(0,0,0,0.05) 24px)', backgroundPositionY: '32px', border: plan.pop ? '2px solid rgba(59,130,246,0.5)' : 'none' }}>
+                  <div key={plan.name} style={{ background: plan.cardBgColor, borderRadius: '4px', padding: '24px', position: 'relative', marginTop: '12px', boxShadow: plan.pop ? '4px 6px 20px rgba(0,0,0,0.22)' : '3px 4px 12px rgba(0,0,0,0.15)', backgroundImage: 'repeating-linear-gradient(transparent, transparent 23px, rgba(0,0,0,0.05) 24px)', backgroundPositionY: '32px', border: plan.pop ? '2px solid rgba(59,130,246,0.5)' : 'none', gridColumn: plan.studentOnly ? '2' : 'auto' }}>
                     <div aria-hidden="true" style={{ width: '14px', height: '14px', borderRadius: '50%', position: 'absolute', top: '-7px', left: '50%', transform: 'translateX(-50%)', background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.55) 0%, ' + plan.tack + ' 52%, rgba(0,0,0,0.25) 100%)', boxShadow: '0 2px 5px rgba(0,0,0,0.4)' }} />
                     {plan.pop && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(59,130,246,0.15)', color: '#1D4ED8', border: '1px solid rgba(59,130,246,0.3)', fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', marginBottom: '10px' }}>
@@ -723,9 +754,12 @@ export default function LandingPage() {
                       <span style={{ fontSize: '40px', fontWeight: 800, color: '#111827', lineHeight: 1 }}>{displayPrice}</span>
                       <span style={{ fontSize: '13px', color: '#6B7280' }}>/mo</span>
                     </div>
-                    {billingInterval === 'annual' && (
-                      <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '4px' }}>billed as {plan.annualTotal}</div>
-                    )}
+                    {billingInterval === 'annual' && !plan.studentOnly && (
+  <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '4px' }}>billed as {plan.annualTotal}</div>
+)}
+{plan.studentOnly && (
+  <div style={{ fontSize: '11px', color: '#166534', fontWeight: 600, marginBottom: '4px' }}>Requires .edu email · Monthly only</div>
+)}
                     <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '14px' }}>{plan.meta}</div>
                     <p style={{ fontSize: '12px', color: '#374151', lineHeight: 1.6, marginBottom: '18px' }}>{plan.tagline}</p>
                     <button onClick={function() { goToSignup(); }} className="focus:outline-none focus:ring-2 focus:ring-amber-400" style={{ width: '100%', padding: '10px', fontSize: '13px', fontWeight: 700, background: plan.btnBg, color: plan.btnColor, border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'opacity 0.15s' }} onMouseOver={function(e) { e.currentTarget.style.opacity = '0.88'; }} onMouseOut={function(e) { e.currentTarget.style.opacity = '1'; }}>
