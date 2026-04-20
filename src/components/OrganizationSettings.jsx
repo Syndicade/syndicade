@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
-import { mascotSuccessToast } from '../components/MascotToast';
+import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import MembershipTiers from '../components/MembershipTiers';
 import NonprofitVerificationForm from './NonprofitVerificationForm';
 
@@ -392,6 +392,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var [activeTab, setActiveTab] = useState('basic');
   var [deleteConfirmText, setDeleteConfirmText] = useState('');
   var [deleting, setDeleting] = useState(false);
+  var [connectLoading, setConnectLoading] = useState(false);
+  var [connectStatus, setConnectStatus] = useState('not_connected');
 
   var [form, setForm] = useState({
     name: '', description: '', type: 'community',
@@ -412,6 +414,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     donation_external_link: '',
     donation_title: '',
     donation_description: '',
+    manual_payment_instructions: '',
   });
 
   var tabs = [
@@ -421,17 +424,33 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     { id: 'membership',   label: 'Membership'        },
     { id: 'discover',     label: 'Discover Orgs'     },
     { id: 'donations',    label: 'Donations'         },
+    { id: 'payments',     label: 'Payments'          },
     { id: 'verification', label: 'Verification'      },
     { id: 'danger',       label: 'Danger Zone'       },
   ];
 
-  useEffect(function(){ fetchOrganization(); }, [organizationId]);
+  useEffect(function(){
+    fetchOrganization();
+    // Check for Stripe Connect return params
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('connect') === 'success') {
+      setActiveTab('payments');
+      mascotSuccessToast('Stripe connected!', 'Your account is being verified. This may take a few minutes.');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('connect') === 'refresh') {
+      setActiveTab('payments');
+      toast.error('Stripe setup was not completed. Please try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [organizationId]);
 
   async function fetchOrganization() {
     try {
       var { data, error } = await supabase.from('organizations').select('*').eq('id', organizationId).single();
       if (error) throw error;
       setOrganization(data);
+      setConnectStatus(data.stripe_connect_status || 'not_connected');
       setForm({
         name:                  data.name || '',
         description:           data.description || '',
@@ -455,18 +474,37 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         languages:             data.languages || [],
         keywords:              data.keywords || [],
         discovery_about:       data.discovery_about || '',
-        allow_following: data.allow_following !== false,
+        allow_following:       data.allow_following !== false,
         search_tags:           data.search_tags || [],
         enable_donations:      data.enable_donations || false,
         donation_suggested_amount: data.donation_suggested_amount || '',
         donation_external_link:    data.donation_external_link || '',
         donation_title:            data.donation_title || '',
         donation_description:      data.donation_description || '',
+        manual_payment_instructions: data.manual_payment_instructions || '',
       });
     } catch(err) {
       toast.error('Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleStripeConnect() {
+    setConnectLoading(true);
+    try {
+      var res = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-connect-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: organizationId }),
+      });
+      var data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || 'Failed to create connect link');
+      window.location.href = data.url;
+    } catch(err) {
+      mascotErrorToast('Failed to start Stripe setup.', err.message);
+    } finally {
+      setConnectLoading(false);
     }
   }
 
@@ -508,19 +546,20 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         languages:             form.languages,
         keywords:              form.keywords,
         discovery_about:       form.discovery_about.trim() || null,
-        allow_following: form.allow_following,
+        allow_following:       form.allow_following,
         search_tags:           form.search_tags,
         enable_donations:             form.enable_donations,
         donation_suggested_amount:    form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
         donation_external_link:       form.donation_external_link ? form.donation_external_link.trim() : null,
         donation_title:               form.donation_title ? form.donation_title.trim() : null,
         donation_description:         form.donation_description ? form.donation_description.trim() : null,
+        manual_payment_instructions:  form.manual_payment_instructions ? form.manual_payment_instructions.trim() : null,
       }).eq('id', organizationId);
       if (error) throw error;
       mascotSuccessToast('Settings saved!', 'Your changes are live.');
       if (onUpdate) onUpdate(form);
     } catch(err) {
-      toast.error('Save failed: '+err.message);
+      mascotErrorToast('Save failed', err.message);
     } finally {
       setSaving(false);
     }
@@ -542,10 +581,10 @@ function OrganizationSettings({ organizationId, onUpdate }) {
       }
       var delRes = await supabase.from('organizations').delete().eq('id', organizationId);
       if (delRes.error) throw delRes.error;
-      toast.success('Organization deleted.');
+      mascotSuccessToast('Organization deleted.');
       window.location.href = '/dashboard';
     } catch(err) {
-      toast.error('Delete failed: ' + err.message);
+      mascotErrorToast('Delete failed', err.message);
       setDeleting(false);
     }
   }
@@ -865,6 +904,97 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
+            {/* ── PAYMENTS ── */}
+            {activeTab === 'payments' && (
+              <section aria-labelledby="payments-heading" className="space-y-6">
+                <div>
+                  <h3 id="payments-heading" className="text-lg font-bold text-gray-900">Payment Settings</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">Connect Stripe to collect dues and ticket payments directly into your bank account. Optionally add manual payment instructions for members who prefer to pay offline.</p>
+                </div>
+
+                {/* Stripe Connect Card */}
+                <div className={'rounded-xl border-2 p-5 ' + (connectStatus === 'active' ? 'border-green-400 bg-green-50' : connectStatus === 'pending' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-gray-50')}>
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ' + (connectStatus === 'active' ? 'bg-green-100' : connectStatus === 'pending' ? 'bg-yellow-100' : 'bg-gray-200')}>
+                        {connectStatus === 'active'
+                          ? <Icon path="M5 13l4 4L19 7" className={'h-5 w-5 text-green-600'}/>
+                          : connectStatus === 'pending'
+                          ? <Icon path="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" className={'h-5 w-5 text-yellow-600'}/>
+                          : <Icon path="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" className={'h-5 w-5 text-gray-500'}/>
+                        }
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">Stripe Connect</p>
+                        <p className={'text-xs mt-0.5 ' + (connectStatus === 'active' ? 'text-green-700' : connectStatus === 'pending' ? 'text-yellow-700' : 'text-gray-500')}>
+                          {connectStatus === 'active'
+                            ? 'Connected — payments go directly to your bank account'
+                            : connectStatus === 'pending'
+                            ? 'Setup in progress — finish Stripe onboarding to activate'
+                            : 'Not connected — connect to accept dues and ticket payments'}
+                        </p>
+                      </div>
+                    </div>
+                    {connectStatus !== 'active' && (
+                      <button
+                        type="button"
+                        onClick={handleStripeConnect}
+                        disabled={connectLoading}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex-shrink-0"
+                        aria-busy={connectLoading}
+                      >
+                        {connectLoading
+                          ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Connecting...</>
+                          : <><Icon path="M13 10V3L4 14h7v7l9-11h-7z" className="h-4 w-4"/>{connectStatus === 'pending' ? 'Continue Setup' : 'Connect Stripe'}</>
+                        }
+                      </button>
+                    )}
+                  </div>
+
+                  {connectStatus === 'not_connected' && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 font-semibold mb-2">What you get by connecting:</p>
+                      <ul className="space-y-1" role="list">
+                        {[
+                          'Dues payments go directly to your bank account',
+                          'Ticket sales go directly to your bank account',
+                          'Stripe handles all card processing — you never see card numbers',
+                          'Payouts within 2 business days',
+                        ].map(function(item){
+                          return (
+                            <li key={item} className="flex items-center gap-2 text-xs text-gray-600" role="listitem">
+                              <Icon path="M5 13l4 4L19 7" className="h-3.5 w-3.5 text-green-500 flex-shrink-0"/>
+                              {item}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Payment Instructions */}
+                <div>
+                  <label htmlFor="manual-payment" className={labelCls}>Manual Payment Instructions (optional)</label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Shown to members on their dues page. Use this for PayPal, Venmo, Zelle, checks, or cash drop-off. Leave blank if not needed.
+                  </p>
+                  <textarea
+                    id="manual-payment"
+                    name="manual_payment_instructions"
+                    value={form.manual_payment_instructions}
+                    onChange={handleField}
+                    rows={4}
+                    maxLength={500}
+                    placeholder={'e.g. Pay via Venmo @YourOrg, PayPal paypal.me/yourorg, or mail a check to 123 Main St, Toledo OH 43601. Include your name in the memo.'}
+                    className={inputCls + ' resize-none'}
+                    aria-describedby="manual-payment-count"
+                  />
+                  <p id="manual-payment-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.manual_payment_instructions.length}/500</p>
+                </div>
+              </section>
+            )}
+
             {/* ── VERIFICATION ── */}
             {activeTab === 'verification' && (
               <section aria-label="Nonprofit verification">
@@ -915,7 +1045,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
-            {/* Save button — hidden on roles, membership save handled internally, hidden on danger */}
+            {/* Save button — hidden on roles, membership, danger, and payments (payments has its own save via main form) */}
             {activeTab !== 'roles' && activeTab !== 'danger' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
