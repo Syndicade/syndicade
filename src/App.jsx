@@ -13,6 +13,7 @@ import AuthPage from './pages/AuthPage';
 import AboutPage from './pages/AboutPage';
 import WelcomePage from './pages/WelcomePage';
 import UnifiedDashboard from './pages/UnifiedDashboard';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import MemberProfileSettings from './components/MemberProfileSettings';
 import EventList from './pages/EventList';
 import EventDetails from './pages/EventDetails';
@@ -134,6 +135,7 @@ var hideChrome = (
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login"  element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
             <Route path="/signup" element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
             <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
             <Route path="/wishlist" element={<WishlistPage />} />

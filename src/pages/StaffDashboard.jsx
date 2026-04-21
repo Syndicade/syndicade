@@ -477,8 +477,8 @@ function OrgsTab() {
     if (!query.trim()) return;
     setLoading(true); setSearched(true);
     var { data: orgs, error } = await supabase.from('organizations')
-      .select('id, name, city, state, created_at, is_verified_nonprofit')
-      .ilike('name', '%' + query + '%').limit(25);
+      .select('id, name, slug, org_number, city, state, created_at, is_verified_nonprofit')
+      .or('name.ilike.%' + query + '%,city.ilike.%' + query + '%,state.ilike.%' + query + '%').limit(25);
     if (error) { toast.error('Search failed.'); setLoading(false); return; }
     setResults(orgs || []);
     if (orgs && orgs.length > 0) {
@@ -496,8 +496,8 @@ function OrgsTab() {
       <form onSubmit={handleSearch} className="flex gap-3 mb-6" role="search" aria-label="Search organizations">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" aria-hidden="true" />
-          <label htmlFor="org-search" className="sr-only">Search by organization name</label>
-          <input id="org-search" type="search" value={query} onChange={function (e) { setQuery(e.target.value); }} placeholder="Search by organization name..." className="w-full bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-[14px] rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-[#64748B]" autoComplete="off" />
+          <label htmlFor="org-search" className="sr-only">Search by name, city, or state</label>
+          <input id="org-search" type="search" value={query} onChange={function (e) { setQuery(e.target.value); }} placeholder="Search by name, city, or state..." className="w-full bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-[14px] rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-[#64748B]" autoComplete="off" />
         </div>
         <button type="submit" disabled={loading || !query.trim()} className="px-6 py-3 bg-blue-500 text-white font-700 text-[14px] rounded-xl hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0E1523] disabled:opacity-50 transition-colors">
           {loading ? 'Searching...' : 'Search'}
@@ -521,7 +521,11 @@ function OrgsTab() {
                         <p className="text-[14px] text-white font-600 truncate">{org.name}</p>
                         {org.is_verified_nonprofit && <CheckCircle size={13} className="text-green-400 flex-shrink-0" aria-label="Verified nonprofit" />}
                       </div>
-                      <p className="text-[12px] text-[#64748B]">{org.city && org.state ? org.city + ', ' + org.state + ' · ' : ''}{sub ? (PLAN_LABELS[sub.plan] || sub.plan) : 'Free'}</p>
+                      <p className="text-[12px] text-[#64748B]">
+  {org.org_number ? org.org_number + ' · ' : ''}
+  {org.city && org.state ? org.city + ', ' + org.state + ' · ' : ''}
+  {sub ? (PLAN_LABELS[sub.plan] || sub.plan) : 'Free'}
+</p>
                     </div>
                     <span className={'text-[11px] font-700 px-2.5 py-1 rounded-full flex-shrink-0 border ' + statusColor}>
                       {sub?.status === 'active' ? 'Paid' : sub?.status === 'trialing' ? 'Trial' : 'Free'}

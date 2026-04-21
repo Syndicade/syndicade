@@ -660,6 +660,12 @@ function OrganizationSettings({ organizationId, onUpdate }) {
             {activeTab === 'basic' && (
               <section aria-labelledby="basic-heading" className="space-y-5">
                 <h3 id="basic-heading" className="text-lg font-bold text-gray-900">Basic Information</h3>
+{organization.org_number && (
+  <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Org Number</span>
+    <span className="text-sm font-semibold text-gray-900">{organization.org_number}</span>
+  </div>
+)}
                 <div>
                   <label htmlFor="org-name" className={labelCls}>Organization Name <span className="text-red-400" aria-hidden="true">*</span></label>
                   <input id="org-name" name="name" type="text" required aria-required="true" value={form.name} onChange={handleField} maxLength={100} className={inputCls}/>

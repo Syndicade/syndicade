@@ -156,7 +156,7 @@ function OrgLayout() {
       if (authResult.error || !authResult.data.user) { navigate('/login'); return; }
       var userId = authResult.data.user.id;
 
-      var orgResult = await supabase.from('organizations').select('id,name,type,logo_url,description,is_verified_nonprofit').eq('id', organizationId).single();
+      var orgResult = await supabase.from('organizations').select('id,name,type,logo_url,description,is_verified_nonprofit,contact_email,contact_email_verified').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
       setOrganization(orgResult.data);
 
@@ -318,6 +318,52 @@ function OrgLayout() {
     return <OrgUnavailable orgName={organization && organization.name} />;
   }
 
+  // ── Email verification gate ────────────────────────────────────────────────
+  if (!access.loading && organization && organization.contact_email_verified === false && isAdmin) {
+    return (
+      <div style={{ background:pageBg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
+        <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', padding:'40px 32px', maxWidth:'460px', width:'100%', textAlign:'center' }}>
+          <div style={{ width:'56px', height:'56px', background:'rgba(245,183,49,0.1)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }} aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#F5B731" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <h1 style={{ fontSize:'20px', fontWeight:800, color:textPrimary, marginBottom:'10px' }}>Verify Your Contact Email</h1>
+          <p style={{ color:textSecondary, fontSize:'14px', lineHeight:1.6, marginBottom:'8px' }}>
+            A verification email was sent to <strong style={{ color:textPrimary }}>{organization.contact_email}</strong>.
+          </p>
+          <p style={{ color:textMuted, fontSize:'13px', lineHeight:1.6, marginBottom:'28px' }}>
+            Please check your inbox and click the link to verify your organization's contact email before accessing your workspace.
+          </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+            <button
+              onClick={async function() {
+                var res = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/verify-contact-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ organization_id: organizationId })
+                });
+                var data = await res.json();
+                if (data.success) {
+                  alert('Verification email sent! Please check your inbox.');
+                } else {
+                  alert('Could not send email. Please try again.');
+                }
+              }}
+              style={{ background:'#3B82F6', color:'#fff', border:'none', borderRadius:'8px', padding:'12px 24px', fontWeight:700, cursor:'pointer', fontSize:'14px' }}
+            >
+              Resend Verification Email
+            </button>
+            <button
+              onClick={function() { navigate('/dashboard'); }}
+              style={{ background:'transparent', color:textMuted, border:'1px solid '+borderColor, borderRadius:'8px', padding:'12px 24px', fontWeight:600, cursor:'pointer', fontSize:'14px' }}
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>

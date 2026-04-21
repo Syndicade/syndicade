@@ -537,7 +537,9 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
       var slug=generateSlug(data.name)
       var {data:existing}=await supabase.from('organizations').select('slug').eq('slug',slug).maybeSingle()
       if(existing) slug=slug+'-'+Math.random().toString(36).substring(2,6)
-      var {data:newOrg,error:orgErr}=await supabase.from('organizations').insert([{name:data.name.trim(),type:data.type,description:data.description.trim(),website:data.website.trim()||null,created_by:user.id,slug:slug,settings:{},trial_started_at:new Date().toISOString(),trial_length_days:14,account_status:'active'}]).select().single()
+      var orgNumResult=await supabase.rpc('generate_org_number')
+var orgNumber=orgNumResult.data||null
+var {data:newOrg,error:orgErr}=await supabase.from('organizations').insert([{name:data.name.trim(),type:data.type,description:data.description.trim(),website:data.website.trim()||null,created_by:user.id,slug:slug,settings:{},trial_started_at:new Date().toISOString(),trial_length_days:14,account_status:'active',org_number:orgNumber}]).select().single()
       if(orgErr) throw orgErr
       var {error:memErr}=await supabase.from('memberships').insert([{member_id:user.id,organization_id:newOrg.id,role:'admin',status:'active',approved_date:new Date().toISOString()}])
       if(memErr) throw memErr
@@ -552,7 +554,13 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
     try {
       var location=[data.city.trim(),data.state.trim()].filter(Boolean).join(', ')
       var {error}=await supabase.from('organizations').update({contact_email:data.contact_email.trim(),contact_phone:data.contact_phone.trim()||null,address:data.address.trim()||null,city:data.city.trim()||null,state:data.state.trim()||null,zip_code:data.zip_code.trim()||null,location:location||null}).eq('id',createdOrgId)
-      if(error) throw error; setStep(3)
+      if(error) throw error;
+await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/verify-contact-email', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ organization_id: createdOrgId })
+});
+setStep(3)
     } catch(err){toast.error(err.message||'Could not save contact info.')}
     finally{setSaving(false)}
   }
