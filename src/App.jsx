@@ -181,6 +181,7 @@ var hideChrome = (
               <Route path="invite"    element={<OrganizationDashboard />} />
               <Route path="events" element={<EventList />} />
               <Route path="events/:eventId" element={<EventDetails />} />
+              <Route path="calendar" element={<EventCalendar />} />
               <Route path="announcements" element={<AnnouncementFeed />} />
               <Route path="email-blasts" element={<EmailBlasts />} />
               <Route path="members" element={<MemberDirectory />} />
