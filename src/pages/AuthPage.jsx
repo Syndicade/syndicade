@@ -328,6 +328,19 @@ function LoginForm({ onSwitchToSignup }) {
     try {
       var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
       if (result.error) throw result.error;
+
+      // Fire-and-forget login log
+      try {
+        fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: result.data.user.id,
+            user_agent: navigator.userAgent
+          })
+        });
+      } catch (_) {}
+
       navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Login failed. Please check your credentials.');
