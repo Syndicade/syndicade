@@ -329,8 +329,9 @@ function LoginForm({ onSwitchToSignup }) {
 var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
       if (result.error) throw result.error;
 
-      try {
-        await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
+try {
+        console.log('Firing log-login for', result.data.user.id);
+        var logRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -338,7 +339,10 @@ var result = await supabase.auth.signInWithPassword({ email: email.trim(), passw
             user_agent: navigator.userAgent
           })
         });
-      } catch (_) {}
+        console.log('log-login response:', logRes.status);
+      } catch (logErr) {
+        console.error('log-login error:', logErr);
+      }
 
       navigate('/dashboard', { replace: true });
     } catch (err) {
