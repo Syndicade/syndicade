@@ -576,7 +576,7 @@ setStep(3)
     finally{setSaving(false)}
   }
 
-  async function handleStep4Next(planOptions) {
+async function handleStep4Next(planOptions) {
     if(!data.selected_plan){toast.error('Please select a plan to continue.');return}
     var updates = { onboarding_completed: true }
     if (data.selected_plan === 'student' && planOptions && planOptions.eduEmail) {
@@ -584,6 +584,13 @@ setStep(3)
       updates.edu_email_verified = false
     }
     await supabase.from('organizations').update(updates).eq('id',createdOrgId)
+    if (data.selected_plan === 'student' && planOptions && planOptions.eduEmail) {
+      await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/verify-contact-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: createdOrgId, type: 'edu' })
+      });
+    }
     mascotSuccessToast(data.name+' is ready!','Your organization has been created.')
     setStep(5)
   }

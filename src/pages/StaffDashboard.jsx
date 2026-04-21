@@ -324,11 +324,21 @@ function OrgDrawer({ org, subscription, onClose, onAction }) {
         <div className="flex-1 px-6 py-5 space-y-6">
           {/* Badges */}
           <div className="flex gap-2 flex-wrap">
-            {org.is_verified_nonprofit && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-700 bg-green-500/10 text-green-400 border border-green-500/20">
-                <CheckCircle size={11} aria-hidden="true" /> Verified Nonprofit
-              </span>
-            )}
+{org.is_verified_nonprofit && (
+  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-700 bg-green-500/10 text-green-400 border border-green-500/20">
+    <CheckCircle size={11} aria-hidden="true" /> Verified Nonprofit
+  </span>
+)}
+{org.edu_email && !org.edu_email_verified && (
+  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-700 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+    <AlertTriangle size={11} aria-hidden="true" /> .edu Unverified
+  </span>
+)}
+{org.edu_email && org.edu_email_verified && (
+  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-700 bg-blue-500/10 text-blue-400 border border-blue-500/20">
+    <CheckCircle size={11} aria-hidden="true" /> .edu Verified
+  </span>
+)}
             <span className={'inline-flex items-center px-3 py-1 rounded-full text-[12px] font-700 border ' + (subscription?.status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' : subscription?.status === 'trialing' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-[#2A3550] text-[#64748B] border-[#2A3550]')}>
               {subscription?.status === 'active' ? 'Paid' : subscription?.status === 'trialing' ? 'Trial' : 'Free'}
             </span>
@@ -477,7 +487,7 @@ function OrgsTab() {
     if (!query.trim()) return;
     setLoading(true); setSearched(true);
     var { data: orgs, error } = await supabase.from('organizations')
-      .select('id, name, slug, org_number, city, state, created_at, is_verified_nonprofit')
+      .select('id, name, slug, org_number, city, state, created_at, is_verified_nonprofit, edu_email, edu_email_verified')
       .or('name.ilike.%' + query + '%,city.ilike.%' + query + '%,state.ilike.%' + query + '%').limit(25);
     if (error) { toast.error('Search failed.'); setLoading(false); return; }
     setResults(orgs || []);
