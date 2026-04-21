@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
-const FROM_ADDRESS = 'onboarding@resend.dev'
+const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -15,10 +15,24 @@ serve(async (req) => {
   }
 
   try {
-    var authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: corsHeaders })
-    }
+var bodyText = await req.text();
+var parsedBody = JSON.parse(bodyText);
+
+// Contact form shortcut — anonymous, no org_id, internal recipient only
+if (parsedBody.type === 'contact_form') {
+  var RESEND_API_KEY_CF = Deno.env.get('RESEND_API_KEY');
+  var cfRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY_CF, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: FROM_ADDRESS, to: 'hello@syndicade.org', subject: parsedBody.subject, html: parsedBody.html })
+  });
+  return new Response(JSON.stringify({ success: cfRes.ok }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+
+var authHeader = req.headers.get('Authorization')
+if (!authHeader) {
+  return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: corsHeaders })
+}
 
     var supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -36,7 +50,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
     }
 
-    var body = await req.json()
+var body = parsedBody
     var { org_id, subject, html_body, audience, template_name, attachments, test_email } = body
 
     if (!org_id || !subject || !html_body || !audience) {
