@@ -410,8 +410,10 @@ export default function EventDiscovery() {
             orgLogoUrl: selectedEvent.org_logo_url || '',
             eventDate: eventDate + ' at ' + eventTime,
             eventLocation: selectedEvent.is_virtual ? 'Virtual Event' : (selectedEvent.location || ''),
-            eventUrl: window.location.origin + '/events/' + selectedEvent.id,
                       eventId: selectedEvent.id,
+                      startISO: selectedEvent.start_time,
+                      endISO: selectedEvent.end_time || selectedEvent.start_time,
+                      eventUrl: window.location.origin + '/events/' + selectedEvent.id,
           },
         }),
       });

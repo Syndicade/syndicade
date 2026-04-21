@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 
-function Icon({ path, className }) {
+function Icon({ path, size }) {
+  var s = size || 18;
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className || 'h-5 w-5'} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+    <svg width={s} height={s} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       {Array.isArray(path)
-        ? path.map(function(d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d} />; })
+        ? path.map(function (d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d} />; })
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />}
     </svg>
   );
@@ -16,7 +18,9 @@ function Icon({ path, className }) {
 var ICONS = {
   megaphone: ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
   x:         'M6 18L18 6M6 6l12 12',
-  pin:       ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
+  pin:       'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z',
+  check:     'M5 13l4 4L19 7',
+  spinner:   null,
 };
 
 function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
@@ -31,46 +35,61 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
   var [error, setError] = useState(null);
 
   var priorityOptions = [
-    { value: 'urgent', label: 'Urgent',       description: 'Critical, time-sensitive' },
-    { value: 'normal', label: 'Normal',        description: 'Standard announcement' },
-    { value: 'low',    label: 'Low Priority',  description: 'FYI, non-urgent' },
+    { value: 'urgent', label: 'Urgent',      description: 'Critical, time-sensitive' },
+    { value: 'normal', label: 'Normal',       description: 'Standard announcement' },
+    { value: 'low',    label: 'Low Priority', description: 'FYI, non-urgent' },
   ];
-
-  var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400';
-  var labelCls = 'block text-sm font-semibold text-gray-900 mb-2';
 
   function handleChange(e) {
     var name = e.target.name;
     var value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setFormData(function(prev) { return Object.assign({}, prev, { [name]: value }); });
+    setFormData(function (prev) { return Object.assign({}, prev, { [name]: value }); });
+  }
+
+  function resetForm() {
+    setFormData({ title: '', content: '', priority: 'normal', is_pinned: false, expires_at: '' });
+    setError(null);
+  }
+
+  function handleClose() {
+    resetForm();
+    onClose();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
+
+    if (formData.title.trim().length < 3) {
+      toast.error('Title must be at least 3 characters.');
+      return;
+    }
+    if (formData.content.trim().length < 10) {
+      toast.error('Content must be at least 10 characters.');
+      return;
+    }
+
     setLoading(true);
+    var loadingToast = toast.loading('Posting announcement...');
 
     try {
-      if (formData.title.trim().length < 3) throw new Error('Title must be at least 3 characters');
-      if (formData.content.trim().length < 10) throw new Error('Content must be at least 10 characters');
+      var authRes = await supabase.auth.getUser();
+      if (authRes.error) throw authRes.error;
+      var user = authRes.data.user;
+      if (!user) throw new Error('You must be logged in');
 
-      var authResult = await supabase.auth.getUser();
-      if (authResult.error) throw authResult.error;
-      if (!authResult.data.user) throw new Error('You must be logged in');
-      var user = authResult.data.user;
-
-      // Determine approval status based on role
-      var memberResult = await supabase
+      var memberRes = await supabase
         .from('memberships')
         .select('role')
         .eq('organization_id', organizationId)
         .eq('member_id', user.id)
         .eq('status', 'active')
         .maybeSingle();
-      var userRole = memberResult.data ? memberResult.data.role : 'member';
+
+      var userRole = memberRes.data ? memberRes.data.role : 'member';
       var approvalStatus = userRole === 'admin' ? 'approved' : 'pending';
 
-      var insertResult = await supabase
+      var insertRes = await supabase
         .from('announcements')
         .insert([{
           organization_id: organizationId,
@@ -85,13 +104,13 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
         .select()
         .single();
 
-      if (insertResult.error) throw insertResult.error;
-      var newAnnouncement = insertResult.data;
+      if (insertRes.error) throw insertRes.error;
+      var newAnnouncement = insertRes.data;
 
-// Send notifications only if approved
       if (approvalStatus === 'approved') {
+        // In-app notifications
         try {
-          var notificationResult = await notifyOrganizationMembers({
+          var notifRes = await notifyOrganizationMembers({
             organizationId: organizationId,
             type: 'announcement',
             title: 'New Announcement',
@@ -99,14 +118,14 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
             link: '/organizations/' + organizationId,
             excludeUserId: null,
           });
-          if (!notificationResult.error) {
+          if (!notifRes.error) {
             window.dispatchEvent(new CustomEvent('notificationCreated'));
           }
-        } catch (notifError) {
-          console.error('Notification failed (announcement still created):', notifError);
+        } catch (notifErr) {
+          console.error('Notification failed (announcement still created):', notifErr);
         }
 
-        // Send email to all members if urgent
+        // Email all members if urgent
         if (formData.priority === 'urgent') {
           try {
             var membersRes = await supabase
@@ -119,8 +138,8 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
               var announcementUrl = window.location.origin + '/organizations/' + organizationId;
               var emailPromises = membersRes.data
-                .filter(function(m) { return m.members && m.members.email; })
-                .map(function(m) {
+                .filter(function (m) { return m.members && m.members.email; })
+                .map(function (m) {
                   return fetch(SUPABASE_URL + '/functions/v1/send-email', {
                     method: 'POST',
                     headers: {
@@ -142,24 +161,26 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               await Promise.allSettled(emailPromises);
             }
           } catch (emailErr) {
-            console.error('Urgent announcement emails failed:', emailErr);
+            console.error('Urgent emails failed:', emailErr);
           }
         }
       }
 
-      setFormData({ title: '', content: '', priority: 'normal', is_pinned: false, expires_at: '' });
-      if (onSuccess) onSuccess(newAnnouncement);
+      toast.dismiss(loadingToast);
 
       if (approvalStatus === 'pending') {
-        toast.success('Announcement submitted for admin approval.');
+        mascotSuccessToast('Announcement submitted!', 'Waiting for admin approval.');
       } else {
-        toast.success('Announcement posted successfully.');
+        mascotSuccessToast('Announcement posted!', 'Your members will see it now.');
       }
 
+      if (onSuccess) onSuccess(newAnnouncement);
+      resetForm();
       onClose();
     } catch (err) {
       console.error('CreateAnnouncement error:', err);
-      toast.error('Failed to create announcement: ' + err.message);
+      toast.dismiss(loadingToast);
+      mascotErrorToast('Failed to post announcement.', err.message);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -168,58 +189,74 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
 
   if (!isOpen) return null;
 
+  var isSubmitDisabled = loading || formData.title.trim().length < 3 || formData.content.trim().length < 10;
+
+  // Shared input style
+  var inputStyle = {
+    width: '100%', padding: '12px 16px', background: '#0E1523', border: '1px solid #2A3550',
+    borderRadius: '8px', color: '#FFFFFF', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+    fontFamily: 'inherit'
+  };
+
+  var labelStyle = { display: 'block', color: '#CBD5E1', fontSize: '13px', fontWeight: 600, marginBottom: '6px' };
+
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-      onKeyDown={function(e) { if (e.key === 'Escape') onClose(); }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+      onClick={handleClose}
+      onKeyDown={function (e) { if (e.key === 'Escape') handleClose(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-announcement-title"
     >
       <div
-        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col"
-        onClick={function(e) { e.stopPropagation(); }}
+        style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '16px', maxWidth: '640px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}
+        onClick={function (e) { e.stopPropagation(); }}
       >
-        {/* Sticky header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
-              <Icon path={ICONS.megaphone} className="h-5 w-5 text-orange-500" />
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #2A3550', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', background: 'rgba(59,130,246,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6', flexShrink: 0 }} aria-hidden="true">
+              <Icon path={ICONS.megaphone} size={18} />
             </div>
             <div>
-              <h2 id="create-announcement-title" className="text-xl font-bold text-gray-900">
+              <h2 id="create-announcement-title" style={{ color: '#FFFFFF', fontSize: '18px', fontWeight: 700, margin: 0 }}>
                 Create Announcement
               </h2>
-              <p className="text-gray-500 text-sm">{organizationName}</p>
+              <p style={{ color: '#64748B', fontSize: '13px', margin: 0 }}>{organizationName}</p>
             </div>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            onClick={handleClose}
+            style={{ padding: '8px', color: '#64748B', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="hover:bg-white hover:bg-opacity-5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Close dialog"
           >
-            <Icon path={ICONS.x} className="h-5 w-5" />
+            <Icon path={ICONS.x} size={18} />
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-6 py-6 space-y-5">
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-              <p className="text-red-800 font-semibold text-sm">{error}</p>
+            <div
+              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '12px 16px' }}
+              role="alert"
+            >
+              <p style={{ color: '#EF4444', fontSize: '14px', margin: 0, fontWeight: 600 }}>{error}</p>
             </div>
           )}
 
           {/* Title */}
           <div>
-            <label htmlFor="announcement-title" className={labelCls}>
-              Title <span className="text-red-500" aria-hidden="true">*</span>
+            <label htmlFor="ann-title" style={labelStyle}>
+              Title <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
             </label>
             <input
-              id="announcement-title"
+              id="ann-title"
               name="title"
               type="text"
               required
@@ -227,19 +264,21 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               value={formData.title}
               onChange={handleChange}
               placeholder="e.g., Important Meeting Update"
-              className={inputCls}
+              style={inputStyle}
               maxLength={200}
+              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
             />
-            <p className="text-xs text-gray-400 mt-1" aria-live="polite">{formData.title.length}/200</p>
+            <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }} aria-live="polite">{formData.title.length}/200</p>
           </div>
 
           {/* Content */}
           <div>
-            <label htmlFor="announcement-content" className={labelCls}>
-              Content <span className="text-red-500" aria-hidden="true">*</span>
+            <label htmlFor="ann-content" style={labelStyle}>
+              Content <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
             </label>
             <textarea
-              id="announcement-content"
+              id="ann-content"
               name="content"
               required
               aria-required="true"
@@ -247,23 +286,27 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               onChange={handleChange}
               placeholder="Write your announcement here..."
               rows={6}
-              className={inputCls + ' resize-none'}
+              style={Object.assign({}, inputStyle, { resize: 'none' })}
               maxLength={2000}
+              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
             />
-            <p className="text-xs text-gray-400 mt-1" aria-live="polite">{formData.content.length}/2000</p>
+            <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }} aria-live="polite">{formData.content.length}/2000</p>
           </div>
 
           {/* Priority */}
           <div>
-            <label htmlFor="announcement-priority" className={labelCls}>Priority</label>
+            <label htmlFor="ann-priority" style={labelStyle}>Priority</label>
             <select
-              id="announcement-priority"
+              id="ann-priority"
               name="priority"
               value={formData.priority}
               onChange={handleChange}
-              className={inputCls}
+              style={Object.assign({}, inputStyle, { cursor: 'pointer' })}
+              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
             >
-              {priorityOptions.map(function(opt) {
+              {priorityOptions.map(function (opt) {
                 return (
                   <option key={opt.value} value={opt.value}>
                     {opt.label + ' — ' + opt.description}
@@ -271,79 +314,102 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
                 );
               })}
             </select>
+            {formData.priority === 'urgent' && (
+              <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '6px' }}>
+                Urgent announcements send an email notification to all members.
+              </p>
+            )}
           </div>
 
           {/* Pin + Expiry */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className={'flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ' +
-              (formData.is_pinned ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50')}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+            {/* Pin toggle */}
+            <label
+              htmlFor="ann-pin"
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '16px',
+                background: formData.is_pinned ? 'rgba(59,130,246,0.08)' : '#0E1523',
+                border: '1px solid ' + (formData.is_pinned ? '#3B82F6' : '#2A3550'),
+                borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s'
+              }}
+            >
               <input
-                id="announcement-pin"
+                id="ann-pin"
                 name="is_pinned"
                 type="checkbox"
                 checked={formData.is_pinned}
                 onChange={handleChange}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                style={{ marginTop: '2px', flexShrink: 0, accentColor: '#3B82F6' }}
+                className="focus:ring-2 focus:ring-blue-500"
               />
-              <div className="flex items-start gap-2">
-                <Icon path={ICONS.pin} className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <span style={{ color: '#3B82F6', flexShrink: 0, marginTop: '1px' }}>
+                  <Icon path={ICONS.pin} size={15} />
+                </span>
                 <div>
-                  <p className="font-semibold text-gray-900 text-sm">Pin Announcement</p>
-                  <p className="text-xs text-gray-500">Keep at top of feed</p>
+                  <p style={{ color: '#FFFFFF', fontSize: '13px', fontWeight: 600, margin: 0 }}>Pin Announcement</p>
+                  <p style={{ color: '#64748B', fontSize: '12px', margin: '2px 0 0' }}>Keep at top of feed</p>
                 </div>
               </div>
             </label>
 
+            {/* Expiry */}
             <div>
-              <label htmlFor="announcement-expires" className={labelCls}>
-                Expiration Date <span className="text-gray-400 font-normal">(optional)</span>
+              <label htmlFor="ann-expires" style={labelStyle}>
+                Expiration <span style={{ color: '#64748B', fontWeight: 400 }}>(optional)</span>
               </label>
               <input
-                id="announcement-expires"
+                id="ann-expires"
                 name="expires_at"
                 type="datetime-local"
                 value={formData.expires_at}
                 onChange={handleChange}
-                className={inputCls}
+                style={Object.assign({}, inputStyle, { colorScheme: 'dark' })}
+                onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
+                onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
               />
-              <p className="text-xs text-gray-400 mt-1">Auto-hide after this date</p>
+              <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }}>Auto-hide after this date</p>
             </div>
           </div>
 
         </div>
 
-        {/* Sticky footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+        {/* Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', borderTop: '1px solid #2A3550', flexShrink: 0 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={loading}
-            className="px-6 py-3 bg-transparent border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all disabled:opacity-50 text-sm"
+            style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #2A3550', color: '#CBD5E1', fontWeight: 600, borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: loading ? 0.5 : 1 }}
+            className="hover:bg-white hover:bg-opacity-5 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={loading || formData.title.trim().length < 3 || formData.content.trim().length < 10}
-            className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2 text-sm"
+            disabled={isSubmitDisabled}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: isSubmitDisabled ? '#1E2845' : '#3B82F6', border: 'none', color: isSubmitDisabled ? '#64748B' : '#FFFFFF', fontWeight: 600, borderRadius: '8px', cursor: isSubmitDisabled ? 'not-allowed' : 'pointer', fontSize: '14px', transition: 'background 0.15s' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             {loading ? (
               <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                <svg style={{ animation: 'spin 1s linear infinite' }} width="16" height="16" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
                 Posting...
               </>
             ) : (
               <>
-                <Icon path={ICONS.megaphone} className="h-4 w-4" />
+                <Icon path={ICONS.megaphone} size={16} />
                 Post Announcement
               </>
             )}
           </button>
         </div>
+
       </div>
     </div>
   );

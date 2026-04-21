@@ -106,7 +106,7 @@ serve(async (req) => {
     }
 
     var RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-    var FROM_ADDRESS = 'onboarding@resend.dev'
+    var FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>'
 
     var sentCount = 0
     var errors = []

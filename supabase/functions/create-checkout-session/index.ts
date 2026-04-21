@@ -207,8 +207,9 @@ Deno.serve(async function(req) {
       customerId = customer.id
     }
 
-    var priceId = PRICE_IDS[plan + '_' + interval]
-    if (!priceId) throw new Error('Invalid plan')
+if (plan === 'student' && interval === 'year') throw new Error('Student plan is monthly only')
+var priceId = PRICE_IDS[plan + '_' + interval]
+if (!priceId) throw new Error('Invalid plan')
 
     var successUrl = body.success_url || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
 var cancelUrl  = body.cancel_url  || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=cancelled'
