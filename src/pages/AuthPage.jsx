@@ -326,12 +326,11 @@ function LoginForm({ onSwitchToSignup }) {
     setErrors({});
     setLoading(true);
     try {
-      var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
+var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
       if (result.error) throw result.error;
 
-      // Fire-and-forget login log
       try {
-        fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
+        await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
