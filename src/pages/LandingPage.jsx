@@ -191,18 +191,20 @@ async function handleContactSubmit(e) {
     if (result.error) throw result.error;
 
     // Send email notification to hello@syndicade.org
-await supabase.functions.invoke('send-email', {
-  body: {
+await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-email', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE'
+  },
+  body: JSON.stringify({
     to: 'hello@syndicade.org',
     subject: 'New Contact Form Submission — ' + contactForm.name,
     html: '<p><strong>Name:</strong> ' + contactForm.name + '</p>' +
           '<p><strong>Email:</strong> ' + contactForm.email + '</p>' +
           (contactForm.organization ? '<p><strong>Organization:</strong> ' + contactForm.organization + '</p>' : '') +
-          '<p><strong>Message:</strong></p><p>' + contactForm.message + '</p>',
-  },
-  headers: {
-    Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE'
-  }
+          '<p><strong>Message:</strong></p><p>' + contactForm.message + '</p>'
+  })
 });
 
     setContactStatus('success');
