@@ -1,188 +1,292 @@
 import { useState } from 'react';
-import { downloadDocument, formatFileSize, getFileIcon } from '../lib/documentService';
+import { downloadDocument, formatFileSize, recordDocumentView, getUploaderName } from '../lib/documentService';
 import EditDocumentModal from './EditDocumentModal';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import MoveDocumentModal from './MoveDocumentModal';
+import DocumentViewersModal from './DocumentViewersModal';
+import { useTheme } from '../context/ThemeContext';
+import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
+import toast from 'react-hot-toast';
+import {
+  Eye,
+  Download,
+  Pencil,
+  FolderInput,
+  Trash2,
+  FileText,
+  Image,
+  File,
+  Loader2,
+  User
+} from 'lucide-react';
 
 /**
- * DocumentCard Component
- * Displays a single document with download, edit, view, and delete actions
- * 
+ * DocumentCard
+ *
  * Props:
- * - document: Document object from database
- * - viewMode: 'grid' or 'list'
- * - isAdmin: Boolean - whether current user is admin
- * - onDelete: Function to call when delete button clicked
- * - onUpdate: Function to call when document is updated (OPTIONAL)
- * 
- * ADA Compliant:
- * - ARIA labels on all buttons
- * - Keyboard accessible
- * - Screen reader friendly
+ * - document: object from DB (includes uploader, view_count)
+ * - viewMode: 'grid' | 'list'
+ * - userRole: 'admin' | 'editor' | 'member'
+ * - organizationId: string
+ * - onDelete: function(documentId)
+ * - onUpdate: function(updatedDoc) — optional
  */
-function DocumentCard({ document, viewMode = 'grid', isAdmin = false, organizationId, onDelete, onUpdate }) {
-  const [downloading, setDownloading] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showMoveModal, setShowMoveModal] = useState(false);
-  const [localDoc, setLocalDoc] = useState(document);
+function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDelete, onUpdate }) {
+  var { isDark } = useTheme();
+  var [downloading, setDownloading] = useState(false);
+  var [showEditModal, setShowEditModal] = useState(false);
+  var [showPreview, setShowPreview] = useState(false);
+  var [showMoveModal, setShowMoveModal] = useState(false);
+  var [showViewers, setShowViewers] = useState(false);
+  var [localDoc, setLocalDoc] = useState(doc);
+
+  var canManage = userRole === 'admin' || userRole === 'editor';
+  var canSeeViewers = userRole === 'admin' || userRole === 'editor';
+
+  // Theme tokens
+  var card = isDark
+    ? 'bg-[#1A2035] border-[#2A3550] hover:border-[#3B82F6]'
+    : 'bg-white border-gray-200 hover:border-blue-400';
+  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
+  var textSecondary = isDark ? 'text-[#CBD5E1]' : 'text-[#475569]';
+  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-[#64748B]';
+  var previewBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-100';
+  var badgeBg = isDark ? 'bg-[#0E1523] text-[#94A3B8]' : 'bg-gray-100 text-gray-600';
+  var dividerColor = isDark ? 'bg-[#2A3550]' : 'bg-gray-200';
+  var iconBtnBase = 'p-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors';
+
+  var isImage = localDoc.file_type && localDoc.file_type.startsWith('image/');
+  var isPDF = localDoc.file_type && localDoc.file_type.includes('pdf');
+  var uploaderName = getUploaderName(localDoc.uploader);
+
+  // Safe integer extraction — guards against Supabase returning {count:N} objects
+  var rawCount = localDoc.view_count;
+  var viewCount = (typeof rawCount === 'number') ? rawCount : 0;
+
+  function getFileIconNode(sizeClass) {
+    if (isImage) return <Image className={sizeClass + ' text-purple-400'} aria-hidden="true" />;
+    if (isPDF) return <FileText className={sizeClass + ' text-red-400'} aria-hidden="true" />;
+    return <File className={sizeClass + ' text-blue-400'} aria-hidden="true" />;
+  }
+
+  async function handlePreviewOpen() {
+    setShowPreview(true);
+    await recordDocumentView(localDoc.id);
+    setLocalDoc(function(prev) {
+      var current = (typeof prev.view_count === 'number') ? prev.view_count : 0;
+      return { ...prev, view_count: current + 1 };
+    });
+  }
 
   async function handleDownload() {
     setDownloading(true);
-    const { data, error } = await downloadDocument(localDoc.id);
-    
-    if (error) {
-      alert(`Error downloading: ${error}`);
-    } else if (data?.signedUrl) {
-      // Trigger download using window.document
-      const link = window.document.createElement('a');
-      link.href = data.signedUrl;
-      link.download = data.fileName;
+    var toastId = toast.loading('Preparing download...');
+    var result = await downloadDocument(localDoc.id);
+    toast.dismiss(toastId);
+    if (result.error) {
+      mascotErrorToast('Download failed.', result.error);
+    } else if (result.data && result.data.signedUrl) {
+      var link = window.document.createElement('a');
+      link.href = result.data.signedUrl;
+      link.download = result.data.fileName;
       window.document.body.appendChild(link);
       link.click();
       window.document.body.removeChild(link);
+      mascotSuccessToast('Download started!');
     }
     setDownloading(false);
   }
 
-  const handleEditSuccess = (updatedDoc) => {
-    // Update local state
+  function handleEditSuccess(updatedDoc) {
     setLocalDoc(updatedDoc);
-    
-    // Call parent's onUpdate if provided
-    if (onUpdate) {
-      onUpdate(updatedDoc);
-    }
-  };
+    if (onUpdate) onUpdate(updatedDoc);
+  }
 
-  const handleMoveSuccess = (movedDoc) => {
-    // Update local state
+  function handleMoveSuccess(movedDoc) {
     setLocalDoc(movedDoc);
-    
-    // Call parent's onUpdate if provided
-    if (onUpdate) {
-      onUpdate(movedDoc);
+    if (onUpdate) onUpdate(movedDoc);
+  }
+
+  // ─── INLINE HELPERS (not JSX components — called as expressions) ──────────
+
+  function renderFileIcon(sizeClass) {
+    return getFileIconNode(sizeClass);
+  }
+
+  function renderUploaderRow() {
+    return (
+      <p className={'flex items-center gap-1 text-xs truncate ' + textMuted}>
+        <User className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+        {uploaderName}
+      </p>
+    );
+  }
+
+  function renderViewCount() {
+    if (viewCount === 0) return null;
+    if (canSeeViewers) {
+      return (
+        <button
+          onClick={function() { setShowViewers(true); }}
+          className={'flex items-center gap-1 text-xs rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors '
+            + (isDark ? 'text-[#94A3B8] hover:text-blue-400' : 'text-[#64748B] hover:text-blue-500')}
+          aria-label={'See ' + viewCount + ' members who viewed this document'}
+          title="See who viewed this document"
+        >
+          <Eye className="w-3 h-3" aria-hidden="true" />
+          {viewCount}
+        </button>
+      );
     }
-  };
+    return (
+      <span className={'flex items-center gap-1 text-xs ' + textMuted} aria-label={viewCount + ' views'}>
+        <Eye className="w-3 h-3" aria-hidden="true" />
+        {viewCount}
+      </span>
+    );
+  }
 
-  const isImage = localDoc.file_type?.startsWith('image/');
-  const isPDF = localDoc.file_type?.includes('pdf');
-
-  // LIST VIEW
-  if (viewMode === 'list') {
+  function renderModals() {
     return (
       <>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow flex items-center gap-4">
-          {/* File Icon */}
-          <div className="text-2xl flex-shrink-0" aria-hidden="true">
-            {isImage ? '🖼️' : isPDF ? '📄' : '📎'}
-          </div>
-          
-          {/* File Info */}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 truncate">
-              {localDoc.title}
-            </h3>
-            <p className="text-sm text-gray-600 truncate">
-              {localDoc.file_name}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {formatFileSize(localDoc.file_size_bytes)} • 
-              {' '}{new Date(localDoc.uploaded_at).toLocaleDateString()}
-            </p>
-          </div>
-          
-          {/* Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => setShowPreview(true)}
-              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              aria-label={`Preview ${localDoc.title}`}
-            >
-              👁️ Preview
-            </button>
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={`Download ${localDoc.title}`}
-            >
-              {downloading ? 'Downloading...' : '⬇️ Download'}
-            </button>
-            
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setShowEditModal(true)}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label={`Edit ${localDoc.title}`}
-                  title="Edit document"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => setShowMoveModal(true)}
-                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  aria-label={`Move ${localDoc.title}`}
-                  title="Move to folder"
-                >
-                  📦
-                </button>
-                <button
-                  onClick={() => onDelete && onDelete(localDoc.id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                  aria-label={`Delete ${localDoc.title}`}
-                  title="Delete document"
-                >
-                  🗑️
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Edit Modal */}
         {showEditModal && (
           <EditDocumentModal
             isOpen={showEditModal}
-            onClose={() => setShowEditModal(false)}
+            onClose={function() { setShowEditModal(false); }}
             document={localDoc}
             onSuccess={handleEditSuccess}
           />
         )}
-
-        {/* Preview Modal */}
         {showPreview && (
           <DocumentPreviewModal
             isOpen={showPreview}
-            onClose={() => setShowPreview(false)}
+            onClose={function() { setShowPreview(false); }}
             document={localDoc}
           />
         )}
-
-        {/* Move Modal */}
         {showMoveModal && (
           <MoveDocumentModal
             isOpen={showMoveModal}
-            onClose={() => setShowMoveModal(false)}
+            onClose={function() { setShowMoveModal(false); }}
             document={localDoc}
             organizationId={organizationId}
             onSuccess={handleMoveSuccess}
+          />
+        )}
+        {showViewers && (
+          <DocumentViewersModal
+            isOpen={showViewers}
+            onClose={function() { setShowViewers(false); }}
+            document={localDoc}
           />
         )}
       </>
     );
   }
 
-  // GRID VIEW
+  function renderManageButtons() {
+    if (!canManage) return null;
+    return (
+      <>
+        <button
+          onClick={function() { setShowEditModal(true); }}
+          className={iconBtnBase + ' text-blue-400 hover:bg-blue-500 hover:bg-opacity-10 focus:ring-blue-500'}
+          aria-label={'Edit ' + localDoc.title}
+          title="Edit"
+        >
+          <Pencil className="w-4 h-4" aria-hidden="true" />
+        </button>
+        <button
+          onClick={function() { setShowMoveModal(true); }}
+          className={iconBtnBase + ' text-purple-400 hover:bg-purple-500 hover:bg-opacity-10 focus:ring-purple-500'}
+          aria-label={'Move ' + localDoc.title + ' to a folder'}
+          title="Move to folder"
+        >
+          <FolderInput className="w-4 h-4" aria-hidden="true" />
+        </button>
+        <button
+          onClick={function() { if (onDelete) onDelete(localDoc.id); }}
+          className={iconBtnBase + ' text-red-400 hover:bg-red-500 hover:bg-opacity-10 focus:ring-red-500'}
+          aria-label={'Delete ' + localDoc.title}
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" aria-hidden="true" />
+        </button>
+      </>
+    );
+  }
+
+  // ─── LIST VIEW ────────────────────────────────────────────────────────────
+  if (viewMode === 'list') {
+    return (
+      <>
+        <div className={'border rounded-xl p-4 flex items-center gap-4 transition-all ' + card}>
+          <div className={'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + previewBg}>
+            {renderFileIcon('w-5 h-5')}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h3 className={'font-semibold truncate text-sm ' + textPrimary}>{localDoc.title}</h3>
+            <p className={'text-xs truncate mt-0.5 ' + textMuted}>{localDoc.file_name}</p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <span className={'text-xs ' + textMuted}>
+                {formatFileSize(localDoc.file_size_bytes)}
+                {' \u2022 '}
+                {new Date(localDoc.uploaded_at).toLocaleDateString()}
+              </span>
+              {renderUploaderRow()}
+            </div>
+          </div>
+
+          <div className="flex-shrink-0">
+            {renderViewCount()}
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handlePreviewOpen}
+              className={'px-3 py-1.5 text-sm rounded-lg border font-medium flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors '
+                + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845]' : 'border-gray-300 text-gray-700 hover:bg-gray-50')}
+              aria-label={'Preview ' + localDoc.title}
+            >
+              <Eye className="w-4 h-4" aria-hidden="true" />
+              Preview
+            </button>
+
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg font-medium flex items-center gap-1.5 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label={'Download ' + localDoc.title}
+            >
+              {downloading
+                ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                : <Download className="w-4 h-4" aria-hidden="true" />}
+              {downloading ? 'Downloading...' : 'Download'}
+            </button>
+
+            {canManage && (
+              <>
+                <div className={'w-px h-5 flex-shrink-0 ' + dividerColor} aria-hidden="true" />
+                {renderManageButtons()}
+              </>
+            )}
+          </div>
+        </div>
+        {renderModals()}
+      </>
+    );
+  }
+
+  // ─── GRID VIEW ────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow group">
-        {/* Preview/Icon Section - CLICKABLE */}
+      <div className={'border rounded-xl overflow-hidden transition-all group ' + card}>
+
         <button
-          onClick={() => setShowPreview(true)}
-          className="w-full h-40 bg-gray-100 flex items-center justify-center relative overflow-hidden hover:bg-gray-200 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-          aria-label={`Preview ${localDoc.title}`}
+          onClick={handlePreviewOpen}
+          className={'w-full h-40 flex items-center justify-center relative overflow-hidden transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ' + previewBg}
+          aria-label={'Preview ' + localDoc.title}
         >
           {isImage ? (
             <img
@@ -192,133 +296,67 @@ function DocumentCard({ document, viewMode = 'grid', isAdmin = false, organizati
               loading="lazy"
             />
           ) : (
-            <div className="text-6xl" aria-hidden="true">
-              {isPDF ? '📄' : '📎'}
+            <div className={'w-16 h-16 rounded-2xl flex items-center justify-center ' + (isDark ? 'bg-[#1A2035]' : 'bg-white shadow-sm')}>
+              {renderFileIcon('w-8 h-8')}
             </div>
           )}
-          
-          {/* Quick Preview Overlay (appears on hover) */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <div className="text-white text-5xl">
-              👁️
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <div className="bg-white bg-opacity-20 rounded-full p-3">
+              <Eye className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
           </div>
         </button>
 
-        {/* Content Section */}
         <div className="p-4">
-          <h3 className="font-semibold text-gray-900 truncate mb-1" title={localDoc.title}>
+          <h3 className={'font-semibold truncate text-sm mb-0.5 ' + textPrimary} title={localDoc.title}>
             {localDoc.title}
           </h3>
-          
-          <p className="text-sm text-gray-600 truncate mb-2" title={localDoc.file_name}>
+          <p className={'text-xs truncate mb-1 ' + textMuted} title={localDoc.file_name}>
             {localDoc.file_name}
           </p>
-          
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+
+          <div className="mb-2">
+            {renderUploaderRow()}
+          </div>
+
+          <div className={'flex items-center justify-between text-xs mb-3 ' + textMuted}>
             <span>{formatFileSize(localDoc.file_size_bytes)}</span>
             <span>{new Date(localDoc.uploaded_at).toLocaleDateString()}</span>
           </div>
 
-          {/* Description (if exists) */}
           {localDoc.description && (
-            <p className="text-xs text-gray-600 line-clamp-2 mb-3">
+            <p className={'text-xs mb-3 line-clamp-2 ' + textSecondary}>
               {localDoc.description}
             </p>
           )}
 
-          {/* Action Buttons */}
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label={`Download ${localDoc.title}`}
+              className="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded-lg font-medium flex items-center justify-center gap-1.5 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label={'Download ' + localDoc.title}
             >
-              {downloading ? (
-                <>
-                  <span className="inline-block animate-spin mr-1">⏳</span>
-                  Downloading...
-                </>
-              ) : (
-                '⬇️ Download'
-              )}
+              {downloading
+                ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                : <Download className="w-4 h-4" aria-hidden="true" />}
+              {downloading ? 'Downloading...' : 'Download'}
             </button>
-            
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setShowEditModal(true)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                  aria-label={`Edit ${localDoc.title}`}
-                  title="Edit document"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => setShowMoveModal(true)}
-                  className="p-2 text-purple-600 hover:bg-purple-50 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
-                  aria-label={`Move ${localDoc.title}`}
-                  title="Move to folder"
-                >
-                  📦
-                </button>
-                <button
-                  onClick={() => onDelete && onDelete(localDoc.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                  aria-label={`Delete ${localDoc.title}`}
-                  title="Delete document"
-                >
-                  🗑️
-                </button>
-              </>
-            )}
+
+            {renderManageButtons()}
           </div>
 
-          {/* File Type Badge */}
-          <div className="mt-2 flex items-center justify-between">
-            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-              {localDoc.file_extension?.toUpperCase() || 'FILE'}
+          <div className="mt-3 flex items-center justify-between">
+            <span className={'inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ' + badgeBg}>
+              {renderFileIcon('w-3 h-3')}
+              {localDoc.file_extension ? localDoc.file_extension.toUpperCase() : 'FILE'}
             </span>
-            
-            {localDoc.view_count > 0 && (
-              <span className="text-xs text-gray-500" title="View count">
-                👁️ {localDoc.view_count}
-              </span>
-            )}
+            {renderViewCount()}
           </div>
         </div>
       </div>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <EditDocumentModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          document={localDoc}
-          onSuccess={handleEditSuccess}
-        />
-      )}
-
-      {/* Preview Modal */}
-      {showPreview && (
-        <DocumentPreviewModal
-          isOpen={showPreview}
-          onClose={() => setShowPreview(false)}
-          document={localDoc}
-        />
-      )}
-
-      {/* Move Modal */}
-      {showMoveModal && (
-        <MoveDocumentModal
-          isOpen={showMoveModal}
-          onClose={() => setShowMoveModal(false)}
-          document={localDoc}
-          organizationId={organizationId}
-          onSuccess={handleMoveSuccess}
-        />
-      )}
+      {renderModals()}
     </>
   );
 }

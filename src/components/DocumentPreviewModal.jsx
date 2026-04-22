@@ -1,274 +1,289 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { mascotErrorToast } from './MascotToast';
+import toast from 'react-hot-toast';
+import {
+  Download,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  FileQuestion,
+  AlertTriangle,
+  Loader2
+} from 'lucide-react';
 
 /**
- * DocumentPreviewModal Component
- * 
- * Displays document previews in a modal overlay.
- * Supports PDFs (with page navigation) and images (with zoom).
- * 
+ * DocumentPreviewModal
+ *
  * Props:
- * - isOpen: boolean - Controls modal visibility
- * - onClose: function - Called when modal should close
- * - document: object - Document to preview (must have file_url, file_type, title)
- * 
- * Features:
- * - PDF viewing with page navigation
- * - Image viewing with zoom controls
- * - Download button
- * - Keyboard shortcuts (Escape, Arrow keys)
- * - Loading states
- * - Error handling
- * - ADA compliant
+ * - isOpen: boolean
+ * - onClose: function
+ * - document: object (file_url, file_type, file_name, title, file_size_bytes)
+ *
+ * Supports PDF iframe preview and image preview with zoom controls.
+ * ADA compliant: role="dialog", aria-modal, aria-labelledby, focus trap via Escape.
  */
-function DocumentPreviewModal({ isOpen, onClose, document }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [signedUrl, setSignedUrl] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(100);
+function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
+  var { isDark } = useTheme();
+  var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
+  var [signedUrl, setSignedUrl] = useState(null);
+  var [zoomLevel, setZoomLevel] = useState(100);
 
-  // Fetch signed URL when document changes
-  useEffect(() => {
-    if (!document || !isOpen) return;
+  // Theme tokens
+  var modalBg = isDark ? 'bg-[#1A2035]' : 'bg-white';
+  var headerBorder = isDark ? 'border-[#2A3550]' : 'border-gray-200';
+  var footerBg = isDark ? 'bg-[#151B2D] border-[#2A3550]' : 'bg-gray-50 border-gray-200';
+  var previewBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-100';
+  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
+  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-[#64748B]';
+  var kbdStyle = isDark
+    ? 'bg-[#0E1523] border-[#2A3550] text-[#CBD5E1]'
+    : 'bg-white border-gray-300 text-gray-700';
+  var zoomBtnBase = 'px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+  var zoomBtnSecondary = isDark
+    ? 'bg-[#0E1523] text-[#CBD5E1] hover:bg-[#2A3550]'
+    : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+
+  // Fetch signed URL
+  useEffect(function() {
+    if (!doc || !isOpen) return;
+    setLoading(true);
+    setError(null);
+    setSignedUrl(null);
+    setZoomLevel(100);
 
     async function getSignedUrl() {
-      setLoading(true);
-      setError(null);
-
       try {
-        // Extract bucket path from file_url
-        // file_url format: "https://xxx.supabase.co/storage/v1/object/public/documents/org-id/file.pdf"
-        const urlParts = document.file_url.split('/documents/');
-        if (urlParts.length < 2) {
-          throw new Error('Invalid file URL format');
-        }
-        const filePath = urlParts[1];
+        var filePath = doc.storage_path || (doc.file_url.split('/documents/')[1] || null);
+        if (!filePath) throw new Error('Could not determine file path.');
 
-        // Get signed URL (valid for 1 hour)
-        const { data, error: urlError } = await supabase.storage
+        var result = await supabase.storage
           .from('documents')
-          .createSignedUrl(filePath, 3600); // 1 hour
+          .createSignedUrl(filePath, 3600);
 
-        if (urlError) throw urlError;
-
-        setSignedUrl(data.signedUrl);
-        setLoading(false);
+        if (result.error) throw result.error;
+        setSignedUrl(result.data.signedUrl);
       } catch (err) {
-        console.error('Error fetching signed URL:', err);
-        setError(err.message);
+        setError(err.message || 'Could not load preview.');
+      } finally {
         setLoading(false);
       }
     }
 
     getSignedUrl();
-  }, [document, isOpen]);
+  }, [doc, isOpen]);
 
-  // Keyboard shortcut: Escape to close
-  useEffect(() => {
+  // Escape key to close
+  useEffect(function() {
     if (!isOpen) return;
-
     function handleKeyDown(e) {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     }
-
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return function() { window.removeEventListener('keydown', handleKeyDown); };
   }, [isOpen, onClose]);
 
-  // Handle download
-  const handleDownload = () => {
+  function handleDownload() {
     if (!signedUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = signedUrl;
-    link.download = document.file_name || document.title;
-    link.click();
-  };
+    var toastId = toast.loading('Preparing download...');
+    try {
+      var link = window.document.createElement('a');
+      link.href = signedUrl;
+      link.download = doc.file_name || doc.title;
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      toast.dismiss(toastId);
+    } catch (err) {
+      toast.dismiss(toastId);
+      mascotErrorToast('Download failed.', 'Please try again.');
+    }
+  }
 
-  // Zoom controls
-  const zoomIn = () => setZoomLevel(prev => Math.min(prev + 25, 200));
-  const zoomOut = () => setZoomLevel(prev => Math.max(prev - 25, 50));
-  const resetZoom = () => setZoomLevel(100);
+  function zoomIn() { setZoomLevel(function(prev) { return Math.min(prev + 25, 200); }); }
+  function zoomOut() { setZoomLevel(function(prev) { return Math.max(prev - 25, 50); }); }
+  function resetZoom() { setZoomLevel(100); }
 
-  if (!isOpen || !document) return null;
+  if (!isOpen || !doc) return null;
 
-  const isPDF = document.file_type === 'application/pdf';
-  const isImage = document.file_type?.startsWith('image/');
+  var isPDF = doc.file_type === 'application/pdf';
+  var isImage = doc.file_type && doc.file_type.startsWith('image/');
+  var fileSizeKB = doc.file_size_bytes ? (doc.file_size_bytes / 1024).toFixed(1) + ' KB' : '';
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50"
+    <div
+      className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="preview-title"
+      aria-labelledby="preview-modal-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col">
-        
+      <div className={'rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden ' + modalBg}>
+
         {/* Header */}
-        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className={'border-b px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0 ' + headerBorder}>
           <div className="flex-1 min-w-0">
-            <h2 
-              id="preview-title"
-              className="text-xl font-bold text-gray-900 truncate"
+            <h2
+              id="preview-modal-title"
+              className={'text-lg font-bold truncate ' + textPrimary}
             >
-              {document.title}
+              {doc.title}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {document.file_name} • {(document.file_size_bytes / 1024).toFixed(2)} KB
-            </p>
+            {(doc.file_name || fileSizeKB) && (
+              <p className={'text-xs mt-0.5 truncate ' + textMuted}>
+                {doc.file_name}{fileSizeKB ? ' \u2022 ' + fileSizeKB : ''}
+              </p>
+            )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3 ml-4">
-            {/* Download Button */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             <button
               onClick={handleDownload}
               disabled={!signedUrl}
-              className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg text-sm flex items-center gap-2 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Download document"
             >
-              <span>⬇️</span>
+              <Download className="w-4 h-4" aria-hidden="true" />
               Download
             </button>
-
-            {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all"
+              className={'p-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 '
+                + (isDark ? 'text-[#94A3B8] hover:text-white hover:bg-[#2A3550]' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}
               aria-label="Close preview"
             >
-              <span className="text-2xl">✕</span>
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Preview Area */}
-        <div className="flex-1 overflow-auto bg-gray-50 p-6">
+        <div className={'flex-1 overflow-auto p-6 flex flex-col items-center justify-center ' + previewBg}>
+
+          {/* Loading */}
           {loading && (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div 
-                className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"
-                role="status"
-                aria-label="Loading preview"
+            <div className="flex flex-col items-center gap-4" role="status" aria-label="Loading preview">
+              <Loader2 className="w-12 h-12 text-blue-400 animate-spin" aria-hidden="true" />
+              <p className={textMuted}>Loading preview...</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {!loading && error && (
+            <div className={'rounded-xl border p-8 max-w-sm text-center ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')} role="alert">
+              <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" aria-hidden="true" />
+              <h3 className={'font-semibold mb-1 ' + textPrimary}>Preview Unavailable</h3>
+              <p className={'text-sm mb-4 ' + textMuted}>{error}</p>
+              <button
+                onClick={handleDownload}
+                disabled={!signedUrl}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
-                <span className="sr-only">Loading...</span>
-              </div>
-              <p className="text-gray-600 mt-4">Loading preview...</p>
+                Download Instead
+              </button>
             </div>
           )}
 
-          {error && (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-                <p className="text-red-800 font-semibold mb-2">❌ Preview Error</p>
-                <p className="text-red-700 text-sm">{error}</p>
-                <button
-                  onClick={handleDownload}
-                  disabled={!signedUrl}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Download Instead
-                </button>
-              </div>
-            </div>
-          )}
-
+          {/* Content */}
           {!loading && !error && signedUrl && (
             <>
-              {/* PDF Preview */}
+              {/* PDF */}
               {isPDF && (
-                <div className="flex flex-col items-center">
+                <div className="w-full flex flex-col items-center gap-4">
                   <iframe
                     src={signedUrl}
-                    className="w-full bg-white shadow-lg rounded-lg"
-                    style={{ height: '70vh' }}
-                    title={`Preview of ${document.title}`}
+                    className="w-full rounded-lg shadow-lg bg-white"
+                    style={{ height: '68vh' }}
+                    title={'Preview of ' + doc.title}
                   />
-                  
-                  <p className="mt-4 text-sm text-gray-600 bg-white rounded-lg shadow-md px-6 py-3">
-                    💡 Use the PDF's built-in controls to navigate pages and zoom
+                  <p className={'text-xs ' + textMuted}>
+                    Use the PDF viewer controls to navigate pages and zoom.
                   </p>
                 </div>
               )}
 
-              {/* Image Preview */}
+              {/* Image */}
               {isImage && (
-                <div className="flex flex-col items-center">
-                  <div className="bg-white rounded-lg shadow-lg p-4 mb-4 overflow-auto max-h-[70vh]">
+                <div className="w-full flex flex-col items-center gap-4">
+                  <div className="overflow-auto max-h-[62vh] rounded-lg shadow-lg">
                     <img
                       src={signedUrl}
-                      alt={document.title}
-                      style={{ 
-                        width: `${zoomLevel}%`,
-                        maxWidth: 'none',
-                        height: 'auto'
-                      }}
-                      className="mx-auto"
+                      alt={doc.title}
+                      style={{ width: zoomLevel + '%', maxWidth: 'none', height: 'auto' }}
+                      className="block mx-auto"
                     />
                   </div>
 
-                  {/* Image Zoom Controls */}
-                  <div className="bg-white rounded-lg shadow-md px-6 py-3 flex items-center gap-4">
+                  {/* Zoom Controls */}
+                  <div className={'flex items-center gap-3 rounded-xl border px-5 py-3 shadow-sm ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')}>
                     <button
                       onClick={zoomOut}
                       disabled={zoomLevel <= 50}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={zoomBtnBase + ' ' + zoomBtnSecondary}
                       aria-label="Zoom out"
                     >
-                      🔍−
+                      <ZoomOut className="w-4 h-4" aria-hidden="true" />
+                      Zoom Out
                     </button>
 
-                    <span className="text-gray-700 font-medium min-w-[80px] text-center">
+                    <span className={'text-sm font-semibold min-w-[52px] text-center ' + textPrimary}>
                       {zoomLevel}%
                     </span>
 
                     <button
                       onClick={zoomIn}
                       disabled={zoomLevel >= 200}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={zoomBtnBase + ' ' + zoomBtnSecondary}
                       aria-label="Zoom in"
                     >
-                      🔍+
+                      <ZoomIn className="w-4 h-4" aria-hidden="true" />
+                      Zoom In
                     </button>
+
+                    <div className={'w-px h-5 ' + (isDark ? 'bg-[#2A3550]' : 'bg-gray-200')} aria-hidden="true" />
 
                     <button
                       onClick={resetZoom}
-                      className="px-4 py-2 bg-blue-100 text-blue-700 font-semibold rounded-lg hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label="Reset zoom"
+                      className={zoomBtnBase + ' text-blue-400 ' + (isDark ? 'hover:bg-[#2A3550]' : 'hover:bg-blue-50')}
+                      aria-label="Reset zoom to 100%"
                     >
+                      <RotateCcw className="w-4 h-4" aria-hidden="true" />
                       Reset
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Unsupported File Type */}
+              {/* Unsupported */}
               {!isPDF && !isImage && (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md text-center">
-                    <p className="text-yellow-800 font-semibold mb-2">📄 Preview Not Available</p>
-                    <p className="text-yellow-700 text-sm mb-4">
-                      This file type cannot be previewed in the browser.
-                    </p>
-                    <button
-                      onClick={handleDownload}
-                      className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      Download to View
-                    </button>
-                  </div>
+                <div className={'rounded-xl border p-10 max-w-sm text-center ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')}>
+                  <FileQuestion className={'w-12 h-12 mx-auto mb-3 ' + textMuted} aria-hidden="true" />
+                  <h3 className={'font-semibold mb-1 ' + textPrimary}>Preview Not Available</h3>
+                  <p className={'text-sm mb-5 ' + textMuted}>
+                    This file type cannot be previewed in the browser.
+                  </p>
+                  <button
+                    onClick={handleDownload}
+                    className="px-5 py-2.5 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2 mx-auto"
+                  >
+                    <Download className="w-4 h-4" aria-hidden="true" />
+                    Download to View
+                  </button>
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* Footer - Keyboard Shortcuts */}
-        <div className="border-t border-gray-200 px-6 py-3 bg-gray-50">
-          <p className="text-xs text-gray-500 text-center">
-            💡 <strong>Tip:</strong> Press <kbd className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-700">Esc</kbd> to close
+        {/* Footer */}
+        <div className={'border-t px-6 py-3 flex-shrink-0 ' + footerBg}>
+          <p className={'text-xs text-center ' + textMuted}>
+            Press{' '}
+            <kbd className={'px-1.5 py-0.5 rounded border text-xs font-mono ' + kbdStyle}>Esc</kbd>
+            {' '}to close
           </p>
         </div>
       </div>

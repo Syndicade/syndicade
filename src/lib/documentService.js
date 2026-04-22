@@ -11,7 +11,7 @@ import { supabase } from './supabase';
 
 export async function fetchFolders(organizationId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_folders')
       .select('*')
       .eq('organization_id', organizationId)
@@ -19,8 +19,8 @@ export async function fetchFolders(organizationId) {
       .order('sort_order')
       .order('name');
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching folders:', error);
     return { data: null, error: error.message };
@@ -29,11 +29,11 @@ export async function fetchFolders(organizationId) {
 
 export async function fetchFolderBreadcrumbs(folderId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .rpc('get_folder_breadcrumbs', { folder_uuid: folderId });
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching breadcrumbs:', error);
     return { data: null, error: error.message };
@@ -42,17 +42,18 @@ export async function fetchFolderBreadcrumbs(folderId) {
 
 export async function createFolder(folderData) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    var userResult = await supabase.auth.getUser();
+    if (!userResult.data || !userResult.data.user) throw new Error('Not authenticated');
+    var user = userResult.data.user;
 
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_folders')
       .insert([{ ...folderData, created_by: user.id }])
       .select()
       .single();
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error creating folder:', error);
     return { data: null, error: error.message };
@@ -61,15 +62,15 @@ export async function createFolder(folderData) {
 
 export async function updateFolder(folderId, updates) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_folders')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', folderId)
       .select()
       .single();
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error updating folder:', error);
     return { data: null, error: error.message };
@@ -78,12 +79,12 @@ export async function updateFolder(folderId, updates) {
 
 export async function deleteFolder(folderId) {
   try {
-    const { error } = await supabase
+    var result = await supabase
       .from('document_folders')
       .delete()
       .eq('id', folderId);
 
-    if (error) throw error;
+    if (result.error) throw result.error;
     return { error: null };
   } catch (error) {
     console.error('Error deleting folder:', error);
@@ -93,10 +94,10 @@ export async function deleteFolder(folderId) {
 
 export async function createDefaultFolders(organizationId) {
   try {
-    const { error } = await supabase
+    var result = await supabase
       .rpc('create_default_folders', { org_uuid: organizationId });
 
-    if (error) throw error;
+    if (result.error) throw result.error;
     return { error: null };
   } catch (error) {
     console.error('Error creating default folders:', error);
@@ -108,11 +109,16 @@ export async function createDefaultFolders(organizationId) {
 // DOCUMENT OPERATIONS
 // ============================================
 
-export async function fetchDocuments(organizationId, folderId = null) {
+export async function fetchDocuments(organizationId, folderId) {
   try {
-    let query = supabase
+    var query = supabase
       .from('documents')
-      .select('*, folder:document_folders(id, name, color)')
+      .select(
+        '*, ' +
+        'folder:document_folders(id, name, color), ' +
+        'uploader:members!uploaded_by(user_id, first_name, last_name, display_name, avatar_url), ' +
+        'view_count:document_views(count)'
+      )
       .eq('organization_id', organizationId)
       .eq('is_current_version', true)
       .eq('status', 'approved');
@@ -125,35 +131,46 @@ export async function fetchDocuments(organizationId, folderId = null) {
 
     query = query.order('uploaded_at', { ascending: false });
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return { data, error: null };
+    var result = await query;
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching documents:', error);
     return { data: null, error: error.message };
   }
 }
 
-export async function searchDocuments(organizationId, searchTerm, filters = {}) {
+export async function searchDocuments(organizationId, searchTerm, filters) {
   try {
-    let query = supabase
+    var query = supabase
       .from('documents')
-      .select('*, folder:document_folders(name)')
+      .select(
+        '*, ' +
+        'folder:document_folders(name), ' +
+        'uploader:members!uploaded_by(user_id, first_name, last_name, display_name, avatar_url), ' +
+        'view_count:document_views(count)'
+      )
       .eq('organization_id', organizationId)
       .eq('is_current_version', true)
       .eq('status', 'approved');
 
     if (searchTerm) {
-      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,file_name.ilike.%${searchTerm}%`);
+      query = query.or(
+        'title.ilike.%' + searchTerm + '%,' +
+        'description.ilike.%' + searchTerm + '%,' +
+        'file_name.ilike.%' + searchTerm + '%'
+      );
     }
 
-    if (filters.fileType) query = query.eq('file_type', filters.fileType);
-    if (filters.folderId) query = query.eq('folder_id', filters.folderId);
-    if (filters.tags && filters.tags.length > 0) query = query.contains('tags', filters.tags);
+    if (filters) {
+      if (filters.fileType) query = query.eq('file_type', filters.fileType);
+      if (filters.folderId) query = query.eq('folder_id', filters.folderId);
+      if (filters.tags && filters.tags.length > 0) query = query.contains('tags', filters.tags);
+    }
 
-    const { data, error } = await query.order('uploaded_at', { ascending: false });
-    if (error) throw error;
-    return { data, error: null };
+    var result = await query.order('uploaded_at', { ascending: false });
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error searching documents:', error);
     return { data: null, error: error.message };
@@ -162,49 +179,49 @@ export async function searchDocuments(organizationId, searchTerm, filters = {}) 
 
 export async function fetchDocument(documentId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('documents')
-      .select('*, folder:document_folders(id, name)')
+      .select(
+        '*, ' +
+        'folder:document_folders(id, name), ' +
+        'uploader:members!uploaded_by(user_id, first_name, last_name, display_name, avatar_url)'
+      )
       .eq('id', documentId)
       .single();
 
-    if (error) throw error;
+    if (result.error) throw result.error;
     await logAccess(documentId, 'view');
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching document:', error);
     return { data: null, error: error.message };
   }
 }
 
-/**
- * Upload document to storage and create database record.
- * Accepts optional allowedGroups (array of group UUIDs) and visibility.
- */
 export async function uploadDocument(file, metadata) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    var userResult = await supabase.auth.getUser();
+    if (!userResult.data || !userResult.data.user) throw new Error('Not authenticated');
+    var user = userResult.data.user;
 
     if (file.size > 26214400) {
       throw new Error('File size exceeds 25MB limit');
     }
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `${metadata.organizationId}/${metadata.folderId || 'root'}/${fileName}`;
+    var fileExt = file.name.split('.').pop();
+    var fileName = Date.now() + '-' + Math.random().toString(36).substring(7) + '.' + fileExt;
+    var filePath = metadata.organizationId + '/' + (metadata.folderId || 'root') + '/' + fileName;
 
-    const { error: uploadError } = await supabase.storage
+    var uploadResult = await supabase.storage
       .from('documents')
       .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-    if (uploadError) throw uploadError;
+    if (uploadResult.error) throw uploadResult.error;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
+    var urlResult = supabase.storage.from('documents').getPublicUrl(filePath);
+    var publicUrl = urlResult.data.publicUrl;
 
-    const { data: docData, error: docError } = await supabase
+    var docResult = await supabase
       .from('documents')
       .insert([{
         organization_id: metadata.organizationId,
@@ -227,13 +244,13 @@ export async function uploadDocument(file, metadata) {
       .select()
       .single();
 
-    if (docError) {
+    if (docResult.error) {
       await supabase.storage.from('documents').remove([filePath]);
-      throw docError;
+      throw docResult.error;
     }
 
-    await logAccess(docData.id, 'upload');
-    return { data: docData, error: null };
+    await logAccess(docResult.data.id, 'upload');
+    return { data: docResult.data, error: null };
   } catch (error) {
     console.error('Error uploading document:', error);
     return { data: null, error: error.message };
@@ -242,29 +259,28 @@ export async function uploadDocument(file, metadata) {
 
 export async function downloadDocument(documentId) {
   try {
-    const { data: doc, error: docError } = await supabase
+    var docResult = await supabase
       .from('documents')
       .select('file_url, file_name, allow_download, storage_path')
       .eq('id', documentId)
       .single();
 
-    if (docError) throw docError;
-    if (!doc.allow_download) throw new Error('Download not allowed for this document');
+    if (docResult.error) throw docResult.error;
+    if (!docResult.data.allow_download) throw new Error('Download not allowed for this document');
 
-    // Use storage_path if available, fall back to parsing file_url
-    const filePath = doc.storage_path || (() => {
-      const urlParts = doc.file_url.split('/documents/');
+    var filePath = docResult.data.storage_path || (function() {
+      var urlParts = docResult.data.file_url.split('/documents/');
       if (urlParts.length < 2) throw new Error('Invalid file URL');
       return urlParts[1];
     })();
 
-    const { data: signedData, error: signedError } = await supabase.storage
+    var signedResult = await supabase.storage
       .from('documents')
       .createSignedUrl(filePath, 3600);
 
-    if (signedError) throw signedError;
+    if (signedResult.error) throw signedResult.error;
     await logAccess(documentId, 'download');
-    return { data: { signedUrl: signedData.signedUrl, fileName: doc.file_name }, error: null };
+    return { data: { signedUrl: signedResult.data.signedUrl, fileName: docResult.data.file_name }, error: null };
   } catch (error) {
     console.error('Error downloading document:', error);
     return { data: null, error: error.message };
@@ -273,16 +289,16 @@ export async function downloadDocument(documentId) {
 
 export async function updateDocument(documentId, updates) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('documents')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', documentId)
       .select()
       .single();
 
-    if (error) throw error;
+    if (result.error) throw result.error;
     await logAccess(documentId, 'edit');
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error updating document:', error);
     return { data: null, error: error.message };
@@ -291,16 +307,16 @@ export async function updateDocument(documentId, updates) {
 
 export async function deleteDocument(documentId) {
   try {
-    const { data: doc, error: docError } = await supabase
+    var docResult = await supabase
       .from('documents')
       .select('file_url, storage_path')
       .eq('id', documentId)
       .single();
 
-    if (docError) throw docError;
+    if (docResult.error) throw docResult.error;
 
-    const filePath = doc.storage_path || (() => {
-      const urlParts = doc.file_url.split('/documents/');
+    var filePath = docResult.data.storage_path || (function() {
+      var urlParts = docResult.data.file_url.split('/documents/');
       return urlParts.length >= 2 ? urlParts[1] : null;
     })();
 
@@ -308,12 +324,12 @@ export async function deleteDocument(documentId) {
       await supabase.storage.from('documents').remove([filePath]);
     }
 
-    const { error: deleteError } = await supabase
+    var deleteResult = await supabase
       .from('documents')
       .delete()
       .eq('id', documentId);
 
-    if (deleteError) throw deleteError;
+    if (deleteResult.error) throw deleteResult.error;
     return { error: null };
   } catch (error) {
     console.error('Error deleting document:', error);
@@ -323,18 +339,72 @@ export async function deleteDocument(documentId) {
 
 export async function moveDocument(documentId, newFolderId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('documents')
       .update({ folder_id: newFolderId, updated_at: new Date().toISOString() })
       .eq('id', documentId)
       .select()
       .single();
 
-    if (error) throw error;
+    if (result.error) throw result.error;
     await logAccess(documentId, 'edit');
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error moving document:', error);
+    return { data: null, error: error.message };
+  }
+}
+
+// ============================================
+// DOCUMENT VIEWS
+// ============================================
+
+/**
+ * Record that the current user viewed a document.
+ * Uses upsert — each member gets one row per document, updated_at refreshes on repeat views.
+ */
+export async function recordDocumentView(documentId) {
+  try {
+    var userResult = await supabase.auth.getUser();
+    if (!userResult.data || !userResult.data.user) return { error: null }; // silently skip if not authed
+
+    var user = userResult.data.user;
+
+    var result = await supabase
+      .from('document_views')
+      .upsert(
+        { document_id: documentId, member_id: user.id, viewed_at: new Date().toISOString() },
+        { onConflict: 'document_id,member_id' }
+      );
+
+    if (result.error) throw result.error;
+    return { error: null };
+  } catch (error) {
+    console.error('Error recording document view:', error);
+    return { error: error.message };
+  }
+}
+
+/**
+ * Fetch list of members who have viewed a document.
+ * Admin/editor only — enforced in UI, backed by RLS.
+ * Returns: [{ member_id, viewed_at, member: { first_name, last_name, display_name, avatar_url } }]
+ */
+export async function getDocumentViewers(documentId) {
+  try {
+    var result = await supabase
+      .from('document_views')
+      .select(
+        'member_id, viewed_at, ' +
+        'member:members!member_id(user_id, first_name, last_name, display_name, avatar_url)'
+      )
+      .eq('document_id', documentId)
+      .order('viewed_at', { ascending: false });
+
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
+  } catch (error) {
+    console.error('Error fetching document viewers:', error);
     return { data: null, error: error.message };
   }
 }
@@ -356,15 +426,15 @@ async function logAccess(documentId, action) {
 
 export async function fetchAccessLog(documentId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_access_log')
       .select('*, member:member_id(id)')
       .eq('document_id', documentId)
       .order('accessed_at', { ascending: false })
       .limit(50);
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching access log:', error);
     return { data: null, error: error.message };
@@ -373,15 +443,16 @@ export async function fetchAccessLog(documentId) {
 
 export async function markAsRead(documentId) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    var userResult = await supabase.auth.getUser();
+    if (!userResult.data || !userResult.data.user) throw new Error('Not authenticated');
+    var user = userResult.data.user;
 
-    const { error } = await supabase
+    var result = await supabase
       .from('document_reads')
       .insert([{ document_id: documentId, member_id: user.id, completed: true }])
       .select();
 
-    if (error && error.code !== '23505') throw error;
+    if (result.error && result.error.code !== '23505') throw result.error;
     return { error: null };
   } catch (error) {
     console.error('Error marking as read:', error);
@@ -391,18 +462,19 @@ export async function markAsRead(documentId) {
 
 export async function hasUserRead(documentId) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { hasRead: false, error: null };
+    var userResult = await supabase.auth.getUser();
+    if (!userResult.data || !userResult.data.user) return { hasRead: false, error: null };
+    var user = userResult.data.user;
 
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_reads')
       .select('id')
       .eq('document_id', documentId)
       .eq('member_id', user.id)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error;
-    return { hasRead: !!data, error: null };
+    if (result.error && result.error.code !== 'PGRST116') throw result.error;
+    return { hasRead: !!result.data, error: null };
   } catch (error) {
     console.error('Error checking read status:', error);
     return { hasRead: false, error: error.message };
@@ -411,16 +483,16 @@ export async function hasUserRead(documentId) {
 
 export async function fetchReadingStats(documentId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('document_reads')
       .select('member_id, read_at, completed')
       .eq('document_id', documentId);
 
-    if (error) throw error;
-    return { data, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Error fetching reading stats:', error);
-    return { data: null, error: error.message };
+    return { data: result.data, error: error.message };
   }
 }
 
@@ -430,11 +502,11 @@ export async function fetchReadingStats(documentId) {
 
 export async function fetchStorageUsage(organizationId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .rpc('get_organization_storage_usage', { org_uuid: organizationId });
 
-    if (error) throw error;
-    return { data: data[0] || { total_files: 0, total_bytes: 0, total_mb: 0 }, error: null };
+    if (result.error) throw result.error;
+    return { data: result.data[0] || { total_files: 0, total_bytes: 0, total_mb: 0 }, error: null };
   } catch (error) {
     console.error('Error fetching storage usage:', error);
     return { data: null, error: error.message };
@@ -443,24 +515,24 @@ export async function fetchStorageUsage(organizationId) {
 
 export async function fetchDocumentStats(organizationId) {
   try {
-    const { data, error } = await supabase
+    var result = await supabase
       .from('documents')
       .select('file_type, file_size_bytes, uploaded_at')
       .eq('organization_id', organizationId)
       .eq('is_current_version', true)
       .eq('status', 'approved');
 
-    if (error) throw error;
+    if (result.error) throw result.error;
 
-    const stats = {
-      totalFiles: data.length,
-      totalSize: data.reduce((sum, doc) => sum + doc.file_size_bytes, 0),
+    var stats = {
+      totalFiles: result.data.length,
+      totalSize: result.data.reduce(function(sum, doc) { return sum + doc.file_size_bytes; }, 0),
       byType: {},
-      recentUploads: data.slice(0, 10).map(d => ({ date: d.uploaded_at, size: d.file_size_bytes })),
+      recentUploads: result.data.slice(0, 10).map(function(d) { return { date: d.uploaded_at, size: d.file_size_bytes }; }),
     };
 
-    data.forEach(doc => {
-      const type = doc.file_type.split('/')[0];
+    result.data.forEach(function(doc) {
+      var type = doc.file_type.split('/')[0];
       stats.byType[type] = (stats.byType[type] || 0) + 1;
     });
 
@@ -476,10 +548,10 @@ export async function fetchDocumentStats(organizationId) {
 // ============================================
 
 export function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  if (!bytes || bytes === 0) return '0 Bytes';
+  var k = 1024;
+  var sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
@@ -496,9 +568,21 @@ export function getFileIcon(fileType) {
   return 'file';
 }
 
-export function validateFile(file, maxSize = 26214400) {
-  const errors = [];
-  if (file.size > maxSize) errors.push(`File size exceeds ${formatFileSize(maxSize)} limit`);
+export function validateFile(file, maxSize) {
+  var limit = maxSize || 26214400;
+  var errors = [];
+  if (file.size > limit) errors.push('File size exceeds ' + formatFileSize(limit) + ' limit');
   if (!file || file.size === 0) errors.push('File is empty or invalid');
-  return { isValid: errors.length === 0, errors };
+  return { isValid: errors.length === 0, errors: errors };
+}
+
+/**
+ * Get a member's display name from an uploader object.
+ * Prefers display_name, falls back to first + last, then 'Unknown'.
+ */
+export function getUploaderName(uploader) {
+  if (!uploader) return 'Unknown';
+  if (uploader.display_name) return uploader.display_name;
+  var parts = [uploader.first_name, uploader.last_name].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'Unknown';
 }
