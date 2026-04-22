@@ -1,96 +1,69 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
 import { Calendar, Package, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-/**
- * MySignups Component
- * Shows the current user's sign-ups across organizations
- * Can be filtered by organization on unified dashboard
- */
-function MySignups({ organizationId = null, showFilter = false }) {
-  const [signups, setSignups] = useState([]);
-  const [organizations, setOrganizations] = useState([]);
-  const [selectedOrg, setSelectedOrg] = useState('all');
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+function MySignups({ organizationId, showFilter, headingId }) {
+  var { isDark } = useTheme();
+  var [signups, setSignups] = useState([]);
+  var [organizations, setOrganizations] = useState([]);
+  var [selectedOrg, setSelectedOrg] = useState('all');
+  var [loading, setLoading] = useState(true);
+  var navigate = useNavigate();
 
-  useEffect(() => {
+  // Color tokens
+  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
+  var border = isDark ? '#2A3550' : '#E2E8F0';
+  var textPrimary = isDark ? '#FFFFFF' : '#0F172A';
+  var textSecondary = isDark ? '#CBD5E1' : '#475569';
+  var textMuted = isDark ? '#94A3B8' : '#64748B';
+  var itemBg = isDark ? '#0E1523' : '#F8FAFC';
+  var itemBorderHover = '#3B82F6';
+  var inputBg = isDark ? '#1E2845' : '#FFFFFF';
+  var inputBorder = isDark ? '#2A3550' : '#CBD5E1';
+
+  useEffect(function() {
     fetchSignups();
-    if (showFilter) {
-      fetchOrganizations();
-    }
+    if (showFilter) fetchOrganizations();
   }, [organizationId, selectedOrg]);
 
-  const fetchOrganizations = async () => {
+  var fetchOrganizations = async function() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      var { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data } = await supabase
+      var { data } = await supabase
         .from('memberships')
         .select('organization_id, organizations(id, name)')
         .eq('member_id', user.id)
         .eq('status', 'active');
-
-      if (data) {
-        setOrganizations(data.map(m => m.organizations).filter(Boolean));
-      }
+      if (data) setOrganizations(data.map(function(m) { return m.organizations; }).filter(Boolean));
     } catch (err) {
       console.error('Error fetching organizations:', err);
     }
   };
 
-  const fetchSignups = async () => {
+  var fetchSignups = async function() {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      var { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      let query = supabase
+      var { data, error } = await supabase
         .from('signup_responses')
-        .select(`
-          id,
-          quantity,
-          created_at,
-          signup_items (
-            id,
-            item_name,
-            slot_type,
-            max_slots,
-            current_signups,
-            signup_forms (
-              id,
-              title,
-              organization_id,
-              organizations (
-                id,
-                name
-              )
-            )
-          )
-        `)
+        .select('id, quantity, created_at, signup_items(id, item_name, slot_type, max_slots, current_signups, signup_forms(id, title, organization_id, organizations(id, name)))')
         .eq('member_id', user.id)
         .order('created_at', { ascending: false });
 
-      const { data, error } = await query;
-
       if (error) throw error;
 
-      // Filter by organization if needed
-      let filteredData = data || [];
-      
+      var filtered = data || [];
       if (organizationId) {
-        filteredData = filteredData.filter(
-          s => s.signup_items?.signup_forms?.organization_id === organizationId
-        );
+        filtered = filtered.filter(function(s) { return s.signup_items?.signup_forms?.organization_id === organizationId; });
       } else if (selectedOrg !== 'all') {
-        filteredData = filteredData.filter(
-          s => s.signup_items?.signup_forms?.organization_id === selectedOrg
-        );
+        filtered = filtered.filter(function(s) { return s.signup_items?.signup_forms?.organization_id === selectedOrg; });
       }
-
-      setSignups(filteredData);
+      setSignups(filtered);
     } catch (err) {
       console.error('Error fetching signups:', err);
     } finally {
@@ -98,116 +71,110 @@ function MySignups({ organizationId = null, showFilter = false }) {
     }
   };
 
-  const handleViewForm = (formId, orgId) => {
-    navigate(`/organizations/${orgId}/signup-forms`);
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+  var formatDate = function(dateString) {
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-          <div className="space-y-3">
-            <div className="h-16 bg-gray-200 rounded"></div>
-            <div className="h-16 bg-gray-200 rounded"></div>
-          </div>
-        </div>
+      <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {[1, 2, 3].map(function(i) {
+          return (
+            <div key={i} style={{ height: '64px', borderRadius: '8px', background: isDark ? '#0E1523' : '#F1F5F9' }} className="animate-pulse" />
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      {/* Header */}
-<div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 flex-shrink-0">
-          <Package size={20} className="text-blue-600" aria-hidden="true" />
-          My Sign-Ups
-        </h3>
-        {showFilter && organizations.length > 1 && (
+    <div style={{ padding: '16px' }}>
+      {/* Org filter — only shown when showFilter=true */}
+      {showFilter && organizations.length > 1 && (
+        <div style={{ marginBottom: '12px' }}>
+          <label htmlFor="signups-org-filter" style={{ fontSize: '11px', fontWeight: 700, color: textMuted, display: 'block', marginBottom: '4px' }}>
+            Filter by org
+          </label>
           <select
+            id="signups-org-filter"
             value={selectedOrg}
-            onChange={(e) => setSelectedOrg(e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            onChange={function(e) { setSelectedOrg(e.target.value); }}
+            style={{ width: '100%', padding: '7px 10px', background: inputBg, border: '1px solid ' + inputBorder, borderRadius: '8px', color: textPrimary, fontSize: '13px', cursor: 'pointer' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Organizations</option>
-            {organizations.map(org => (
-              <option key={org.id} value={org.id}>{org.name}</option>
-            ))}
+            {organizations.map(function(org) {
+              return <option key={org.id} value={org.id}>{org.name}</option>;
+            })}
           </select>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Signups List */}
+      {/* Empty state */}
       {signups.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Package size={48} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm">No sign-ups yet</p>
-          <p className="text-xs mt-1">Sign up for volunteer spots or items to see them here</p>
+        <div style={{ textAlign: 'center', padding: '28px 16px' }}>
+          <Package size={36} style={{ color: textMuted, margin: '0 auto 10px', opacity: 0.5 }} aria-hidden="true" />
+          <p style={{ fontSize: '13px', fontWeight: 600, color: textPrimary, marginBottom: '4px' }}>No sign-ups yet</p>
+          <p style={{ fontSize: '12px', color: textMuted, lineHeight: 1.5 }}>Sign up for volunteer spots or items to see them here.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {signups.map((signup) => {
-            const item = signup.signup_items;
-            const form = item?.signup_forms;
-            const org = form?.organizations;
-            const isSpots = item?.slot_type === 'spots';
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {signups.map(function(signup) {
+            var item = signup.signup_items;
+            var form = item?.signup_forms;
+            var org = form?.organizations;
+            var isSpots = item?.slot_type === 'spots';
 
             return (
-              <div
+              <button
                 key={signup.id}
-                className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors cursor-pointer"
-                onClick={() => handleViewForm(form?.id, org?.id)}
+                onClick={function() { if (org?.id) navigate('/organizations/' + org.id + '/signup-forms'); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', background: itemBg, border: '1px solid ' + border, borderRadius: '8px', padding: '12px', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                aria-label={'View sign-up: ' + (item?.item_name || 'item') + ' in ' + (form?.title || 'form')}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-400"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium text-gray-900">{item?.item_name}</h4>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item?.item_name}
+                      </span>
                       {signup.quantity > 1 && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                          {signup.quantity} {isSpots ? (signup.quantity === 1 ? 'spot' : 'spots') : 'items'}
+                        <span style={{ padding: '1px 6px', background: 'rgba(59,130,246,0.15)', color: '#3B82F6', fontSize: '11px', fontWeight: 600, borderRadius: '99px', flexShrink: 0 }}>
+                          &times;{signup.quantity} {isSpots ? 'spots' : 'items'}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">{form?.title}</p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <p style={{ fontSize: '12px', color: textSecondary, marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {form?.title}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                       {showFilter && org && (
-                        <span className="flex items-center gap-1">
-                          <Users size={14} />
-                          {org.name}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: textMuted }}>
+                          <Users size={11} aria-hidden="true" />{org.name}
                         </span>
                       )}
-                      <span className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        Signed up {formatDate(signup.created_at)}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: textMuted }}>
+                        <Calendar size={11} aria-hidden="true" />
+                        {formatDate(signup.created_at)}
                       </span>
-                      <span>
-                        {item?.current_signups} of {item?.max_slots} {isSpots ? (item?.max_slots === 1 ? 'spot' : 'spots') : 'items'} filled
+                      <span style={{ fontSize: '11px', color: textMuted }}>
+                        {item?.current_signups}/{item?.max_slots} {isSpots ? 'spots' : 'items'} filled
                       </span>
                     </div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       )}
 
+      {/* Footer count */}
       {signups.length > 0 && (
-        <div className="mt-4 pt-4 border-t text-center">
-          <p className="text-sm text-gray-600">
-            {signups.length} active sign-up{signups.length !== 1 ? 's' : ''}
-          </p>
-        </div>
+        <p style={{ fontSize: '12px', color: textMuted, textAlign: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid ' + border }}>
+          {signups.length} active sign-up{signups.length !== 1 ? 's' : ''}
+        </p>
       )}
     </div>
   );
