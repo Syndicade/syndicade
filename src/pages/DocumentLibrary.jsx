@@ -17,16 +17,7 @@ import CreateFolderModal from '../components/CreateFolderModal';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import {
-  LayoutGrid,
-  List,
-  FolderPlus,
-  Upload,
-  Search,
-  X,
-  Folder,
-  Trash2,
-  FileText,
-  AlertTriangle
+  LayoutGrid, List, FolderPlus, Upload, Search, X, Folder, Trash2, FileText, AlertTriangle
 } from 'lucide-react';
 
 function DocumentLibrary() {
@@ -38,23 +29,18 @@ function DocumentLibrary() {
   var [currentFolder, setCurrentFolder] = useState(null);
   var [breadcrumbs, setBreadcrumbs] = useState([]);
   var [storageUsage, setStorageUsage] = useState(null);
-
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [searchTerm, setSearchTerm] = useState('');
   var [viewMode, setViewMode] = useState('grid');
   var [showUploadModal, setShowUploadModal] = useState(false);
   var [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
-
-  // userRole: 'admin' | 'editor' | 'member' | null
   var [userRole, setUserRole] = useState(null);
 
-  // Read viewMode from OrgLayout outlet context so Admin/Member toggle is respected
   var outletCtx = useOutletContext() || {};
   var orgViewMode = outletCtx.viewMode || 'admin';
   var effectiveRole = (userRole === 'admin' && orgViewMode === 'member') ? 'member' : userRole;
 
-  // Theme tokens
   var bg = isDark ? 'bg-[#0E1523]' : 'bg-gray-50';
   var card = isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200';
   var textPrimary = isDark ? 'text-white' : 'text-gray-900';
@@ -69,7 +55,6 @@ function DocumentLibrary() {
   var toggleActive = isDark ? 'bg-[#2A3550] text-white' : 'bg-white text-blue-600 shadow-sm';
   var toggleWrap = isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-gray-100 border-gray-200';
 
-  var isAdmin = effectiveRole === 'admin';
   var canManage = effectiveRole === 'admin' || effectiveRole === 'editor';
   var canUpload = effectiveRole === 'admin' || effectiveRole === 'editor';
 
@@ -85,9 +70,7 @@ function DocumentLibrary() {
         .eq('member_id', user.id)
         .eq('status', 'active')
         .single();
-      if (result.data) {
-        setUserRole(result.data.role);
-      }
+      if (result.data) setUserRole(result.data.role);
     }
     checkRole();
   }, [organizationId]);
@@ -104,10 +87,7 @@ function DocumentLibrary() {
       if (foldersResult.error) throw new Error(foldersResult.error);
       setFolders(foldersResult.data || []);
 
-      var docsResult = await fetchDocuments(
-        organizationId,
-        currentFolder ? currentFolder.id : null
-      );
+      var docsResult = await fetchDocuments(organizationId, currentFolder ? currentFolder.id : null);
       if (docsResult.error) throw new Error(docsResult.error);
 
       var uniqueDocs = docsResult.data
@@ -119,10 +99,7 @@ function DocumentLibrary() {
       if (!usageResult.error) setStorageUsage(usageResult.data);
 
       if (currentFolder) {
-        setBreadcrumbs([
-          { id: null, name: 'Documents' },
-          { id: currentFolder.id, name: currentFolder.name }
-        ]);
+        setBreadcrumbs([{ id: null, name: 'Documents' }, { id: currentFolder.id, name: currentFolder.name }]);
       } else {
         setBreadcrumbs([{ id: null, name: 'Documents' }]);
       }
@@ -135,23 +112,14 @@ function DocumentLibrary() {
 
   async function handleSearch(e) {
     e.preventDefault();
-    if (!searchTerm.trim()) {
-      fetchData();
-      return;
-    }
+    if (!searchTerm.trim()) { fetchData(); return; }
     setLoading(true);
     var result = await searchDocuments(organizationId, searchTerm);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setDocuments(result.data || []);
-    }
+    if (result.error) { setError(result.error); } else { setDocuments(result.data || []); }
     setLoading(false);
   }
 
-  function navigateToFolder(folder) {
-    setCurrentFolder(folder || null);
-  }
+  function navigateToFolder(folder) { setCurrentFolder(folder || null); }
 
   function handleFolderCreated(newFolder) {
     setFolders([...folders, newFolder]);
@@ -169,30 +137,19 @@ function DocumentLibrary() {
   async function handleDeleteFolder(folderId, folderName) {
     if (!confirm('Delete "' + folderName + '"? All documents inside will be permanently deleted.')) return;
     var result = await deleteFolder(folderId);
-    if (result.error) {
-      mascotErrorToast('Failed to delete folder.', 'Please try again.');
-    } else {
-      setFolders(folders.filter(function(f) { return f.id !== folderId; }));
-      mascotSuccessToast('Folder deleted.');
-    }
+    if (result.error) { mascotErrorToast('Failed to delete folder.', 'Please try again.'); }
+    else { setFolders(folders.filter(function(f) { return f.id !== folderId; })); mascotSuccessToast('Folder deleted.'); }
   }
 
   async function handleDeleteDocument(documentId) {
     if (!confirm('Permanently delete this document?')) return;
     var result = await deleteDocument(documentId);
-    if (result.error) {
-      mascotErrorToast('Failed to delete document.', 'Please try again.');
-    } else {
-      setDocuments(documents.filter(function(d) { return d.id !== documentId; }));
-      fetchData();
-      mascotSuccessToast('Document deleted.');
-    }
+    if (result.error) { mascotErrorToast('Failed to delete document.', 'Please try again.'); }
+    else { setDocuments(documents.filter(function(d) { return d.id !== documentId; })); fetchData(); mascotSuccessToast('Document deleted.'); }
   }
 
   function handleUpdateDocument(updatedDoc) {
-    setDocuments(function(prev) {
-      return prev.map(function(d) { return d.id === updatedDoc.id ? updatedDoc : d; });
-    });
+    setDocuments(function(prev) { return prev.map(function(d) { return d.id === updatedDoc.id ? updatedDoc : d; }); });
   }
 
   var currentFolders = folders.filter(function(f) {
@@ -203,7 +160,6 @@ function DocumentLibrary() {
     ? 'text-[#F5B731] text-xs font-bold uppercase tracking-widest mb-4'
     : 'text-[#64748B] text-xs font-bold uppercase tracking-widest mb-4';
 
-  // ─── LOADING SKELETONS ───────────────────────────────────────────────────
   if (loading && !documents.length && !folders.length) {
     return (
       <div className={'min-h-screen ' + bg}>
@@ -213,9 +169,7 @@ function DocumentLibrary() {
           <div className={'h-10 w-full rounded-xl mb-6 animate-pulse ' + (isDark ? 'bg-[#1A2035]' : 'bg-gray-200')} />
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {[1,2,3,4,5,6,7,8].map(function(i) {
-              return (
-                <div key={i} className={'h-52 rounded-xl animate-pulse ' + (isDark ? 'bg-[#1A2035]' : 'bg-gray-200')} />
-              );
+              return <div key={i} className={'h-52 rounded-xl animate-pulse ' + (isDark ? 'bg-[#1A2035]' : 'bg-gray-200')} />;
             })}
           </div>
         </div>
@@ -223,7 +177,6 @@ function DocumentLibrary() {
     );
   }
 
-  // ─── ERROR STATE ─────────────────────────────────────────────────────────
   if (error && !documents.length) {
     return (
       <div className={'min-h-screen flex items-center justify-center ' + bg}>
@@ -231,10 +184,7 @@ function DocumentLibrary() {
           <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" aria-hidden="true" />
           <h2 className={'text-lg font-semibold mb-2 ' + textPrimary}>Failed to Load Documents</h2>
           <p className={'text-sm mb-5 ' + textMuted}>{error}</p>
-          <button
-            onClick={fetchData}
-            className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
+          <button onClick={fetchData} className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
             Try Again
           </button>
         </div>
@@ -256,45 +206,23 @@ function DocumentLibrary() {
                 : '\u00a0'}
             </p>
           </div>
-
           <div className="flex items-center gap-3 flex-wrap">
-            {/* View Toggle */}
             <div className={'flex items-center rounded-lg p-1 border ' + toggleWrap}>
-              <button
-                onClick={function() { setViewMode('grid'); }}
-                className={'px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (viewMode === 'grid' ? toggleActive : textMuted)}
-                aria-label="Grid view"
-                aria-pressed={viewMode === 'grid'}
-              >
+              <button onClick={function() { setViewMode('grid'); }} className={'px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (viewMode === 'grid' ? toggleActive : textMuted)} aria-label="Grid view" aria-pressed={viewMode === 'grid'}>
                 <LayoutGrid className="w-4 h-4" aria-hidden="true" />
               </button>
-              <button
-                onClick={function() { setViewMode('list'); }}
-                className={'px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (viewMode === 'list' ? toggleActive : textMuted)}
-                aria-label="List view"
-                aria-pressed={viewMode === 'list'}
-              >
+              <button onClick={function() { setViewMode('list'); }} className={'px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (viewMode === 'list' ? toggleActive : textMuted)} aria-label="List view" aria-pressed={viewMode === 'list'}>
                 <List className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
-
             {canManage && (
-              <button
-                onClick={function() { setShowCreateFolderModal(true); }}
-                className={'px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ' + (isDark ? 'bg-[#1A2035] border-[#2A3550] text-white hover:bg-[#1E2845]' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50')}
-                aria-label="Create new folder"
-              >
+              <button onClick={function() { setShowCreateFolderModal(true); }} className={'px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ' + (isDark ? 'bg-[#1A2035] border-[#2A3550] text-white hover:bg-[#1E2845]' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50')} aria-label="Create new folder">
                 <FolderPlus className="w-4 h-4" aria-hidden="true" />
                 New Folder
               </button>
             )}
-
             {canUpload && (
-              <button
-                onClick={function() { setShowUploadModal(true); }}
-                className="px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-                aria-label="Upload document"
-              >
+              <button onClick={function() { setShowUploadModal(true); }} className="px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors" aria-label="Upload document">
                 <Upload className="w-4 h-4" aria-hidden="true" />
                 Upload
               </button>
@@ -311,11 +239,8 @@ function DocumentLibrary() {
                 <li key={crumb.id || 'root'} className="flex items-center gap-2">
                   {index > 0 && <span className={textMuted} aria-hidden="true">/</span>}
                   <button
-                    onClick={function() {
-                      navigateToFolder(crumb.id ? folders.find(function(f) { return f.id === crumb.id; }) : null);
-                    }}
-                    className={'focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors '
-                      + (isLast ? textPrimary + ' font-semibold cursor-default' : 'text-blue-400 hover:text-blue-300 hover:underline')}
+                    onClick={function() { navigateToFolder(crumb.id ? folders.find(function(f) { return f.id === crumb.id; }) : null); }}
+                    className={'focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors ' + (isLast ? textPrimary + ' font-semibold cursor-default' : 'text-blue-400 hover:text-blue-300 hover:underline')}
                     aria-current={isLast ? 'page' : undefined}
                   >
                     {crumb.name}
@@ -332,29 +257,16 @@ function DocumentLibrary() {
             <div className="relative flex-1">
               <Search className={'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ' + textMuted} aria-hidden="true" />
               <input
-                id="doc-search"
-                type="search"
-                value={searchTerm}
+                id="doc-search" type="search" value={searchTerm}
                 onChange={function(e) { setSearchTerm(e.target.value); }}
                 placeholder="Search by name, description, or tags..."
                 className={'w-full pl-10 pr-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + inputBg}
                 aria-label="Search documents"
               />
             </div>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Search
-            </button>
+            <button type="submit" className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Search</button>
             {searchTerm && (
-              <button
-                type="button"
-                onClick={function() { setSearchTerm(''); fetchData(); }}
-                className={'px-3 py-2.5 rounded-lg border text-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 '
-                  + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1A2035]' : 'border-gray-300 text-gray-600 hover:bg-gray-50')}
-                aria-label="Clear search"
-              >
+              <button type="button" onClick={function() { setSearchTerm(''); fetchData(); }} className={'px-3 py-2.5 rounded-lg border text-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ' + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1A2035]' : 'border-gray-300 text-gray-600 hover:bg-gray-50')} aria-label="Clear search">
                 <X className="w-4 h-4" aria-hidden="true" />
                 Clear
               </button>
@@ -369,34 +281,18 @@ function DocumentLibrary() {
             <div className={'grid gap-4 ' + (viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1')}>
               {currentFolders.map(function(folder) {
                 return (
-                  <div
-                    key={folder.id}
-                    className={'border rounded-xl p-4 cursor-pointer transition-all group ' + folderCard}
-                    onClick={function() { navigateToFolder(folder); }}
-                    onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToFolder(folder); } }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={'Open folder: ' + folder.name}
-                  >
+                  <div key={folder.id} className={'border rounded-xl p-4 cursor-pointer transition-all group ' + folderCard} onClick={function() { navigateToFolder(folder); }} onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToFolder(folder); } }} role="button" tabIndex={0} aria-label={'Open folder: ' + folder.name}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <Folder className="w-8 h-8 text-blue-400 flex-shrink-0" aria-hidden="true" />
                         <div className="flex-1 min-w-0">
                           <h3 className={'font-semibold truncate text-sm ' + textPrimary}>{folder.name}</h3>
-                          {folder.description && (
-                            <p className={'text-xs truncate mt-0.5 ' + textSecondary}>{folder.description}</p>
-                          )}
-                          <p className={'text-xs mt-1 ' + textMuted}>
-                            {folder.file_count || 0} {folder.file_count === 1 ? 'file' : 'files'}
-                          </p>
+                          {folder.description && <p className={'text-xs truncate mt-0.5 ' + textSecondary}>{folder.description}</p>}
+                          <p className={'text-xs mt-1 ' + textMuted}>{folder.file_count || 0} {folder.file_count === 1 ? 'file' : 'files'}</p>
                         </div>
                       </div>
                       {canManage && (
-                        <button
-                          onClick={function(e) { e.stopPropagation(); handleDeleteFolder(folder.id, folder.name); }}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
-                          aria-label={'Delete folder: ' + folder.name}
-                        >
+                        <button onClick={function(e) { e.stopPropagation(); handleDeleteFolder(folder.id, folder.name); }} className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Delete folder: ' + folder.name}>
                           <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>
                       )}
@@ -410,38 +306,22 @@ function DocumentLibrary() {
 
         {/* Documents */}
         <section aria-label="Documents">
-          <h2 className={sectionLabel}>
-            {'Documents' + (documents.length > 0 ? ' (' + documents.length + ')' : '')}
-          </h2>
-
+          <h2 className={sectionLabel}>{'Documents' + (documents.length > 0 ? ' (' + documents.length + ')' : '')}</h2>
           {documents.length === 0 ? (
             <div className={'rounded-xl border-2 border-dashed p-12 text-center ' + (isDark ? 'border-[#2A3550]' : 'border-gray-300')}>
               <FileText className={'w-10 h-10 mx-auto mb-3 ' + textMuted} aria-hidden="true" />
-              <h3 className={'font-semibold mb-1 ' + textPrimary}>
-                {searchTerm ? 'No Documents Found' : 'No Documents Yet'}
-              </h3>
+              <h3 className={'font-semibold mb-1 ' + textPrimary}>{searchTerm ? 'No Documents Found' : 'No Documents Yet'}</h3>
               <p className={'text-sm mb-5 ' + textSecondary}>
-                {searchTerm
-                  ? 'Try a different search term or clear the filter.'
-                  : canUpload
-                    ? 'Upload your first document to get started.'
-                    : 'No documents have been added yet.'}
+                {searchTerm ? 'Try a different search term or clear the filter.' : canUpload ? 'Upload your first document to get started.' : 'No documents have been added yet.'}
               </p>
               {!searchTerm && canUpload && (
-                <button
-                  onClick={function() { setShowUploadModal(true); }}
-                  className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm flex items-center gap-2 mx-auto hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
+                <button onClick={function() { setShowUploadModal(true); }} className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm flex items-center gap-2 mx-auto hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                   <Upload className="w-4 h-4" aria-hidden="true" />
                   Upload Your First Document
                 </button>
               )}
               {searchTerm && (
-                <button
-                  onClick={function() { setSearchTerm(''); fetchData(); }}
-                  className={'px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 mx-auto border focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 '
-                    + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1A2035]' : 'border-gray-300 text-gray-700 hover:bg-gray-50')}
-                >
+                <button onClick={function() { setSearchTerm(''); fetchData(); }} className={'px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 mx-auto border focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ' + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1A2035]' : 'border-gray-300 text-gray-700 hover:bg-gray-50')}>
                   <X className="w-4 h-4" aria-hidden="true" />
                   Clear Search
                 </button>
@@ -468,25 +348,11 @@ function DocumentLibrary() {
 
       </div>
 
-      {/* Modals */}
       {showUploadModal && (
-        <FileUploadModal
-          isOpen={showUploadModal}
-          onClose={function() { setShowUploadModal(false); }}
-          organizationId={organizationId}
-          folderId={currentFolder ? currentFolder.id : null}
-          onSuccess={handleDocumentUploaded}
-        />
+        <FileUploadModal isOpen={showUploadModal} onClose={function() { setShowUploadModal(false); }} organizationId={organizationId} folderId={currentFolder ? currentFolder.id : null} onSuccess={handleDocumentUploaded} />
       )}
-
       {showCreateFolderModal && (
-        <CreateFolderModal
-          isOpen={showCreateFolderModal}
-          onClose={function() { setShowCreateFolderModal(false); }}
-          organizationId={organizationId}
-          parentFolderId={currentFolder ? currentFolder.id : null}
-          onSuccess={handleFolderCreated}
-        />
+        <CreateFolderModal isOpen={showCreateFolderModal} onClose={function() { setShowCreateFolderModal(false); }} organizationId={organizationId} parentFolderId={currentFolder ? currentFolder.id : null} onSuccess={handleFolderCreated} />
       )}
     </div>
   );

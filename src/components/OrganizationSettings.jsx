@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import MembershipTiers from '../components/MembershipTiers';
 import NonprofitVerificationForm from './NonprofitVerificationForm';
+import { getStorageBreakdown, formatBytes, getStorageUsage } from '../lib/storageUtils';
 
 var SERVICE_CATEGORIES = [
   'Arts & Culture','Community Advocacy','Education & Tutoring',
@@ -394,6 +395,14 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var [deleting, setDeleting] = useState(false);
   var [connectLoading, setConnectLoading] = useState(false);
   var [connectStatus, setConnectStatus] = useState('not_connected');
+  var [storageLimit, setStorageLimit] = useState(null);
+
+  // Storage tab state
+  var [storageBreakdown, setStorageBreakdown] = useState(null);
+  var [storageLoading, setStorageLoading] = useState(false);
+  var [storageSortField, setStorageSortField] = useState('size');
+  var [storageSortDir, setStorageSortDir] = useState('desc');
+  var [deletingFile, setDeletingFile] = useState(null);
 
   var [form, setForm] = useState({
     name: '', description: '', type: 'community',
@@ -425,18 +434,17 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     { id: 'discover',     label: 'Discover Orgs'     },
     { id: 'donations',    label: 'Donations'         },
     { id: 'payments',     label: 'Payments'          },
+    { id: 'storage',      label: 'Storage'           },
     { id: 'verification', label: 'Verification'      },
     { id: 'danger',       label: 'Danger Zone'       },
   ];
 
   useEffect(function(){
     fetchOrganization();
-    // Check for Stripe Connect return params
     var params = new URLSearchParams(window.location.search);
     if (params.get('connect') === 'success') {
       setActiveTab('payments');
       mascotSuccessToast('Stripe connected!', 'Your account is being verified. This may take a few minutes.');
-      // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     } else if (params.get('connect') === 'refresh') {
       setActiveTab('payments');
@@ -444,6 +452,61 @@ function OrganizationSettings({ organizationId, onUpdate }) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [organizationId]);
+
+  // Load storage breakdown when tab becomes active
+  useEffect(function() {
+    if (activeTab !== 'storage') return;
+    if (storageBreakdown) return; // already loaded
+    loadStorageBreakdown();
+  }, [activeTab]);
+
+async function loadStorageBreakdown() {
+  setStorageLoading(true);
+  var breakdown = await getStorageBreakdown(organizationId);
+  setStorageBreakdown(breakdown);
+  var usage = await getStorageUsage(organizationId);
+  if (usage) setStorageLimit(usage.limitBytes);
+  setStorageLoading(false);
+}
+
+  async function handleDeleteStorageFile(file) {
+    if (!window.confirm('Permanently delete "' + file.name + '"? This cannot be undone.')) return;
+    setDeletingFile(file.id);
+    try {
+      if (file.category === 'documents') {
+        // Delete from documents table (storage file cleanup handled by existing logic)
+        var { error: dbErr } = await supabase.from('documents').delete().eq('id', file.id);
+        if (dbErr) throw dbErr;
+        // Also remove from storage bucket
+        if (file.path) {
+          await supabase.storage.from('documents').remove([file.path]);
+        }
+      } else if (file.category === 'event_fliers') {
+        var { error: flierErr } = await supabase.storage.from('event-fliers').remove([file.path]);
+        if (flierErr) throw flierErr;
+      } else if (file.category === 'newsletters') {
+        var { error: nlErr } = await supabase.storage.from('newsletter-images').remove([file.path]);
+        if (nlErr) throw nlErr;
+      }
+      mascotSuccessToast('File deleted.');
+      // Refresh breakdown
+      setStorageBreakdown(null);
+      await loadStorageBreakdown();
+    } catch(err) {
+      mascotErrorToast('Failed to delete file.', err.message);
+    } finally {
+      setDeletingFile(null);
+    }
+  }
+
+  function handleStorageSort(field) {
+    if (storageSortField === field) {
+      setStorageSortDir(storageSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setStorageSortField(field);
+      setStorageSortDir('desc');
+    }
+  }
 
   async function fetchOrganization() {
     try {
@@ -602,6 +665,40 @@ function OrganizationSettings({ organizationId, onUpdate }) {
 
   var publicPageUrl = organization.slug ? '/org/'+organization.slug : null;
 
+  // Build sorted all-files list for storage tab
+  var allStorageFiles = [];
+  if (storageBreakdown) {
+    allStorageFiles = allStorageFiles
+      .concat(storageBreakdown.documents.files)
+      .concat(storageBreakdown.event_fliers.files)
+      .concat(storageBreakdown.newsletters.files);
+    allStorageFiles.sort(function(a, b) {
+      if (storageSortField === 'size') {
+        return storageSortDir === 'desc' ? b.size_bytes - a.size_bytes : a.size_bytes - b.size_bytes;
+      } else {
+        var na = (a.name || '').toLowerCase();
+        var nb = (b.name || '').toLowerCase();
+        return storageSortDir === 'asc' ? na.localeCompare(nb) : nb.localeCompare(na);
+      }
+    });
+  }
+
+var storageCategoryLabels = {
+  documents:    'Documents',
+  event_fliers: 'Event Fliers',
+  newsletters:  'Newsletters',
+  org_photos:   'Photos',
+  org_images:   'Org Images'
+};
+
+var storageCategoryColors = {
+  documents:    '#3B82F6',
+  event_fliers: '#F5B731',
+  newsletters:  '#8B5CF6',
+  org_photos:   '#22C55E',
+  org_images:   '#06B6D4'
+};
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
@@ -644,7 +741,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         <form onSubmit={handleSubmit} noValidate>
           <div className="px-6 py-6">
 
-            {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && activeTab !== 'danger' && (
+            {publicPageUrl && activeTab !== 'roles' && activeTab !== 'membership' && activeTab !== 'danger' && activeTab !== 'storage' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-2 mb-6">
                 <Icon path={['M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101','M14.828 14.828a4 4 0 015.656 0l4-4a4 4 0 01-5.656-5.656l-1.1 1.1']} className="h-4 w-4 text-blue-500 flex-shrink-0"/>
                 <p className="text-sm text-blue-800">
@@ -660,12 +757,12 @@ function OrganizationSettings({ organizationId, onUpdate }) {
             {activeTab === 'basic' && (
               <section aria-labelledby="basic-heading" className="space-y-5">
                 <h3 id="basic-heading" className="text-lg font-bold text-gray-900">Basic Information</h3>
-{organization.org_number && (
-  <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Org Number</span>
-    <span className="text-sm font-semibold text-gray-900">{organization.org_number}</span>
-  </div>
-)}
+                {organization.org_number && (
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Org Number</span>
+                    <span className="text-sm font-semibold text-gray-900">{organization.org_number}</span>
+                  </div>
+                )}
                 <div>
                   <label htmlFor="org-name" className={labelCls}>Organization Name <span className="text-red-400" aria-hidden="true">*</span></label>
                   <input id="org-name" name="name" type="text" required aria-required="true" value={form.name} onChange={handleField} maxLength={100} className={inputCls}/>
@@ -789,14 +886,9 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                   <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900 text-sm">Allow Following</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Let people follow your organization from the Discover page and their dashboard. Followers see your public events and announcements.</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Let people follow your organization from the Discover page and their dashboard.</p>
                     </div>
-                    <Toggle
-                      checked={form.allow_following}
-                      onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{allow_following:!prev.allow_following}); }); }}
-                      id="allow-following-toggle"
-                      label={form.allow_following ? 'Disable following' : 'Enable following'}
-                    />
+                    <Toggle checked={form.allow_following} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{allow_following:!prev.allow_following}); }); }} id="allow-following-toggle" label={form.allow_following ? 'Disable following' : 'Enable following'}/>
                   </div>
                 </div>
               </section>
@@ -815,7 +907,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                 <div className={'flex items-center justify-between p-5 rounded-xl border-2 '+(form.collect_dues?'border-green-400 bg-green-50':'border-gray-200 bg-gray-50')}>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">Collect Dues</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{form.collect_dues?'Dues tracking is enabled. Badges show on member profiles and the member directory.':'Dues tracking is off. No dues badges will appear anywhere.'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{form.collect_dues?'Dues tracking is enabled.':'Dues tracking is off.'}</p>
                   </div>
                   <Toggle checked={form.collect_dues} onChange={function(){ setForm(function(prev){ return Object.assign({},prev,{collect_dues:!prev.collect_dues}); }); }} id="collect-dues-toggle" label={form.collect_dues?'Disable dues tracking':'Enable dues tracking'}/>
                 </div>
@@ -915,10 +1007,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               <section aria-labelledby="payments-heading" className="space-y-6">
                 <div>
                   <h3 id="payments-heading" className="text-lg font-bold text-gray-900">Payment Settings</h3>
-                  <p className="text-gray-500 text-sm mt-0.5">Connect Stripe to collect dues and ticket payments directly into your bank account. Optionally add manual payment instructions for members who prefer to pay offline.</p>
+                  <p className="text-gray-500 text-sm mt-0.5">Connect Stripe to collect dues and ticket payments directly into your bank account.</p>
                 </div>
-
-                {/* Stripe Connect Card */}
                 <div className={'rounded-xl border-2 p-5 ' + (connectStatus === 'active' ? 'border-green-400 bg-green-50' : connectStatus === 'pending' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-gray-50')}>
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
@@ -933,40 +1023,27 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                       <div>
                         <p className="font-semibold text-gray-900 text-sm">Stripe Connect</p>
                         <p className={'text-xs mt-0.5 ' + (connectStatus === 'active' ? 'text-green-700' : connectStatus === 'pending' ? 'text-yellow-700' : 'text-gray-500')}>
-                          {connectStatus === 'active'
-                            ? 'Connected — payments go directly to your bank account'
-                            : connectStatus === 'pending'
-                            ? 'Setup in progress — finish Stripe onboarding to activate'
+                          {connectStatus === 'active' ? 'Connected — payments go directly to your bank account'
+                            : connectStatus === 'pending' ? 'Setup in progress — finish Stripe onboarding to activate'
                             : 'Not connected — connect to accept dues and ticket payments'}
                         </p>
                       </div>
                     </div>
                     {connectStatus !== 'active' && (
-                      <button
-                        type="button"
-                        onClick={handleStripeConnect}
-                        disabled={connectLoading}
+                      <button type="button" onClick={handleStripeConnect} disabled={connectLoading}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex-shrink-0"
-                        aria-busy={connectLoading}
-                      >
+                        aria-busy={connectLoading}>
                         {connectLoading
                           ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Connecting...</>
-                          : <><Icon path="M13 10V3L4 14h7v7l9-11h-7z" className="h-4 w-4"/>{connectStatus === 'pending' ? 'Continue Setup' : 'Connect Stripe'}</>
-                        }
+                          : <><Icon path="M13 10V3L4 14h7v7l9-11h-7z" className="h-4 w-4"/>{connectStatus === 'pending' ? 'Continue Setup' : 'Connect Stripe'}</>}
                       </button>
                     )}
                   </div>
-
                   {connectStatus === 'not_connected' && (
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <p className="text-xs text-gray-500 font-semibold mb-2">What you get by connecting:</p>
                       <ul className="space-y-1" role="list">
-                        {[
-                          'Dues payments go directly to your bank account',
-                          'Ticket sales go directly to your bank account',
-                          'Stripe handles all card processing — you never see card numbers',
-                          'Payouts within 2 business days',
-                        ].map(function(item){
+                        {['Dues payments go directly to your bank account','Ticket sales go directly to your bank account','Stripe handles all card processing — you never see card numbers','Payouts within 2 business days'].map(function(item){
                           return (
                             <li key={item} className="flex items-center gap-2 text-xs text-gray-600" role="listitem">
                               <Icon path="M5 13l4 4L19 7" className="h-3.5 w-3.5 text-green-500 flex-shrink-0"/>
@@ -978,26 +1055,162 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                     </div>
                   )}
                 </div>
-
-                {/* Manual Payment Instructions */}
                 <div>
                   <label htmlFor="manual-payment" className={labelCls}>Manual Payment Instructions (optional)</label>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Shown to members on their dues page. Use this for PayPal, Venmo, Zelle, checks, or cash drop-off. Leave blank if not needed.
-                  </p>
-                  <textarea
-                    id="manual-payment"
-                    name="manual_payment_instructions"
-                    value={form.manual_payment_instructions}
-                    onChange={handleField}
-                    rows={4}
-                    maxLength={500}
-                    placeholder={'e.g. Pay via Venmo @YourOrg, PayPal paypal.me/yourorg, or mail a check to 123 Main St, Toledo OH 43601. Include your name in the memo.'}
-                    className={inputCls + ' resize-none'}
-                    aria-describedby="manual-payment-count"
-                  />
+                  <p className="text-xs text-gray-500 mb-2">Shown to members on their dues page. Use this for PayPal, Venmo, Zelle, checks, or cash.</p>
+                  <textarea id="manual-payment" name="manual_payment_instructions" value={form.manual_payment_instructions} onChange={handleField} rows={4} maxLength={500} placeholder="e.g. Pay via Venmo @YourOrg or mail a check to 123 Main St, Toledo OH 43601." className={inputCls + ' resize-none'} aria-describedby="manual-payment-count"/>
                   <p id="manual-payment-count" className="text-xs text-gray-400 mt-1 text-right" aria-live="polite">{form.manual_payment_instructions.length}/500</p>
                 </div>
+              </section>
+            )}
+
+            {/* ── STORAGE ── */}
+            {activeTab === 'storage' && (
+              <section aria-labelledby="storage-heading" className="space-y-6">
+                <div>
+                  <h3 id="storage-heading" className="text-lg font-bold text-gray-900">Storage</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">See how your storage is used across documents, photos, newsletters, and more.</p>
+                </div>
+
+                {storageLoading ? (
+                  <div className="space-y-4" aria-busy="true" aria-label="Loading storage data">
+                    <Skeleton className="h-4 w-40 mb-2"/>
+                    <Skeleton className="h-4 w-full rounded-full"/>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[1,2,3].map(function(i){ return <Skeleton key={i} className="h-20 rounded-xl"/>; })}
+                    </div>
+                    <Skeleton className="h-48 rounded-xl"/>
+                  </div>
+                ) : !storageBreakdown || storageBreakdown.total_bytes === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+                    <Icon path="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" className="h-10 w-10 text-gray-300 mx-auto mb-3"/>
+                    <p className="text-gray-500 font-semibold text-sm">No storage used yet</p>
+                    <p className="text-gray-400 text-xs mt-1">Upload documents or event fliers to see your breakdown here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+
+<div>
+  <div className="flex items-center justify-between mb-2">
+    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Usage by Category</p>
+    <p className="text-sm font-bold text-gray-900">
+      {formatBytes(storageBreakdown.total_bytes)}
+      {storageLimit ? ' of ' + formatBytes(storageLimit) + ' used' : ' total'}
+    </p>
+  </div>
+  <div className="w-full h-3 rounded-full overflow-hidden bg-gray-100" role="img" aria-label={'Storage used: ' + formatBytes(storageBreakdown.total_bytes) + (storageLimit ? ' of ' + formatBytes(storageLimit) : '')}>
+    <div className="flex h-full rounded-full overflow-hidden" style={{ width: storageLimit ? Math.min((storageBreakdown.total_bytes / storageLimit) * 100, 100) + '%' : '100%' }}>
+      {['documents','event_fliers','newsletters','org_photos','org_images'].map(function(cat) {
+        var bytes = storageBreakdown[cat].total_bytes;
+        var pct = storageBreakdown.total_bytes > 0 ? (bytes / storageBreakdown.total_bytes) * 100 : 0;
+        if (pct <= 0) return null;
+        return (
+          <div key={cat} style={{ width: pct + '%', backgroundColor: storageCategoryColors[cat] }} title={storageCategoryLabels[cat] + ': ' + formatBytes(bytes)}/>
+        );
+      })}
+    </div>
+  </div>
+  <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2">
+    {['documents','event_fliers','newsletters','org_photos','org_images'].map(function(cat) {
+      return (
+        <div key={cat} className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: storageCategoryColors[cat] }} aria-hidden="true"/>
+          <span className="text-xs text-gray-500">{storageCategoryLabels[cat]}</span>
+          <span className="text-xs font-semibold text-gray-800">{formatBytes(storageBreakdown[cat].total_bytes)}</span>
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+                    {/* Category cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {['documents','event_fliers','newsletters','org_photos','org_images'].map(function(cat) {
+                        var count = storageBreakdown[cat].files.length;
+                        return (
+                          <div key={cat} className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: storageCategoryColors[cat] }} aria-hidden="true"/>
+                              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{storageCategoryLabels[cat]}</p>
+                            </div>
+                            <p className="text-xl font-extrabold text-gray-900">{formatBytes(storageBreakdown[cat].total_bytes)}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{count} {count === 1 ? 'file' : 'files'}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* All files table */}
+                    {allStorageFiles.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">All Files</p>
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          <table className="w-full text-sm" role="table" aria-label="All storage files">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-200">
+                                <th scope="col" className="text-left px-4 py-3">
+                                  <button type="button" onClick={function(){ handleStorageSort('name'); }} className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Sort by name ' + (storageSortField === 'name' ? (storageSortDir === 'asc' ? 'descending' : 'ascending') : 'ascending')}>
+                                    File Name
+                                    {storageSortField === 'name' && (
+                                      <Icon path={storageSortDir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className="h-3 w-3"/>
+                                    )}
+                                  </button>
+                                </th>
+                                <th scope="col" className="text-left px-4 py-3 hidden sm:table-cell">
+                                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</span>
+                                </th>
+                                <th scope="col" className="text-right px-4 py-3">
+                                  <button type="button" onClick={function(){ handleStorageSort('size'); }} className="flex items-center gap-1 ml-auto text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Sort by size ' + (storageSortField === 'size' ? (storageSortDir === 'asc' ? 'descending' : 'ascending') : 'descending')}>
+                                    Size
+                                    {storageSortField === 'size' && (
+                                      <Icon path={storageSortDir === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className="h-3 w-3"/>
+                                    )}
+                                  </button>
+                                </th>
+                                <th scope="col" className="px-4 py-3 w-12">
+                                  <span className="sr-only">Actions</span>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {allStorageFiles.map(function(file, idx) {
+                                var isDeleting = deletingFile === file.id;
+                                return (
+                                  <tr key={file.id + '-' + idx} className={'border-b border-gray-100 last:border-0 ' + (isDeleting ? 'opacity-50' : 'hover:bg-gray-50')}>
+                                    <td className="px-4 py-3">
+                                      <p className="font-medium text-gray-900 text-sm truncate max-w-[200px]" title={file.name}>{file.name}</p>
+                                    </td>
+                                    <td className="px-4 py-3 hidden sm:table-cell">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: storageCategoryColors[file.category] }} aria-hidden="true"/>
+                                        <span className="text-xs text-gray-500">{storageCategoryLabels[file.category]}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                      <span className="text-sm text-gray-700 font-medium">{formatBytes(file.size_bytes)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <button
+                                        type="button"
+                                        onClick={function(){ handleDeleteStorageFile(file); }}
+                                        disabled={isDeleting}
+                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors disabled:opacity-40"
+                                        aria-label={'Delete ' + file.name}
+                                      >
+                                        <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4"/>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
               </section>
             )}
 
@@ -1018,47 +1231,22 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                 <div className="border-2 border-red-200 rounded-xl p-6 space-y-5">
                   <div>
                     <h4 className="text-base font-bold text-red-700">Delete Organization</h4>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Permanently deletes <strong>{organization.name}</strong> and all associated data — members, events, announcements, documents, polls, surveys, and sign-up forms. This cannot be undone.
-                    </p>
+                    <p className="text-sm text-gray-600 mt-1">Permanently deletes <strong>{organization.name}</strong> and all associated data. This cannot be undone.</p>
                   </div>
-{/* E4: Stripe disconnect warning */}
-                  <div
-                    role="alert"
-                    className="flex items-start gap-3 p-4 rounded-lg"
-                    style={{ border: '1px solid #EF4444', backgroundColor: '#FEF2F2' }}
-                  >
-                    <Icon
-                      path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      className="h-5 w-5 flex-shrink-0 text-red-500 mt-0.5"
-                    />
-                    <p className="text-sm text-red-700">
-                      <strong>Before deleting this organization, you must disconnect your Stripe account.</strong>{' '}
-                      Syndicade has no access to your Stripe account and cannot recover funds, payouts, or account data after deletion.
-                    </p>
+                  <div role="alert" className="flex items-start gap-3 p-4 rounded-lg" style={{ border: '1px solid #EF4444', backgroundColor: '#FEF2F2' }}>
+                    <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" className="h-5 w-5 flex-shrink-0 text-red-500 mt-0.5"/>
+                    <p className="text-sm text-red-700"><strong>Before deleting this organization, you must disconnect your Stripe account.</strong> Syndicade has no access to your Stripe account and cannot recover funds, payouts, or account data after deletion.</p>
                   </div>
                   <div>
                     <label htmlFor="delete-confirm" className="block text-sm font-semibold text-gray-900 mb-2">
                       Type <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-red-700">DELETE</span> to confirm
                     </label>
-                    <input
-                      id="delete-confirm"
-                      type="text"
-                      value={deleteConfirmText}
-                      onChange={function(e) { setDeleteConfirmText(e.target.value); }}
-                      placeholder="DELETE"
-                      className="w-full max-w-xs px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm bg-white text-gray-900"
-                      aria-describedby="delete-confirm-hint"
-                    />
+                    <input id="delete-confirm" type="text" value={deleteConfirmText} onChange={function(e) { setDeleteConfirmText(e.target.value); }} placeholder="DELETE" className="w-full max-w-xs px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm bg-white text-gray-900" aria-describedby="delete-confirm-hint"/>
                     <p id="delete-confirm-hint" className="text-xs text-gray-400 mt-1">This action is permanent and cannot be reversed.</p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={deleteConfirmText !== 'DELETE' || deleting}
-                    onClick={handleDeleteOrg}
+                  <button type="button" disabled={deleteConfirmText !== 'DELETE' || deleting} onClick={handleDeleteOrg}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
-                    aria-label="Delete organization permanently"
-                  >
+                    aria-label="Delete organization permanently">
                     <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4"/>
                     {deleting ? 'Deleting...' : 'Delete Organization'}
                   </button>
@@ -1066,8 +1254,8 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
-            {/* Save button — hidden on roles, membership, danger, and payments (payments has its own save via main form) */}
-            {activeTab !== 'roles' && activeTab !== 'danger' && (
+            {/* Save button */}
+            {activeTab !== 'roles' && activeTab !== 'danger' && activeTab !== 'storage' && (
               <div className="flex items-center justify-end pt-6 mt-6 border-t border-gray-200">
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
