@@ -6,6 +6,7 @@ import { et } from '../lib/eventDiscoveryTranslations';
 import EventDiscoveryCard from '../components/EventDiscoveryCard';
 import EventDiscoveryFilters from '../components/EventDiscoveryFilters';
 import ProgramDiscoveryCard from '../components/ProgramDiscoveryCard';
+import DiscoveryCalendar from '../components/DiscoveryCalendar';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useTheme } from '../context/ThemeContext';
@@ -35,6 +36,40 @@ var DEFAULT_FILTERS = {
   requiresRsvp: null, volunteerSignup: null, donationDropoff: null,
   uiLang: 'en',
 };
+
+/* ─── Calendar range helpers (outside component) ───────────── */
+
+function toDateStr(d) {
+  var y   = d.getFullYear();
+  var m   = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function getCalendarRange(date, subView) {
+  if (subView === 'month') {
+    var year  = date.getFullYear();
+    var month = date.getMonth();
+    var first = new Date(year, month, 1);
+    var from  = new Date(first);
+    from.setDate(1 - first.getDay()); // start of 6-week grid (Sunday)
+    var to    = new Date(from);
+    to.setDate(from.getDate() + 41);  // 42 cells total
+    return { from: toDateStr(from), to: toDateStr(to) };
+  }
+  if (subView === 'week') {
+    var d   = new Date(date);
+    d.setDate(d.getDate() - d.getDay()); // Sunday
+    var from2 = new Date(d);
+    var to2   = new Date(d);
+    to2.setDate(d.getDate() + 6);
+    return { from: toDateStr(from2), to: toDateStr(to2) };
+  }
+  // day
+  return { from: toDateStr(date), to: toDateStr(date) };
+}
+
+/* ─── Icons ─────────────────────────────────────────────────── */
 
 function SearchIcon() {
   return (
@@ -101,6 +136,8 @@ function AlertCircleIcon() {
   );
 }
 
+/* ─── Skeletons ─────────────────────────────────────────────── */
+
 function EventCardSkeleton({ isDark }) {
   var cardBg = isDark ? '#1A2035' : '#FFFFFF';
   var borderColor = isDark ? '#2A3550' : '#E2E8F0';
@@ -161,6 +198,8 @@ function ProgramCardSkeleton({ isDark }) {
   );
 }
 
+/* ─── Component ─────────────────────────────────────────────── */
+
 export default function EventDiscovery() {
   var { isDark } = useTheme();
 
@@ -197,6 +236,12 @@ export default function EventDiscovery() {
   var [programsLoading, setProgramsLoading] = useState(false);
   var [programsError, setProgramsError] = useState(null);
   var [savedPrograms, setSavedPrograms] = useState(new Set());
+
+  /* Calendar state */
+  var [calendarDate, setCalendarDate] = useState(function () { return new Date(); });
+  var [calendarSubView, setCalendarSubView] = useState('month');
+  var [calendarEvents, setCalendarEvents] = useState([]);
+  var [calendarLoading, setCalendarLoading] = useState(false);
 
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   var [savedEvents, setSavedEvents] = useState(new Set());
@@ -251,6 +296,7 @@ export default function EventDiscovery() {
     setProgramsPage(1);
   }, [debouncedKeyword, filters, sortBy, programStatus, viewMode, verifiedOnly]);
 
+  /* ─── Fetch events ── */
   var fetchEvents = useCallback(async function () {
     if (viewMode !== 'events') return;
     setLoading(true);
@@ -290,9 +336,7 @@ export default function EventDiscovery() {
         return 0;
       });
       var withDemo = sorted.map(function (e) {
-        return Object.assign({}, e, {
-          is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001'
-        });
+        return Object.assign({}, e, { is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001' });
       });
       setEvents(withDemo);
       setTotalCount(res.data && res.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (res.data ? res.data.length : 0));
@@ -305,6 +349,7 @@ export default function EventDiscovery() {
     }
   }, [viewMode, page, debouncedKeyword, filters, sortBy, lang, verifiedOnly]);
 
+  /* ─── Fetch programs ── */
   var fetchPrograms = useCallback(async function () {
     if (viewMode !== 'programs') return;
     setProgramsLoading(true);
@@ -321,7 +366,7 @@ export default function EventDiscovery() {
       if (verifiedOnly) query = query.eq('organizations.is_verified_nonprofit', true);
       if (programStatus) query = query.eq('status', programStatus);
       if (filters.state) query = query.ilike('organizations.state', filters.state);
-      if (filters.city) query = query.ilike('organizations.city', '%' + filters.city + '%');
+      if (filters.city)  query = query.ilike('organizations.city', '%' + filters.city + '%');
       if (debouncedKeyword) query = query.or('name.ilike.%' + debouncedKeyword + '%,description.ilike.%' + debouncedKeyword + '%');
 
       query = query.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
@@ -350,8 +395,46 @@ export default function EventDiscovery() {
     }
   }, [viewMode, programsPage, debouncedKeyword, filters, programStatus, verifiedOnly]);
 
-  useEffect(function () { fetchEvents(); }, [fetchEvents]);
-  useEffect(function () { fetchPrograms(); }, [fetchPrograms]);
+  /* ─── Fetch calendar events ── */
+  var fetchCalendarEvents = useCallback(async function () {
+    if (viewMode !== 'calendar') return;
+    setCalendarLoading(true);
+    try {
+      var range = getCalendarRange(calendarDate, calendarSubView);
+      var res = await supabase.rpc('get_public_events', {
+        search_keyword:       debouncedKeyword || null,
+        filter_tags:          (filters.tags || []).length > 0 ? filters.tags : null,
+        filter_event_types:   filters.eventTypes.length > 0 ? filters.eventTypes : null,
+        filter_audience:      filters.audience.length > 0 ? filters.audience : null,
+        filter_languages:     filters.languages.length > 0 ? filters.languages : null,
+        filter_org_type:      filters.orgType || null,
+        filter_state:         filters.state || null,
+        filter_city:          filters.city || null,
+        filter_zip:           filters.zip || null,
+        filter_volunteer:     filters.volunteerSignup || null,
+        filter_donation:      filters.donationDropoff || null,
+        filter_rsvp:          filters.requiresRsvp || null,
+        filter_date_range:    'custom',
+        filter_date_from:     range.from,
+        filter_date_to:       range.to,
+        sort_by:              'start_time',
+        page_limit:           300,
+        page_offset:          0,
+        filter_verified_only: verifiedOnly,
+      });
+      if (res.error) throw res.error;
+      setCalendarEvents(res.data || []);
+    } catch (err) {
+      console.error('Calendar fetch error:', err);
+      toast.error('Failed to load calendar events');
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [viewMode, calendarDate, calendarSubView, debouncedKeyword, filters, verifiedOnly]);
+
+  useEffect(function () { fetchEvents(); },         [fetchEvents]);
+  useEffect(function () { fetchPrograms(); },       [fetchPrograms]);
+  useEffect(function () { fetchCalendarEvents(); }, [fetchCalendarEvents]);
 
   function handleFilterChange(key, value) {
     setFilters(function (prev) { var u = {}; u[key] = value; return Object.assign({}, prev, u); });
@@ -402,18 +485,18 @@ export default function EventDiscovery() {
         body: JSON.stringify({
           type: 'guest_rsvp_confirmation',
           data: {
-            guestEmail: guestInfo.email.toLowerCase().trim(),
-            guestName: guestInfo.name.trim(),
-            guestCount: parseInt(guestInfo.guestCount) || 1,
-            eventTitle: selectedEvent.title,
-            orgName: selectedEvent.org_name || '',
-            orgLogoUrl: selectedEvent.org_logo_url || '',
-            eventDate: eventDate + ' at ' + eventTime,
+            guestEmail:    guestInfo.email.toLowerCase().trim(),
+            guestName:     guestInfo.name.trim(),
+            guestCount:    parseInt(guestInfo.guestCount) || 1,
+            eventTitle:    selectedEvent.title,
+            orgName:       selectedEvent.org_name || '',
+            orgLogoUrl:    selectedEvent.org_logo_url || '',
+            eventDate:     eventDate + ' at ' + eventTime,
             eventLocation: selectedEvent.is_virtual ? 'Virtual Event' : (selectedEvent.location || ''),
-                      eventId: selectedEvent.id,
-                      startISO: selectedEvent.start_time,
-                      endISO: selectedEvent.end_time || selectedEvent.start_time,
-                      eventUrl: window.location.origin + '/events/' + selectedEvent.id,
+            eventId:       selectedEvent.id,
+            startISO:      selectedEvent.start_time,
+            endISO:        selectedEvent.end_time || selectedEvent.start_time,
+            eventUrl:      window.location.origin + '/events/' + selectedEvent.id,
           },
         }),
       });
@@ -484,8 +567,8 @@ export default function EventDiscovery() {
               type="search"
               value={keyword}
               onChange={function (e) { setKeyword(e.target.value); }}
-              placeholder={viewMode === 'events' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
-              aria-label={viewMode === 'events' ? et(lang, 'searchPlaceholder') : 'Search programs'}
+              placeholder={viewMode === 'events' || viewMode === 'calendar' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
+              aria-label={viewMode === 'programs' ? 'Search programs' : et(lang, 'searchPlaceholder')}
               style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: inputBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none' }}
               className="focus:ring-2 focus:ring-blue-500"
             />
@@ -549,17 +632,15 @@ export default function EventDiscovery() {
             <div style={{ marginBottom: '16px' }}>
               <h1 style={{ fontSize: '24px', fontWeight: 800, color: textPrimary }}>
                 {verifiedOnly
-                  ? (viewMode === 'events' ? 'Nonprofit Events' : 'Nonprofit Programs')
+                  ? (viewMode === 'programs' ? 'Nonprofit Programs' : 'Nonprofit Events')
                   : et(lang, 'pageTitle')}
               </h1>
               <p style={{ color: textMuted, fontSize: '14px', marginTop: '4px' }}>
-                {verifiedOnly
-                  ? 'Events and programs from verified 501(c)(3) nonprofits.'
-                  : et(lang, 'pageSubtitle')}
+                {verifiedOnly ? 'Events and programs from verified 501(c)(3) nonprofits.' : et(lang, 'pageSubtitle')}
               </p>
             </div>
 
-            {/* Events / Programs toggle */}
+            {/* Events / Programs / Calendar toggle */}
             <div style={{ display: 'inline-flex', background: sectionBg, border: '1px solid ' + borderColor, borderRadius: '10px', padding: '3px', marginBottom: '20px' }} role="tablist" aria-label="View mode">
               <button
                 role="tab"
@@ -587,158 +668,189 @@ export default function EventDiscovery() {
               >
                 Programs
               </button>
+              <button
+                role="tab"
+                aria-selected={viewMode === 'calendar'}
+                onClick={function () { setViewMode('calendar'); }}
+                style={{
+                  padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: viewMode === 'calendar' ? '#F5B731' : 'transparent',
+                  color: viewMode === 'calendar' ? '#0E1523' : textMuted,
+                }}
+                className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              >
+                Calendar
+              </button>
             </div>
 
-            {/* Results bar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-              <p style={{ fontSize: '14px', color: textMuted }} aria-live="polite" aria-atomic="true">
-                {!isLoading && !currentError && (currentTotal + ' ' + et(lang, 'results'))}
-              </p>
-              {viewMode === 'events' ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: textSecondary, whiteSpace: 'nowrap' }}>{et(lang, 'sortBy')}:</label>
-                  <select id="event-sort-select" value={sortBy} onChange={function (e) { setSortBy(e.target.value); }} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: textPrimary, outline: 'none' }} className="focus:ring-2 focus:ring-blue-500">
-                    {SORT_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>; })}
-                  </select>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <label htmlFor="program-status-select" style={{ fontSize: '14px', color: textSecondary, whiteSpace: 'nowrap' }}>Status:</label>
-                  <select id="program-status-select" value={programStatus} onChange={function (e) { setProgramStatus(e.target.value); }} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: textPrimary, outline: 'none' }} className="focus:ring-2 focus:ring-purple-500">
-                    {PROGRAM_STATUS_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{opt.label}</option>; })}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Skeletons */}
-            {isLoading && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label={'Loading ' + viewMode}>
-                {[1,2,3,4,5,6].map(function (i) {
-                  return viewMode === 'events'
-                    ? <EventCardSkeleton key={i} isDark={isDark} />
-                    : <ProgramCardSkeleton key={i} isDark={isDark} />;
-                })}
-              </div>
+            {/* ── Calendar view ── */}
+            {viewMode === 'calendar' && (
+              <DiscoveryCalendar
+                events={calendarEvents}
+                loading={calendarLoading}
+                isDark={isDark}
+                calendarDate={calendarDate}
+                onNavigate={setCalendarDate}
+                subView={calendarSubView}
+                onSubViewChange={setCalendarSubView}
+              />
             )}
 
-            {/* Error */}
-            {!isLoading && currentError && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
-                <span style={{ color: '#EF4444', marginBottom: '16px' }}><AlertCircleIcon /></span>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
-                <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
-                <button onClick={viewMode === 'events' ? fetchEvents : fetchPrograms} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {et(lang, 'tryAgain')}
-                </button>
-              </div>
-            )}
-
-            {/* Empty — events */}
-            {!isLoading && !currentError && viewMode === 'events' && events.length === 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
-                <span style={{ color: textMuted, marginBottom: '16px' }}><CalendarXIcon /></span>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>
-                  {verifiedOnly ? 'No nonprofit events found' : et(lang, 'noResults')}
-                </h2>
-                <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
-                  {verifiedOnly ? 'Try adjusting your filters, or switch to All to see every event.' : et(lang, 'noResultsDesc')}
-                </p>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {verifiedOnly && (
-                    <button onClick={function () { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500">
-                      Show All Events
-                    </button>
-                  )}
-                  <button onClick={handleReset} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {et(lang, 'resetFilters')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Empty — programs */}
-            {!isLoading && !currentError && viewMode === 'programs' && programs.length === 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
-                <span style={{ color: textMuted, marginBottom: '16px' }}><ProgramsEmptyIcon /></span>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>
-                  {verifiedOnly ? 'No nonprofit programs found' : 'No programs found'}
-                </h2>
-                <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
-                  {verifiedOnly ? 'Try switching to All to see programs from all organizations.' : 'Try adjusting your search or filters.'}
-                </p>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {verifiedOnly && (
-                    <button onClick={function () { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500">
-                      Show All Programs
-                    </button>
-                  )}
-                  <button onClick={handleReset} style={{ padding: '10px 20px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    {et(lang, 'resetFilters')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Events grid */}
-            {!isLoading && !currentError && viewMode === 'events' && events.length > 0 && (
+            {/* ── List/grid views ── */}
+            {viewMode !== 'calendar' && (
               <>
-                {events.filter(function (e) { return e.is_featured; }).length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
-                    {events.filter(function (e) { return e.is_featured; }).map(function (event) {
-                      return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
-                    })}
-                  </div>
-                )}
-                {events.filter(function (e) { return !e.is_featured; }).length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {events.filter(function (e) { return !e.is_featured; }).map(function (event) {
-                      return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
-                    })}
-                  </div>
-                )}
-                <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
-                  Featured events are promoted by their organizations for 7 days.
-                </p>
-              </>
-            )}
-
-            {/* Programs grid */}
-            {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {programs.filter(function (p) { return p && p.id; }).map(function (program) {
-                  return <ProgramDiscoveryCard key={program.id} program={program} session={session} isDark={isDark} initialSaved={savedPrograms.has(program.id)} />;
-                })}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {!isLoading && !currentError && totalPages > 1 && (
-              <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
-                <button onClick={function () { setCurrentPage(function (p) { return Math.max(1, p - 1); }); }} disabled={currentPage === 1} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }} aria-label={et(lang, 'previous')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <ChevronLeftIcon />
-                  {et(lang, 'previous')}
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {Array.from({ length: Math.min(5, totalPages) }, function (_, i) {
-                    var pageNum;
-                    if (totalPages <= 5) pageNum = i + 1;
-                    else if (currentPage <= 3) pageNum = i + 1;
-                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
-                    else pageNum = currentPage - 2 + i;
-                    var isActive = pageNum === currentPage;
-                    return (
-                      <button key={pageNum} onClick={function () { setCurrentPage(pageNum); }} style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : ('1px solid ' + borderColor), background: isActive ? (viewMode === 'programs' ? '#8B5CF6' : '#3B82F6') : cardBg, color: isActive ? '#FFFFFF' : textSecondary, cursor: 'pointer' }} aria-label={(et(lang, 'page') + ' ' + pageNum)} aria-current={isActive ? 'page' : undefined} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        {pageNum}
-                      </button>
-                    );
-                  })}
+                {/* Results bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                  <p style={{ fontSize: '14px', color: textMuted }} aria-live="polite" aria-atomic="true">
+                    {!isLoading && !currentError && (currentTotal + ' ' + et(lang, 'results'))}
+                  </p>
+                  {viewMode === 'events' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: textSecondary, whiteSpace: 'nowrap' }}>{et(lang, 'sortBy')}:</label>
+                      <select id="event-sort-select" value={sortBy} onChange={function (e) { setSortBy(e.target.value); }} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: textPrimary, outline: 'none' }} className="focus:ring-2 focus:ring-blue-500">
+                        {SORT_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>; })}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label htmlFor="program-status-select" style={{ fontSize: '14px', color: textSecondary, whiteSpace: 'nowrap' }}>Status:</label>
+                      <select id="program-status-select" value={programStatus} onChange={function (e) { setProgramStatus(e.target.value); }} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: textPrimary, outline: 'none' }} className="focus:ring-2 focus:ring-purple-500">
+                        {PROGRAM_STATUS_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{opt.label}</option>; })}
+                      </select>
+                    </div>
+                  )}
                 </div>
-                <button onClick={function () { setCurrentPage(function (p) { return Math.min(totalPages, p + 1); }); }} disabled={currentPage === totalPages} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }} aria-label={et(lang, 'next')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {et(lang, 'next')}
-                  <ChevronRightIcon />
-                </button>
-              </nav>
+
+                {/* Skeletons */}
+                {isLoading && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label={'Loading ' + viewMode}>
+                    {[1,2,3,4,5,6].map(function (i) {
+                      return viewMode === 'events'
+                        ? <EventCardSkeleton key={i} isDark={isDark} />
+                        : <ProgramCardSkeleton key={i} isDark={isDark} />;
+                    })}
+                  </div>
+                )}
+
+                {/* Error */}
+                {!isLoading && currentError && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <span style={{ color: '#EF4444', marginBottom: '16px' }}><AlertCircleIcon /></span>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
+                    <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
+                    <button onClick={viewMode === 'events' ? fetchEvents : fetchPrograms} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {et(lang, 'tryAgain')}
+                    </button>
+                  </div>
+                )}
+
+                {/* Empty — events */}
+                {!isLoading && !currentError && viewMode === 'events' && events.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <span style={{ color: textMuted, marginBottom: '16px' }}><CalendarXIcon /></span>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>
+                      {verifiedOnly ? 'No nonprofit events found' : et(lang, 'noResults')}
+                    </h2>
+                    <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
+                      {verifiedOnly ? 'Try adjusting your filters, or switch to All to see every event.' : et(lang, 'noResultsDesc')}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {verifiedOnly && (
+                        <button onClick={function () { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500">
+                          Show All Events
+                        </button>
+                      )}
+                      <button onClick={handleReset} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {et(lang, 'resetFilters')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty — programs */}
+                {!isLoading && !currentError && viewMode === 'programs' && programs.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <span style={{ color: textMuted, marginBottom: '16px' }}><ProgramsEmptyIcon /></span>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>
+                      {verifiedOnly ? 'No nonprofit programs found' : 'No programs found'}
+                    </h2>
+                    <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
+                      {verifiedOnly ? 'Try switching to All to see programs from all organizations.' : 'Try adjusting your search or filters.'}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {verifiedOnly && (
+                        <button onClick={function () { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500">
+                          Show All Programs
+                        </button>
+                      )}
+                      <button onClick={handleReset} style={{ padding: '10px 20px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        {et(lang, 'resetFilters')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Events grid */}
+                {!isLoading && !currentError && viewMode === 'events' && events.length > 0 && (
+                  <>
+                    {events.filter(function (e) { return e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
+                        {events.filter(function (e) { return e.is_featured; }).map(function (event) {
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
+                        })}
+                      </div>
+                    )}
+                    {events.filter(function (e) { return !e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {events.filter(function (e) { return !e.is_featured; }).map(function (event) {
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
+                        })}
+                      </div>
+                    )}
+                    <p style={{ padding: '4px 0 16px', fontSize: '12px', color: textMuted }}>
+                      Featured events are promoted by their organizations for 7 days.
+                    </p>
+                  </>
+                )}
+
+                {/* Programs grid */}
+                {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {programs.filter(function (p) { return p && p.id; }).map(function (program) {
+                      return <ProgramDiscoveryCard key={program.id} program={program} session={session} isDark={isDark} initialSaved={savedPrograms.has(program.id)} />;
+                    })}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {!isLoading && !currentError && totalPages > 1 && (
+                  <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
+                    <button onClick={function () { setCurrentPage(function (p) { return Math.max(1, p - 1); }); }} disabled={currentPage === 1} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }} aria-label={et(lang, 'previous')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <ChevronLeftIcon />
+                      {et(lang, 'previous')}
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {Array.from({ length: Math.min(5, totalPages) }, function (_, i) {
+                        var pageNum;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (currentPage <= 3) pageNum = i + 1;
+                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = currentPage - 2 + i;
+                        var isActive = pageNum === currentPage;
+                        return (
+                          <button key={pageNum} onClick={function () { setCurrentPage(pageNum); }} style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : ('1px solid ' + borderColor), background: isActive ? (viewMode === 'programs' ? '#8B5CF6' : '#3B82F6') : cardBg, color: isActive ? '#FFFFFF' : textSecondary, cursor: 'pointer' }} aria-label={(et(lang, 'page') + ' ' + pageNum)} aria-current={isActive ? 'page' : undefined} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={function () { setCurrentPage(function (p) { return Math.min(totalPages, p + 1); }); }} disabled={currentPage === totalPages} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, background: cardBg, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }} aria-label={et(lang, 'next')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {et(lang, 'next')}
+                      <ChevronRightIcon />
+                    </button>
+                  </nav>
+                )}
+              </>
             )}
           </main>
         </div>
@@ -800,13 +912,13 @@ export default function EventDiscovery() {
     </div>
   );
 
- return (
-  <>
-    <Header />
-    <main id="main-content">
-      {pageContent}
-    </main>
-    <Footer />
-  </>
-);
+  return (
+    <>
+      <Header />
+      <main id="main-content">
+        {pageContent}
+      </main>
+      <Footer />
+    </>
+  );
 }
