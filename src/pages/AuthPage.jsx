@@ -330,8 +330,7 @@ var result = await supabase.auth.signInWithPassword({ email: email.trim(), passw
       if (result.error) throw result.error;
 
 try {
-        console.log('Firing log-login for', result.data.user.id);
-        var logRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
+        await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -339,10 +338,7 @@ try {
             user_agent: navigator.userAgent
           })
         });
-        console.log('log-login response:', logRes.status);
-      } catch (logErr) {
-        console.error('log-login error:', logErr);
-      }
+      } catch (_) {}
 
       navigate('/dashboard', { replace: true });
     } catch (err) {
