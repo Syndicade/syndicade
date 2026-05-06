@@ -7,7 +7,7 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
+await supabase.from('login_log').delete().lt('logged_in_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
 // Days before expiry to send countdown emails
 const COUNTDOWN_DAYS = [7, 5, 3, 2, 1];
 // Days after expiry to send post-expiry emails
