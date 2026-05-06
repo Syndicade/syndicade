@@ -202,7 +202,7 @@ function MarkPaidModal({ member, tiers, onConfirm, onClose }) {
 }
 
 // ── Dues Row ──────────────────────────────────────────────────────────────────
-function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, toggling, isDark }) {
+function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, toggling, isDark, onSendPaymentLink, sendingPaymentLink, canSendPaymentLink }) {
   var status = getDuesStatus(membership);
   var until = membership.dues_paid_until ? new Date(membership.dues_paid_until) : null;
   var untilStr = until ? until.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -234,8 +234,18 @@ function DuesRow({ membership, tiers, isAdmin, onMarkPaid, onMarkUnpaid, togglin
           {untilStr && status === 'expired' ? (amount ? ' · ' : '') + 'Expired ' + untilStr : ''}
         </span>
       </div>
-      {isAdmin && (
+{isAdmin && (
         <div className="flex items-center gap-2">
+          {status !== 'paid' && canSendPaymentLink && (
+            <button
+              onClick={onSendPaymentLink}
+              disabled={sendingPaymentLink || toggling}
+              className={'text-xs font-semibold px-3 py-1 rounded-lg border transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 ' + (isDark ? 'border-blue-700 text-blue-400 hover:bg-blue-900/30' : 'border-blue-300 text-blue-600 hover:bg-blue-50')}
+              aria-label={'Send payment link to ' + membership.displayName}
+            >
+              {sendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
+            </button>
+          )}
           {status !== 'paid' ? (
             <button
               onClick={onMarkPaid}
@@ -312,6 +322,10 @@ function MemberDirectory() {
   var [changingRoleId, setChangingRoleId] = useState(null);
   var [sendingReminder, setSendingReminder] = useState(false);
   var [markPaidTarget, setMarkPaidTarget] = useState(null);
+  var [stripeConnectStatus, setStripeConnectStatus] = useState('not_connected');
+  var [manualPaymentInstructions, setManualPaymentInstructions] = useState('');
+  var [sendingPaymentLinkId, setSendingPaymentLinkId] = useState(null);
+  var [manualInstructionsTarget, setManualInstructionsTarget] = useState(null);
 
   var [searchQuery, setSearchQuery] = useState('');
   var [roleFilter, setRoleFilter] = useState('all');
@@ -360,7 +374,7 @@ function MemberDirectory() {
       setCurrentUserId(user ? user.id : null);
 
       var [orgResult, membershipResult, membersResult, tagsResult, tiersResult] = await Promise.all([
-        supabase.from('organizations').select('id, name, contact_email, collect_dues').eq('id', organizationId).single(),
+        supabase.from('organizations').select('id, name, contact_email, collect_dues, stripe_connect_status, manual_payment_instructions').eq('id', organizationId).single(),
         user ? supabase.from('memberships').select('role').eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').maybeSingle() : Promise.resolve({ data: null }),
         supabase.from('memberships').select('id, role, member_id, tier_id, dues_paid, dues_paid_at, dues_paid_until, dues_amount, members(user_id, first_name, last_name, display_name, email, bio, profile_photo_url, avatar_url, city, state, phone, location_visibility, phone_visibility, email_visibility)').eq('organization_id', organizationId).eq('status', 'active').order('members(last_name)', { ascending: true }),
         supabase.from('member_tags').select('id, name, color').eq('organization_id', organizationId).order('name'),
@@ -372,6 +386,8 @@ function MemberDirectory() {
 
       setOrganizationName(orgResult.data.name);
       setCollectDues(orgResult.data.collect_dues !== false);
+      setStripeConnectStatus(orgResult.data.stripe_connect_status || 'not_connected');
+      setManualPaymentInstructions(orgResult.data.manual_payment_instructions || '');
       setOrgTags(tagsResult.data || []);
       setTiers(tiersResult.data || []);
 
@@ -524,6 +540,65 @@ function MemberDirectory() {
       toast.error('Failed to update dues status.');
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleSendPaymentLink(member) {
+    if (!member.email) {
+      toast.error('This member has no email address on file.');
+      return;
+    }
+    var tier = tiers.find(function(t) { return t.id === member.tier_id; }) || null;
+    var amount = (tier && tier.dues_amount != null) ? tier.dues_amount : (member.dues_amount || 0);
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error('No dues amount set. Assign a tier with a dues amount first.');
+      return;
+    }
+    setSendingPaymentLinkId(member.user_id);
+    try {
+      var sessionResult = await supabase.auth.getSession();
+      var token = sessionResult.data.session ? sessionResult.data.session.access_token : '';
+      var sessionRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-dues-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          organization_id: organizationId,
+          member_id: member.user_id,
+          tier_id: member.tier_id || null,
+          amount: amount,
+          member_name: member.displayName,
+          member_email: member.email,
+        }),
+      });
+      var sessionData = await sessionRes.json();
+      if (!sessionRes.ok || !sessionData.url) {
+        throw new Error(sessionData.error || 'Failed to generate payment link.');
+      }
+      var emailRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          type: 'dues_payment_link',
+          data: {
+            memberEmail: member.email,
+            memberName: member.displayName,
+            orgName: organizationName,
+            amount: amount,
+            paymentUrl: sessionData.url,
+          },
+        }),
+      });
+      if (emailRes.ok) {
+        mascotSuccessToast('Payment link sent!', 'Email sent to ' + member.displayName + '.');
+      } else {
+        await navigator.clipboard.writeText(sessionData.url).catch(function() {});
+        mascotSuccessToast('Link copied!', 'Email failed — link copied to clipboard.');
+      }
+    } catch (err) {
+      console.error('Send payment link error:', err);
+      toast.error(err.message || 'Failed to send payment link.');
+    } finally {
+      setSendingPaymentLinkId(null);
     }
   }
 
@@ -822,7 +897,7 @@ function MemberDirectory() {
                         isDark={isDark}
                       />
                     )}
-                    {showDuesRow && (
+{showDuesRow && (
                       <DuesRow
                         membership={member}
                         tiers={tiers}
@@ -831,6 +906,15 @@ function MemberDirectory() {
                         onMarkUnpaid={function() { handleMarkUnpaid(member); }}
                         toggling={togglingId === member.user_id}
                         isDark={isDark}
+                        onSendPaymentLink={function() {
+                          if (stripeConnectStatus === 'active') {
+                            handleSendPaymentLink(member);
+                          } else {
+                            setManualInstructionsTarget(member);
+                          }
+                        }}
+                        sendingPaymentLink={sendingPaymentLinkId === member.user_id}
+                        canSendPaymentLink={!!(limits && limits.can_collect_dues)}
                       />
                     )}
                   </div>
@@ -845,6 +929,29 @@ function MemberDirectory() {
 
       </div>
 
+{manualInstructionsTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="manual-pay-title">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={function() { setManualInstructionsTarget(null); }} aria-hidden="true" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 id="manual-pay-title" className="text-lg font-bold text-gray-900 mb-1">Payment Instructions</h2>
+            <p className="text-sm text-gray-500 mb-4">{'Share these instructions with ' + manualInstructionsTarget.displayName + '.'}</p>
+            {manualPaymentInstructions ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{manualPaymentInstructions}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 mb-5">No manual payment instructions have been set. Add them in Organization Settings under Payments.</p>
+            )}
+            <button
+              onClick={function() { setManualInstructionsTarget(null); }}
+              className="w-full px-4 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      
       {markPaidTarget && (
         <MarkPaidModal
           member={markPaidTarget}
