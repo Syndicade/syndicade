@@ -308,6 +308,102 @@ serve(async (req) => {
       }
     }
 
+    // ── Dues renewal reminders (7 days before dues_paid_until) ───────────────
+    var reminderWindow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    var { data: duesSoon } = await supabase
+      .from('memberships')
+      .select('id, member_id, organization_id, tier_id, dues_amount, dues_paid_until, members(email, first_name, last_name, display_name), organizations(name, logo_url, stripe_connect_status, manual_payment_instructions)')
+      .eq('dues_paid', true)
+      .gte('dues_paid_until', now.toISOString())
+      .lte('dues_paid_until', reminderWindow.toISOString());
+
+    for (const membership of duesSoon || []) {
+      var duesUntilDate = new Date(membership.dues_paid_until);
+      var duesKey = 'dues_reminder_' + membership.id + '_' + duesUntilDate.getFullYear() + '_' + (duesUntilDate.getMonth() + 1);
+      var { data: alreadySentDues } = await supabase
+        .from('enforcement_log')
+        .select('id')
+        .eq('event_type', duesKey)
+        .maybeSingle();
+      if (alreadySentDues) continue;
+
+      var memberEmail = membership.members?.email;
+      if (!memberEmail) continue;
+
+      var memberName = membership.members?.display_name ||
+        ((membership.members?.first_name || '') + ' ' + (membership.members?.last_name || '')).trim();
+      var orgName = membership.organizations?.name || 'Your organization';
+      var orgLogoUrl = membership.organizations?.logo_url || '';
+      var daysUntilExpiry = Math.ceil((duesUntilDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      var untilStr = duesUntilDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      var paymentSection = '';
+      if (membership.organizations?.stripe_connect_status === 'active' && membership.dues_amount && parseFloat(membership.dues_amount) > 0) {
+        try {
+          var duesSessionRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-dues-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              organization_id: membership.organization_id,
+              member_id: membership.member_id,
+              tier_id: membership.tier_id || null,
+              amount: membership.dues_amount,
+              member_name: memberName,
+              member_email: memberEmail,
+            }),
+          });
+          if (duesSessionRes.ok) {
+            var duesSessionData = await duesSessionRes.json();
+            if (duesSessionData.url) {
+              paymentSection =
+                '<p style="text-align:center;margin:24px 0 0;">' +
+                '<a href="' + duesSessionData.url + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Renew Membership</a>' +
+                '</p>';
+            }
+          }
+        } catch (duesLinkErr) {
+          console.error('Dues reminder link error:', duesLinkErr);
+        }
+      }
+      if (!paymentSection && membership.organizations?.manual_payment_instructions) {
+        paymentSection =
+          '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-top:24px;">' +
+          '<p style="font-size:13px;font-weight:700;color:#374151;margin:0 0 8px;">Payment Instructions</p>' +
+          '<p style="font-size:13px;color:#6b7280;margin:0;white-space:pre-wrap;">' + membership.organizations.manual_payment_instructions + '</p>' +
+          '</div>';
+      }
+
+      var duesReminderHtml =
+        '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+        '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
+        '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
+        '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
+        (orgLogoUrl ? '<img src="' + orgLogoUrl + '" alt="' + orgName + '" style="height:48px;border-radius:50%;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;" />' : '') +
+        '<span style="font-size:20px;font-weight:800;color:#ffffff;">' + orgName + '</span>' +
+        '</td></tr>' +
+        '<tr><td style="padding:32px;">' +
+        '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Your membership renews soon</h2>' +
+        '<p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ' + (memberName || 'there') + ', your membership dues expire in <strong>' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days') + '</strong> on ' + untilStr + '.</p>' +
+        paymentSection +
+        '</td></tr>' +
+        '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
+        '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
+        '</td></tr></table></td></tr></table></body></html>';
+
+      await sendEmail(
+        memberEmail,
+        'Your ' + orgName + ' membership renews in ' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days'),
+        duesReminderHtml
+      );
+
+      await supabase.from('enforcement_log').insert({
+        org_id: membership.organization_id,
+        event_type: duesKey,
+        notification_sent: 'dues_renewal_reminder',
+      });
+    }
+
     return new Response(JSON.stringify({ ok: true, processed: orgs?.length || 0 }), {
       headers: { 'Content-Type': 'application/json' }
     });

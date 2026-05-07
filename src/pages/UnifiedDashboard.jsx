@@ -476,6 +476,7 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange, isDark }) {
   var textPrimary = isDark ? '#FFFFFF' : '#0E1523'
   var textMuted = isDark ? '#94A3B8' : '#64748B'
   var isFiltered = selectedOrgId !== 'all'
+  var [savedEvents, setSavedEvents] = useState([]);
   var selectedName = isFiltered ? ((organizations.find(function(o) { return o.id === selectedOrgId }) || {}).name || 'Org') : 'All Orgs'
 
   useEffect(function() {
@@ -640,6 +641,7 @@ function UnifiedDashboard() {
   var [followedOrgs, setFollowedOrgs] = useState([])
   var [followedEvents, setFollowedEvents] = useState([])
   var [unfollowingId, setUnfollowingId] = useState(null)
+  var [savedEvents, setSavedEvents] = useState([]);
   var [showInviteMember, setShowInviteMember] = useState(false);
   var [showInviteOrg, setShowInviteOrg] = useState(false);
 
@@ -757,6 +759,15 @@ function UnifiedDashboard() {
       } else {
         setFollowedEvents([])
       }
+
+      // ── Saved events ──
+        var savesRes = await supabase
+          .from('event_saves')
+          .select('id, events(id, title, start_time, location, organizations(id, name))')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(4);
+        setSavedEvents((savesRes.data || []).map(function(s) { return s.events; }).filter(Boolean));
 
       var orgIds = orgsWithStats.map(function(o) { return o.id })
       if (orgIds.length > 0) {
@@ -1163,7 +1174,51 @@ function UnifiedDashboard() {
               </div>
             </section>
           )}
-        </div>
+
+        {/* Saved Events */}
+{!loading && savedEvents.length > 0 && (
+  <section aria-labelledby="saved-events-heading" style={{marginTop: '36px'}}>
+    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px'}}>
+      <h2 id="saved-events-heading" style={{fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', margin: 0}}>SAVED EVENTS</h2>
+      <Link to="/saved-events" style={{fontSize: '12px', fontWeight: 600, color: '#3B82F6', textDecoration: 'none'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">View all</Link>
+    </div>
+    <div style={{display: 'flex', flexDirection: 'column', gap: '6px'}}>
+      {savedEvents.map(function(evt) {
+        if (!evt) return null;
+        var d = evt.start_time ? new Date(evt.start_time) : null;
+        return (
+          <Link
+            key={evt.id}
+            to={'/events/' + evt.id}
+            aria-label={'Saved event: ' + evt.title}
+            style={{display: 'flex', alignItems: 'center', gap: '14px', background: cardBg, border: '1px solid ' + border, borderRadius: '10px', padding: '10px 14px', textDecoration: 'none'}}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <div style={{flexShrink: 0, width: '40px', textAlign: 'center', background: isDark ? '#1E2845' : '#F1F5F9', borderRadius: '7px', padding: '5px 0'}}>
+              {d ? (
+                <>
+                  <div style={{fontSize: '9px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '1px'}}>{d.toLocaleDateString('en-US', { month: 'short' })}</div>
+                  <div style={{fontSize: '18px', fontWeight: 800, color: textPrimary, lineHeight: 1}}>{d.getDate()}</div>
+                </>
+              ) : (
+                <div style={{fontSize: '18px', fontWeight: 800, color: textMuted, lineHeight: 1, padding: '4px 0'}}>?</div>
+              )}
+            </div>
+            <div style={{flex: 1, minWidth: 0}}>
+              <p style={{fontSize: '13px', fontWeight: 600, color: textPrimary, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{evt.title}</p>
+              <p style={{fontSize: '11px', color: textMuted, margin: 0}}>
+                {evt.organizations ? evt.organizations.name : ''}
+                {evt.location ? ' · ' + evt.location : ''}
+              </p>
+            </div>
+            <IconBookmark />
+          </Link>
+        );
+      })}
+    </div>
+  </section>
+)}
+</div>
 
         {/* ── Right sidebar ──────────────────────────────────────────────── */}
         <aside role="complementary" aria-label="Dashboard sidebar" style={{display: 'flex', flexDirection: 'column', gap: '18px'}}>

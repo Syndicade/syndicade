@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 import { useLocation } from 'react-router-dom';
+import { Bookmark } from 'lucide-react';
 
 function Header() {
   var navigate = useNavigate();
@@ -234,6 +235,7 @@ function Header() {
             {/* Logged-in: notification bell + avatar */}
             {currentUser && (
               <>
+
                 <NotificationBell />
 
                 <div className="relative flex-shrink-0" ref={userMenuRef}>

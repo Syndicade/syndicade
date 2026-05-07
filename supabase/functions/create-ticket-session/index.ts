@@ -28,12 +28,20 @@ var supabaseUrl = Deno.env.get('SUPABASE_URL')
     // Fetch event
     var { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, is_paid')
+      .select('id, title, is_paid, organization_id')
       .eq('id', event_id)
       .single()
 
-    if (eventError || !event) throw new Error('Event not found: ' + (eventError ? eventError.message : 'no data') + ' | event_id=' + event_id)
+if (eventError || !event) throw new Error('Event not found: ' + (eventError ? eventError.message : 'no data') + ' | event_id=' + event_id)
     if (!event.is_paid) throw new Error('Event is not a paid event')
+
+    // Fetch org Stripe Connect details
+    var { data: ticketOrg } = await supabase
+      .from('organizations')
+      .select('stripe_connect_status, stripe_account_id')
+      .eq('id', event.organization_id)
+      .single()
+    var connectedAccountId = (ticketOrg && ticketOrg.stripe_connect_status === 'active') ? ticketOrg.stripe_account_id : null
 
     // Fetch ticket types for this event
     var { data: ticketTypes, error: ttError } = await supabase
@@ -57,7 +65,8 @@ var supabaseUrl = Deno.env.get('SUPABASE_URL')
     params.append('metadata[member_id]', member_id)
     params.append('metadata[type]', 'event_ticket')
 
-    var lineIndex = 0
+var lineIndex = 0
+    var totalTicketCount = 0
     for (var i = 0; i < selections.length; i++) {
       var sel = selections[i]
       var tt = ttMap[sel.ticket_type_id]
@@ -88,19 +97,31 @@ var supabaseUrl = Deno.env.get('SUPABASE_URL')
       params.append('line_items[' + lineIndex + '][price_data][currency]', 'usd')
       params.append('line_items[' + lineIndex + '][price_data][unit_amount]', String(amountCents))
       params.append('line_items[' + lineIndex + '][price_data][product_data][name]', productName)
-      params.append('metadata[tt_' + lineIndex + ']', tt.id + ':' + sel.quantity)
+params.append('metadata[tt_' + lineIndex + ']', tt.id + ':' + sel.quantity)
 
+      totalTicketCount += sel.quantity
       lineIndex++
     }
 
     if (lineIndex === 0) throw new Error('No tickets selected')
 
+// $1 per ticket application fee (in cents)
+    if (connectedAccountId) {
+      params.append('application_fee_amount', String(totalTicketCount * 100))
+      params.append('invoice_creation[enabled]', 'true')
+    }
+
+    var stripeHeaders = {
+      'Authorization': 'Bearer ' + stripeKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    if (connectedAccountId) {
+      stripeHeaders['Stripe-Account'] = connectedAccountId
+    }
+
     var stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + stripeKey,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: stripeHeaders,
       body: params.toString(),
     })
 

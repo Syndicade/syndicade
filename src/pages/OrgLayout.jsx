@@ -102,6 +102,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
     },
     {
       label: 'Platform',
+      adminOnly: true,   // ← entire section hidden from members
       items: [
         { id:'community-board', label:'Community Board', iconKey:'pinboard', route:'community-board', path: base + '/community-board', isPurple: true, lock:'verified' },
         { id:'settings',        label:'Settings',        iconKey:'settings', route:'settings',        path: base + '/settings' },
@@ -183,7 +184,6 @@ function OrgLayout() {
     }
   }
 
-  // ── Active route detection ─────────────────────────────────────────────────
   function isActive(item) {
     var base = '/organizations/' + organizationId;
     var pathname = location.pathname.replace(/\/$/, '');
@@ -191,7 +191,6 @@ function OrgLayout() {
     return pathname === base + '/' + item.route || pathname.startsWith(base + '/' + item.route + '/');
   }
 
-  // ── Nav renderer ───────────────────────────────────────────────────────────
   function renderNav() {
     var navGroups = buildNavGroups(organizationId, pendingCount, unreadCount);
     return navGroups.map(function(group) {
@@ -208,7 +207,6 @@ function OrgLayout() {
           {visibleItems.map(function(item) {
             var active = isActive(item);
 
-            // ── Lock logic ──────────────────────────────────────────────────
             var isLocked = false;
             var lockReason = null;
             if (item.lock === 'growth') {
@@ -231,7 +229,6 @@ function OrgLayout() {
               <button
                 key={item.id}
                 onClick={function() {
-                  // Only 'verified' lock shows a popup — all others navigate normally
                   if (isLocked && lockReason === 'verified') {
                     setLockedNavTarget(lockReason);
                     return;
@@ -285,7 +282,6 @@ function OrgLayout() {
     });
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ background:pageBg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -310,7 +306,6 @@ function OrgLayout() {
     );
   }
 
-  // ── Access gates ───────────────────────────────────────────────────────────
   if (!access.loading && accessStatus === 'iced' && isAdmin) {
     return <OrgIced orgName={organization && organization.name} orgId={organizationId} />;
   }
@@ -318,7 +313,6 @@ function OrgLayout() {
     return <OrgUnavailable orgName={organization && organization.name} />;
   }
 
-  // ── Email verification gate ────────────────────────────────────────────────
   if (!access.loading && organization && organization.contact_email_verified === false && isAdmin) {
     return (
       <div style={{ background:pageBg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
@@ -363,8 +357,7 @@ function OrgLayout() {
       </div>
     );
   }
-  
-  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>
       <SubscriptionBanner
@@ -449,7 +442,7 @@ function OrgLayout() {
         </div>
       </div>
 
-      {/* ── Locked nav upgrade modal ── */}
+      {/* Locked nav upgrade modal */}
       {lockedNavTarget && (
         <div
           style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:60 }}

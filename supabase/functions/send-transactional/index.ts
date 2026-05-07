@@ -148,6 +148,28 @@ function buildGuestRsvpConfirmation(data: any) {
   return { subject, html: wrapEmail(inner) }
 }
 
+function buildDuesConfirmation(data: any) {
+  var subject = 'Dues payment confirmed — ' + (data.orgName || 'your organization')
+  var paidUntil = data.duesPaidUntil
+    ? new Date(data.duesPaidUntil).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null
+  var inner =
+    orgHeader(data.orgName || 'Your Organization', data.orgLogoUrl || '') +
+    '<tr><td style="padding:32px;">' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Payment received!</h2>' +
+    '<p style="font-size:15px;color:#374151;margin:0 0 24px;">Hi ' + (data.memberName || 'there') + ', your dues payment to <strong>' + (data.orgName || 'your organization') + '</strong> has been confirmed.</p>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">' +
+    '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Amount Paid</td></tr>' +
+    '<tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">$' + parseFloat(data.amount || 0).toFixed(2) + '</td></tr>' +
+    (data.tierName ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Membership Tier</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.tierName + '</td></tr>' : '') +
+    (paidUntil ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Membership Valid Through</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + paidUntil + '</td></tr>' : '') +
+    '</table>' +
+    '<p style="font-size:13px;color:#6b7280;text-align:center;margin:0;">Thank you for your support!</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -178,6 +200,9 @@ serve(async (req) => {
     } else if (type === 'guest_rsvp_confirmation') {
       toEmail = data.guestEmail
       emailContent = buildGuestRsvpConfirmation(data)
+} else if (type === 'dues_confirmation') {
+      toEmail = data.memberEmail
+      emailContent = buildDuesConfirmation(data)
     } else {
       return new Response(JSON.stringify({ error: 'Unknown email type: ' + type }), { status: 400, headers: corsHeaders })
     }

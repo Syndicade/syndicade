@@ -22,11 +22,12 @@ function Footer() {
     { label: 'Explore Organizations', path: '/explore'   },
   ];
 
-  var authLinks = [
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Calendar',  path: '/calendar'  },
+var authLinks = [
+    { label: 'Dashboard',   path: '/dashboard'    },
+    { label: 'Calendar',    path: '/calendar'     },
+    { label: 'Saved Events', path: '/saved-events' },
+    { label: 'Wishlist',    path: '/wishlist'     },
   ];
-
   var navLinks = isLoggedIn
     ? publicLinks.concat(authLinks)
     : publicLinks;

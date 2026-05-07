@@ -110,6 +110,85 @@ serve(async (req) => {
           await supabase.from('ticket_purchases').insert(purchaseRows)
         }
       }
+      // DUES PAYMENT
+if (session.metadata?.type === 'dues') {
+  var duesMemberId = session.metadata.member_id;
+  var duesOrgId = session.metadata.organization_id;
+  var duesTierId = session.metadata.tier_id || null;
+  var duesAmount = parseFloat(session.metadata.amount || '0');
+  var paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent
+    : session.payment_intent?.id || null;
+
+  // Insert dues_payment record
+  await supabase.from('dues_payments').insert({
+    member_id: duesMemberId,
+    organization_id: duesOrgId,
+    tier_id: duesTierId || null,
+    amount: duesAmount,
+    stripe_payment_intent_id: paymentIntentId,
+    paid_at: new Date().toISOString(),
+  });
+
+  // Mark membership dues as paid
+  // dues_paid_until = 1 year from today
+  var duesPaidUntil = new Date();
+  duesPaidUntil.setFullYear(duesPaidUntil.getFullYear() + 1);
+
+await supabase
+          .from('memberships')
+          .update({
+            dues_paid: true,
+            dues_paid_until: duesPaidUntil.toISOString(),
+          })
+          .eq('member_id', duesMemberId)
+          .eq('organization_id', duesOrgId);
+
+        // Send dues confirmation email
+        try {
+          var { data: duesMember } = await supabase
+            .from('members')
+            .select('email, first_name, last_name, display_name')
+            .eq('user_id', duesMemberId)
+            .single();
+          var { data: duesOrg } = await supabase
+            .from('organizations')
+            .select('name, logo_url')
+            .eq('id', duesOrgId)
+            .single();
+          var duesTier = null;
+          if (duesTierId) {
+            var { data: tierData } = await supabase
+              .from('membership_tiers')
+              .select('name')
+              .eq('id', duesTierId)
+              .single();
+            duesTier = tierData;
+          }
+          if (duesMember && duesMember.email) {
+            var memberDisplayName = duesMember.display_name ||
+              ((duesMember.first_name || '') + ' ' + (duesMember.last_name || '')).trim();
+            await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-transactional', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'dues_confirmation',
+                data: {
+                  memberEmail: duesMember.email,
+                  memberName: memberDisplayName,
+                  orgName: duesOrg ? duesOrg.name : '',
+                  orgLogoUrl: duesOrg ? duesOrg.logo_url : '',
+                  amount: duesAmount,
+                  tierName: duesTier ? duesTier.name : null,
+                  duesPaidUntil: duesPaidUntil.toISOString(),
+                },
+              }),
+            });
+          }
+} catch (emailErr) {
+          console.error('Dues confirmation email error:', emailErr);
+        }
+      }
     }
 
     // ── Handle subscription events ────────────────────────────────────────
