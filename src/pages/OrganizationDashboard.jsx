@@ -148,46 +148,13 @@ function PostitSkeleton() {
 
 // ── Org tour steps ────────────────────────────────────────────────────────────
 var ORG_TOUR_STEPS = [
-  {
-    target: null,
-    title: 'Welcome to your dashboard',
-    description: 'You\'re all set up. Let\'s take a 30-second tour so you can hit the ground running.'
-  },
-  {
-    target: 'tour-org-nav',
-    title: 'Your navigation',
-    description: 'Everything your organization needs is here — members, events, announcements, documents, and more.',
-    placement: 'right'
-  },
-  {
-    target: 'tour-members-nav',
-    title: 'Manage your members',
-    description: 'Invite people, assign admin roles, and see who\'s active in your organization.',
-    placement: 'right'
-  },
-  {
-    target: 'tour-events-nav',
-    title: 'Create your first event',
-    description: 'Schedule events, collect RSVPs, sell tickets, and track attendance — all in one place.',
-    placement: 'right'
-  },
-  {
-    target: 'tour-announcements-nav',
-    title: 'Keep members informed',
-    description: 'Post announcements that show up directly on your members\' unified dashboards.',
-    placement: 'right'
-  },
-  {
-    target: 'tour-public-page-nav',
-    title: 'Your public page',
-    description: 'Set up your organization\'s public website — add your logo, mission, events, and a contact form. No coding needed.',
-    placement: 'right'
-  },
-  {
-    target: null,
-    title: 'You\'re ready to go',
-    description: 'Start by inviting your first members. They\'ll get a welcome email and can join right away.'
-  }
+  { target: null, title: 'Welcome to your dashboard', description: 'You\'re all set up. Let\'s take a 30-second tour so you can hit the ground running.' },
+  { target: 'tour-org-nav', title: 'Your navigation', description: 'Everything your organization needs is here — members, events, announcements, documents, and more.', placement: 'right' },
+  { target: 'tour-members-nav', title: 'Manage your members', description: 'Invite people, assign admin roles, and see who\'s active in your organization.', placement: 'right' },
+  { target: 'tour-events-nav', title: 'Create your first event', description: 'Schedule events, collect RSVPs, sell tickets, and track attendance — all in one place.', placement: 'right' },
+  { target: 'tour-announcements-nav', title: 'Keep members informed', description: 'Post announcements that show up directly on your members\' unified dashboards.', placement: 'right' },
+  { target: 'tour-public-page-nav', title: 'Your public page', description: 'Set up your organization\'s public website — add your logo, mission, events, and a contact form. No coding needed.', placement: 'right' },
+  { target: null, title: 'You\'re ready to go', description: 'Start by inviting your first members. They\'ll get a welcome email and can join right away.' }
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -208,13 +175,11 @@ function OrganizationDashboard() {
   var textMuted     = isDark ? '#94A3B8'  : '#64748B';
   var inputBg       = isDark ? '#151B2D'  : '#F8FAFC';
 
-  // ── Plan limits ───────────────────────────────────────────────────────────
   var planData = usePlanLimits(organizationId);
   var plan = planData ? planData.plan : 'starter';
   var limits = planData ? planData.limits : null;
   var isAllowed = planData ? planData.isAllowed : function() { return false; };
 
-  // Core state
   var [organization, setOrganization] = useState(null);
   var [membership, setMembership] = useState(null);
   var [currentUserId, setCurrentUserId] = useState(null);
@@ -225,16 +190,10 @@ function OrganizationDashboard() {
   var [viewMode, setViewMode] = useState('admin');
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
   var [showInviteModal, setShowInviteModal] = useState(false);
-
-  // ── Locked nav prompt state ───────────────────────────────────────────────
-  // null | 'growth' | 'pro' | 'verified'
   var [lockedNavTarget, setLockedNavTarget] = useState(null);
-
-  // ── TOUR STATE — triggers tour after wizard completes ─────────────────────
   var [showTour, setShowTour] = useState(false);
   var [showCelebration, setShowCelebration] = useState(false);
 
-  // ── Detect ?tour=1 from CreateOrganization wizard ──
   useEffect(function() {
     var params = new URLSearchParams(window.location.search);
     if (params.get('tour') === '1') {
@@ -243,16 +202,11 @@ function OrganizationDashboard() {
     }
   }, []);
 
-  // Overview data
   var [overviewEvents, setOverviewEvents] = useState([]);
   var [overviewAnnouncements, setOverviewAnnouncements] = useState([]);
   var [overviewLoading, setOverviewLoading] = useState(false);
-
-  // Chat preview
   var [chatPreview, setChatPreview] = useState([]);
   var [chatLoading, setChatLoading] = useState(false);
-
-  // Event actions
   var [activeEventMenu, setActiveEventMenu] = useState(null);
   var [editingEvent, setEditingEvent] = useState(null);
   var [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -263,24 +217,16 @@ function OrganizationDashboard() {
   var [deletingEvent, setDeletingEvent] = useState(null);
   var [deleteScope, setDeleteScope] = useState('this');
   var [deleteLoading, setDeleteLoading] = useState(false);
-
-  // Modals
   var [showCreateEvent, setShowCreateEvent] = useState(false);
   var [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   var [showCreatePoll, setShowCreatePoll] = useState(false);
   var [showCreateSignupForm, setShowCreateSignupForm] = useState(false);
-
-  // Approvals
   var [pendingApprovals, setPendingApprovals] = useState([]);
   var [pendingApprovalsLoading, setPendingApprovalsLoading] = useState(false);
   var [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
-
-  // Inbox
   var [inquiries, setInquiries] = useState([]);
   var [inquiriesLoading, setInquiriesLoading] = useState(false);
   var [unreadInquiriesCount, setUnreadInquiriesCount] = useState(0);
-
-  // Photos
   var [photos, setPhotos] = useState([]);
   var [photosLoading, setPhotosLoading] = useState(false);
   var [photoUploading, setPhotoUploading] = useState(false);
@@ -288,21 +234,21 @@ function OrganizationDashboard() {
   var [photoError, setPhotoError] = useState(null);
   var [deletingPhotoId, setDeletingPhotoId] = useState(null);
   var [lightboxPhoto, setLightboxPhoto] = useState(null);
-
-  // Program modal
   var [showProgramModal, setShowProgramModal] = useState(false);
   var [editingProgram, setEditingProgram] = useState(null);
   var [programForm, setProgramForm] = useState({ name:'', description:'', audience:'', schedule:'', how_to_apply:'', contact_name:'', contact_email:'', status:'active', is_public:true });
   var [programSaving, setProgramSaving] = useState(false);
-
-  // Preview data for non-overview tabs
   var [previewData, setPreviewData] = useState({});
   var [previewLoading, setPreviewLoading] = useState(false);
+
+  // ── Collaboration requests ────────────────────────────────────────────────
+  var [collabRequests, setCollabRequests] = useState([]);
+  var [collabRequestsLoading, setCollabRequestsLoading] = useState(false);
+  var [respondingCollab, setRespondingCollab] = useState(null);
 
   var effectiveRole = (membership && membership.role === 'admin' && viewMode === 'admin') ? 'admin' : 'member';
   var isAdmin = effectiveRole === 'admin';
 
-  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(function() { fetchData(); }, [organizationId]);
 
   useEffect(function() {
@@ -321,7 +267,13 @@ function OrganizationDashboard() {
     if (previewTabs.indexOf(activeTab) !== -1) fetchPreviewData(activeTab);
   }, [activeTab]);
 
-  // ── Data ──────────────────────────────────────────────────────────────────
+  // Fetch collab requests once org + membership are loaded
+  useEffect(function() {
+    if (organization && membership && membership.role === 'admin') {
+      fetchCollaborationRequests();
+    }
+  }, [organization, membership]);
+
   async function fetchData() {
     try {
       var authResult = await supabase.auth.getUser();
@@ -468,6 +420,87 @@ function OrganizationDashboard() {
     finally { setPhotosLoading(false); }
   }
 
+  // ── Collaboration requests ────────────────────────────────────────────────
+  async function fetchCollaborationRequests() {
+    setCollabRequestsLoading(true);
+    try {
+      var { data: requests, error: reqErr } = await supabase
+        .from('event_collaborators')
+        .select('*')
+        .eq('host_org_id', organizationId)
+        .eq('status', 'pending');
+      if (reqErr) throw reqErr;
+
+      if (requests && requests.length > 0) {
+        var eventIds = requests.map(function(r) { return r.event_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; });
+        var orgIds = requests.map(function(r) { return r.requesting_org_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; });
+
+        var eventsRes = await supabase.from('events').select('id, title').in('id', eventIds);
+        var orgsRes = await supabase.from('organizations').select('id, name').in('id', orgIds);
+
+        var eventMap = {};
+        if (eventsRes.data) eventsRes.data.forEach(function(e) { eventMap[e.id] = e; });
+        var orgMap = {};
+        if (orgsRes.data) orgsRes.data.forEach(function(o) { orgMap[o.id] = o; });
+
+        setCollabRequests(requests.map(function(r) {
+          return Object.assign({}, r, {
+            event: eventMap[r.event_id] || null,
+            requesting_org: orgMap[r.requesting_org_id] || null,
+          });
+        }));
+      } else {
+        setCollabRequests([]);
+      }
+    } catch (err) {
+      console.error('fetchCollaborationRequests error:', err);
+    } finally {
+      setCollabRequestsLoading(false);
+    }
+  }
+
+async function respondToCollabRequest(request, status) {
+  setRespondingCollab(request.id);
+  try {
+    var { error: updateErr } = await supabase
+      .from('event_collaborators')
+      .update({ status: status, updated_at: new Date().toISOString() })
+      .eq('id', request.id);
+    if (updateErr) throw updateErr;
+
+    var { data: reqAdmins } = await supabase
+      .from('memberships')
+      .select('member_id')
+      .eq('organization_id', request.requesting_org_id)
+      .eq('role', 'admin')
+      .eq('status', 'active');
+
+    if (reqAdmins && reqAdmins.length > 0) {
+      var orgName = organization ? organization.name : 'The host organization';
+      var eventTitle = request.event ? request.event.title : 'an event';
+      var notifications = reqAdmins.map(function(a) {
+        return {
+          user_id: a.member_id,
+          organization_id: request.requesting_org_id,
+          type: status === 'accepted' ? 'collab_accepted' : 'collab_declined',
+          title: status === 'accepted' ? 'Collaboration Accepted' : 'Collaboration Declined',
+          message: orgName + ' ' + (status === 'accepted' ? 'accepted' : 'declined') + ' your co-host request for "' + eventTitle + '"',
+          link: '/org/' + request.requesting_org_id + '/events',
+          read: false,
+        };
+      });
+      await supabase.from('notifications').insert(notifications);
+    }
+
+    mascotSuccessToast(status === 'accepted' ? 'Co-host accepted!' : 'Request declined.');
+    setCollabRequests(function(prev) { return prev.filter(function(r) { return r.id !== request.id; }); });
+  } catch (err) {
+    toast.error('Could not update request');
+  } finally {
+    setRespondingCollab(null);
+  }
+}
+
   async function fetchPreviewData(tab) {
     setPreviewLoading(true);
     try {
@@ -510,7 +543,6 @@ function OrganizationDashboard() {
     finally { setPreviewLoading(false); }
   }
 
-  // ── Event actions ─────────────────────────────────────────────────────────
   function handleEditEvent(ev) { setEditingEvent(ev); setShowCreateEvent(true); setActiveEventMenu(null); }
 
   function handleRescheduleEvent(ev) {
@@ -650,7 +682,6 @@ function OrganizationDashboard() {
     setShowProgramModal(false);
   }
 
-  // ── Generic preview panel wrapper ─────────────────────────────────────────
   function renderPreviewPanel(opts) {
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
@@ -684,7 +715,6 @@ function OrganizationDashboard() {
     );
   }
 
-  // ── Preview tab renderers ──────────────────────────────────────────────────
   function renderAnnouncementsPreview() {
     var items = (previewData.announcements && previewData.announcements.items) || [];
     var priorityColors = { urgent:'#EF4444', normal:'#F5B731', low:'#22C55E' };
@@ -973,7 +1003,6 @@ function OrganizationDashboard() {
     });
   }
 
-  // ── Nav definition ────────────────────────────────────────────────────────
   var NAV_GROUPS = [
     {
       label: 'Workspace',
@@ -1001,7 +1030,7 @@ function OrganizationDashboard() {
       adminOnly: true,
       items: [
         { id:'approvals',  label:'Approvals',   iconKey:'approvals', roles:['admin'], badge: pendingApprovalsCount },
-        { id:'inbox', label:'Inbox', iconKey:'inbox', roles:['admin'], badge: unreadInquiriesCount, lock:'growth' }, 
+        { id:'inbox', label:'Inbox', iconKey:'inbox', roles:['admin'], badge: unreadInquiriesCount, lock:'growth' },
         { id:'analytics',  label:'Analytics',    iconKey:'analytics', roles:['admin'], lock:'growth' },
         { id:'publicpage', label:'Public Page',  iconKey:'pencil',    roles:['admin'], tourKey:'tour-public-page-nav' },
       ]
@@ -1022,7 +1051,6 @@ function OrganizationDashboard() {
     setActiveTab(item.id);
   }
 
-  // ── Determine if a nav item is locked ────────────────────────────────────
   function getNavLockState(item) {
     if (!item.lock) return { locked: false, reason: null };
     if (item.lock === 'growth') {
@@ -1040,7 +1068,6 @@ function OrganizationDashboard() {
     return { locked: false, reason: null };
   }
 
-  // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ background: pageBg, minHeight:'100vh', padding:'32px 16px' }}>
@@ -1076,7 +1103,6 @@ function OrganizationDashboard() {
     );
   }
 
-  // ── Render nav items ──────────────────────────────────────────────────────
   function renderNavItems() {
     return NAV_GROUPS.map(function(group) {
       if (group.adminOnly && !isAdmin) return null;
@@ -1094,12 +1120,8 @@ function OrganizationDashboard() {
             var lockState = getNavLockState(item);
             var isLocked = lockState.locked;
             var lockReason = lockState.reason;
-
-            var color = isLocked
-              ? '#3A4A65'
-              : (item.isPurple ? '#A78BFA' : isActive ? '#3B82F6' : textMuted);
+            var color = isLocked ? '#3A4A65' : (item.isPurple ? '#A78BFA' : isActive ? '#3B82F6' : textMuted);
             var bg = isActive && !isLocked ? 'rgba(59,130,246,0.12)' : 'transparent';
-
             return (
               <button
                 key={item.id}
@@ -1108,49 +1130,17 @@ function OrganizationDashboard() {
                   handleNavClick(item);
                 }}
                 data-tour={item.tourKey || null}
-                style={{
-                  display:'flex', alignItems:'center', gap:'8px',
-                  padding: item.isSub ? '8px 10px 8px 26px' : '8px 10px',
-                  borderRadius:'7px',
-                  fontSize: item.isSub ? '15px' : '16px',
-                  fontWeight: 600,
-                  color: color,
-                  background: bg,
-                  border:'none', cursor:'pointer', width:'100%', textAlign:'left',
-                  position:'relative', whiteSpace:'nowrap',
-                  opacity: isLocked ? 0.55 : 1,
-                }}
+                style={{ display:'flex', alignItems:'center', gap:'8px', padding: item.isSub ? '8px 10px 8px 26px' : '8px 10px', borderRadius:'7px', fontSize: item.isSub ? '15px' : '16px', fontWeight: 600, color: color, background: bg, border:'none', cursor:'pointer', width:'100%', textAlign:'left', position:'relative', whiteSpace:'nowrap', opacity: isLocked ? 0.55 : 1 }}
                 aria-current={isActive && !isLocked ? 'page' : undefined}
                 aria-disabled={isLocked || undefined}
-                aria-label={isLocked
-                  ? (item.label + ' — ' + (lockReason === 'verified' ? 'available to verified nonprofits' : 'available on ' + (lockReason || 'Growth') + ' plan'))
-                  : item.label
-                }
+                aria-label={isLocked ? (item.label + ' — ' + (lockReason === 'verified' ? 'available to verified nonprofits' : 'available on ' + (lockReason || 'Growth') + ' plan')) : item.label}
               >
-               <Icon path={ICONS[item.iconKey]} className="h-4 w-4" style={{ flexShrink:0, color:color }} />
+                <Icon path={ICONS[item.iconKey]} className="h-4 w-4" style={{ flexShrink:0, color:color }} />
                 <span style={{ flex:1 }}>{item.label}</span>
-
-                {/* Lock icon for locked items */}
-                {isLocked && (
-                  <Lock size={10} style={{ color:'#3A4A65', flexShrink:0 }} aria-hidden="true" />
-                )}
-
-                {/* Plan badge for locked items */}
-                {isLocked && lockReason && (
-                  <LockedNavBadge requiredPlan={lockReason} />
-                )}
-
-                {/* Regular badge (unread count etc) — only when not locked */}
+                {isLocked && <Lock size={10} style={{ color:'#3A4A65', flexShrink:0 }} aria-hidden="true" />}
+                {isLocked && lockReason && <LockedNavBadge requiredPlan={lockReason} />}
                 {!isLocked && item.badge > 0 && (
-                  <span
-                    style={{
-                      position:'absolute', right:'8px',
-                      background: item.id === 'inbox' ? '#EF4444' : '#F5B731',
-                      color: item.id === 'inbox' ? '#fff' : '#1A0000',
-                      fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px',
-                    }}
-                    aria-label={item.badge + ' pending'}
-                  >
+                  <span style={{ position:'absolute', right:'8px', background: item.id === 'inbox' ? '#EF4444' : '#F5B731', color: item.id === 'inbox' ? '#fff' : '#1A0000', fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px' }} aria-label={item.badge + ' pending'}>
                     {item.badge}
                   </span>
                 )}
@@ -1162,9 +1152,7 @@ function OrganizationDashboard() {
     });
   }
 
-  // ── Overview tab ──────────────────────────────────────────────────────────
   function renderOverview() {
-    // Member count progress pill values
     var memberLimit = (limits && limits.members) ? limits.members : 50;
     var memberPct = memberLimit ? Math.min(Math.round((stats.totalMembers / memberLimit) * 100), 100) : 0;
     var memberBarColor = memberPct >= 90 ? '#EF4444' : memberPct >= 80 ? '#F5B731' : '#22C55E';
@@ -1173,32 +1161,19 @@ function OrganizationDashboard() {
       <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
         <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'16px' }}>
           <div style={{ display:'flex', gap:'8px', marginBottom:'16px' }}>
-
-            {/* Members stat card — with progress pill */}
-            <button
-              onClick={function() { navigate('/organizations/'+organizationId+'/members'); }}
-              style={{ flex:1, background:isDark?'#0E1523':'#EFF6FF', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }}
-              className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-opacity"
-              aria-label="View members"
-            >
+            <button onClick={function() { navigate('/organizations/'+organizationId+'/members'); }} style={{ flex:1, background:isDark?'#0E1523':'#EFF6FF', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-opacity" aria-label="View members">
               <p style={{ fontSize:'8px', fontWeight:700, color:'#60A5FA', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>Members</p>
               <p style={{ fontSize:'20px', fontWeight:800, color:'#60A5FA' }}>{stats.totalMembers}</p>
-              {/* Progress bar */}
               <div style={{ marginTop:'6px' }} role="meter" aria-valuenow={stats.totalMembers} aria-valuemin={0} aria-valuemax={memberLimit} aria-label={'Member usage: ' + stats.totalMembers + ' of ' + memberLimit}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'3px' }}>
                   <span style={{ fontSize:'8px', color:'#60A5FA', fontWeight:600 }}>{stats.totalMembers} / {memberLimit}</span>
-                  {memberPct >= 80 && (
-                    <span style={{ fontSize:'8px', fontWeight:700, color: memberBarColor }}>
-                      {memberPct >= 90 ? 'Almost full' : 'Near limit'}
-                    </span>
-                  )}
+                  {memberPct >= 80 && <span style={{ fontSize:'8px', fontWeight:700, color: memberBarColor }}>{memberPct >= 90 ? 'Almost full' : 'Near limit'}</span>}
                 </div>
                 <div style={{ width:'100%', background:'rgba(96,165,250,0.2)', borderRadius:'99px', height:'3px' }}>
                   <div style={{ width: memberPct + '%', background: memberBarColor, height:'3px', borderRadius:'99px', transition:'width 0.3s ease' }} />
                 </div>
               </div>
             </button>
-
             <button onClick={function() { navigate('/organizations/'+organizationId+'/events'); }} style={{ flex:1, background:isDark?'#0E1523':'#F0FDF4', borderRadius:'8px', padding:'10px 12px', border:'none', cursor:'pointer', textAlign:'left' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-opacity" aria-label="View events">
               <p style={{ fontSize:'8px', fontWeight:700, color:'#34D399', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'2px' }}>{isAdmin ? 'Upcoming Events' : 'My RSVPs'}</p>
               <p style={{ fontSize:'20px', fontWeight:800, color:'#34D399' }}>{isAdmin ? stats.activeEvents : stats.myRsvps}</p>
@@ -1360,6 +1335,71 @@ function OrganizationDashboard() {
           )}
         </div>
 
+        {/* ── Collaboration Requests ── */}
+        {isAdmin && (collabRequests.length > 0 || collabRequestsLoading) && (
+          <div style={{ background:cardBg, border:'1px solid rgba(139,92,246,0.3)', borderRadius:'10px', padding:'16px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
+              <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#A78BFA' }}>Co-Host Requests</p>
+              {collabRequests.length > 0 && (
+                <span style={{ background:'rgba(139,92,246,0.15)', border:'1px solid rgba(139,92,246,0.3)', color:'#A78BFA', fontSize:'10px', fontWeight:700, padding:'1px 7px', borderRadius:'99px' }}>
+                  {collabRequests.length}
+                </span>
+              )}
+            </div>
+            {collabRequestsLoading ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                {[1,2].map(function(i) { return <div key={i} style={{ height:'60px', background:elevatedBg, borderRadius:'8px' }} className="animate-pulse" aria-hidden="true" />; })}
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }} role="list" aria-label="Co-host collaboration requests">
+                {collabRequests.map(function(req) {
+                  var orgName = req.requesting_org ? req.requesting_org.name : 'Unknown organization';
+                  var eventTitle = req.event ? req.event.title : 'an event';
+                  var isResponding = respondingCollab === req.id;
+                  return (
+                    <div key={req.id} role="listitem" style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', padding:'12px 14px', background:isDark?'#0E1523':'#F8FAFC', borderRadius:'8px', border:'1px solid rgba(139,92,246,0.15)' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'3px' }}>
+                          <div style={{ width:'22px', height:'22px', borderRadius:'50%', background:'rgba(139,92,246,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:700, color:'#A78BFA', flexShrink:0 }} aria-hidden="true">
+                            {orgName.charAt(0).toUpperCase()}
+                          </div>
+                          <p style={{ fontSize:'12px', fontWeight:700, color:textPrimary }}>{orgName}</p>
+                        </div>
+                        <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px' }}>
+                          wants to co-host <span style={{ color:textSecondary, fontWeight:600 }}>"{eventTitle}"</span>
+                        </p>
+                        {req.message && (
+                          <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px', marginTop:'3px', fontStyle:'italic' }}>"{req.message}"</p>
+                        )}
+                      </div>
+                      <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
+                        <button
+                          onClick={function() { respondToCollabRequest(req, 'accepted'); }}
+                          disabled={isResponding}
+                          style={{ padding:'5px 12px', background:'#22C55E', color:'#fff', fontSize:'11px', fontWeight:700, border:'none', borderRadius:'6px', cursor: isResponding ? 'not-allowed' : 'pointer', opacity: isResponding ? 0.6 : 1 }}
+                          className="focus:outline-none focus:ring-2 focus:ring-green-500"
+                          aria-label={'Accept co-host request from ' + orgName + ' for ' + eventTitle}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={function() { respondToCollabRequest(req, 'declined'); }}
+                          disabled={isResponding}
+                          style={{ padding:'5px 12px', background:'transparent', color:'#EF4444', border:'1px solid rgba(239,68,68,0.4)', fontSize:'11px', fontWeight:700, borderRadius:'6px', cursor: isResponding ? 'not-allowed' : 'pointer', opacity: isResponding ? 0.6 : 1 }}
+                          className="focus:outline-none focus:ring-2 focus:ring-red-500"
+                          aria-label={'Decline co-host request from ' + orgName + ' for ' + eventTitle}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'10px', padding:'16px' }}>
           <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#F5B731', marginBottom:'10px' }}>
@@ -1403,21 +1443,17 @@ function OrganizationDashboard() {
             </div>
           )}
         </div>
-                                {/* Storage meter */}
-          {isAdmin && (
-            <div style={{ marginBottom:'16px' }}>
-              <StorageMeter
-                organizationId={organizationId}
-                compact={true}
-                isAdmin={true}
-              />
-            </div>
-          )}
+
+        {/* Storage meter */}
+        {isAdmin && (
+          <div style={{ marginBottom:'16px' }}>
+            <StorageMeter organizationId={organizationId} compact={true} isAdmin={true} />
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── Photos tab ────────────────────────────────────────────────────────────
   function renderPhotos() {
     return (
       <div>
@@ -1484,7 +1520,6 @@ function OrganizationDashboard() {
     );
   }
 
-  // ── Approvals tab ─────────────────────────────────────────────────────────
   function renderApprovals() {
     return (
       <div>
@@ -1528,7 +1563,6 @@ function OrganizationDashboard() {
     );
   }
 
-  // ── Invite tab ────────────────────────────────────────────────────────────
   function renderInvite() {
     if (membership.role === 'admin' || (organization.settings && organization.settings.allowMemberInvites)) {
       return <InviteMember organizationId={organizationId} organizationName={organization.name} onInviteSent={function() { fetchStats(currentUserId); }} />;
@@ -1542,57 +1576,28 @@ function OrganizationDashboard() {
     );
   }
 
-  // ── Main render ───────────────────────────────────────────────────────────
   var currentPath = window.location.pathname;
   var pathBase = '/organizations/' + organizationId;
   var subPath = currentPath.replace(pathBase, '').replace(/^\//, '') || 'overview';
   var pathTabMap = { 'photos':'photos', 'approvals':'approvals', 'analytics':'analytics', 'settings':'settings', 'invite':'invite', '':'overview', 'overview':'overview' };
   var resolvedTab = pathTabMap[subPath] || 'overview';
 
-  // Upgrade prompt copy
   var upgradePromptConfig = {
-    growth: {
-      title: 'Available on Growth',
-      description: 'Upgrade to Growth to unlock inbox, full analytics, email blasts, and more.',
-    },
-    pro: {
-      title: 'Available on Pro',
-      description: 'Upgrade to Pro to unlock the AI content assistant and priority support.',
-    },
-    verified: {
-      title: 'Verified Nonprofits Only',
-      description: 'This feature is available to verified 501(c)(3) organizations. Submit your EIN to get verified.',
-    },
+    growth: { title: 'Available on Growth', description: 'Upgrade to Growth to unlock inbox, full analytics, email blasts, and more.' },
+    pro:    { title: 'Available on Pro', description: 'Upgrade to Pro to unlock the AI content assistant and priority support.' },
+    verified: { title: 'Verified Nonprofits Only', description: 'This feature is available to verified 501(c)(3) organizations. Submit your EIN to get verified.' },
   };
   var activePromptConfig = lockedNavTarget ? (upgradePromptConfig[lockedNavTarget] || upgradePromptConfig.growth) : null;
 
   return (
     <>
-      {/* ── Guided Tour ── */}
       {isAdmin && (
-        <GuidedTour
-          steps={ORG_TOUR_STEPS}
-          orgId={organizationId}
-          tourType="org"
-          show={showTour}
-          onDone={function() { setShowTour(false); setShowCelebration(true); }}
-        />
+        <GuidedTour steps={ORG_TOUR_STEPS} orgId={organizationId} tourType="org" show={showTour} onDone={function() { setShowTour(false); setShowCelebration(true); }} />
       )}
 
-      {/* ── Locked nav upgrade prompt modal ── */}
       {lockedNavTarget && activePromptConfig && (
-        <div
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:60 }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="lock-prompt-title"
-          onClick={function() { setLockedNavTarget(null); }}
-        >
-          <div
-            style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)', width:'100%', maxWidth:'400px', padding:'24px' }}
-            onClick={function(e) { e.stopPropagation(); }}
-          >
-            {/* Header */}
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px', zIndex:60 }} role="dialog" aria-modal="true" aria-labelledby="lock-prompt-title" onClick={function() { setLockedNavTarget(null); }}>
+          <div style={{ background:cardBg, border:'1px solid '+borderColor, borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.4)', width:'100%', maxWidth:'400px', padding:'24px' }} onClick={function(e) { e.stopPropagation(); }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                 <div style={{ width:'36px', height:'36px', borderRadius:'10px', background: lockedNavTarget === 'verified' ? 'rgba(34,197,94,0.1)' : lockedNavTarget === 'pro' ? 'rgba(139,92,246,0.1)' : 'rgba(59,130,246,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -1600,44 +1605,19 @@ function OrganizationDashboard() {
                 </div>
                 <h2 id="lock-prompt-title" style={{ fontSize:'16px', fontWeight:800, color:textPrimary, margin:0 }}>{activePromptConfig.title}</h2>
               </div>
-              <button
-                onClick={function() { setLockedNavTarget(null); }}
-                style={{ background:'none', border:'none', cursor:'pointer', color:textMuted, padding:'4px', borderRadius:'6px' }}
-                className="focus:outline-none focus:ring-2 focus:ring-gray-500"
-                aria-label="Dismiss"
-              >
+              <button onClick={function() { setLockedNavTarget(null); }} style={{ background:'none', border:'none', cursor:'pointer', color:textMuted, padding:'4px', borderRadius:'6px' }} className="focus:outline-none focus:ring-2 focus:ring-gray-500" aria-label="Dismiss">
                 <Icon path={ICONS.x} className="h-5 w-5" />
               </button>
             </div>
-
             <p style={{ fontSize:'14px', color:textSecondary, lineHeight:1.6, marginBottom:'20px' }}>{activePromptConfig.description}</p>
-
             <div style={{ display:'flex', gap:'10px' }}>
               {lockedNavTarget !== 'verified' && (
-                <button
-                  onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/billing'); }}
-                  style={{ flex:1, padding:'10px 16px', background:'#3B82F6', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }}
-                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                >
-                  View Plans
-                </button>
+                <button onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/billing'); }} style={{ flex:1, padding:'10px 16px', background:'#3B82F6', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">View Plans</button>
               )}
               {lockedNavTarget === 'verified' && (
-                <button
-                  onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/settings?tab=verification'); }}
-                  style={{ flex:1, padding:'10px 16px', background:'#22C55E', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }}
-                  className="hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
-                >
-                  Get Verified
-                </button>
+                <button onClick={function() { setLockedNavTarget(null); navigate('/organizations/'+organizationId+'/settings?tab=verification'); }} style={{ flex:1, padding:'10px 16px', background:'#22C55E', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }} className="hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1">Get Verified</button>
               )}
-              <button
-                onClick={function() { setLockedNavTarget(null); }}
-                style={{ padding:'10px 16px', background:'transparent', color:textMuted, border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'13px', fontWeight:600, cursor:'pointer' }}
-                className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              >
-                Dismiss
-              </button>
+              <button onClick={function() { setLockedNavTarget(null); }} style={{ padding:'10px 16px', background:'transparent', color:textMuted, border:'1px solid '+borderColor, borderRadius:'8px', fontSize:'13px', fontWeight:600, cursor:'pointer' }} className="hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-500">Dismiss</button>
             </div>
           </div>
         </div>
@@ -1656,10 +1636,8 @@ function OrganizationDashboard() {
       )}
       {resolvedTab === 'invite' && renderInvite()}
 
-      {/* Event action menu backdrop */}
       {activeEventMenu && <div style={{ position:'fixed', inset:0, zIndex:20 }} onClick={function() { setActiveEventMenu(null); }} aria-hidden="true" />}
 
-      {/* CreateEvent */}
       <CreateEvent
         isOpen={showCreateEvent}
         onClose={function() { setShowCreateEvent(false); setEditingEvent(null); }}
@@ -1674,14 +1652,10 @@ function OrganizationDashboard() {
         editingEvent={editingEvent}
       />
 
-      {/* CreateAnnouncement */}
       <CreateAnnouncement
         isOpen={showCreateAnnouncement}
         onClose={function() { setShowCreateAnnouncement(false); }}
-        onSuccess={async function() {
-          await fetchStats(currentUserId);
-          await fetchOverviewData();
-        }}
+        onSuccess={async function() { await fetchStats(currentUserId); await fetchOverviewData(); }}
         organizationId={organizationId}
         organizationName={organization ? organization.name : ''}
       />
@@ -1702,14 +1676,13 @@ function OrganizationDashboard() {
         />
       )}
 
-            <OrgInviteMemberModal
-          isOpen={showInviteModal}
-          onClose={function() { setShowInviteModal(false); }}
-          organizationId={organizationId}
-          organizationName={organization ? organization.name : ''}
-          currentUserId={currentUserId}
-        />
-      )}
+      <OrgInviteMemberModal
+        isOpen={showInviteModal}
+        onClose={function() { setShowInviteModal(false); }}
+        organizationId={organizationId}
+        organizationName={organization ? organization.name : ''}
+        currentUserId={currentUserId}
+      />
 
       {showProgramModal && (
         <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowProgramModal(false); }}>
@@ -1748,7 +1721,6 @@ function OrganizationDashboard() {
         </div>
       )}
 
-      {/* Reschedule modal */}
       {showRescheduleModal && rescheduleEvent && (
         <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="reschedule-title">
           <div style={{ background:'#fff', borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', width:'100%', maxWidth:'420px' }}>
@@ -1779,7 +1751,6 @@ function OrganizationDashboard() {
         </div>
       )}
 
-      {/* Delete confirm modal */}
       {showDeleteConfirm && deletingEvent && (
         <div style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} role="dialog" aria-modal="true" aria-labelledby="delete-title">
           <div style={{ background:'#fff', borderRadius:'16px', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', width:'100%', maxWidth:'420px' }}>
@@ -1826,9 +1797,7 @@ function OrganizationDashboard() {
           <div style={{ background:'#1A2035', border:'1px solid #2A3550', borderRadius:'16px', padding:'32px', maxWidth:'400px', width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,0.5)' }}>
             <img src="/mascot-onboarding.png" alt="" aria-hidden="true" style={{ width:'160px', height:'auto', margin:'0 auto 16px', display:'block' }} />
             <h2 id="celebrate-title" style={{ fontSize:'20px', fontWeight:800, color:'#FFFFFF', marginBottom:'8px', textAlign:'center' }}>You're all set!</h2>
-            <p style={{ fontSize:'13px', color:'#CBD5E1', lineHeight:1.65, marginBottom:'20px', textAlign:'center' }}>
-              What do you want to do first?
-            </p>
+            <p style={{ fontSize:'13px', color:'#CBD5E1', lineHeight:1.65, marginBottom:'20px', textAlign:'center' }}>What do you want to do first?</p>
             <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
               {[
                 { key:'event',        label:'Create an Event',       desc:'Schedule your first meeting or activity', color:'#3B82F6', path:'/organizations/'+organizationId+'/events?create=true' },
@@ -1837,15 +1806,7 @@ function OrganizationDashboard() {
                 { key:'dashboard',    label:'Explore My Dashboard',  desc:'See everything your org has to offer',      color:'#8B5CF6', path:'/organizations/'+organizationId },
               ].map(function(a) {
                 return (
-                  <button
-                    key={a.key}
-                    onClick={function() { setShowCelebration(false); navigate(a.path); }}
-                    style={{ background:'#151B2D', border:'1px solid #2A3550', borderRadius:'10px', padding:'12px 14px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'12px', width:'100%' }}
-                    onMouseEnter={function(e) { e.currentTarget.style.borderColor=a.color; }}
-                    onMouseLeave={function(e) { e.currentTarget.style.borderColor='#2A3550'; }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    aria-label={a.label}
-                  >
+                  <button key={a.key} onClick={function() { setShowCelebration(false); navigate(a.path); }} style={{ background:'#151B2D', border:'1px solid #2A3550', borderRadius:'10px', padding:'12px 14px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:'12px', width:'100%' }} onMouseEnter={function(e) { e.currentTarget.style.borderColor=a.color; }} onMouseLeave={function(e) { e.currentTarget.style.borderColor='#2A3550'; }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label={a.label}>
                     <div style={{ flex:1 }}>
                       <p style={{ fontSize:'13px', fontWeight:700, color:'#FFFFFF', margin:'0 0 2px' }}>{a.label}</p>
                       <p style={{ fontSize:'12px', color: isDark ? '#FFFFFF' : '#475569', margin:0 }}>{a.desc}</p>

@@ -27,6 +27,7 @@ var TABS = [
   { id: 'settings',  label: 'Settings' },
   { id: 'audience',  label: 'Audience & Tags' },
   { id: 'ticketing', label: 'Ticketing' },
+  { id: 'cohosts',   label: 'Co-Hosts' },
   { id: 'publishing',label: 'Publishing' },
 ];
 var TZ_MAP = {
@@ -405,12 +406,29 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
   var [ticketTypes, setTicketTypes] = useState([blankTicketType()]);
   var [checkoutFields, setCheckoutFields] = useState(defaultCheckoutFields());
 
+  // Co-Hosts tab
+  var [coHostSearch, setCoHostSearch] = useState('');
+  var [coHostResults, setCoHostResults] = useState([]);
+  var [coHostSearching, setCoHostSearching] = useState(false);
+  var [coHostInvites, setCoHostInvites] = useState([]);
+  var [coHostInvitesLoading, setCoHostInvitesLoading] = useState(false);
+  var [coHostMessage, setCoHostMessage] = useState('');
+  var [coHostSearchTimeout, setCoHostSearchTimeout] = useState(null);
+  var [sendingInvite, setSendingInvite] = useState(null);
+
   var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
   useEffect(function(){
     if (form.visibility === 'groups' && organizationId) fetchGroups();
   }, [form.visibility, organizationId]);
+
+  // Load co-host invites when tab is opened
+  useEffect(function() {
+    if (activeTab === 'cohosts' && editingEvent) {
+      fetchCoHostInvites();
+    }
+  }, [activeTab, editingEvent]);
 
   useEffect(function(){
     if (!isOpen) { resetAll(); return; }
@@ -519,6 +537,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     setPublishToDiscovery(false); setPublishToWebsite(false); setIsFeatured(false);
     setFlierFile(null);
     setIsPaid(false); setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields());
+    setCoHostSearch(''); setCoHostResults([]); setCoHostInvites([]); setCoHostMessage('');
     setError(null);
   }
 
@@ -531,6 +550,140 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     } catch(err) { toast.error('Could not load groups'); }
     finally { setLoadingGroups(false); }
   }
+
+  // ── Co-Host functions ──────────────────────────────────────────────────────
+
+  async function fetchCoHostInvites() {
+    if (!editingEvent) return;
+    setCoHostInvitesLoading(true);
+    try {
+      var { data: collabs, error: collabErr } = await supabase
+        .from('event_collaborators')
+        .select('*')
+        .eq('event_id', editingEvent.id)
+        .eq('host_org_id', organizationId);
+      if (collabErr) throw collabErr;
+
+      if (collabs && collabs.length > 0) {
+        var orgIds = collabs.map(function(c) { return c.requesting_org_id; });
+        var { data: orgs } = await supabase
+          .from('organizations')
+          .select('id, name, logo_url, type, city, state')
+          .in('id', orgIds);
+        var orgMap = {};
+        if (orgs) orgs.forEach(function(o) { orgMap[o.id] = o; });
+        setCoHostInvites(collabs.map(function(c) {
+          return Object.assign({}, c, { org: orgMap[c.requesting_org_id] || null });
+        }));
+      } else {
+        setCoHostInvites([]);
+      }
+    } catch (err) {
+      console.error('fetchCoHostInvites error:', err);
+    } finally {
+      setCoHostInvitesLoading(false);
+    }
+  }
+
+  async function searchOrgs(query) {
+    if (!query || query.length < 2) { setCoHostResults([]); return; }
+    setCoHostSearching(true);
+    try {
+      var { data, error: searchErr } = await supabase
+        .from('organizations')
+        .select('id, name, logo_url, type, city, state')
+        .ilike('name', '%' + query + '%')
+        .neq('id', organizationId)
+        .eq('is_public', true)
+        .limit(8);
+      if (searchErr) throw searchErr;
+      var invitedIds = new Set(coHostInvites.map(function(c) { return c.requesting_org_id; }));
+      setCoHostResults((data || []).filter(function(o) { return !invitedIds.has(o.id); }));
+    } catch (err) {
+      console.error('searchOrgs error:', err);
+    } finally {
+      setCoHostSearching(false);
+    }
+  }
+
+  function handleCoHostSearchChange(e) {
+    var val = e.target.value;
+    setCoHostSearch(val);
+    if (coHostSearchTimeout) clearTimeout(coHostSearchTimeout);
+    if (val.length >= 2) {
+      var t = setTimeout(function() { searchOrgs(val); }, 400);
+      setCoHostSearchTimeout(t);
+    } else {
+      setCoHostResults([]);
+    }
+  }
+
+  async function sendCoHostInvite(org) {
+    setSendingInvite(org.id);
+    try {
+      var { error: insertErr } = await supabase
+        .from('event_collaborators')
+        .insert({
+          event_id: editingEvent.id,
+          requesting_org_id: org.id,
+          host_org_id: organizationId,
+          status: 'pending',
+          message: coHostMessage.trim() || null,
+        });
+      if (insertErr) {
+        if (insertErr.code === '23505') throw new Error('This organization already has a pending request for this event.');
+        throw insertErr;
+      }
+
+      // Notify invited org admins
+      var { data: orgAdmins } = await supabase
+        .from('memberships')
+        .select('member_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('status', 'active');
+      if (orgAdmins && orgAdmins.length > 0) {
+        var notifications = orgAdmins.map(function(a) {
+          return {
+            user_id: a.member_id,
+            organization_id: org.id,
+            type: 'collab_invite',
+            title: 'Co-Host Invitation',
+            message: organizationName + ' invited you to co-host "' + editingEvent.title + '"',
+            link: '/org/' + org.id + '/events',
+            read: false,
+          };
+        });
+        await supabase.from('notifications').insert(notifications);
+      }
+
+      mascotSuccessToast('Invite sent to ' + org.name + '!');
+      setCoHostMessage('');
+      setCoHostSearch('');
+      setCoHostResults([]);
+      await fetchCoHostInvites();
+    } catch (err) {
+      toast.error(err.message || 'Could not send invite');
+    } finally {
+      setSendingInvite(null);
+    }
+  }
+
+  async function updateCoHostStatus(id, status) {
+    try {
+      var { error: updateErr } = await supabase
+        .from('event_collaborators')
+        .update({ status: status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (updateErr) throw updateErr;
+      mascotSuccessToast(status === 'accepted' ? 'Co-host accepted!' : 'Invite withdrawn.');
+      await fetchCoHostInvites();
+    } catch (err) {
+      toast.error('Could not update status');
+    }
+  }
+
+  // ── Other handlers ─────────────────────────────────────────────────────────
 
   function handleChange(e) {
     var name = e.target.name, value = e.target.type==='checkbox' ? e.target.checked : e.target.value;
@@ -816,6 +969,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     if (tabId==='ticketing') return isPaid;
     if (tabId==='publishing') return publishToDiscovery||publishToWebsite||isFeatured;
     if (tabId==='settings') return isRecurring||form.visibility!=='members'||form.requireRSVP||form.maxAttendees;
+    if (tabId==='cohosts') return coHostInvites.length > 0;
     return false;
   }
 
@@ -1387,6 +1541,174 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     );
   }
 
+  function renderCoHosts() {
+    if (!editingEvent) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-4" aria-hidden="true">
+            <Icon path="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" className="h-6 w-6 text-gray-400"/>
+          </div>
+          <p className="text-sm font-semibold text-gray-700 mb-1">Create the event first</p>
+          <p className="text-xs text-gray-400 max-w-xs">Save this event, then open it again to invite co-host organizations.</p>
+        </div>
+      );
+    }
+
+    var statusConfig = {
+      pending:   { bg: '#FEF9C3', color: '#B45309', label: 'Pending' },
+      accepted:  { bg: '#DCFCE7', color: '#15803D', label: 'Accepted' },
+      declined:  { bg: '#FEE2E2', color: '#B91C1C', label: 'Declined' },
+      withdrawn: { bg: '#F1F5F9', color: '#64748B', label: 'Withdrawn' },
+    };
+
+    return (
+      <div className="space-y-6">
+
+        {/* Existing co-hosts */}
+        <div>
+          <p className={labelCls}>Co-Host Organizations</p>
+          <p className="text-xs text-gray-500 mb-4">
+            Once an organization accepts, both names will appear on the event page and discovery listings.
+          </p>
+
+          {coHostInvitesLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map(function(i) {
+                return <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" aria-hidden="true"/>;
+              })}
+            </div>
+          ) : coHostInvites.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center bg-gray-50 border border-gray-200 rounded-xl">
+              <Icon path="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" className="h-8 w-8 text-gray-300 mb-2"/>
+              <p className="text-sm font-semibold text-gray-500">No co-hosts yet</p>
+              <p className="text-xs text-gray-400 mt-1">Invite an organization using the search below.</p>
+            </div>
+          ) : (
+            <div className="space-y-2" role="list" aria-label="Co-host invitations">
+              {coHostInvites.map(function(invite) {
+                var sc = statusConfig[invite.status] || statusConfig.pending;
+                var orgName = invite.org ? invite.org.name : 'Unknown organization';
+                return (
+                  <div key={invite.id} role="listitem" className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600 flex-shrink-0" aria-hidden="true">
+                        {orgName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{orgName}</p>
+                        {invite.message && (
+                          <p className="text-xs text-gray-400 truncate max-w-xs">{invite.message}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                        style={{ background: sc.bg, color: sc.color }}>
+                        {sc.label}
+                      </span>
+                      {invite.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={function() { updateCoHostStatus(invite.id, 'withdrawn'); }}
+                          className="text-xs text-gray-400 hover:text-red-500 font-medium focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-1"
+                          aria-label={'Withdraw invitation to ' + orgName}>
+                          Withdraw
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-100"/>
+
+        {/* Invite new org */}
+        <div>
+          <p className={labelCls}>Invite an Organization</p>
+
+          {/* Optional message */}
+          <div className="mb-4">
+            <label htmlFor="cohost-message" className="block text-xs font-semibold text-gray-700 mb-1">
+              Message <span className="text-gray-400 font-normal">(optional — sent with all invitations below)</span>
+            </label>
+            <textarea
+              id="cohost-message"
+              value={coHostMessage}
+              onChange={function(e) { setCoHostMessage(e.target.value); }}
+              placeholder="Introduce the collaboration opportunity..."
+              rows={2}
+              maxLength={500}
+              className={inputCls + ' resize-none'}
+            />
+          </div>
+
+          {/* Org search */}
+          <div>
+            <label htmlFor="cohost-search" className="block text-xs font-semibold text-gray-700 mb-1">Search Organizations</label>
+            <div className="relative">
+              <input
+                id="cohost-search"
+                type="text"
+                value={coHostSearch}
+                onChange={handleCoHostSearchChange}
+                placeholder="Type an organization name..."
+                className={inputCls}
+                autoComplete="off"
+                aria-label="Search organizations to invite"
+              />
+              {coHostSearching && (
+                <div className="absolute right-3 top-3.5" aria-hidden="true">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"/>
+                </div>
+              )}
+            </div>
+
+            {/* Results */}
+            {coHostResults.length > 0 && (
+              <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm" role="list" aria-label="Organization search results">
+                {coHostResults.map(function(org) {
+                  var sending = sendingInvite === org.id;
+                  var location = [org.city, org.state].filter(Boolean).join(', ');
+                  return (
+                    <div key={org.id} role="listitem" className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0 bg-white hover:bg-gray-50">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0" aria-hidden="true">
+                          {org.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{org.name}</p>
+                          {location && <p className="text-xs text-gray-400">{location}</p>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={function() { sendCoHostInvite(org); }}
+                        disabled={sending}
+                        className="flex-shrink-0 ml-3 px-3 py-1.5 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label={'Invite ' + org.name + ' to co-host this event'}>
+                        {sending ? 'Sending...' : 'Invite'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {coHostSearch.length >= 2 && !coHostSearching && coHostResults.length === 0 && (
+              <p className="mt-3 text-xs text-gray-400 text-center py-3 bg-gray-50 rounded-xl border border-gray-200">
+                No organizations found matching "{coHostSearch}"
+              </p>
+            )}
+          </div>
+        </div>
+
+      </div>
+    );
+  }
+
   function renderPublishing() {
     return (
       <div className="space-y-6">
@@ -1546,6 +1868,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
           {activeTab==='settings'   && renderSettings()}
           {activeTab==='audience'   && renderAudience()}
           {activeTab==='ticketing'  && renderTicketing()}
+          {activeTab==='cohosts'    && renderCoHosts()}
           {activeTab==='publishing' && renderPublishing()}
         </div>
 

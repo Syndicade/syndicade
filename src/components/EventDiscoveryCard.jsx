@@ -158,12 +158,13 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
   var [colabModal, setColabModal] = useState(false);
   var [selectedOrgId, setSelectedOrgId] = useState('');
   var [colabLoading, setColabLoading] = useState(false);
+  var [colabMessage, setColabMessage] = useState('');
 
-  var isOwnEvent    = adminOrgs.some(function(org) { return org.id === event.organization_id; });
-  var showCollaborate = adminOrgs.length > 0 && !isOwnEvent;
-  var isFeatured    = event.is_featured;
-  var eventUrl      = '/events/' + event.id;
-  var typeColors    = isDark ? EVENT_TYPE_COLORS : EVENT_TYPE_COLORS_LIGHT;
+  var eligibleOrgs  = adminOrgs.filter(function(org) { return org.id !== event.organization_id; });
+var showCollaborate = eligibleOrgs.length > 0;
+  var isFeatured      = event.is_featured;
+  var eventUrl        = '/events/' + event.id;
+  var typeColors      = isDark ? EVENT_TYPE_COLORS : EVENT_TYPE_COLORS_LIGHT;
 
   async function handleSave(e) {
     e.stopPropagation();
@@ -201,27 +202,35 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
   }
 
   function handleCardClick(e) {
-    /* don't navigate if clicking a button/link inside the card */
     if (e.target.closest('button') || e.target.closest('a')) return;
     navigate(eventUrl);
   }
 
-  function openColabModal(e) {
-    e.stopPropagation();
-    if (adminOrgs.length === 1) setSelectedOrgId(adminOrgs[0].id);
-    setColabModal(true);
+function openColabModal(e) {
+  e.stopPropagation();
+  if (eligibleOrgs.length === 1) setSelectedOrgId(eligibleOrgs[0].id);
+  setColabModal(true);
+}
+
+  function closeColabModal() {
+    setColabModal(false);
+    setColabMessage('');
+    setSelectedOrgId('');
   }
 
   async function submitCollab() {
-    var orgId = selectedOrgId || (adminOrgs.length === 1 ? adminOrgs[0].id : '');
+    var orgId = selectedOrgId || (eligibleOrgs.length === 1 ? eligibleOrgs[0].id : '');
     if (!orgId) { toast.error('Please select an organization'); return; }
     setColabLoading(true);
     try {
-      var org = adminOrgs.find(function(o) { return o.id === orgId; });
+      var org = eligibleOrgs.find(function(o) { return o.id === orgId; });
       var orgName = org ? org.name : 'An organization';
       var collabRes = await supabase.from('event_collaborators').insert({
-        event_id: event.id, requesting_org_id: orgId, host_org_id: event.organization_id,
-        status: 'pending', message: orgName + ' wants to collaborate on this event.',
+        event_id: event.id,
+        requesting_org_id: orgId,
+        host_org_id: event.organization_id,
+        status: 'pending',
+        message: colabMessage.trim() || null,
       });
       if (collabRes.error) {
         if (collabRes.error.code === '23505') throw new Error('You have already sent a collaboration request for this event');
@@ -230,12 +239,22 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
       var hostRes = await supabase.from('memberships').select('member_id').eq('organization_id', event.organization_id).eq('role', 'admin').eq('status', 'active');
       if (hostRes.data && hostRes.data.length > 0) {
         var notifications = hostRes.data.map(function(m) {
-          return { user_id: m.member_id, type: 'collaboration_request', title: 'Collaboration Request', message: orgName + ' wants to collaborate on "' + event.title + '"', data: { event_id: event.id, requesting_org_id: orgId }, is_read: false };
+          return {
+            user_id: m.member_id,
+            organization_id: event.organization_id,
+            type: 'collaboration_request',
+            title: 'Collaboration Request',
+            message: orgName + ' wants to collaborate on "' + event.title + '"',
+            link: '/org/' + event.organization_id + '/events',
+            read: false,
+          };
         });
         await supabase.from('notifications').insert(notifications);
       }
       mascotSuccessToast('Collaboration request sent!');
-      setColabModal(false);
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+      setColabMessage('');
+      closeColabModal();
     } catch (err) { toast.error(err.message || 'Could not send request'); }
     finally { setColabLoading(false); }
   }
@@ -261,7 +280,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
         aria-label={'Event: ' + event.title}
         role="article"
       >
-        {/* Brand tack — same style as org cards */}
+        {/* Brand tack */}
         <div aria-hidden="true" style={{
           width: '16px', height: '16px', borderRadius: '50%',
           position: 'absolute', top: '-8px', left: '50%', transform: 'translateX(-50%)',
@@ -288,18 +307,18 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                   >
                     {event.org_name}
                   </Link>
-{isFeatured && (
+                  {isFeatured && (
                     <span style={{ marginLeft: 'auto', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#F5B731', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>
                       Featured
                     </span>
                   )}
                   {event.is_demo && <DemoBadge size="sm" />}
-{event.org_is_verified_nonprofit && (
-  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', fontSize:'10px', fontWeight:700, color:'#22C55E', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', borderRadius:'99px', padding:'2px 7px', flexShrink:0 }} aria-label="Verified nonprofit">
-    <svg xmlns="http://www.w3.org/2000/svg" style={{width:'9px',height:'9px'}} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-    Verified
-  </span>
-)}
+                  {event.org_is_verified_nonprofit && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '99px', padding: '2px 7px', flexShrink: 0 }} aria-label="Verified nonprofit">
+                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '9px', height: '9px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      Verified
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -408,38 +427,93 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
 
       {/* Collaborate Modal */}
       {colabModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
-          onClick={function() { setColabModal(false); }} role="dialog" aria-modal="true" aria-labelledby="collab-modal-title">
-          <div style={{ background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: '448px', width: '100%' }}
-            onClick={function(e) { e.stopPropagation(); }}>
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          onClick={closeColabModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="collab-modal-title"
+        >
+          <div
+            style={{ background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: '448px', width: '100%' }}
+            onClick={function(e) { e.stopPropagation(); }}
+          >
+            {/* Header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid ' + borderColor }}>
               <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: textPrimary }}>Request Collaboration</h2>
               <p style={{ fontSize: '14px', color: textMuted, marginTop: '4px' }}>{event.title}</p>
             </div>
+
+            {/* Body */}
             <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ fontSize: '14px', color: textSecondary }}>Your collaboration request will be sent to the admins of this organization. If accepted, both org names will appear on the event.</p>
-              {adminOrgs.length > 1 && (
+              <p style={{ fontSize: '14px', color: textSecondary }}>
+                Your collaboration request will be sent to the admins of this organization. If accepted, both org names will appear on the event.
+              </p>
+
+              {/* Org selector (multi-org admins) */}
+              {eligibleOrgs.length > 1 && (
                 <div>
-                  <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>Requesting as <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                  <select id="collab-org-select" value={selectedOrgId} onChange={function(e) { setSelectedOrgId(e.target.value); }}
+                  <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
+                    Requesting as <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
+                  </label>
+                  <select
+                    id="collab-org-select"
+                    value={selectedOrgId}
+                    onChange={function(e) { setSelectedOrgId(e.target.value); }}
                     style={{ width: '100%', padding: '8px 12px', background: isDark ? '#0E1523' : '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none' }}
-                    aria-required="true" className="focus:ring-2 focus:ring-blue-500">
+                    aria-required="true"
+                    className="focus:ring-2 focus:ring-blue-500"
+                  >
                     <option value="">Select your organization...</option>
-                    {adminOrgs.map(function(org) { return <option key={org.id} value={org.id}>{org.name}</option>; })}
+                    {eligibleOrgs.map(function(org) { return <option key={org.id} value={org.id}>{org.name}</option>; })}
                   </select>
                 </div>
               )}
-              {adminOrgs.length === 1 && (
-                <p style={{ fontSize: '14px', color: textSecondary }}>Requesting as <span style={{ color: textPrimary, fontWeight: 700 }}>{adminOrgs[0].name}</span></p>
-              )}
+
+{/* Single org display */}
+{eligibleOrgs.length === 1 && (
+  <p style={{ fontSize: '14px', color: textSecondary }}>
+    Requesting as <span style={{ color: textPrimary, fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
+  </p>
+)}
+
+              {/* Message field */}
+              <div>
+                <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
+                  Message <span style={{ color: textMuted, fontWeight: 400 }}>(optional)</span>
+                </label>
+                <textarea
+                  id="collab-message"
+                  value={colabMessage}
+                  onChange={function(e) { setColabMessage(e.target.value); }}
+                  placeholder="Introduce your organization or explain how you'd like to collaborate..."
+                  rows={3}
+                  maxLength={500}
+                  style={{ width: '100%', padding: '8px 12px', background: isDark ? '#0E1523' : '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                  className="focus:ring-2 focus:ring-purple-500"
+                />
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: textMuted, textAlign: 'right' }}>
+                  {colabMessage.length}/500
+                </p>
+              </div>
             </div>
+
+            {/* Footer */}
             <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid ' + borderColor }}>
-              <button onClick={function() { setColabModal(false); }} disabled={colabLoading}
+              <button
+                onClick={closeColabModal}
+                disabled={colabLoading}
                 style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: textSecondary, cursor: 'pointer' }}
-                className="focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
-              <button onClick={submitCollab} disabled={colabLoading || (adminOrgs.length > 1 && !selectedOrgId)}
-                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 700, borderRadius: '8px', background: '#3B82F6', color: '#FFFFFF', border: 'none', cursor: (colabLoading || (adminOrgs.length > 1 && !selectedOrgId)) ? 'not-allowed' : 'pointer', opacity: (colabLoading || (adminOrgs.length > 1 && !selectedOrgId)) ? 0.5 : 1 }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitCollab}
+                disabled={colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)}
+                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 700, borderRadius: '8px', background: '#3B82F6', color: '#FFFFFF', border: 'none', cursor: (colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)) ? 'not-allowed' : 'pointer', opacity: (colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)) ? 0.5 : 1 }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 {colabLoading ? 'Sending...' : 'Send Request'}
               </button>
             </div>
