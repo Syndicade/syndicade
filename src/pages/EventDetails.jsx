@@ -149,6 +149,7 @@ function EventDetails() {
 
   var [event, setEvent] = useState(null);
   var [organization, setOrganization] = useState(null);
+  var [coHosts, setCoHosts] = useState([]);
   var [rsvps, setRsvps] = useState([]);
   var [userRsvp, setUserRsvp] = useState(null);
   var [currentUser, setCurrentUser] = useState(null);
@@ -169,11 +170,11 @@ function EventDetails() {
   var [showEditModal, setShowEditModal] = useState(false);
   var [editScope, setEditScope] = useState(null);
   var [showAttendanceReport, setShowAttendanceReport] = useState(false);
-var [isMember, setIsMember] = useState(false);
-var [guestRsvpCount, setGuestRsvpCount] = useState(0);
-var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '' });
-var [guestRsvpLoading, setGuestRsvpLoading] = useState(false);
-var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
+  var [isMember, setIsMember] = useState(false);
+  var [guestRsvpCount, setGuestRsvpCount] = useState(0);
+  var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '' });
+  var [guestRsvpLoading, setGuestRsvpLoading] = useState(false);
+  var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
 
   var fetchEvent = async function() {
     try {
@@ -198,6 +199,24 @@ var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
         .eq('id', eventData.organization_id)
         .single();
       if (orgData) setOrganization(orgData);
+
+// Fetch accepted co-hosts (two-step to avoid FK name guessing)
+var { data: collabRows } = await supabase
+  .from('event_collaborators')
+  .select('requesting_org_id')
+  .eq('event_id', eventData.id)
+  .eq('status', 'accepted');
+
+if (collabRows && collabRows.length > 0) {
+  var coHostOrgIds = collabRows.map(function(r) { return r.requesting_org_id; });
+  var { data: coHostOrgs } = await supabase
+    .from('organizations')
+    .select('id, name, logo_url')
+    .in('id', coHostOrgIds);
+  setCoHosts(coHostOrgs || []);
+} else {
+  setCoHosts([]);
+}
 
       if (user) {
         var { data: membership } = await supabase
@@ -299,7 +318,6 @@ var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
         if (memberRes.data && memberRes.data.email) {
           var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
           var eventTime = new Date(event.start_time).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
-// Re-fetch org to ensure data is available (state may not be set yet on Stripe return)
           var orgName = organization ? organization.name : '';
           var orgLogoUrl = organization ? (organization.logo_url || '') : '';
           var orgUrl = getOrgUrl();
@@ -316,10 +334,9 @@ var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
           }
 
           if (fromTicket) {
-var purchaseRes = await supabase.from('ticket_purchases').select('*')
+            var purchaseRes = await supabase.from('ticket_purchases').select('*')
               .eq('event_id', event.id).eq('member_id', currentUser.id).order('purchased_at', { ascending: false }).limit(10);
             var allPurchases = purchaseRes.data || [];
-            // Only use purchases from the most recent Stripe session
             var latestSessionId = allPurchases.length > 0 ? allPurchases[0].stripe_session_id : null;
             var purchases = latestSessionId
               ? allPurchases.filter(function(p) { return p.stripe_session_id === latestSessionId; })
@@ -723,7 +740,44 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
               )}
             </div>
           </div>
-          {organization && <p className="text-[#94A3B8] mt-1">{organization.name}</p>}
+
+          {/* Primary org + co-hosts */}
+          <div className="mt-2">
+            {organization && (
+              <p className="text-[#94A3B8]">{organization.name}</p>
+            )}
+            {coHosts.length > 0 && (
+              <div className="mt-1.5 space-y-1.5" aria-label="Co-hosting organizations">
+{coHosts.map(function(org) {
+  return (
+    <div
+      key={org.id}
+      className="flex items-center gap-2"
+      aria-label={'Co-hosted with ' + org.name}
+    >
+      <span style={{fontSize:'11px', fontWeight:600, color:'#64748B', minWidth:'84px'}}>Co-hosted with</span>
+      {org.logo_url ? (
+        <img
+          src={org.logo_url}
+          alt={org.name + ' logo'}
+          style={{width:'20px', height:'20px', borderRadius:'50%', objectFit:'cover', border:'1px solid #2A3550', flexShrink:0}}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          style={{width:'20px', height:'20px', borderRadius:'50%', background:'#1E2845', border:'1px solid #2A3550', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'8px', fontWeight:700, color:'#94A3B8', flexShrink:0}}
+        >
+          {org.name.charAt(0).toUpperCase()}
+        </div>
+      )}
+      <span style={{fontSize:'13px', fontWeight:600, color:'#94A3B8'}}>{org.name}</span>
+    </div>
+  );
+})}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -993,7 +1047,7 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
                   <span className="font-bold text-red-400">{counts.not_going}</span>
                 </div>
               </div>
-            </div>} 
+            </div>}
 
             {/* Going list — members only */}
             {isMember && counts.going > 0 && (
@@ -1021,7 +1075,7 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
               </div>
             )}
 
-{/* Guest RSVP — for non-members on free public events */}
+            {/* Guest RSVP — for non-members on free public events */}
             {!isPastEvent && !isMember && !isPaidEvent && (
               <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
                 <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>RSVP to this Event</p>
@@ -1079,7 +1133,7 @@ var purchaseRes = await supabase.from('ticket_purchases').select('*')
                 </Link>
               </div>
             )}
-            
+
           </div>
         </div>
       </div>

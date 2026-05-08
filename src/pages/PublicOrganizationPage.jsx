@@ -737,7 +737,40 @@ supabase
       if (configRes.status === 'fulfilled' && configRes.value.data) setSiteConfig(configRes.value.data);
       if (pagesRes.status === 'fulfilled') setSitePages(pagesRes.value.data || []);
       if (navRes.status === 'fulfilled' && navRes.value.data) setSiteNav(navRes.value.data.items || []);
-      if (eventsRes.status === 'fulfilled') setEvents(eventsRes.value.data || []);
+      if (eventsRes.status === 'fulfilled') {
+  var ownEvents = eventsRes.value.data || [];
+
+  // Also fetch events where this org is an accepted co-host
+  var { data: collabRows } = await supabase
+    .from('event_collaborators')
+    .select('event_id')
+    .eq('requesting_org_id', org.id)
+    .eq('status', 'accepted');
+
+  if (collabRows && collabRows.length > 0) {
+    var coHostEventIds = collabRows.map(function(r) { return r.event_id; });
+    var { data: coHostEvents } = await supabase
+      .from('events')
+      .select('*')
+      .in('id', coHostEventIds)
+      .eq('publish_to_website', true)
+      .gte('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true });
+
+    // Merge and deduplicate by id, then sort and cap at 6
+    var merged = ownEvents.concat(coHostEvents || []);
+    var seen = {};
+    var deduped = merged.filter(function(e) {
+      if (seen[e.id]) return false;
+      seen[e.id] = true;
+      return true;
+    });
+    deduped.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+    setEvents(deduped.slice(0, 6));
+  } else {
+    setEvents(ownEvents);
+  }
+}
       if (announcementsRes.status === 'fulfilled') setAnnouncements(announcementsRes.value.data || []);
       if (photosRes.status === 'fulfilled') setPhotos(photosRes.value.data || []);
       if (blocksRes.status === 'fulfilled') setBlocks(blocksRes.value.data || []);

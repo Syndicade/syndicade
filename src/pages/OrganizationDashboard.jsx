@@ -345,7 +345,20 @@ function OrganizationDashboard() {
     setOverviewLoading(true);
     try {
       var evRes = await supabase.from('events').select('id,title,start_time,end_time,location,event_type,description,recurrence_rule,parent_event_id,is_rescheduled,original_start_time,publish_to_discovery,publish_to_website,volunteer_signup,donation_dropoff,event_types,audience,languages,visibility,require_rsvp,virtual_link,full_address,city,state,zip_code,max_attendees,is_recurring,recurrence_end_date,is_paid,enable_check_in').eq('organization_id', organizationId).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true }).limit(3);
-      setOverviewEvents(evRes.data || []);
+var ownEventsOverview = evRes.data || [];
+var { data: coHostRowsOv } = await supabase.from('event_collaborators').select('event_id').eq('requesting_org_id', organizationId).eq('status', 'accepted');
+if (coHostRowsOv && coHostRowsOv.length > 0) {
+  var coHostIdsOv = coHostRowsOv.map(function(r) { return r.event_id; });
+  var coHostEvOv = await supabase.from('events').select('id,title,start_time,end_time,location,event_type,description,recurrence_rule,parent_event_id,is_rescheduled,original_start_time,publish_to_discovery,publish_to_website,volunteer_signup,donation_dropoff,event_types,audience,languages,visibility,require_rsvp,virtual_link,full_address,city,state,zip_code,max_attendees,is_recurring,recurrence_end_date,is_paid,enable_check_in').in('id', coHostIdsOv).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true });
+  var coHostEvOvData = (coHostEvOv.data || []).map(function(e) { return Object.assign({}, e, { is_co_hosted: true }); });
+  var mergedOv = ownEventsOverview.concat(coHostEvOvData);
+  var seenOv = {};
+  var dedupedOv = mergedOv.filter(function(e) { if (seenOv[e.id]) return false; seenOv[e.id] = true; return true; });
+  dedupedOv.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+  setOverviewEvents(dedupedOv.slice(0, 3));
+} else {
+  setOverviewEvents(ownEventsOverview);
+}
       var annRes = await supabase.from('announcements').select('id,title,content,priority,created_at,is_pinned').eq('organization_id', organizationId).order('is_pinned', { ascending:false }).order('created_at', { ascending:false }).limit(3);
       setOverviewAnnouncements(annRes.data || []);
     } catch(err) { console.error(err); }
@@ -493,6 +506,7 @@ async function respondToCollabRequest(request, status) {
     }
 
     mascotSuccessToast(status === 'accepted' ? 'Co-host accepted!' : 'Request declined.');
+    window.dispatchEvent(new CustomEvent('notificationCreated'));
     setCollabRequests(function(prev) { return prev.filter(function(r) { return r.id !== request.id; }); });
   } catch (err) {
     toast.error('Could not update request');
@@ -510,9 +524,22 @@ async function respondToCollabRequest(request, status) {
         result.items = r.data || [];
       }
       if (tab === 'events') {
-        var r2 = await supabase.from('events').select('id,title,start_time,location,visibility,is_virtual').eq('organization_id', organizationId).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true }).limit(6);
-        result.items = r2.data || [];
-      }
+  var r2 = await supabase.from('events').select('id,title,start_time,location,visibility,is_virtual').eq('organization_id', organizationId).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true }).limit(6);
+  var ownEvPrev = r2.data || [];
+  var { data: coHostRowsPrev } = await supabase.from('event_collaborators').select('event_id').eq('requesting_org_id', organizationId).eq('status', 'accepted');
+  if (coHostRowsPrev && coHostRowsPrev.length > 0) {
+    var coHostIdsPrev = coHostRowsPrev.map(function(r) { return r.event_id; });
+    var coHostEvPrev = await supabase.from('events').select('id,title,start_time,location,visibility,is_virtual').in('id', coHostIdsPrev).gte('start_time', new Date().toISOString()).order('start_time', { ascending:true });
+    var coHostEvPrevData = (coHostEvPrev.data || []).map(function(e) { return Object.assign({}, e, { is_co_hosted: true }); });
+    var mergedPrev = ownEvPrev.concat(coHostEvPrevData);
+    var seenPrev = {};
+    var dedupedPrev = mergedPrev.filter(function(e) { if (seenPrev[e.id]) return false; seenPrev[e.id] = true; return true; });
+    dedupedPrev.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+    result.items = dedupedPrev.slice(0, 6);
+  } else {
+    result.items = ownEvPrev;
+  }
+}
       if (tab === 'members') {
         var r3 = await supabase.from('memberships').select('member_id,role,joined_date,members(first_name,last_name,profile_photo_url)').eq('organization_id', organizationId).eq('status', 'active').order('joined_date', { ascending:false }).limit(12);
         result.items = r3.data || [];
@@ -1265,11 +1292,12 @@ async function respondToCollabRequest(request, status) {
                         <div style={{ display:'flex', alignItems:'center', gap:'4px', marginBottom:'5px', paddingRight: isAdmin ? '22px' : '0' }}>
                           <span style={{ display:'inline-block', padding:'2px 6px', borderRadius:'3px', fontSize:'9px', fontWeight:700, textTransform:'uppercase', background:c.bdgBg, color:c.bdgTxt }}>{ev.is_virtual ? 'Virtual' : 'Event'}</span>
                           {isRecurring && <span style={{ fontSize:'9px', fontWeight:700, color:c.org }}>Recurring</span>}
+                          {ev.is_co_hosted && <span style={{ fontSize:'9px', fontWeight:700, color:c.org }}>Co-host</span>}
                         </div>
                         <p style={{ fontSize:'11px', fontWeight:800, color:c.txt, lineHeight:1.3, marginBottom:'4px', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{ev.title}</p>
                         <p style={{ fontSize:'9px', fontWeight:700, color:c.org, marginTop:'auto' }}>{formatShortDate(ev.start_time)}</p>
-                        {isAdmin && (
-                          <div style={{ position:'absolute', top:'6px', right:'6px' }}>
+                        {isAdmin && !ev.is_co_hosted && (
+  <div style={{ position:'absolute', top:'6px', right:'6px' }}>
                             <button onClick={function(e) { e.stopPropagation(); setActiveEventMenu(activeEventMenu === ev.id ? null : ev.id); }} style={{ width:'20px', height:'20px', borderRadius:'4px', border:'none', background:'rgba(0,0,0,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:c.org }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-black/20" aria-label={'Actions for '+ev.title} aria-haspopup="true" aria-expanded={activeEventMenu === ev.id}>
                               <Icon path={ICONS.dots} className="h-3 w-3" />
                             </button>

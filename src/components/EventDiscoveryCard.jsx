@@ -139,12 +139,13 @@ function formatEventDate(startTime, endTime) {
   return dateStr + ' \u00b7 ' + timeStr;
 }
 
-export default function EventDiscoveryCard({ event, lang, session, initialSaved, adminOrgs }) {
+export default function EventDiscoveryCard({ event, lang, session, initialSaved, adminOrgs, coHosts }) {
   var { isDark } = useTheme();
   var navigate = useNavigate();
   lang = lang || 'en';
   initialSaved = initialSaved || false;
   adminOrgs = adminOrgs || [];
+  coHosts = coHosts || [];
 
   var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
   var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
@@ -160,8 +161,8 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
   var [colabLoading, setColabLoading] = useState(false);
   var [colabMessage, setColabMessage] = useState('');
 
-  var eligibleOrgs  = adminOrgs.filter(function(org) { return org.id !== event.organization_id; });
-var showCollaborate = eligibleOrgs.length > 0;
+  var eligibleOrgs    = adminOrgs.filter(function(org) { return org.id !== event.organization_id; });
+  var showCollaborate = eligibleOrgs.length > 0;
   var isFeatured      = event.is_featured;
   var eventUrl        = '/events/' + event.id;
   var typeColors      = isDark ? EVENT_TYPE_COLORS : EVENT_TYPE_COLORS_LIGHT;
@@ -206,11 +207,11 @@ var showCollaborate = eligibleOrgs.length > 0;
     navigate(eventUrl);
   }
 
-function openColabModal(e) {
-  e.stopPropagation();
-  if (eligibleOrgs.length === 1) setSelectedOrgId(eligibleOrgs[0].id);
-  setColabModal(true);
-}
+  function openColabModal(e) {
+    e.stopPropagation();
+    if (eligibleOrgs.length === 1) setSelectedOrgId(eligibleOrgs[0].id);
+    setColabModal(true);
+  }
 
   function closeColabModal() {
     setColabModal(false);
@@ -292,7 +293,7 @@ function openColabModal(e) {
 
         <div style={{ padding: '18px 16px 14px', display: 'flex', flexDirection: 'column', gap: '10px', borderRadius: '12px', overflow: 'hidden' }}>
 
-          {/* ── Header: title + org + save/share ── */}
+          {/* ── Header: title + org + co-hosts + save/share ── */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, lineHeight: 1.3 }}>{event.title}</h2>
@@ -319,6 +320,23 @@ function openColabModal(e) {
                       Verified
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* Co-hosts */}
+              {coHosts.length > 0 && (
+                <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} aria-label="Co-hosting organizations">
+                  {coHosts.map(function(name) {
+                    return (
+                      <span
+                        key={name}
+                        style={{ fontSize: '12px', color: textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: textMuted, opacity: 0.7 }}>+ co-hosted with</span>
+                        <span style={{ fontWeight: 600, color: textSecondary }}>{name}</span>
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -438,19 +456,16 @@ function openColabModal(e) {
             style={{ background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: '448px', width: '100%' }}
             onClick={function(e) { e.stopPropagation(); }}
           >
-            {/* Header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid ' + borderColor }}>
               <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: textPrimary }}>Request Collaboration</h2>
               <p style={{ fontSize: '14px', color: textMuted, marginTop: '4px' }}>{event.title}</p>
             </div>
 
-            {/* Body */}
             <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <p style={{ fontSize: '14px', color: textSecondary }}>
                 Your collaboration request will be sent to the admins of this organization. If accepted, both org names will appear on the event.
               </p>
 
-              {/* Org selector (multi-org admins) */}
               {eligibleOrgs.length > 1 && (
                 <div>
                   <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
@@ -470,14 +485,12 @@ function openColabModal(e) {
                 </div>
               )}
 
-{/* Single org display */}
-{eligibleOrgs.length === 1 && (
-  <p style={{ fontSize: '14px', color: textSecondary }}>
-    Requesting as <span style={{ color: textPrimary, fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
-  </p>
-)}
+              {eligibleOrgs.length === 1 && (
+                <p style={{ fontSize: '14px', color: textSecondary }}>
+                  Requesting as <span style={{ color: textPrimary, fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
+                </p>
+              )}
 
-              {/* Message field */}
               <div>
                 <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
                   Message <span style={{ color: textMuted, fontWeight: 400 }}>(optional)</span>
@@ -498,7 +511,6 @@ function openColabModal(e) {
               </div>
             </div>
 
-            {/* Footer */}
             <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid ' + borderColor }}>
               <button
                 onClick={closeColabModal}

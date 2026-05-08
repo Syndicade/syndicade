@@ -246,6 +246,7 @@ export default function EventDiscovery() {
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   var [savedEvents, setSavedEvents] = useState(new Set());
   var [adminOrgs, setAdminOrgs] = useState([]);
+  var [coHostsMap, setCoHostsMap] = useState({});
 
   var [selectedEvent, setSelectedEvent] = useState(null);
   var [guestRSVPModal, setGuestRSVPModal] = useState(false);
@@ -339,6 +340,31 @@ export default function EventDiscovery() {
         return Object.assign({}, e, { is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001' });
       });
       setEvents(withDemo);
+      if (withDemo.length > 0) {
+  var eventIds = withDemo.map(function(e) { return e.id; });
+  var { data: collabRows } = await supabase
+    .from('event_collaborators')
+    .select('event_id, requesting_org_id')
+    .in('event_id', eventIds)
+    .eq('status', 'accepted');
+  if (collabRows && collabRows.length > 0) {
+    var coOrgIds = collabRows.map(function(r) { return r.requesting_org_id; });
+    var { data: coOrgs } = await supabase
+      .from('organizations')
+      .select('id, name')
+      .in('id', coOrgIds);
+    var orgLookup = {};
+    if (coOrgs) coOrgs.forEach(function(o) { orgLookup[o.id] = o.name; });
+    var newMap = {};
+    collabRows.forEach(function(r) {
+      if (!newMap[r.event_id]) newMap[r.event_id] = [];
+      if (orgLookup[r.requesting_org_id]) newMap[r.event_id].push(orgLookup[r.requesting_org_id]);
+    });
+    setCoHostsMap(newMap);
+  } else {
+    setCoHostsMap({});
+  }
+}
       setTotalCount(res.data && res.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (res.data ? res.data.length : 0));
     } catch (err) {
       console.error('Event discovery fetch error:', err);
@@ -796,14 +822,14 @@ export default function EventDiscovery() {
                     {events.filter(function (e) { return e.is_featured; }).length > 0 && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
                         {events.filter(function (e) { return e.is_featured; }).map(function (event) {
-                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} coHosts={coHostsMap[event.id] || []} />;
                         })}
                       </div>
                     )}
                     {events.filter(function (e) { return !e.is_featured; }).length > 0 && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {events.filter(function (e) { return !e.is_featured; }).map(function (event) {
-                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} />;
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} session={session} initialSaved={savedEvents.has(event.id)} onRSVP={handleGuestRSVP} adminOrgs={adminOrgs} coHosts={coHostsMap[event.id] || []} />;
                         })}
                       </div>
                     )}

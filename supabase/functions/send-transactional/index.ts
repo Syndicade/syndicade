@@ -65,6 +65,16 @@ function wrapEmail(inner: string) {
   )
 }
 
+function messageBlock(message: string) {
+  if (!message) return ''
+  return (
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-left:3px solid #F5B731;border-radius:8px;margin-bottom:24px;">' +
+    '<tr><td style="padding:12px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Their Message</td></tr>' +
+    '<tr><td style="padding:2px 16px 14px;font-size:14px;color:#374151;font-style:italic;">"' + message + '"</td></tr>' +
+    '</table>'
+  )
+}
+
 function buildRsvpConfirmation(data: any) {
   var subject = 'You\'re going: ' + data.eventTitle
   var inner =
@@ -170,6 +180,93 @@ function buildDuesConfirmation(data: any) {
   return { subject, html: wrapEmail(inner) }
 }
 
+// ── Collaboration emails ─────────────────────────────────────────────────────
+
+// Sent to the invited org's admins when the event owner sends them an invite
+function buildCollabInvite(data: any) {
+  var subject = data.hostOrgName + ' invited you to co-host: ' + data.eventTitle
+  var inner =
+    orgHeader('Syndicade', '') +
+    '<tr><td style="padding:32px;">' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Co-host invitation</h2>' +
+    '<p style="font-size:15px;color:#374151;margin:0 0 24px;"><strong>' + data.hostOrgName + '</strong> has invited <strong>' + data.invitedOrgName + '</strong> to co-host <strong>' + data.eventTitle + '</strong>.</p>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">' +
+    '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Event</td></tr>' +
+    '<tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventTitle + '</td></tr>' +
+    (data.eventDate ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Date &amp; Time</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventDate + '</td></tr>' : '') +
+    (data.eventLocation ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Location</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventLocation + '</td></tr>' : '') +
+    '</table>' +
+    (data.message ? messageBlock(data.message) : '') +
+    '<p style="font-size:14px;color:#374151;margin:0 0 24px;">To accept or decline, visit your organization dashboard.</p>' +
+    '<p style="text-align:center;margin:0;">' +
+    '<a href="' + (data.dashboardUrl || 'https://syndicade.org') + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Review in Dashboard</a>' +
+    '</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
+// Sent to the event owner's admins when a browsing org requests to co-host
+function buildCollabRequest(data: any) {
+  var subject = data.requestingOrgName + ' wants to co-host: ' + data.eventTitle
+  var inner =
+    orgHeader('Syndicade', '') +
+    '<tr><td style="padding:32px;">' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Co-host request</h2>' +
+    '<p style="font-size:15px;color:#374151;margin:0 0 24px;"><strong>' + data.requestingOrgName + '</strong> has requested to co-host your event <strong>' + data.eventTitle + '</strong>.</p>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">' +
+    '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Event</td></tr>' +
+    '<tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventTitle + '</td></tr>' +
+    (data.eventDate ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Date &amp; Time</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventDate + '</td></tr>' : '') +
+    '</table>' +
+    (data.message ? messageBlock(data.message) : '') +
+    '<p style="font-size:14px;color:#374151;margin:0 0 24px;">Review and respond in your organization dashboard.</p>' +
+    '<p style="text-align:center;margin:0;">' +
+    '<a href="' + (data.dashboardUrl || 'https://syndicade.org') + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Review in Dashboard</a>' +
+    '</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
+// Sent to the requesting org when their request or invite is accepted
+function buildCollabAccepted(data: any) {
+  var subject = 'Co-host confirmed: ' + data.eventTitle
+  var inner =
+    orgHeader('Syndicade', '') +
+    '<tr><td style="padding:32px;">' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">You\'re co-hosting!</h2>' +
+    '<p style="font-size:15px;color:#374151;margin:0 0 24px;"><strong>' + data.hostOrgName + '</strong> has accepted your request — <strong>' + data.respondingOrgName + '</strong> is now listed as a co-host for <strong>' + data.eventTitle + '</strong>.</p>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">' +
+    '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Event</td></tr>' +
+    '<tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventTitle + '</td></tr>' +
+    (data.eventDate ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Date &amp; Time</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventDate + '</td></tr>' : '') +
+    (data.eventLocation ? '<tr><td style="padding:6px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Location</td></tr><tr><td style="padding:2px 16px 12px;font-size:15px;color:#111827;font-weight:600;">' + data.eventLocation + '</td></tr>' : '') +
+    '</table>' +
+    (data.message ? messageBlock(data.message) : '') +
+    '<p style="text-align:center;margin:0;">' +
+    '<a href="' + (data.eventUrl || 'https://syndicade.org') + '" style="display:inline-block;padding:12px 28px;background:#22C55E;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">View Event</a>' +
+    '</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
+// Sent to the requesting org when their request or invite is declined
+function buildCollabDeclined(data: any) {
+  var subject = 'Co-host update: ' + data.eventTitle
+  var inner =
+    orgHeader('Syndicade', '') +
+    '<tr><td style="padding:32px;">' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Co-host request declined</h2>' +
+    '<p style="font-size:15px;color:#374151;margin:0 0 24px;"><strong>' + data.hostOrgName + '</strong> was unable to move forward with <strong>' + data.respondingOrgName + '</strong> as a co-host for <strong>' + data.eventTitle + '</strong>.</p>' +
+    (data.message ? messageBlock(data.message) : '') +
+    '<p style="font-size:14px;color:#6b7280;margin:0;">You can still explore other collaboration opportunities on the Community Board.</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -200,9 +297,21 @@ serve(async (req) => {
     } else if (type === 'guest_rsvp_confirmation') {
       toEmail = data.guestEmail
       emailContent = buildGuestRsvpConfirmation(data)
-} else if (type === 'dues_confirmation') {
+    } else if (type === 'dues_confirmation') {
       toEmail = data.memberEmail
       emailContent = buildDuesConfirmation(data)
+    } else if (type === 'collab_invite') {
+      toEmail = data.toEmail
+      emailContent = buildCollabInvite(data)
+    } else if (type === 'collab_request') {
+      toEmail = data.toEmail
+      emailContent = buildCollabRequest(data)
+    } else if (type === 'collab_accepted') {
+      toEmail = data.toEmail
+      emailContent = buildCollabAccepted(data)
+    } else if (type === 'collab_declined') {
+      toEmail = data.toEmail
+      emailContent = buildCollabDeclined(data)
     } else {
       return new Response(JSON.stringify({ error: 'Unknown email type: ' + type }), { status: 400, headers: corsHeaders })
     }
