@@ -1,18 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 import { useLocation } from 'react-router-dom';
-import { Bookmark } from 'lucide-react';
 
 function Header() {
   var navigate = useNavigate();
   var location = useLocation();
-  var { isDark, toggle } = useTheme();
 
-  var [currentUser, setCurrentUser]   = useState(null);
-  var [userMenuOpen, setUserMenuOpen] = useState(false);
+  var [currentUser, setCurrentUser]     = useState(null);
+  var [userMenuOpen, setUserMenuOpen]   = useState(false);
   var [firstAdminOrg, setFirstAdminOrg] = useState(null);
 
   var userMenuRef = useRef(null);
@@ -62,30 +59,30 @@ function Header() {
     || currentUser?.email?.split('@')[0]
     || 'User';
 
-  var headerBg      = isDark ? '#0E1523' : '#FFFFFF';
-  var headerBorder  = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
-  var textMuted     = isDark ? '#64748B'  : '#94A3B8';
-  var cardBg        = isDark ? '#1A2035'  : '#FFFFFF';
-  var hoverBg       = isDark ? '#1E2845'  : '#F1F5F9';
+  var headerBg      = '#FFFFFF';
+  var headerBorder  = '#E2E8F0';
+  var textPrimary   = '#0E1523';
+  var textSecondary = '#475569';
+  var textMuted     = '#94A3B8';
+  var cardBg        = '#FFFFFF';
+  var hoverBg       = '#F1F5F9';
 
   return (
     <header style={{ background: headerBg, borderBottom: '1px solid ' + headerBorder }} className="sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
 
-          {/* Logo — goes to / (landing if logged out, redirects to dashboard if logged in) */}
+          {/* Logo */}
           <button
             onClick={function() { navigate(currentUser ? '/dashboard' : '/'); }}
             className="flex items-center flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
             aria-label={currentUser ? 'Go to dashboard' : 'Go to Syndicade homepage'}
           >
-            <span style={{ color: isDark ? '#FFFFFF' : '#1A2035', fontWeight: 800, fontSize: '22px' }}>Syndi</span>
+            <span style={{ color: '#0E1523', fontWeight: 800, fontSize: '22px' }}>Syndi</span>
             <span style={{ color: '#F5B731', fontWeight: 800, fontSize: '22px' }}>cade</span>
           </button>
 
-          {/* ── Nav links — logged IN ── */}
+          {/* Nav — logged IN */}
           {currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
               {[
@@ -121,121 +118,63 @@ function Header() {
             </nav>
           )}
 
-{/* ── Nav links — logged OUT ── */}
-{!currentUser && (
-  <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
+          {/* Nav — logged OUT */}
+          {!currentUser && (
+            <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
 
-    {location.pathname !== '/features' && (
-      <button
-        onClick={function() { navigate('/features'); }}
-        style={{ color: textSecondary }}
-        className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-        onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-        onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-      >
-        Features
-      </button>
-    )}
+              {location.pathname !== '/features' && (
+                <button
+                  onClick={function() { navigate('/features'); }}
+                  style={{ color: textSecondary }}
+                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+                  onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Features
+                </button>
+              )}
 
-    {location.pathname !== '/pricing' && (
-      <button
-        onClick={function() { navigate('/pricing'); }}
-        style={{ color: textSecondary }}
-        className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-        onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-        onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-      >
-        Pricing
-      </button>
-    )}
+              {location.pathname !== '/pricing' && (
+                <button
+                  onClick={function() { navigate('/pricing'); }}
+                  style={{ color: textSecondary }}
+                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+                  onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Pricing
+                </button>
+              )}
 
-    <button
-      onClick={function() { navigate('/discover'); }}
-      className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-      style={{ color: '#60A5FA' }}
-      onMouseEnter={function(e) { e.currentTarget.style.color = '#93C5FD'; e.currentTarget.style.background = hoverBg; }}
-      onMouseLeave={function(e) { e.currentTarget.style.color = '#60A5FA'; e.currentTarget.style.background = 'transparent'; }}
-    >
-      Discover Events
-    </button>
+              <button
+                onClick={function() { navigate('/discover'); }}
+                className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                style={{ color: textSecondary }}
+                onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+                onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+              >
+                Discover Events
+              </button>
 
-    <button
-      onClick={function() { navigate('/explore'); }}
-      className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-      style={{ color: '#4ADE80' }}
-      onMouseEnter={function(e) { e.currentTarget.style.color = '#86EFAC'; e.currentTarget.style.background = hoverBg; }}
-      onMouseLeave={function(e) { e.currentTarget.style.color = '#4ADE80'; e.currentTarget.style.background = 'transparent'; }}
-    >
-      Explore Orgs
-    </button>
+              <button
+                onClick={function() { navigate('/explore'); }}
+                className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                style={{ color: textSecondary }}
+                onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
+                onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
+              >
+                Explore Orgs
+              </button>
 
-  </nav>
-)}
+            </nav>
+          )}
 
           {/* Right side */}
           <div className="flex items-center gap-2">
 
-            {/* Dark/Light toggle */}
-            <div
-              role="group"
-              aria-label="Color theme toggle"
-              style={{
-                display: 'flex', alignItems: 'center', borderRadius: '99px', padding: '2px',
-                background: isDark ? '#151B2D' : '#E2E8F0',
-                border: '1px solid ' + (isDark ? '#2A3550' : '#CBD5E1'),
-                flexShrink: 0,
-              }}
-            >
-              <button
-                onClick={toggle}
-                aria-pressed={isDark}
-                aria-label="Switch to dark mode"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px',
-                  borderRadius: '99px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: isDark ? '#0E1523' : 'transparent',
-                  color: isDark ? '#CBD5E1' : '#64748B',
-                  boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.5)' : 'none',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
-                </svg>
-                Dark
-              </button>
-              <button
-                onClick={toggle}
-                aria-pressed={!isDark}
-                aria-label="Switch to light mode"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px',
-                  borderRadius: '99px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: isDark ? 'transparent' : '#FFFFFF',
-                  color: isDark ? '#64748B' : '#0E1523',
-                  boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.12)',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                Light
-              </button>
-            </div>
-
-            {/* Logged-in: notification bell + avatar */}
+            {/* Logged-in: notification bell + avatar menu */}
             {currentUser && (
               <>
-
                 <NotificationBell />
 
                 <div className="relative flex-shrink-0" ref={userMenuRef}>
@@ -306,7 +245,7 @@ function Header() {
                         onClick={function() { setUserMenuOpen(false); handleSignOut(); }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm focus:outline-none transition-colors text-left"
                         style={{ color: '#EF4444', borderTop: '1px solid ' + headerBorder }}
-                        onMouseEnter={function(e) { e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2'; }}
+                        onMouseEnter={function(e) { e.currentTarget.style.background = '#FEF2F2'; }}
                         onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
                         role="menuitem"
                       >
@@ -321,7 +260,7 @@ function Header() {
               </>
             )}
 
-            {/* Logged-out: Log In + Sign Up */}
+            {/* Logged-out: Log In + Get Started */}
             {!currentUser && (
               <div className="flex items-center gap-2">
                 <button
