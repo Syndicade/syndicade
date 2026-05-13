@@ -51,6 +51,48 @@ if (!authHeader) {
     }
 
 var body = parsedBody
+
+    // ── Dues payment link shortcut ─────────────────────────────────────────
+    if (body.type === 'dues_payment_link') {
+      var RESEND_KEY_DPL = Deno.env.get('RESEND_API_KEY');
+      var dplHtml =
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
+        '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
+        '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
+        '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
+        '<span style="font-size:20px;font-weight:800;color:#ffffff;">' + (body.data.orgName || 'Your Organization') + '</span>' +
+        '</td></tr>' +
+        '<tr><td style="padding:32px;">' +
+        '<p style="font-size:16px;font-weight:700;color:#111827;margin:0 0 8px;">Dues Payment Request</p>' +
+        '<p style="font-size:15px;color:#374151;margin:0 0 16px;">Hi ' + (body.data.memberName || 'there') + ',</p>' +
+        '<p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px;">' +
+        (body.data.orgName || 'Your organization') + ' has sent you a dues payment request' +
+        (body.data.amount ? ' for <strong>$' + Number(body.data.amount).toFixed(2) + '</strong>' : '') + '.' +
+        '</p>' +
+        '<table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;"><tr><td style="background:#3B82F6;border-radius:8px;">' +
+        '<a href="' + body.data.paymentUrl + '" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">Pay Dues Now</a>' +
+        '</td></tr></table>' +
+        '<p style="font-size:12px;color:#9ca3af;margin:0;">If you have questions, contact your organization admin.</p>' +
+        '</td></tr>' +
+        '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
+        '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
+        '</td></tr></table></td></tr></table></body></html>';
+      var dplRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + RESEND_KEY_DPL, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_ADDRESS,
+          to: body.data.memberEmail,
+          subject: 'Dues payment request from ' + (body.data.orgName || 'your organization'),
+          html: dplHtml,
+        }),
+      });
+      return new Response(JSON.stringify({ success: dplRes.ok }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     var { org_id, subject, html_body, audience, template_name, attachments, test_email } = body
 
     if (!org_id || !subject || !html_body || !audience) {

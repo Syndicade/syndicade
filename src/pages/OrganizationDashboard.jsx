@@ -245,6 +245,9 @@ function OrganizationDashboard() {
   var [collabRequests, setCollabRequests] = useState([]);
   var [collabRequestsLoading, setCollabRequestsLoading] = useState(false);
   var [respondingCollab, setRespondingCollab] = useState(null);
+  var [collabResponseExpanded, setCollabResponseExpanded] = useState(null);
+  var [collabResponseMessage, setCollabResponseMessage] = useState('');
+  var [collabResponseAction, setCollabResponseAction] = useState(null);
 
   var effectiveRole = (membership && membership.role === 'admin' && viewMode === 'admin') ? 'admin' : 'member';
   var isAdmin = effectiveRole === 'admin';
@@ -472,7 +475,7 @@ if (coHostRowsOv && coHostRowsOv.length > 0) {
     }
   }
 
-async function respondToCollabRequest(request, status) {
+async function respondToCollabRequest(request, status, message) {
   setRespondingCollab(request.id);
   try {
     var { error: updateErr } = await supabase
@@ -491,13 +494,17 @@ async function respondToCollabRequest(request, status) {
     if (reqAdmins && reqAdmins.length > 0) {
       var orgName = organization ? organization.name : 'The host organization';
       var eventTitle = request.event ? request.event.title : 'an event';
+      var notifMsg = orgName + ' ' + (status === 'accepted' ? 'accepted' : 'declined') + ' your co-host request for "' + eventTitle + '"';
+      if (message && message.trim()) {
+        notifMsg += ' — "' + message.trim() + '"';
+      }
       var notifications = reqAdmins.map(function(a) {
         return {
           user_id: a.member_id,
           organization_id: request.requesting_org_id,
           type: status === 'accepted' ? 'collab_accepted' : 'collab_declined',
           title: status === 'accepted' ? 'Collaboration Accepted' : 'Collaboration Declined',
-          message: orgName + ' ' + (status === 'accepted' ? 'accepted' : 'declined') + ' your co-host request for "' + eventTitle + '"',
+          message: notifMsg,
           link: '/org/' + request.requesting_org_id + '/events',
           read: false,
         };
@@ -508,6 +515,9 @@ async function respondToCollabRequest(request, status) {
     mascotSuccessToast(status === 'accepted' ? 'Co-host accepted!' : 'Request declined.');
     window.dispatchEvent(new CustomEvent('notificationCreated'));
     setCollabRequests(function(prev) { return prev.filter(function(r) { return r.id !== request.id; }); });
+    setCollabResponseExpanded(null);
+    setCollabResponseMessage('');
+    setCollabResponseAction(null);
   } catch (err) {
     toast.error('Could not update request');
   } finally {
@@ -1363,8 +1373,8 @@ async function respondToCollabRequest(request, status) {
           )}
         </div>
 
-        {/* ── Collaboration Requests ── */}
-        {isAdmin && (collabRequests.length > 0 || collabRequestsLoading) && (
+{/* ── Collaboration Requests ── */}
+        {membership && membership.role === 'admin' && (collabRequests.length > 0 || collabRequestsLoading) && (
           <div style={{ background:cardBg, border:'1px solid rgba(139,92,246,0.3)', borderRadius:'10px', padding:'16px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
               <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#A78BFA' }}>Co-Host Requests</p>
@@ -1384,42 +1394,87 @@ async function respondToCollabRequest(request, status) {
                   var orgName = req.requesting_org ? req.requesting_org.name : 'Unknown organization';
                   var eventTitle = req.event ? req.event.title : 'an event';
                   var isResponding = respondingCollab === req.id;
+                  var isExpanded = collabResponseExpanded === req.id;
                   return (
-                    <div key={req.id} role="listitem" style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', padding:'12px 14px', background:isDark?'#0E1523':'#F8FAFC', borderRadius:'8px', border:'1px solid rgba(139,92,246,0.15)' }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'3px' }}>
-                          <div style={{ width:'22px', height:'22px', borderRadius:'50%', background:'rgba(139,92,246,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:700, color:'#A78BFA', flexShrink:0 }} aria-hidden="true">
-                            {orgName.charAt(0).toUpperCase()}
+                    <div key={req.id} role="listitem" style={{ padding:'12px 14px', background:isDark?'#0E1523':'#F8FAFC', borderRadius:'8px', border:'1px solid ' + (isExpanded ? (collabResponseAction === 'accepted' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(139,92,246,0.15)'), transition:'border-color 0.15s ease' }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px' }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'3px' }}>
+                            <div style={{ width:'22px', height:'22px', borderRadius:'50%', background:'rgba(139,92,246,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:700, color:'#A78BFA', flexShrink:0 }} aria-hidden="true">
+                              {orgName.charAt(0).toUpperCase()}
+                            </div>
+                            <p style={{ fontSize:'12px', fontWeight:700, color:textPrimary }}>{orgName}</p>
                           </div>
-                          <p style={{ fontSize:'12px', fontWeight:700, color:textPrimary }}>{orgName}</p>
+                          <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px' }}>
+                            wants to co-host <span style={{ color:textSecondary, fontWeight:600 }}>"{eventTitle}"</span>
+                          </p>
+                          {req.message && (
+                            <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px', marginTop:'3px', fontStyle:'italic' }}>"{req.message}"</p>
+                          )}
                         </div>
-                        <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px' }}>
-                          wants to co-host <span style={{ color:textSecondary, fontWeight:600 }}>"{eventTitle}"</span>
-                        </p>
-                        {req.message && (
-                          <p style={{ fontSize:'11px', color:textMuted, paddingLeft:'28px', marginTop:'3px', fontStyle:'italic' }}>"{req.message}"</p>
+                        {!isExpanded && (
+                          <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
+                            <button
+                              onClick={function() { setCollabResponseExpanded(req.id); setCollabResponseAction('accepted'); setCollabResponseMessage(''); }}
+                              disabled={isResponding}
+                              style={{ padding:'5px 12px', background:'#22C55E', color:'#fff', fontSize:'11px', fontWeight:700, border:'none', borderRadius:'6px', cursor:'pointer' }}
+                              className="focus:outline-none focus:ring-2 focus:ring-green-500"
+                              aria-label={'Accept co-host request from ' + orgName + ' for ' + eventTitle}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={function() { setCollabResponseExpanded(req.id); setCollabResponseAction('declined'); setCollabResponseMessage(''); }}
+                              disabled={isResponding}
+                              style={{ padding:'5px 12px', background:'transparent', color:'#EF4444', border:'1px solid rgba(239,68,68,0.4)', fontSize:'11px', fontWeight:700, borderRadius:'6px', cursor:'pointer' }}
+                              className="focus:outline-none focus:ring-2 focus:ring-red-500"
+                              aria-label={'Decline co-host request from ' + orgName + ' for ' + eventTitle}
+                            >
+                              Decline
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
-                        <button
-                          onClick={function() { respondToCollabRequest(req, 'accepted'); }}
-                          disabled={isResponding}
-                          style={{ padding:'5px 12px', background:'#22C55E', color:'#fff', fontSize:'11px', fontWeight:700, border:'none', borderRadius:'6px', cursor: isResponding ? 'not-allowed' : 'pointer', opacity: isResponding ? 0.6 : 1 }}
-                          className="focus:outline-none focus:ring-2 focus:ring-green-500"
-                          aria-label={'Accept co-host request from ' + orgName + ' for ' + eventTitle}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={function() { respondToCollabRequest(req, 'declined'); }}
-                          disabled={isResponding}
-                          style={{ padding:'5px 12px', background:'transparent', color:'#EF4444', border:'1px solid rgba(239,68,68,0.4)', fontSize:'11px', fontWeight:700, borderRadius:'6px', cursor: isResponding ? 'not-allowed' : 'pointer', opacity: isResponding ? 0.6 : 1 }}
-                          className="focus:outline-none focus:ring-2 focus:ring-red-500"
-                          aria-label={'Decline co-host request from ' + orgName + ' for ' + eventTitle}
-                        >
-                          Decline
-                        </button>
-                      </div>
+                      {isExpanded && (
+                        <div style={{ marginTop:'10px', paddingTop:'10px', borderTop:'1px solid ' + (collabResponseAction === 'accepted' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)') }}>
+                          <label htmlFor={'collab-msg-' + req.id} style={{ display:'block', fontSize:'11px', fontWeight:700, color: collabResponseAction === 'accepted' ? '#22C55E' : '#EF4444', marginBottom:'5px', textTransform:'uppercase', letterSpacing:'2px' }}>
+                            {collabResponseAction === 'accepted' ? 'Accept' : 'Decline'} — Optional Note
+                          </label>
+                          <textarea
+                            id={'collab-msg-' + req.id}
+                            value={collabResponseMessage}
+                            onChange={function(e) { setCollabResponseMessage(e.target.value); }}
+                            maxLength={500}
+                            rows={2}
+                            placeholder={'Add an optional note for ' + orgName + '...'}
+                            style={{ width:'100%', padding:'8px 10px', background:inputBg, border:'1px solid '+borderColor, borderRadius:'6px', fontSize:'12px', color:textPrimary, resize:'none', outline:'none', boxSizing:'border-box' }}
+                            className="focus:ring-2 focus:ring-blue-500"
+                            aria-label={'Optional message for ' + orgName}
+                          />
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'4px', marginBottom:'8px' }}>
+                            <span style={{ fontSize:'10px', color:textMuted }}>{collabResponseMessage.length}/500</span>
+                          </div>
+                          <div style={{ display:'flex', gap:'6px' }}>
+                            <button
+                              onClick={function() { respondToCollabRequest(req, collabResponseAction, collabResponseMessage); }}
+                              disabled={isResponding}
+                              style={{ padding:'7px 16px', minWidth:'120px', background: collabResponseAction === 'accepted' ? '#22C55E' : '#EF4444', color:'#fff', fontSize:'11px', fontWeight:700, border:'none', borderRadius:'6px', cursor: isResponding ? 'not-allowed' : 'pointer', opacity: isResponding ? 0.6 : 1 }}
+                              className={'focus:outline-none focus:ring-2 ' + (collabResponseAction === 'accepted' ? 'focus:ring-green-500' : 'focus:ring-red-500')}
+                              aria-label={'Confirm ' + (collabResponseAction === 'accepted' ? 'acceptance of' : 'declining') + ' co-host request from ' + orgName}
+                            >
+                              {isResponding ? 'Sending...' : 'Confirm ' + (collabResponseAction === 'accepted' ? 'Accept' : 'Decline')}
+                            </button>
+                            <button
+                              onClick={function() { setCollabResponseExpanded(null); setCollabResponseMessage(''); setCollabResponseAction(null); }}
+                              style={{ padding:'7px 14px', background:'transparent', color:textMuted, border:'1px solid '+borderColor, fontSize:'11px', fontWeight:600, borderRadius:'6px', cursor:'pointer' }}
+                              className="focus:outline-none focus:ring-2 focus:ring-gray-500"
+                              aria-label="Cancel"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1473,7 +1528,7 @@ async function respondToCollabRequest(request, status) {
         </div>
 
         {/* Storage meter */}
-        {isAdmin && (
+{membership && membership.role === 'admin' && (
           <div style={{ marginBottom:'16px' }}>
             <StorageMeter organizationId={organizationId} compact={true} isAdmin={true} />
           </div>

@@ -151,6 +151,14 @@ function OrgLayout() {
 
   useEffect(function() { fetchLayout(); }, [organizationId]);
 
+  useEffect(function() {
+  function handleInboxUpdate(e) {
+    setUnreadCount(e.detail.total);
+  }
+  window.addEventListener('inboxUnreadUpdate', handleInboxUpdate);
+  return function() { window.removeEventListener('inboxUnreadUpdate', handleInboxUpdate); };
+}, []);
+
   async function fetchLayout() {
     try {
       var authResult = await supabase.auth.getUser();
@@ -166,7 +174,7 @@ function OrgLayout() {
       if (!memResult.data) { setError('You are not a member of this organization.'); setLoading(false); return; }
       setMembership(memResult.data);
 
-      if (memResult.data.role === 'admin') {
+if (memResult.data.role === 'admin') {
         supabase.from('contact_inquiries').select('*', { count:'exact', head:true }).eq('organization_id', organizationId).eq('is_read', false).then(function(r) { setUnreadCount(r.count || 0); });
         var tables = ['events','announcements','polls','surveys','signup_forms'];
         var total = 0;
@@ -203,7 +211,7 @@ function OrgLayout() {
       if (visibleItems.length === 0) return null;
       return (
         <div key={group.label}>
-          <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#FFFFFF', padding:'8px 10px 3px' }}>{group.label}</p>
+          <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color: textMuted, padding:'8px 10px 3px' }}>{group.label}</p>
           {visibleItems.map(function(item) {
             var active = isActive(item);
 
