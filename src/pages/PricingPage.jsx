@@ -132,7 +132,7 @@ var COMPARE = [
   {
     category: 'Free social platforms',
     price: 'Free + data tradeoffs',
-    weakness: 'No member management, no events ownership, your audience isn\'t yours',
+    weakness: "No member management, no events ownership, your audience isn't yours",
     isSelf: false,
   },
   {
@@ -161,53 +161,53 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="bg-[#0E1523] min-h-screen flex flex-col">
+    <div className="bg-[#F8FAFC] min-h-screen flex flex-col">
       <Header />
 
       <main id="main-content" className="flex-1">
 
-        {/* Hero */}
-        <section className="py-20 px-6 text-center" aria-labelledby="pricing-heading">
-          <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-4" aria-hidden="true">PRICING</p>
-          <h1 id="pricing-heading" className="text-4xl font-extrabold text-white mb-4">
+        {/* ── Hero ── */}
+        <section className="bg-white py-20 px-6 text-center border-b border-slate-200" aria-labelledby="pricing-heading">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-4" aria-hidden="true">PRICING</p>
+          <h1 id="pricing-heading" className="text-4xl font-extrabold text-[#0E1523] mb-4">
             Simple pricing for every org
           </h1>
-          <p className="text-lg text-[#94A3B8] max-w-xl mx-auto mb-10">
+          <p className="text-lg text-slate-500 max-w-xl mx-auto mb-10">
             14-day free trial. No credit card required. Cancel anytime.
           </p>
 
           {/* Billing toggle */}
           <div
-            className="inline-flex items-center gap-1 bg-[#151B2D] border border-[#2A3550] rounded-lg p-1"
+            className="inline-flex items-center gap-1 bg-[#F1F5F9] border border-slate-200 rounded-lg p-1"
             role="group"
             aria-label="Billing interval"
           >
             <button
               onClick={function() { setBillingInterval('monthly'); }}
               aria-pressed={billingInterval === 'monthly'}
-              className={'px-5 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (billingInterval === 'monthly' ? 'bg-[#1A2035] text-white' : 'text-[#94A3B8] hover:text-white')}
+              className={'px-5 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (billingInterval === 'monthly' ? 'bg-white text-[#0E1523] shadow-sm' : 'text-slate-500 hover:text-[#0E1523]')}
             >
               Monthly
             </button>
             <button
               onClick={function() { setBillingInterval('annual'); }}
               aria-pressed={billingInterval === 'annual'}
-              className={'px-5 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (billingInterval === 'annual' ? 'bg-[#1A2035] text-white' : 'text-[#94A3B8] hover:text-white')}
+              className={'px-5 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (billingInterval === 'annual' ? 'bg-white text-[#0E1523] shadow-sm' : 'text-slate-500 hover:text-[#0E1523]')}
             >
               Annual
-              <span className="ml-2 text-xs bg-green-900 text-green-400 px-2 py-0.5 rounded-full">Save 2 months</span>
+              <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Save 2 months</span>
             </button>
           </div>
         </section>
 
-        {/* Pricing cards */}
-        <section className="px-6 pb-8 max-w-6xl mx-auto" aria-label="Pricing plans">
+        {/* ── Pricing cards ── */}
+        <section className="bg-[#F8FAFC] px-6 py-12 max-w-6xl mx-auto" aria-label="Pricing plans">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {PLANS.map(function(plan) {
               return (
                 <article
                   key={plan.key}
-                  className={'bg-[#1A2035] rounded-2xl border p-8 flex flex-col relative ' + (plan.isHighlight ? 'border-blue-500' : 'border-[#2A3550]')}
+                  className={'bg-white rounded-2xl border p-8 flex flex-col relative ' + (plan.isHighlight ? 'border-blue-500 shadow-md' : 'border-slate-200')}
                   aria-label={plan.name + ' plan'}
                 >
                   {plan.badge && (
@@ -216,32 +216,32 @@ export default function PricingPage() {
                     </div>
                   )}
 
-                  <h2 className="text-xl font-extrabold text-white mb-2">{plan.name}</h2>
+                  <h2 className="text-xl font-extrabold text-[#0E1523] mb-2">{plan.name}</h2>
 
                   <div className="mb-1 flex items-end gap-1">
-                    <span className="text-4xl font-extrabold text-white">${getPrice(plan)}</span>
-                    <span className="text-[#64748B] text-sm mb-1">/mo</span>
+                    <span className="text-4xl font-extrabold text-[#0E1523]">${getPrice(plan)}</span>
+                    <span className="text-slate-400 text-sm mb-1">/mo</span>
                   </div>
 
                   {billingInterval === 'annual' && (
-                    <p className="text-xs text-green-400 mb-4">Billed as ${plan.annual.toFixed(2)}/yr — 2 months free</p>
+                    <p className="text-xs text-green-600 font-semibold mb-4">Billed as ${plan.annual.toFixed(2)}/yr — 2 months free</p>
                   )}
                   {billingInterval === 'monthly' && <div className="mb-4" />}
 
                   <div className="mb-6">
-                    <div className="text-sm text-[#94A3B8] space-y-1 mb-3">
+                    <div className="text-sm text-slate-500 space-y-1 mb-3">
                       <p>Up to {plan.members} members</p>
                       <p>{plan.storage} storage</p>
                     </div>
-                    <div className="bg-[#0E1523] border border-[#2A3550] rounded-lg p-3">
-                      <p className="text-white text-xs font-semibold mb-1">{plan.pages}</p>
-                      <p className="text-[#64748B] text-xs leading-relaxed">{plan.pagesDetail}</p>
+                    <div className="bg-[#F8FAFC] border border-slate-200 rounded-lg p-3">
+                      <p className="text-[#0E1523] text-xs font-semibold mb-1">{plan.pages}</p>
+                      <p className="text-slate-500 text-xs leading-relaxed">{plan.pagesDetail}</p>
                     </div>
                   </div>
 
                   <Link
                     to="/signup"
-                    className={'block text-center py-3 px-6 rounded-lg font-bold text-sm mb-8 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] ' + (plan.isHighlight ? 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-500' : 'bg-[#1E2845] hover:bg-[#2A3550] text-white focus:ring-blue-500')}
+                    className={'block text-center py-3 px-6 rounded-lg font-bold text-sm mb-8 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ' + (plan.isHighlight ? 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-500' : 'bg-[#F1F5F9] hover:bg-slate-200 text-[#0E1523] border border-slate-200 focus:ring-blue-500')}
                     aria-label={'Get started with ' + plan.name + ' — 14 day free trial'}
                   >
                     Start free — 14 days
@@ -251,16 +251,16 @@ export default function PricingPage() {
                     {plan.features.map(function(f, i) {
                       var isHeader = f.startsWith('Everything');
                       return (
-                        <li key={i} className={'flex items-start gap-2 text-sm ' + (isHeader ? 'text-yellow-400 font-semibold' : 'text-[#CBD5E1]')}>
-                          {!isHeader && <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" aria-hidden="true" />}
+                        <li key={i} className={'flex items-start gap-2 text-sm ' + (isHeader ? 'text-[#F5B731] font-semibold' : 'text-slate-600')}>
+                          {!isHeader && <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" aria-hidden="true" />}
                           {f}
                         </li>
                       );
                     })}
                     {plan.locked && plan.locked.map(function(f, i) {
                       return (
-                        <li key={'locked-' + i} className="flex items-start gap-2 text-sm text-[#475569]" aria-label={f + ' — requires upgrade'}>
-                          <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                        <li key={'locked-' + i} className="flex items-start gap-2 text-sm text-slate-400" aria-label={f + ' — requires upgrade'}>
+                          <Lock className="w-4 h-4 shrink-0 mt-0.5 text-slate-300" aria-hidden="true" />
                           {f}
                         </li>
                       );
@@ -268,10 +268,10 @@ export default function PricingPage() {
                   </ul>
 
                   {plan.addons && (
-                    <div className="mt-6 pt-5 border-t border-[#2A3550]">
-                      <p className="text-xs font-bold text-[#64748B] uppercase tracking-wider mb-2">Add-ons available</p>
+                    <div className="mt-6 pt-5 border-t border-slate-200">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Add-ons available</p>
                       {plan.addons.map(function(a, i) {
-                        return <p key={i} className="text-xs text-[#94A3B8] mb-1">{a}</p>;
+                        return <p key={i} className="text-xs text-slate-500 mb-1">{a}</p>;
                       })}
                     </div>
                   )}
@@ -280,57 +280,57 @@ export default function PricingPage() {
             })}
           </div>
 
-          <div className="text-center mt-6 space-y-2">
-            <p className="text-sm text-[#64748B]">
+          <div className="text-center mt-8 space-y-2">
+            <p className="text-sm text-slate-500">
               All features are visible on all plans. Unavailable features are clearly marked — you always know what's ahead.
             </p>
             <div className="flex justify-center">
               <Link
                 to="/features"
                 onClick={function() { window.scrollTo(0, 0); }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#1A2035] border border-[#3B82F6] text-blue-400 hover:bg-[#1E2845] hover:text-blue-300 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0E1523]"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 See all available features in detail →
               </Link>
             </div>
-            <p className="text-xs text-[#64748B]">
+            <p className="text-xs text-slate-400">
               Have a promo code? Apply it at checkout for an extended free trial.
             </p>
           </div>
         </section>
 
-        {/* Student plan */}
+        {/* ── Student plan ── */}
         <section className="px-6 pb-16 max-w-6xl mx-auto" aria-labelledby="student-heading">
-          <div className="bg-[#1A2035] border border-[#2A3550] rounded-2xl p-8">
+          <div className="bg-white border border-slate-200 rounded-2xl p-8">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-400" aria-hidden="true">STUDENT PLAN</p>
-                  <span className="text-xs bg-[#1D3461] text-blue-400 px-2 py-0.5 rounded-full font-semibold">.edu email required</span>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731]" aria-hidden="true">STUDENT PLAN</p>
+                  <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">.edu email required</span>
                 </div>
-                <h2 id="student-heading" className="text-2xl font-extrabold text-white mb-2">
+                <h2 id="student-heading" className="text-2xl font-extrabold text-[#0E1523] mb-2">
                   Built for student organizations
                 </h2>
-                <p className="text-[#94A3B8] text-sm mb-4 max-w-xl">
+                <p className="text-slate-500 text-sm mb-4 max-w-xl">
                   All the features of Starter at a price built for student budgets. Pause your account over the summer or winter break — no charges while paused, your data stays safe.
                 </p>
 
                 <div className="flex items-end gap-1 mb-4">
-                  <span className="text-4xl font-extrabold text-white">$19.99</span>
-                  <span className="text-[#64748B] text-sm mb-1">/mo — monthly only</span>
+                  <span className="text-4xl font-extrabold text-[#0E1523]">$19.99</span>
+                  <span className="text-slate-400 text-sm mb-1">/mo — monthly only</span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
                   <Link
                     to="/signup"
-                    className="inline-block text-center px-6 py-3 bg-[#1E2845] hover:bg-[#2A3550] text-white font-bold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]"
+                    className="inline-block text-center px-6 py-3 bg-[#F1F5F9] hover:bg-slate-200 text-[#0E1523] border border-slate-200 font-bold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     aria-label="Get started with the Student plan"
                   >
                     Start free — 14 days
                   </Link>
                   <button
                     onClick={function() { setShowStudent(!showStudent); }}
-                    className="inline-block text-center px-6 py-3 border border-[#2A3550] text-[#94A3B8] hover:text-white hover:border-[#3B82F6] font-semibold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]"
+                    className="inline-block text-center px-6 py-3 border border-slate-200 text-slate-500 hover:text-[#0E1523] hover:border-blue-400 font-semibold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     aria-expanded={showStudent}
                   >
                     {showStudent ? 'Hide features' : 'See included features'}
@@ -351,8 +351,8 @@ export default function PricingPage() {
                       'Up to 3 admins, 2 editors',
                     ].map(function(f, i) {
                       return (
-                        <li key={i} className="flex items-start gap-2 text-sm text-[#CBD5E1]">
-                          <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" aria-hidden="true" />
+                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                          <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" aria-hidden="true" />
                           {f}
                         </li>
                       );
@@ -362,13 +362,13 @@ export default function PricingPage() {
               </div>
 
               {/* Pause perk callout */}
-              <div className="md:w-64 bg-[#0E1523] border border-[#2A3550] rounded-xl p-5 shrink-0">
+              <div className="md:w-64 bg-[#FFFBEB] border border-amber-200 rounded-xl p-5 shrink-0">
                 <div className="flex items-center gap-2 mb-3">
-                  <Pause className="w-4 h-4 text-yellow-400" aria-hidden="true" />
-                  <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider">Pause anytime</p>
+                  <Pause className="w-4 h-4 text-[#F5B731]" aria-hidden="true" />
+                  <p className="text-[#B45309] text-xs font-bold uppercase tracking-wider">Pause anytime</p>
                 </div>
-                <p className="text-white text-sm font-semibold mb-2">Summer break? Pause your account.</p>
-                <p className="text-[#94A3B8] text-xs leading-relaxed mb-3">
+                <p className="text-[#0E1523] text-sm font-semibold mb-2">Summer break? Pause your account.</p>
+                <p className="text-slate-500 text-xs leading-relaxed mb-3">
                   Schedule a pause and billing stops at the start of your next billing cycle. Resume whenever you're back. Up to 6 months per year.
                 </p>
                 <div className="space-y-2">
@@ -380,8 +380,8 @@ export default function PricingPage() {
                   ].map(function(item, i) {
                     return (
                       <div key={i} className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-green-400 shrink-0" aria-hidden="true" />
-                        <span className="text-xs text-[#CBD5E1]">{item}</span>
+                        <Check className="w-3 h-3 text-green-600 shrink-0" aria-hidden="true" />
+                        <span className="text-xs text-slate-600">{item}</span>
                       </div>
                     );
                   })}
@@ -389,28 +389,28 @@ export default function PricingPage() {
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-[#2A3550]">
-              <p className="text-xs text-[#64748B]">
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <p className="text-xs text-slate-400">
                 Requires a valid .edu email address for verification. One student subscription per organization. Cannot be combined with annual billing.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Add-ons */}
-        <section className="bg-[#151B2D] py-16 px-6" aria-labelledby="addons-heading">
+        {/* ── Add-ons ── */}
+        <section className="bg-[#F8FAFC] border-t border-slate-200 py-16 px-6" aria-labelledby="addons-heading">
           <div className="max-w-4xl mx-auto">
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3 text-center" aria-hidden="true">ADD-ONS</p>
-            <h2 id="addons-heading" className="text-2xl font-extrabold text-white text-center mb-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-3 text-center" aria-hidden="true">ADD-ONS</p>
+            <h2 id="addons-heading" className="text-2xl font-extrabold text-[#0E1523] text-center mb-10">
               Flexible add-ons — pay only for what you need
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {ADDONS.map(function(addon, i) {
                 return (
-                  <div key={i} className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-5">
-                    <p className="text-white font-semibold mb-1">{addon.name}</p>
-                    <p className="text-yellow-400 font-bold text-sm mb-2">{addon.price}</p>
-                    <p className="text-[#64748B] text-xs">{addon.plans}</p>
+                  <div key={i} className="bg-white border border-slate-200 rounded-xl p-5">
+                    <p className="text-[#0E1523] font-semibold mb-1">{addon.name}</p>
+                    <p className="text-[#B45309] font-bold text-sm mb-2">{addon.price}</p>
+                    <p className="text-slate-400 text-xs">{addon.plans}</p>
                   </div>
                 );
               })}
@@ -418,11 +418,11 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Verified nonprofit */}
-        <section className="py-16 px-6" aria-labelledby="nonprofit-heading">
-          <div className="max-w-2xl mx-auto bg-[#1A2035] border border-[#2A3550] rounded-2xl p-8">
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3" aria-hidden="true">VERIFIED 501(c)(3)</p>
-            <h2 id="nonprofit-heading" className="text-xl font-extrabold text-white mb-4">
+        {/* ── Verified nonprofit ── */}
+        <section className="py-16 px-6 bg-white border-t border-slate-200" aria-labelledby="nonprofit-heading">
+          <div className="max-w-2xl mx-auto bg-[#F8FAFC] border border-slate-200 rounded-2xl p-8">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-3" aria-hidden="true">VERIFIED 501(c)(3)</p>
+            <h2 id="nonprofit-heading" className="text-xl font-extrabold text-[#0E1523] mb-4">
               Get extra perks on any plan
             </h2>
             <ul className="space-y-3 mb-6" role="list">
@@ -433,8 +433,8 @@ export default function PricingPage() {
                 'Community Board access — share resources with other verified orgs',
               ].map(function(item, i) {
                 return (
-                  <li key={i} className="flex items-start gap-2 text-sm text-[#CBD5E1]">
-                    <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" aria-hidden="true" />
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                    <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" aria-hidden="true" />
                     {item}
                   </li>
                 );
@@ -442,37 +442,47 @@ export default function PricingPage() {
             </ul>
             <Link
               to="/signup"
-              className="text-sm text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              className="text-sm text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
             >
               Learn about nonprofit verification →
             </Link>
           </div>
         </section>
 
-        {/* Comparison table */}
-        <section className="bg-[#151B2D] py-16 px-6" aria-labelledby="compare-heading">
+        {/* ── Comparison table ── */}
+        <section className="bg-[#F8FAFC] border-t border-slate-200 py-16 px-6" aria-labelledby="compare-heading">
           <div className="max-w-4xl mx-auto">
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3 text-center" aria-hidden="true">COMPARISON</p>
-            <h2 id="compare-heading" className="text-2xl font-extrabold text-white text-center mb-10">How we compare</h2>
-            <div className="overflow-x-auto rounded-xl border border-[#2A3550]">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-3 text-center" aria-hidden="true">COMPARISON</p>
+            <h2 id="compare-heading" className="text-2xl font-extrabold text-[#0E1523] text-center mb-10">How we compare</h2>
+            <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
               <table className="w-full text-sm" role="table" aria-label="Platform comparison">
                 <thead>
-                  <tr className="border-b border-[#2A3550] bg-[#1E2845]">
-                    <th scope="col" className="text-left py-3 px-4 text-[#94A3B8] font-semibold">Alternative</th>
-                    <th scope="col" className="text-left py-3 px-4 text-[#94A3B8] font-semibold">The catch</th>
+                  <tr className="border-b border-slate-200 bg-[#F1F5F9]">
+                    <th scope="col" className="text-left py-3 px-4 text-slate-500 font-semibold">Alternative</th>
+                    <th scope="col" className="text-left py-3 px-4 text-slate-500 font-semibold">The catch</th>
                   </tr>
                 </thead>
                 <tbody>
                   {COMPARE.map(function(row, i) {
                     return (
-                      <tr key={i} className={'border-b border-[#2A3550] last:border-0 ' + (row.isSelf ? 'bg-[#1A2035]' : '')}>
+                      <tr key={i} className={'border-b border-slate-100 last:border-0 ' + (row.isSelf ? 'bg-amber-50' : 'bg-white')}>
                         <td className="py-4 px-4">
                           {row.isSelf
-                            ? <span className="text-yellow-400 font-bold">Syndicade — {row.price}</span>
-                            : <span><span className="text-white font-semibold">{row.category}</span><span className="text-[#64748B] ml-2">{row.price}</span></span>
+                            ? (
+                              <span className="font-bold">
+                                <span className="text-[#0E1523]">Syndi</span><span className="text-[#F5B731]">cade</span>
+                                <span className="ml-2 text-slate-500 font-normal">{row.price}</span>
+                              </span>
+                            )
+                            : (
+                              <span>
+                                <span className="text-[#0E1523] font-semibold">{row.category}</span>
+                                <span className="text-slate-400 ml-2">{row.price}</span>
+                              </span>
+                            )
                           }
                         </td>
-                        <td className={'py-4 px-4 ' + (row.isSelf ? 'text-green-400' : 'text-[#94A3B8]')}>{row.weakness}</td>
+                        <td className={'py-4 px-4 ' + (row.isSelf ? 'text-green-700 font-semibold' : 'text-slate-500')}>{row.weakness}</td>
                       </tr>
                     );
                   })}
@@ -480,15 +490,15 @@ export default function PricingPage() {
               </table>
             </div>
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-5">
-                <p className="text-white font-semibold text-sm mb-2">The ticketing math</p>
-                <p className="text-[#94A3B8] text-sm">
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <p className="text-[#0E1523] font-semibold text-sm mb-2">The ticketing math</p>
+                <p className="text-slate-500 text-sm leading-relaxed">
                   Selling 50 tickets at $25? Per-transaction platforms charge $100+ in fees. Syndicade charges $50 flat — $1/ticket — plus standard Stripe processing paid by the buyer. You keep more of every dollar.
                 </p>
               </div>
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-5">
-                <p className="text-white font-semibold text-sm mb-2">Create once, share on your terms</p>
-                <p className="text-[#94A3B8] text-sm">
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <p className="text-[#0E1523] font-semibold text-sm mb-2">Create once, share on your terms</p>
+                <p className="text-slate-500 text-sm leading-relaxed">
                   Create an event or program and share it with your members instantly. Want to reach beyond your org? Opt in to publish it on your public landing page and the Syndicade discovery board — no duplicate entry, no copy-paste.
                 </p>
               </div>
@@ -496,18 +506,25 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Final CTA */}
-        <section className="py-20 px-6 text-center" aria-labelledby="cta-heading">
-          <img src="/mascot-pair.png" alt="" aria-hidden="true" className="mx-auto mb-8" style={{maxWidth:'200px'}} />
-          <h2 id="cta-heading" className="text-3xl font-extrabold text-white mb-4">Ready to replace your fragmented stack?</h2>
-          <p className="text-[#94A3B8] mb-8">14-day free trial. No credit card. Cancel anytime.</p>
+        {/* ── Final CTA ── */}
+        <section className="bg-white border-t border-slate-200 py-20 px-6 text-center" aria-labelledby="cta-heading">
+          <img
+            src="/mascot-pair.png"
+            alt=""
+            aria-hidden="true"
+            className="mx-auto mb-8"
+            style={{ maxWidth: '200px', mixBlendMode: 'multiply' }}
+            onError={function(e) { e.currentTarget.style.display = 'none'; }}
+          />
+          <h2 id="cta-heading" className="text-3xl font-extrabold text-[#0E1523] mb-4">Ready to replace your fragmented stack?</h2>
+          <p className="text-slate-500 mb-8">14-day free trial. No credit card. Cancel anytime.</p>
           <Link
             to="/signup"
-            className="inline-block px-8 py-4 bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold rounded-lg text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-[#0E1523]"
+            className="inline-block px-8 py-4 bg-[#F5B731] hover:bg-yellow-400 text-gray-900 font-bold rounded-lg text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
           >
             Start free — 14 days
           </Link>
-          <p className="text-xs text-[#64748B] mt-4">Have a promo code? Apply it at checkout for 30 days free.</p>
+          <p className="text-xs text-slate-400 mt-4">Have a promo code? Apply it at checkout for 30 days free.</p>
         </section>
 
       </main>

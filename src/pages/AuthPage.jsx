@@ -27,8 +27,8 @@ var ALERT_ICON = 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 
 var CHECK      = 'M5 13l4 4L19 7';
 
 var inputBase = {
-  width: '100%', padding: '11px 14px', background: '#1E2845',
-  border: '1px solid #2A3550', borderRadius: '8px', color: '#FFFFFF',
+  width: '100%', padding: '11px 14px', background: '#FFFFFF',
+  border: '1px solid #E2E8F0', borderRadius: '8px', color: '#0E1523',
   fontSize: '14px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.15s',
 };
 
@@ -38,12 +38,12 @@ var labelSt = {
 };
 
 function iFocus(e) { e.target.style.borderColor = '#3B82F6'; }
-function iBlur(e, err) { e.target.style.borderColor = err ? '#EF4444' : '#2A3550'; }
+function iBlur(e, err) { e.target.style.borderColor = err ? '#EF4444' : '#E2E8F0'; }
 
 function ErrMsg({ id, msg }) {
   return (
-    <p id={id} role="alert" style={{ marginTop: '4px', fontSize: '12px', color: '#F87171', display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <Icon d={ALERT_ICON} size={12} color="#f87171" />{msg}
+    <p id={id} role="alert" style={{ marginTop: '4px', fontSize: '12px', color: '#EF4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <Icon d={ALERT_ICON} size={12} color="#EF4444" />{msg}
     </p>
   );
 }
@@ -61,7 +61,7 @@ function PwField({ id, label, value, onChange, placeholder, autoComplete, error,
           style={Object.assign({}, inputBase, { paddingRight: '44px' }, error ? { borderColor: '#EF4444' } : {})}
           onFocus={iFocus} onBlur={function(e) { iBlur(e, !!error); }} />
         <button type="button" onClick={function() { setShow(function(s) { return !s; }); }}
-          style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', display: 'flex' }}
+          style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px', display: 'flex' }}
           className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           aria-label={show ? 'Hide password' : 'Show password'}>
           <Icon d={show ? EYE_OFF : EYE_OPEN} size={16} />
@@ -69,7 +69,7 @@ function PwField({ id, label, value, onChange, placeholder, autoComplete, error,
       </div>
       {error
         ? <ErrMsg id={id + '-err'} msg={error} />
-        : hintText && <p id={hintId} style={{ marginTop: '4px', fontSize: '12px', color: '#64748B' }}>{hintText}</p>
+        : hintText && <p id={hintId} style={{ marginTop: '4px', fontSize: '12px', color: '#94A3B8' }}>{hintText}</p>
       }
     </div>
   );
@@ -88,7 +88,7 @@ function PwStrength({ password }) {
     <div style={{ marginTop: '6px' }} aria-live="polite" aria-label={'Password strength: ' + (labels[score] || '')}>
       <div style={{ display: 'flex', gap: '3px', marginBottom: '3px' }}>
         {[1,2,3,4].map(function(i) {
-          return <div key={i} style={{ height: '3px', flex: 1, borderRadius: '99px', background: i <= score ? colors[score] : '#2A3550', transition: 'background 0.2s' }} />;
+          return <div key={i} style={{ height: '3px', flex: 1, borderRadius: '99px', background: i <= score ? colors[score] : '#E2E8F0', transition: 'background 0.2s' }} />;
         })}
       </div>
       {labels[score] && <p style={{ fontSize: '11px', color: colors[score], margin: 0 }}>{labels[score]}</p>}
@@ -103,12 +103,12 @@ function TermsBox({ checked, onChange, error }) {
         <div role="checkbox" aria-checked={checked} tabIndex={0}
           onClick={function() { onChange(!checked); }}
           onKeyDown={function(e) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onChange(!checked); } }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]"
-          style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, marginTop: '1px', border: '2px solid ' + (checked ? '#3B82F6' : error ? '#EF4444' : '#2A3550'), background: checked ? '#3B82F6' : '#1E2845', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white"
+          style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, marginTop: '1px', border: '2px solid ' + (checked ? '#3B82F6' : error ? '#EF4444' : '#E2E8F0'), background: checked ? '#3B82F6' : '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
           aria-describedby={error ? 'terms-err' : undefined} aria-invalid={!!error}>
           {checked && <Icon d={CHECK} size={11} color="#fff" strokeWidth={3} />}
         </div>
-        <span style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.5 }}>
+        <span style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
           I agree to Syndicade&apos;s{' '}
           <Link to="/legal" style={{ color: '#3B82F6', fontWeight: 600 }}>Terms of Service</Link>
           {' '}and{' '}
@@ -186,7 +186,6 @@ function SignupForm({ onSwitchToLogin }) {
         });
       }
 
-      // Navigate to /welcome — the WelcomePage handles the post-signup setup
       navigate('/welcome', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Could not create your account. Please try again.');
@@ -197,14 +196,14 @@ function SignupForm({ onSwitchToLogin }) {
 
   return (
     <div>
-      {/* Mascot — centered */}
+      {/* Mascot */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
         <img src="/mascot-pair.png" alt="" aria-hidden="true"
-          style={{ width: '80px', height: 'auto', display: 'block', marginBottom: '14px' }} />
-        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF', margin: '0 0 6px', textAlign: 'center' }}>
+          style={{ width: '80px', height: 'auto', display: 'block', marginBottom: '14px', mixBlendMode: 'multiply' }} />
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0E1523', margin: '0 0 6px', textAlign: 'center' }}>
           Create your free account
         </h1>
-        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0, textAlign: 'center' }}>
+        <p style={{ fontSize: '14px', color: '#64748B', margin: 0, textAlign: 'center' }}>
           Join organizations and stay connected with your community.
         </p>
       </div>
@@ -268,13 +267,13 @@ function SignupForm({ onSwitchToLogin }) {
 
         <button type="submit" disabled={loading} aria-busy={loading}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', marginTop: '24px', padding: '13px 24px', background: loading ? '#F5B731AA' : '#F5B731', color: '#0E1523', fontWeight: 800, fontSize: '15px', borderRadius: '10px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}
-          className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+          className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2">
           {loading ? <><Spinner dark />Creating your account...</> : 'Create My Free Account'}
         </button>
       </form>
 
       {/* Trust bar */}
-      <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #2A3550' }}>
+      <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px', marginBottom: '8px' }}>
           {[
             { icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', text: 'Free for individuals' },
@@ -283,12 +282,12 @@ function SignupForm({ onSwitchToLogin }) {
             return (
               <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <Icon d={item.icon} size={13} color="#22C55E" strokeWidth={2.5} />
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>{item.text}</span>
+                <span style={{ fontSize: '12px', color: '#64748B' }}>{item.text}</span>
               </div>
             );
           })}
         </div>
-        <p style={{ fontSize: '11px', color: '#64748B', textAlign: 'center', margin: 0 }}>
+        <p style={{ fontSize: '11px', color: '#94A3B8', textAlign: 'center', margin: 0 }}>
           Individual accounts are always free. Organizations pay a monthly plan.{' '}
           <Link to="/pricing" style={{ color: '#3B82F6' }}>See pricing</Link>
         </p>
@@ -326,10 +325,10 @@ function LoginForm({ onSwitchToSignup }) {
     setErrors({});
     setLoading(true);
     try {
-var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
+      var result = await supabase.auth.signInWithPassword({ email: email.trim(), password: password });
       if (result.error) throw result.error;
 
-try {
+      try {
         await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/log-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -352,12 +351,12 @@ try {
     <div>
       <div style={{ marginBottom: '28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" size={16} color="#3B82F6" />
           </div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>Welcome back</h1>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0E1523', margin: 0 }}>Welcome back</h1>
         </div>
-        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0 }}>Sign in to your Syndicade account.</p>
+        <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>Sign in to your Syndicade account.</p>
       </div>
 
       <form id="login-form" onSubmit={handleLogin} noValidate aria-label="Sign in form">
@@ -381,7 +380,7 @@ try {
 
         <button type="submit" disabled={loading} aria-busy={loading}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', marginTop: '24px', padding: '13px 24px', background: loading ? 'rgba(59,130,246,0.6)' : '#3B82F6', color: '#FFFFFF', fontWeight: 700, fontSize: '15px', borderRadius: '10px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           {loading ? <><Spinner />Signing in...</> : 'Sign In'}
         </button>
       </form>
@@ -412,7 +411,7 @@ export default function AuthPage() {
   }, [tab]);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0E1523', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
       <Header />
 
       <a href={tab === 'signup' ? '#signup-form' : '#login-form'}
@@ -422,22 +421,25 @@ export default function AuthPage() {
       </a>
 
       <main id="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 16px' }}>
+
+        {/* Tab switcher */}
         <div role="tablist" aria-label="Authentication options"
-          style={{ display: 'flex', background: '#151B2D', border: '1px solid #2A3550', borderRadius: '12px', padding: '4px', marginBottom: '24px', gap: '4px' }}>
+          style={{ display: 'flex', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '4px', marginBottom: '24px', gap: '4px' }}>
           {[{ id: 'login', label: 'Sign In' }, { id: 'signup', label: 'Create Account' }].map(function(t) {
             var active = tab === t.id;
             return (
               <button key={t.id} role="tab" aria-selected={active}
                 onClick={function() { setTab(t.id); }}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg transition-all"
-                style={{ padding: '8px 24px', borderRadius: '9px', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#1A2035' : 'transparent', color: active ? '#FFFFFF' : '#64748B', boxShadow: active ? '0 1px 4px rgba(0,0,0,0.4)' : 'none' }}>
+                style={{ padding: '8px 24px', borderRadius: '9px', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#FFFFFF' : 'transparent', color: active ? '#0E1523' : '#64748B', boxShadow: active ? '0 1px 4px rgba(14,21,35,0.08)' : 'none' }}>
                 {t.label}
               </button>
             );
           })}
         </div>
 
-        <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '20px', padding: '36px', width: '100%', maxWidth: '460px' }}>
+        {/* Form card */}
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '20px', padding: '36px', width: '100%', maxWidth: '460px', boxShadow: '0 4px 24px rgba(14,21,35,0.06)' }}>
           {tab === 'login'
             ? <LoginForm onSwitchToSignup={function() { setTab('signup'); }} />
             : <SignupForm onSwitchToLogin={function() { setTab('login'); }} />

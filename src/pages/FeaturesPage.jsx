@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 var RESPONSIVE_CSS = [
   '.ft-grid {',
   '  display: grid;',
-  '  grid-template-columns: minmax(0,1fr) minmax(0,360px);',
+  '  grid-template-columns: minmax(0,1fr) minmax(0,340px);',
   '  gap: 48px;',
   '  align-items: center;',
   '  max-width: 1040px;',
@@ -54,9 +54,9 @@ var IC = {
 
 // ─── Plan badge ───────────────────────────────────────────────────────────────
 var PLAN_STYLES = {
-  Starter: { bg: 'rgba(245,183,49,0.15)',  text: '#D4A017', border: 'rgba(245,183,49,0.35)'  },
-  Growth:  { bg: 'rgba(59,130,246,0.15)',  text: '#60A5FA', border: 'rgba(59,130,246,0.35)'  },
-  Pro:     { bg: 'rgba(34,197,94,0.15)',   text: '#4ADE80', border: 'rgba(34,197,94,0.35)'   },
+  Starter: { bg: 'rgba(245,183,49,0.12)',  text: '#B45309', border: 'rgba(245,183,49,0.4)'  },
+  Growth:  { bg: 'rgba(59,130,246,0.1)',   text: '#1D4ED8', border: 'rgba(59,130,246,0.3)'  },
+  Pro:     { bg: 'rgba(34,197,94,0.1)',    text: '#15803D', border: 'rgba(34,197,94,0.3)'   },
 };
 function PlanBadge(props) {
   var s = PLAN_STYLES[props.plan];
@@ -70,7 +70,6 @@ function PlanBadge(props) {
 }
 
 // ─── Screenshot slide wrapper ─────────────────────────────────────────────────
-// Tries to load a real screenshot first. If missing, renders the mock UI fallback.
 function ScreenshotSlide(props) {
   var [failed, setFailed] = useState(false);
   if (!failed && props.src) {
@@ -97,17 +96,15 @@ function Carousel(props) {
   function next() { setIdx(function(i) { return i === slides.length - 1 ? 0 : i + 1; }); }
   return (
     <div role="region" aria-label={props.label + ' preview'}>
-      <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #2A3550', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-        {/* Slide content — no browser chrome */}
-        <div style={{ background: '#0E1523', minHeight: '240px' }} key={idx}>
+      <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 24px rgba(14,21,35,0.08), 0 1px 4px rgba(14,21,35,0.04)' }}>
+        <div style={{ background: '#F8FAFC', minHeight: '240px' }} key={idx}>
           {slides[idx]}
         </div>
-        {/* Pagination dots */}
         {slides.length > 1 && (
-          <div style={{ background: '#151B2D', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #2A3550' }}>
+          <div style={{ background: '#FFFFFF', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0' }}>
             <button onClick={prev} aria-label="Previous screenshot"
               className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-              style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '7px', padding: '5px 9px', cursor: 'pointer', color: '#94A3B8', display: 'flex' }}>
+              style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '7px', padding: '5px 9px', cursor: 'pointer', color: '#64748B', display: 'flex' }}>
               <Icon d={IC.chevL} size={13} />
             </button>
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
@@ -117,13 +114,13 @@ function Carousel(props) {
                     aria-label={'View screenshot ' + (i + 1)}
                     aria-pressed={i === idx}
                     className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full"
-                    style={{ width: i === idx ? '18px' : '6px', height: '6px', borderRadius: '99px', background: i === idx ? color : '#2A3550', border: 'none', padding: 0, cursor: 'pointer', transition: 'width 0.2s, background 0.2s' }} />
+                    style={{ width: i === idx ? '18px' : '6px', height: '6px', borderRadius: '99px', background: i === idx ? color : '#CBD5E1', border: 'none', padding: 0, cursor: 'pointer', transition: 'width 0.2s, background 0.2s' }} />
                 );
               })}
             </div>
             <button onClick={next} aria-label="Next screenshot"
               className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-              style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '7px', padding: '5px 9px', cursor: 'pointer', color: '#94A3B8', display: 'flex' }}>
+              style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '7px', padding: '5px 9px', cursor: 'pointer', color: '#64748B', display: 'flex' }}>
               <Icon d={IC.chevR} size={13} />
             </button>
           </div>
@@ -133,28 +130,30 @@ function Carousel(props) {
   );
 }
 
-// ─── Mock UI fallbacks (shown when screenshot not yet available) ───────────────
+// ─── Mock UI components (light theme app previews) ────────────────────────────
 
 function Mock_MemberDirectory() {
   var rows = [
-    { initials: 'AL', name: 'Ana Lopez',   role: 'Admin',  roleC: '#A78BFA', status: 'Active'   },
-    { initials: 'JM', name: 'James Moore', role: 'Editor', roleC: '#60A5FA', status: 'Active'   },
-    { initials: 'SR', name: 'Sara Ruiz',   role: 'Member', roleC: '#4ADE80', status: 'Active'   },
-    { initials: 'TD', name: 'Tom Diaz',    role: 'Member', roleC: '#4ADE80', status: 'Inactive' },
+    { initials: 'AL', name: 'Ana Lopez',   role: 'Admin',  roleC: '#7C3AED', roleBg: 'rgba(139,92,246,0.1)',  status: 'Active'   },
+    { initials: 'JM', name: 'James Moore', role: 'Editor', roleC: '#1D4ED8', roleBg: 'rgba(59,130,246,0.1)',  status: 'Active'   },
+    { initials: 'SR', name: 'Sara Ruiz',   role: 'Member', roleC: '#15803D', roleBg: 'rgba(34,197,94,0.1)',   status: 'Active'   },
+    { initials: 'TD', name: 'Tom Diaz',    role: 'Member', roleC: '#15803D', roleBg: 'rgba(34,197,94,0.1)',   status: 'Inactive' },
   ];
   return (
     <div style={{ padding: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>Members</span>
-        <span style={{ fontSize: '10px', color: '#64748B', background: '#1A2035', padding: '2px 8px', borderRadius: '99px', border: '1px solid #2A3550' }}>4 total</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>Members</span>
+        <span style={{ fontSize: '10px', color: '#64748B', background: '#F1F5F9', padding: '2px 8px', borderRadius: '99px', border: '1px solid #E2E8F0' }}>4 total</span>
       </div>
       {rows.map(function(r) {
         return (
-          <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: '#1A2035', marginBottom: '5px', border: '1px solid #2A3550' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#1E2845', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#94A3B8', flexShrink: 0 }}>{r.initials}</div>
-            <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#FFFFFF' }}>{r.name}</span>
-            <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: 'rgba(139,92,246,0.12)', color: r.roleC }}>{r.role}</span>
-            <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: r.status === 'Active' ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.15)', color: r.status === 'Active' ? '#4ADE80' : '#94A3B8' }}>{r.status}</span>
+          <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '5px', border: '1px solid #E2E8F0' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#7C3AED', flexShrink: 0 }}>{r.initials}</div>
+            <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#0E1523' }}>{r.name}</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: r.roleBg, color: r.roleC }}>{r.role}</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px',
+              background: r.status === 'Active' ? 'rgba(34,197,94,0.1)' : '#F1F5F9',
+              color: r.status === 'Active' ? '#15803D' : '#64748B' }}>{r.status}</span>
           </div>
         );
       })}
@@ -174,10 +173,10 @@ function Mock_Committees() {
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Committees &amp; Groups</p>
       {groups.map(function(g) {
         return (
-          <div key={g.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: '8px', background: '#1A2035', marginBottom: '6px', border: '1px solid #2A3550' }}>
+          <div key={g.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: g.color }} aria-hidden="true" />
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#FFFFFF' }}>{g.name}</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#0E1523' }}>{g.name}</span>
             </div>
             <span style={{ fontSize: '10px', color: '#64748B' }}>{g.members} members</span>
           </div>
@@ -198,12 +197,12 @@ function Mock_Dues() {
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Membership Tiers &amp; Dues</p>
       {tiers.map(function(t) {
         return (
-          <div key={t.tier} style={{ padding: '10px 12px', borderRadius: '8px', background: '#1A2035', marginBottom: '8px', border: '1px solid #2A3550' }}>
+          <div key={t.tier} style={{ padding: '10px 12px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '8px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#FFFFFF' }}>{t.tier}</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#0E1523' }}>{t.tier}</span>
               <span style={{ fontSize: '11px', fontWeight: 700, color: t.color }}>{t.amount}</span>
             </div>
-            <div style={{ height: '5px', background: '#2A3550', borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{ height: '5px', background: '#E2E8F0', borderRadius: '99px', overflow: 'hidden' }}>
               <div style={{ width: t.pct + '%', height: '100%', background: t.color, borderRadius: '99px' }} aria-hidden="true" />
             </div>
             <p style={{ fontSize: '10px', color: '#64748B', marginTop: '3px' }}>{t.count} members</p>
@@ -223,7 +222,7 @@ function Mock_Calendar() {
   return (
     <div style={{ padding: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>April 2026</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>April 2026</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '4px' }}>
         {days.map(function(d, i) { return <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 600, color: '#64748B' }}>{d}</div>; })}
@@ -232,8 +231,10 @@ function Mock_Calendar() {
         {dates.map(function(d, i) {
           var ev = d && dots[d];
           return (
-            <div key={i} style={{ aspectRatio: '1', borderRadius: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: d === 8 ? '#1E2845' : 'transparent', border: d === 8 ? '1px solid #3B82F6' : '1px solid transparent' }}>
-              {d && <span style={{ fontSize: '9px', color: d === 8 ? '#60A5FA' : '#CBD5E1' }}>{d}</span>}
+            <div key={i} style={{ aspectRatio: '1', borderRadius: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: d === 8 ? '#DBEAFE' : 'transparent',
+              border: d === 8 ? '1px solid #BFDBFE' : '1px solid transparent' }}>
+              {d && <span style={{ fontSize: '9px', color: d === 8 ? '#1D4ED8' : '#475569' }}>{d}</span>}
               {ev && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: dots[d], marginTop: '1px' }} aria-hidden="true" />}
             </div>
           );
@@ -243,8 +244,8 @@ function Mock_Calendar() {
         {bars.map(function(h, i) {
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-              <div style={{ width: '100%', borderRadius: '2px 2px 0 0', background: 'rgba(59,130,246,0.6)', height: (h / 100 * 42) + 'px' }} aria-hidden="true" />
-              <span style={{ fontSize: '7px', color: '#64748B' }}>{mos[i]}</span>
+              <div style={{ width: '100%', borderRadius: '2px 2px 0 0', background: 'rgba(59,130,246,0.45)', height: (h / 100 * 42) + 'px' }} aria-hidden="true" />
+              <span style={{ fontSize: '7px', color: '#94A3B8' }}>{mos[i]}</span>
             </div>
           );
         })}
@@ -256,25 +257,25 @@ function Mock_Calendar() {
 function Mock_EventCard() {
   return (
     <div style={{ padding: '16px' }}>
-      <div style={{ background: '#1A2035', borderRadius: '10px', border: '1px solid #2A3550', overflow: 'hidden', marginBottom: '10px' }}>
-        <div style={{ height: '64px', background: 'linear-gradient(135deg,#1D3461,#2D1B4E)', display: 'flex', alignItems: 'center', padding: '0 16px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>Spring Fundraiser Gala</span>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: '10px' }}>
+        <div style={{ height: '64px', background: 'linear-gradient(135deg,#DBEAFE,#EDE9FE)', display: 'flex', alignItems: 'center', padding: '0 16px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>Spring Fundraiser Gala</span>
         </div>
         <div style={{ padding: '12px 14px' }}>
           <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-            <span style={{ fontSize: '11px', color: '#94A3B8' }}>Sat, Apr 26 · 6:00 PM</span>
-            <span style={{ fontSize: '11px', color: '#94A3B8' }}>Toledo Museum</span>
+            <span style={{ fontSize: '11px', color: '#64748B' }}>Sat, Apr 26 · 6:00 PM</span>
+            <span style={{ fontSize: '11px', color: '#64748B' }}>Toledo Museum</span>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button style={{ flex: 1, padding: '6px', background: '#3B82F6', color: '#FFF', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Going</button>
-            <button style={{ flex: 1, padding: '6px', background: '#1E2845', color: '#94A3B8', border: '1px solid #2A3550', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>Maybe</button>
-            <button style={{ flex: 1, padding: '6px', background: '#1E2845', color: '#94A3B8', border: '1px solid #2A3550', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>Can't Go</button>
+            <button style={{ flex: 1, padding: '6px', background: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>Maybe</button>
+            <button style={{ flex: 1, padding: '6px', background: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>Can't Go</button>
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '8px 12px', background: '#1A2035', borderRadius: '8px', border: '1px solid #2A3550' }}>
-        <span style={{ color: '#22C55E' }}><Icon d={IC.qr} size={16} /></span>
-        <span style={{ fontSize: '11px', color: '#CBD5E1' }}>QR check-in enabled · 43 attending</span>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '8px 12px', background: '#DCFCE7', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+        <span style={{ color: '#15803D' }}><Icon d={IC.qr} size={16} /></span>
+        <span style={{ fontSize: '11px', color: '#15803D' }}>QR check-in enabled · 43 attending</span>
       </div>
     </div>
   );
@@ -291,15 +292,15 @@ function Mock_Tickets() {
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Ticket Types</p>
       {types.map(function(t) {
         return (
-          <div key={t.label} style={{ padding: '9px 12px', borderRadius: '8px', background: '#1A2035', marginBottom: '6px', border: '1px solid ' + (t.full ? 'rgba(239,68,68,0.3)' : '#2A3550') }}>
+          <div key={t.label} style={{ padding: '9px 12px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '6px', border: '1px solid ' + (t.full ? 'rgba(239,68,68,0.3)' : '#E2E8F0') }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: t.full ? '#94A3B8' : '#FFFFFF' }}>{t.label}</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: t.full ? '#94A3B8' : '#0E1523' }}>{t.label}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {t.full && <span style={{ fontSize: '9px', fontWeight: 700, color: '#EF4444', background: 'rgba(239,68,68,0.12)', padding: '1px 6px', borderRadius: '99px' }}>Sold Out</span>}
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#F5B731' }}>{t.price}</span>
+                {t.full && <span style={{ fontSize: '9px', fontWeight: 700, color: '#EF4444', background: 'rgba(239,68,68,0.1)', padding: '1px 6px', borderRadius: '99px' }}>Sold Out</span>}
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#B45309' }}>{t.price}</span>
               </div>
             </div>
-            <div style={{ height: '4px', background: '#2A3550', borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{ height: '4px', background: '#E2E8F0', borderRadius: '99px', overflow: 'hidden' }}>
               <div style={{ width: (t.sold / t.cap * 100) + '%', height: '100%', background: t.full ? '#EF4444' : '#22C55E', borderRadius: '99px' }} aria-hidden="true" />
             </div>
             <p style={{ fontSize: '10px', color: '#64748B', marginTop: '3px' }}>{t.sold} / {t.cap} sold</p>
@@ -312,22 +313,22 @@ function Mock_Tickets() {
 
 function Mock_Announcements() {
   var posts = [
-    { badge: 'Urgent', bC: '#EF4444', bBg: 'rgba(239,68,68,0.12)', title: 'Board meeting rescheduled to April 22', time: '2h ago', unread: true },
-    { badge: 'Normal', bC: '#3B82F6', bBg: 'rgba(59,130,246,0.12)', title: 'Volunteer sign-ups open for spring cleanup', time: '1d ago', unread: false },
-    { badge: 'Normal', bC: '#3B82F6', bBg: 'rgba(59,130,246,0.12)', title: 'Grant application window closes May 1', time: '3d ago', unread: false },
+    { badge: 'Urgent', bC: '#EF4444', bBg: 'rgba(239,68,68,0.1)', title: 'Board meeting rescheduled to April 22', time: '2h ago', unread: true },
+    { badge: 'Normal', bC: '#1D4ED8', bBg: 'rgba(59,130,246,0.1)', title: 'Volunteer sign-ups open for spring cleanup', time: '1d ago', unread: false },
+    { badge: 'Normal', bC: '#1D4ED8', bBg: 'rgba(59,130,246,0.1)', title: 'Grant application window closes May 1', time: '3d ago', unread: false },
   ];
   return (
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Announcements</p>
       {posts.map(function(a, i) {
         return (
-          <div key={i} style={{ padding: '9px 12px', borderRadius: '8px', background: a.unread ? '#1E2845' : '#1A2035', marginBottom: '6px', border: '1px solid ' + (a.unread ? '#2A3550' : '#1E2845'), display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <div key={i} style={{ padding: '9px 12px', borderRadius: '8px', background: a.unread ? '#EFF6FF' : '#FFFFFF', marginBottom: '6px', border: '1px solid ' + (a.unread ? '#BFDBFE' : '#E2E8F0'), display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
             {a.unread && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6', flexShrink: 0, marginTop: '5px' }} aria-hidden="true" />}
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: '3px' }}>
                 <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '99px', background: a.bBg, color: a.bC }}>{a.badge}</span>
               </div>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: '#FFFFFF', lineHeight: 1.4, marginBottom: '3px' }}>{a.title}</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: '#0E1523', lineHeight: 1.4, marginBottom: '3px' }}>{a.title}</p>
               <p style={{ fontSize: '10px', color: '#64748B' }}>{a.time}</p>
             </div>
           </div>
@@ -341,25 +342,25 @@ function Mock_EmailBlast() {
   return (
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Email Blast</p>
-      <div style={{ background: '#1A2035', borderRadius: '10px', border: '1px solid #2A3550', padding: '14px' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '14px' }}>
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '3px' }}>To</div>
-          <div style={{ background: '#151B2D', border: '1px solid #2A3550', borderRadius: '6px', padding: '6px 10px', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', color: '#CBD5E1' }}>All members (94)</span>
-            <span style={{ fontSize: '10px', color: '#64748B' }}>Change</span>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '6px 10px', display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '11px', color: '#475569' }}>All members (94)</span>
+            <span style={{ fontSize: '10px', color: '#3B82F6' }}>Change</span>
           </div>
         </div>
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '3px' }}>Subject</div>
-          <div style={{ background: '#151B2D', border: '1px solid #2A3550', borderRadius: '6px', padding: '6px 10px' }}>
-            <span style={{ fontSize: '11px', color: '#FFFFFF' }}>April Newsletter — Spring Events</span>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '6px 10px' }}>
+            <span style={{ fontSize: '11px', color: '#0E1523' }}>April Newsletter — Spring Events</span>
           </div>
         </div>
-        <div style={{ background: '#151B2D', border: '1px solid #2A3550', borderRadius: '6px', padding: '10px', minHeight: '50px' }}>
-          <span style={{ fontSize: '11px', color: '#64748B' }}>Message content...</span>
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '10px', minHeight: '50px' }}>
+          <span style={{ fontSize: '11px', color: '#94A3B8' }}>Message content...</span>
         </div>
         <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <button style={{ padding: '5px 12px', background: '#1E2845', border: '1px solid #2A3550', borderRadius: '6px', color: '#94A3B8', fontSize: '11px', cursor: 'pointer' }}>Save Draft</button>
+          <button style={{ padding: '5px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', color: '#475569', fontSize: '11px', cursor: 'pointer' }}>Save Draft</button>
           <button style={{ padding: '5px 12px', background: '#3B82F6', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Send Blast</button>
         </div>
       </div>
@@ -381,10 +382,10 @@ function Mock_EmailAnalytics() {
         return (
           <div key={s.label} style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-              <span style={{ fontSize: '12px', color: '#CBD5E1' }}>{s.label}</span>
+              <span style={{ fontSize: '12px', color: '#475569' }}>{s.label}</span>
               <span style={{ fontSize: '12px', fontWeight: 700, color: s.color }}>{s.val}</span>
             </div>
-            <div style={{ height: '6px', background: '#2A3550', borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{ height: '6px', background: '#E2E8F0', borderRadius: '99px', overflow: 'hidden' }}>
               <div style={{ width: s.pct + '%', height: '100%', background: s.color, borderRadius: '99px' }} aria-hidden="true" />
             </div>
           </div>
@@ -404,15 +405,18 @@ function Mock_DocLibrary() {
     <div style={{ padding: '16px' }}>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
         {['All Files','Minutes','Bylaws','Forms'].map(function(t, i) {
-          return <button key={t} style={{ padding: '4px 9px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: i === 0 ? '#1E2845' : 'transparent', border: i === 0 ? '1px solid #3B82F6' : '1px solid transparent', color: i === 0 ? '#60A5FA' : '#64748B', cursor: 'pointer' }}>{t}</button>;
+          return <button key={t} style={{ padding: '4px 9px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
+            background: i === 0 ? '#EFF6FF' : 'transparent',
+            border: i === 0 ? '1px solid #BFDBFE' : '1px solid transparent',
+            color: i === 0 ? '#1D4ED8' : '#64748B', cursor: 'pointer' }}>{t}</button>;
         })}
       </div>
       {files.map(function(f) {
         return (
-          <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '8px', background: '#1A2035', marginBottom: '5px', border: '1px solid #2A3550' }}>
+          <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '5px', border: '1px solid #E2E8F0' }}>
             <span style={{ color: f.color }}><Icon d={IC.doc} size={16} /></span>
             <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: '#FFFFFF' }}>{f.name}</p>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: '#0E1523' }}>{f.name}</p>
               <p style={{ fontSize: '10px', color: '#64748B' }}>{f.size}</p>
             </div>
           </div>
@@ -430,22 +434,22 @@ function Mock_Poll() {
   ];
   return (
     <div style={{ padding: '16px' }}>
-      <div style={{ background: '#1A2035', borderRadius: '10px', border: '1px solid #2A3550', padding: '14px' }}>
-        <p style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', marginBottom: '12px' }}>Best time for the annual meeting?</p>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '14px' }}>
+        <p style={{ fontSize: '12px', fontWeight: 700, color: '#0E1523', marginBottom: '12px' }}>Best time for the annual meeting?</p>
         {opts.map(function(o) {
           return (
             <div key={o.label} style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                <span style={{ fontSize: '11px', color: '#CBD5E1' }}>{o.label}</span>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731' }}>{o.pct}%</span>
+                <span style={{ fontSize: '11px', color: '#475569' }}>{o.label}</span>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#B45309' }}>{o.pct}%</span>
               </div>
-              <div style={{ height: '7px', background: '#2A3550', borderRadius: '99px', overflow: 'hidden' }}>
-                <div style={{ width: o.pct + '%', height: '100%', background: '#F5B731', opacity: 0.8, borderRadius: '99px' }} aria-hidden="true" />
+              <div style={{ height: '7px', background: '#E2E8F0', borderRadius: '99px', overflow: 'hidden' }}>
+                <div style={{ width: o.pct + '%', height: '100%', background: '#F5B731', borderRadius: '99px' }} aria-hidden="true" />
               </div>
             </div>
           );
         })}
-        <p style={{ fontSize: '10px', color: '#64748B', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #2A3550' }}>60 votes total · Closes in 2 days</p>
+        <p style={{ fontSize: '10px', color: '#64748B', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>60 votes total · Closes in 2 days</p>
       </div>
     </div>
   );
@@ -454,20 +458,20 @@ function Mock_Poll() {
 function Mock_PublicPage() {
   return (
     <div style={{ padding: '16px' }}>
-      <div style={{ border: '1px solid #2A3550', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ height: '64px', background: 'linear-gradient(135deg,#1D3461,#2D1B4E)', display: 'flex', alignItems: 'center', padding: '0 14px', gap: '10px' }}>
+      <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ height: '64px', background: 'linear-gradient(135deg,#DBEAFE,#EDE9FE)', display: 'flex', alignItems: 'center', padding: '0 14px', gap: '10px' }}>
           <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#FFF' }}>TF</div>
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 800, color: '#FFFFFF' }}>Toledo Food Bank</div>
-            <div style={{ fontSize: '9px', color: '#94A3B8' }}>toledobank.syndicade.com</div>
+            <div style={{ fontSize: '12px', fontWeight: 800, color: '#0E1523' }}>Toledo Food Bank</div>
+            <div style={{ fontSize: '9px', color: '#64748B' }}>toledobank.syndicade.com</div>
           </div>
-          <span style={{ marginLeft: 'auto', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: '99px', background: 'rgba(245,183,49,0.2)', color: '#F5B731', border: '1px solid rgba(245,183,49,0.3)' }}>Verified Nonprofit</span>
+          <span style={{ marginLeft: 'auto', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', color: '#B45309', border: '1px solid rgba(245,183,49,0.35)' }}>Verified Nonprofit</span>
         </div>
-        <div style={{ padding: '12px 14px', background: '#0E1523' }}>
-          <p style={{ fontSize: '11px', color: '#CBD5E1', marginBottom: '10px', lineHeight: 1.5 }}>Serving the Toledo community since 1974. No family should go hungry.</p>
+        <div style={{ padding: '12px 14px', background: '#FFFFFF' }}>
+          <p style={{ fontSize: '11px', color: '#475569', marginBottom: '10px', lineHeight: 1.5 }}>Serving the Toledo community since 1974. No family should go hungry.</p>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button style={{ flex: 1, padding: '6px', background: '#3B82F6', color: '#FFF', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>Donate</button>
-            <button style={{ flex: 1, padding: '6px', background: '#1A2035', color: '#94A3B8', border: '1px solid #2A3550', borderRadius: '6px', fontSize: '10px', cursor: 'pointer' }}>Volunteer</button>
+            <button style={{ flex: 1, padding: '6px', background: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '10px', cursor: 'pointer' }}>Volunteer</button>
           </div>
         </div>
       </div>
@@ -478,19 +482,22 @@ function Mock_PublicPage() {
 function Mock_PageEditor() {
   return (
     <div style={{ padding: '14px', display: 'flex', gap: '10px' }}>
-      <div style={{ width: '100px', flexShrink: 0, background: '#151B2D', borderRadius: '8px', border: '1px solid #2A3550', padding: '8px' }}>
+      <div style={{ width: '100px', flexShrink: 0, background: '#F1F5F9', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '8px' }}>
         <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#F5B731', marginBottom: '6px' }}>Pages</p>
         {['Home','About','Programs','Team','Gallery','Donate'].map(function(p, i) {
-          return <div key={p} style={{ padding: '4px 7px', borderRadius: '5px', fontSize: '10px', color: i === 0 ? '#FFFFFF' : '#94A3B8', background: i === 0 ? '#1E2845' : 'transparent', marginBottom: '2px' }}>{p}</div>;
+          return <div key={p} style={{ padding: '4px 7px', borderRadius: '5px', fontSize: '10px',
+            color: i === 0 ? '#0E1523' : '#64748B',
+            background: i === 0 ? '#FFFFFF' : 'transparent',
+            marginBottom: '2px', fontWeight: i === 0 ? 600 : 400 }}>{p}</div>;
         })}
       </div>
       <div style={{ flex: 1 }}>
-        <p style={{ fontSize: '11px', fontWeight: 700, color: '#FFFFFF', marginBottom: '8px' }}>Page Blocks</p>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>Page Blocks</p>
         {['Hero Section','Events List','About Section','Contact Form'].map(function(b) {
           return (
-            <div key={b} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#1A2035', borderRadius: '7px', marginBottom: '5px', border: '1px solid #2A3550' }}>
-              <span style={{ fontSize: '10px', color: '#CBD5E1' }}>{b}</span>
-              <span style={{ fontSize: '9px', color: '#22C55E', background: 'rgba(34,197,94,0.1)', padding: '1px 5px', borderRadius: '99px' }}>Live</span>
+            <div key={b} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#FFFFFF', borderRadius: '7px', marginBottom: '5px', border: '1px solid #E2E8F0' }}>
+              <span style={{ fontSize: '10px', color: '#475569' }}>{b}</span>
+              <span style={{ fontSize: '9px', color: '#15803D', background: 'rgba(34,197,94,0.1)', padding: '1px 5px', borderRadius: '99px' }}>Live</span>
             </div>
           );
         })}
@@ -502,10 +509,10 @@ function Mock_PageEditor() {
 function Mock_OrgDiscovery() {
   return (
     <div style={{ padding: '12px' }}>
-      <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid #2A3550', display: 'flex', gap: '6px' }}>
-          <div style={{ flex: 1, background: '#151B2D', border: '1px solid #2A3550', borderRadius: '6px', padding: '5px 9px' }}>
-            <span style={{ fontSize: '11px', color: '#64748B' }}>Search organizations...</span>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #E2E8F0', display: 'flex', gap: '6px' }}>
+          <div style={{ flex: 1, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 9px' }}>
+            <span style={{ fontSize: '11px', color: '#94A3B8' }}>Search organizations...</span>
           </div>
           <button style={{ padding: '5px 10px', background: '#3B82F6', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 700, color: '#FFF', cursor: 'pointer' }}>Search</button>
         </div>
@@ -514,15 +521,15 @@ function Mock_OrgDiscovery() {
           { name: 'Riverview Gardens', cats: ['Environment','Youth'],       color: '#3B82F6' },
         ].map(function(org) {
           return (
-            <div key={org.name} style={{ padding: '10px 12px', borderBottom: '1px solid #1A2035', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div key={org.name} style={{ padding: '10px 12px', borderBottom: '1px solid #F1F5F9', display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: org.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#FFF', flexShrink: 0 }}>{org.name[0]}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', gap: '5px', alignItems: 'center', marginBottom: '3px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF' }}>{org.name}</span>
-                  <span style={{ fontSize: '8px', fontWeight: 700, padding: '1px 5px', borderRadius: '99px', background: 'rgba(245,183,49,0.15)', color: '#F5B731', border: '1px solid rgba(245,183,49,0.3)' }}>Verified</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#0E1523' }}>{org.name}</span>
+                  <span style={{ fontSize: '8px', fontWeight: 700, padding: '1px 5px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', color: '#B45309', border: '1px solid rgba(245,183,49,0.3)' }}>Verified</span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  {org.cats.map(function(c) { return <span key={c} style={{ fontSize: '9px', color: '#64748B', background: '#151B2D', padding: '1px 5px', borderRadius: '99px', border: '1px solid #2A3550' }}>{c}</span>; })}
+                  {org.cats.map(function(c) { return <span key={c} style={{ fontSize: '9px', color: '#64748B', background: '#F1F5F9', padding: '1px 5px', borderRadius: '99px', border: '1px solid #E2E8F0' }}>{c}</span>; })}
                 </div>
               </div>
             </div>
@@ -535,28 +542,32 @@ function Mock_OrgDiscovery() {
 
 function Mock_CommunityBoard() {
   var posts = [
-    { tag: 'Supplies', org: 'TF', orgName: 'Toledo Family Services', text: '"A family of 4 needs 2 twin beds — urgently."', time: '2h ago' },
-    { tag: 'Skills',   org: 'NA', orgName: 'NW Advocacy Center',     text: '"Looking for a Spanish interpreter for May 7."', time: '3d ago' },
+    { tag: 'Supplies', org: 'TF', orgName: 'Toledo Family Services', text: 'A family of 4 needs 2 twin beds — urgently.', time: '2h ago' },
+    { tag: 'Skills',   org: 'NA', orgName: 'NW Advocacy Center',     text: 'Looking for a Spanish interpreter for May 7.', time: '3d ago' },
   ];
   return (
     <div style={{ padding: '16px' }}>
-      <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#A78BFA', marginBottom: '10px' }}>Community Board — Ask Board</p>
+      <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#8B5CF6', marginBottom: '10px' }}>Community Board — Ask Board</p>
       {posts.map(function(post, i) {
         return (
-          <div key={i} style={{ background: '#E1BEE7', borderRadius: '4px', padding: '10px 12px', marginBottom: '10px', marginTop: '8px', position: 'relative',
-            backgroundImage: 'repeating-linear-gradient(transparent,transparent 23px,rgba(0,0,0,0.06) 24px)', backgroundPositionY: '32px' }}>
-            <div aria-hidden="true" style={{ width: '10px', height: '10px', borderRadius: '50%', position: 'absolute', top: '-5px', left: '50%', transform: 'translateX(-50%)', background: 'radial-gradient(circle at 38% 32%,rgba(255,255,255,0.5) 0%,#6A1B9A 52%,rgba(0,0,0,0.2) 100%)', boxShadow: '0 1px 3px rgba(0,0,0,0.35)' }} />
+          <article key={i} role="listitem" aria-label={post.orgName + ' Supplies post'} style={{
+            background: '#E1BEE7',
+            borderRadius: '12px',
+            padding: '10px 12px',
+            marginBottom: '10px',
+            boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'
+          }}>
             <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: '3px', fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', background: '#9C27B0', color: '#F3E5F5', marginBottom: '5px' }}>{post.tag}</span>
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center', marginBottom: '4px' }}>
               <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#9C27B0', color: '#F3E5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', fontWeight: 700 }}>{post.org}</div>
               <span style={{ fontSize: '9px', fontWeight: 700, color: '#374151' }}>{post.orgName}</span>
             </div>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: '#111827', fontFamily: 'Georgia,serif', lineHeight: 1.4, marginBottom: '4px' }}>{post.text}</p>
+            <p style={{ fontSize: '10px', fontWeight: 400, color: '#374151', fontFamily: "'Patrick Hand', sans-serif", lineHeight: 1.4, marginBottom: '4px' }}>{post.text}</p>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '9px', color: '#6B7280' }}>{post.time}</span>
               <button style={{ padding: '2px 8px', borderRadius: '3px', fontSize: '9px', fontWeight: 700, border: 'none', cursor: 'pointer', background: '#9C27B0', color: '#F3E5F5' }}>Respond</button>
             </div>
-          </div>
+          </article>
         );
       })}
     </div>
@@ -569,8 +580,8 @@ function Mock_AnalyticsChart() {
   return (
     <div style={{ padding: '16px' }}>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-        {[['247','Attendees','#3B82F6'],['18','Events','#22C55E'],['83%','Capacity','#8B5CF6']].map(function(s) {
-          return <div key={s[1]} style={{ flex: 1, padding: '8px', background: '#1A2035', borderRadius: '8px', border: '1px solid #2A3550', textAlign: 'center' }}>
+        {[['247','Attendees','#3B82F6','#DBEAFE'],['18','Events','#22C55E','#DCFCE7'],['83%','Capacity','#8B5CF6','#EDE9FE']].map(function(s) {
+          return <div key={s[1]} style={{ flex: 1, padding: '8px', background: s[3], borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
             <div style={{ fontSize: '18px', fontWeight: 800, color: s[2] }}>{s[0]}</div>
             <div style={{ fontSize: '9px', color: '#64748B', marginTop: '2px' }}>{s[1]}</div>
           </div>;
@@ -581,8 +592,8 @@ function Mock_AnalyticsChart() {
         {bars.map(function(h, i) {
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-              <div style={{ width: '100%', borderRadius: '2px 2px 0 0', background: 'rgba(59,130,246,0.65)', height: (h / 100 * 50) + 'px' }} aria-hidden="true" />
-              <span style={{ fontSize: '7px', color: '#64748B' }}>{mos[i]}</span>
+              <div style={{ width: '100%', borderRadius: '2px 2px 0 0', background: 'rgba(59,130,246,0.5)', height: (h / 100 * 50) + 'px' }} aria-hidden="true" />
+              <span style={{ fontSize: '7px', color: '#94A3B8' }}>{mos[i]}</span>
             </div>
           );
         })}
@@ -601,23 +612,23 @@ function Mock_AttendanceReport() {
   return (
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Attendance Report</p>
-      <div style={{ border: '1px solid #2A3550', borderRadius: '8px', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', background: '#1E2845', padding: '6px 12px' }}>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Member</span>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', padding: '0 12px', textAlign: 'center' }}>RSVP</span>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Check-In</span>
+      <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', background: '#F1F5F9', padding: '6px 12px' }}>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Member</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', padding: '0 12px', textAlign: 'center' }}>RSVP</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Check-In</span>
         </div>
         {rows.map(function(r) {
           return (
-            <div key={r.name} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '7px 12px', borderTop: '1px solid #1A2035', background: '#0E1523' }}>
-              <span style={{ fontSize: '11px', color: '#CBD5E1' }}>{r.name}</span>
-              <span style={{ fontSize: '10px', color: '#94A3B8', textAlign: 'center', padding: '0 12px' }}>{r.rsvp}</span>
-              <span style={{ fontSize: '10px', color: r.checkin ? '#22C55E' : '#64748B' }}>{r.checkin ? 'Yes' : '—'}</span>
+            <div key={r.name} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '7px 12px', borderTop: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+              <span style={{ fontSize: '11px', color: '#0E1523' }}>{r.name}</span>
+              <span style={{ fontSize: '10px', color: '#475569', textAlign: 'center', padding: '0 12px' }}>{r.rsvp}</span>
+              <span style={{ fontSize: '10px', color: r.checkin ? '#15803D' : '#94A3B8' }}>{r.checkin ? 'Yes' : '—'}</span>
             </div>
           );
         })}
       </div>
-      <button style={{ width: '100%', marginTop: '8px', padding: '6px', background: '#1A2035', border: '1px solid #2A3550', borderRadius: '7px', fontSize: '11px', fontWeight: 600, color: '#94A3B8', cursor: 'pointer' }}>Export CSV</button>
+      <button style={{ width: '100%', marginTop: '8px', padding: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '7px', fontSize: '11px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>Export CSV</button>
     </div>
   );
 }
@@ -627,16 +638,16 @@ function Mock_Revenue() {
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Revenue Overview</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
-        {[['$2,840','Ticket Sales','#22C55E'],['$1,200','Donations','#3B82F6'],['$3,750','Dues','#8B5CF6'],['$0','Platform Fee','#64748B']].map(function(s) {
-          return <div key={s[1]} style={{ padding: '9px', background: '#1A2035', borderRadius: '8px', border: '1px solid #2A3550' }}>
+        {[['$2,840','Ticket Sales','#22C55E','#DCFCE7'],['$1,200','Donations','#3B82F6','#DBEAFE'],['$3,750','Dues','#8B5CF6','#EDE9FE'],['$0','Platform Fee','#64748B','#F1F5F9']].map(function(s) {
+          return <div key={s[1]} style={{ padding: '9px', background: s[3], borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '15px', fontWeight: 800, color: s[2] }}>{s[0]}</div>
             <div style={{ fontSize: '9px', color: '#64748B', marginTop: '2px' }}>{s[1]}</div>
           </div>;
         })}
       </div>
-      <div style={{ padding: '10px 12px', background: 'rgba(34,197,94,0.07)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px' }}>
-        <p style={{ fontSize: '12px', fontWeight: 700, color: '#4ADE80' }}>$7,790 total — you kept all of it.</p>
-        <p style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>No revenue cut from Syndicade.</p>
+      <div style={{ padding: '10px 12px', background: '#DCFCE7', border: '1px solid #BBF7D0', borderRadius: '8px' }}>
+        <p style={{ fontSize: '12px', fontWeight: 700, color: '#15803D' }}>$7,790 total — you kept all of it.</p>
+        <p style={{ fontSize: '10px', color: '#166534', marginTop: '2px' }}>No revenue cut from Syndicade.</p>
       </div>
     </div>
   );
@@ -644,7 +655,7 @@ function Mock_Revenue() {
 
 function Mock_DuesStatus() {
   var members = [
-    { name: 'Ana Lopez',   tier: 'General',   status: 'Paid',    amount: '$50' },
+    { name: 'Ana Lopez',   tier: 'General',   status: 'Paid',    amount: '$50'  },
     { name: 'James Moore', tier: 'Supporting', status: 'Paid',    amount: '$100' },
     { name: 'Sara Ruiz',   tier: 'General',   status: 'Overdue', amount: '$50'  },
     { name: 'Tom Diaz',    tier: 'Board',     status: 'Pending', amount: '$25'  },
@@ -653,13 +664,15 @@ function Mock_DuesStatus() {
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px', color: '#F5B731', marginBottom: '10px' }}>Dues Status</p>
       {members.map(function(m) {
-        var sc = m.status === 'Paid' ? { bg: 'rgba(34,197,94,0.12)', c: '#4ADE80', bd: 'rgba(34,197,94,0.25)' }
-               : m.status === 'Overdue' ? { bg: 'rgba(239,68,68,0.12)', c: '#F87171', bd: 'rgba(239,68,68,0.25)' }
-               : { bg: 'rgba(245,183,49,0.12)', c: '#FCD34D', bd: 'rgba(245,183,49,0.25)' };
+        var sc = m.status === 'Paid'
+          ? { bg: 'rgba(34,197,94,0.1)', c: '#15803D', bd: 'rgba(34,197,94,0.3)' }
+          : m.status === 'Overdue'
+          ? { bg: 'rgba(239,68,68,0.1)', c: '#EF4444', bd: 'rgba(239,68,68,0.25)' }
+          : { bg: 'rgba(245,183,49,0.1)', c: '#B45309', bd: 'rgba(245,183,49,0.3)' };
         return (
-          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', background: '#1A2035', marginBottom: '5px', border: '1px solid #2A3550' }}>
+          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', background: '#FFFFFF', marginBottom: '5px', border: '1px solid #E2E8F0' }}>
             <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: '#FFFFFF' }}>{m.name}</p>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: '#0E1523' }}>{m.name}</p>
               <p style={{ fontSize: '10px', color: '#64748B' }}>{m.tier} · {m.amount}/yr</p>
             </div>
             <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: sc.bg, color: sc.c, border: '1px solid ' + sc.bd }}>{m.status}</span>
@@ -671,9 +684,6 @@ function Mock_DuesStatus() {
 }
 
 // ─── Section definitions ──────────────────────────────────────────────────────
-// src: paths to real screenshots in /public/screenshots/
-// When you have real screenshots, drop them in /public/screenshots/ and they'll
-// automatically replace the mock UI below. File names are listed per slide.
 var SECTIONS = [
   {
     id: 'members', label: 'Member Management', color: '#3B82F6', icon: IC.users,
@@ -723,7 +733,7 @@ var SECTIONS = [
     description: 'No algorithm. No feed burial. When you post an announcement, every member sees it.',
     features: [
       { name: 'Announcements', desc: 'Pinned updates, priority levels (Urgent / Normal / Low), and read tracking per member.', plans: ['Starter','Growth','Pro'] },
-      { name: 'Dashboard notifications', desc: 'Real-time notification bell for events, announcements, and org activity — visible right in the dashboard.', plans: ['Starter','Growth','Pro'] },
+      { name: 'Dashboard notifications', desc: 'Real-time notification bell for events, announcements, and org activity.', plans: ['Starter','Growth','Pro'] },
       { name: 'Transactional emails', desc: 'System emails for event reminders, RSVP confirmations, invitations, and ticket receipts.', plans: ['Starter','Growth','Pro'] },
       { name: 'Chat channels', desc: 'Internal org chat for members and committees. Organized by channel.', plans: ['Starter','Growth','Pro'] },
       { name: 'Email blasts', desc: 'Manual sends to your full member list or targeted segments. 500/mo included on Growth.', plans: ['Growth','Pro'] },
@@ -845,9 +855,8 @@ export default function FeaturesPage() {
   var navigate = useNavigate();
 
   return (
-    <div style={{ background: '#0E1523', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,-apple-system,sans-serif", color: '#FFFFFF' }}>
+    <div style={{ background: '#F8FAFC', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,-apple-system,sans-serif", color: '#0E1523' }}>
 
-      {/* Responsive + layout CSS */}
       <style>{RESPONSIVE_CSS}</style>
 
       <a href="#features-main" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold focus:outline-none" style={{ background: '#F5B731', color: '#111827' }}>
@@ -859,28 +868,28 @@ export default function FeaturesPage() {
       <main id="features-main">
 
         {/* ── Hero ── */}
-        <section aria-labelledby="features-h1" style={{ background: '#0E1523', padding: '80px 24px 64px', textAlign: 'center', borderBottom: '1px solid #2A3550' }}>
+        <section aria-labelledby="features-h1" style={{ background: '#FFFFFF', padding: '80px 24px 64px', textAlign: 'center', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ maxWidth: '680px', margin: '0 auto' }}>
             <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '16px' }}>Complete feature list</p>
-            <h1 id="features-h1" style={{ fontSize: 'clamp(32px,5vw,52px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15, marginBottom: '20px' }}>
+            <h1 id="features-h1" style={{ fontSize: 'clamp(32px,5vw,52px)', fontWeight: 800, color: '#0E1523', lineHeight: 1.15, marginBottom: '20px' }}>
               Every feature your org needs,<br /><span style={{ color: '#F5B731' }}>in one place.</span>
             </h1>
-            <p style={{ fontSize: '17px', color: '#CBD5E1', lineHeight: 1.7, marginBottom: '36px' }}>
+            <p style={{ fontSize: '17px', color: '#475569', lineHeight: 1.7, marginBottom: '36px' }}>
               Syndicade replaces the fragmented stack of spreadsheets, email chains, and disconnected tools most volunteer orgs rely on.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginBottom: '36px' }}>
               <button onClick={function() { navigate('/signup'); }}
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.35)' }}
+                className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '13px 28px', fontSize: '15px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,183,49,0.3)' }}
                 onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
                 onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
                 Start Free — 14 Days <Icon d={IC.arrow} size={16} />
               </button>
               <Link to="/pricing"
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-xl"
-                style={{ display: 'inline-flex', alignItems: 'center', padding: '13px 24px', fontSize: '15px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', textDecoration: 'none' }}
-                onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.borderColor = '#94A3B8'; }}
-                onMouseOut={function(e) { e.currentTarget.style.color = '#CBD5E1'; e.currentTarget.style.borderColor = '#2A3550'; }}>
+                className="focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 rounded-xl"
+                style={{ display: 'inline-flex', alignItems: 'center', padding: '13px 24px', fontSize: '15px', fontWeight: 600, background: 'none', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '12px', textDecoration: 'none' }}
+                onMouseOver={function(e) { e.currentTarget.style.color = '#0E1523'; e.currentTarget.style.borderColor = '#94A3B8'; }}
+                onMouseOut={function(e) { e.currentTarget.style.color = '#475569'; e.currentTarget.style.borderColor = '#E2E8F0'; }}>
                 View Pricing
               </Link>
             </div>
@@ -894,12 +903,15 @@ export default function FeaturesPage() {
         {/* ── Feature sections ── */}
         {SECTIONS.map(function(sec, si) {
           var altBg = si % 2 !== 0;
+          var sectionBg  = altBg ? '#F8FAFC' : '#FFFFFF';
+          var rowBaseBg  = altBg ? '#F8FAFC' : '#FFFFFF';
+          var rowHoverBg = altBg ? '#F1F5F9' : '#F8FAFC';
           return (
             <section
               key={sec.id}
               id={'feature-' + sec.id}
               aria-labelledby={'sh-' + sec.id}
-              style={{ padding: '80px 24px', background: altBg ? '#151B2D' : '#0E1523', borderBottom: '1px solid #2A3550' }}
+              style={{ padding: '80px 24px', background: sectionBg, borderBottom: '1px solid #E2E8F0' }}
             >
               <div className="ft-grid">
 
@@ -911,34 +923,34 @@ export default function FeaturesPage() {
                     </div>
                     <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: sec.color }}>{sec.label}</p>
                   </div>
-                  <h2 id={'sh-' + sec.id} style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, color: '#FFFFFF', marginBottom: '10px', lineHeight: 1.2 }}>
+                  <h2 id={'sh-' + sec.id} style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, color: '#0E1523', marginBottom: '10px', lineHeight: 1.2 }}>
                     {sec.headline}
                   </h2>
-                  <p style={{ fontSize: '15px', color: '#CBD5E1', lineHeight: 1.65, marginBottom: '6px' }}>{sec.description}</p>
+                  <p style={{ fontSize: '15px', color: '#475569', lineHeight: 1.65, marginBottom: '6px' }}>{sec.description}</p>
                   {sec.verifiedOnly && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: 'rgba(245,183,49,0.12)', color: '#F5B731', border: '1px solid rgba(245,183,49,0.3)', marginBottom: '6px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: 'rgba(245,183,49,0.12)', color: '#B45309', border: '1px solid rgba(245,183,49,0.3)', marginBottom: '6px' }}>
                       Verified nonprofits only
                     </span>
                   )}
 
                   {/* Feature rows */}
-                  <div style={{ border: '1px solid #2A3550', borderRadius: '14px', overflow: 'hidden', marginTop: '24px' }} role="list" aria-label={sec.label + ' features'}>
+                  <div style={{ border: '1px solid #E2E8F0', borderRadius: '14px', overflow: 'hidden', marginTop: '24px' }} role="list" aria-label={sec.label + ' features'}>
                     {sec.features.map(function(feat, fi) {
                       return (
                         <div
                           key={feat.name}
                           role="listitem"
-                          style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', padding: '13px 16px', background: altBg ? '#151B2D' : '#0E1523', borderTop: fi > 0 ? '1px solid #2A3550' : 'none', flexWrap: 'wrap', transition: 'background 0.15s' }}
-                          onMouseEnter={function(e) { e.currentTarget.style.background = '#1A2035'; }}
-                          onMouseLeave={function(e) { e.currentTarget.style.background = altBg ? '#151B2D' : '#0E1523'; }}
+                          style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', padding: '13px 16px', background: rowBaseBg, borderTop: fi > 0 ? '1px solid #E2E8F0' : 'none', flexWrap: 'wrap', transition: 'background 0.15s', cursor: 'default' }}
+                          onMouseEnter={function(e) { e.currentTarget.style.background = rowHoverBg; }}
+                          onMouseLeave={function(e) { e.currentTarget.style.background = rowBaseBg; }}
                         >
                           <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: 0 }}>
                             <span aria-hidden="true" style={{ flexShrink: 0, marginTop: '3px', color: sec.color }}>
                               <Icon d={IC.check} size={14} />
                             </span>
                             <div>
-                              <p style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF', marginBottom: feat.desc ? '2px' : 0 }}>{feat.name}</p>
-                              {feat.desc && <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.5 }}>{feat.desc}</p>}
+                              <p style={{ fontSize: '14px', fontWeight: 600, color: '#0E1523', marginBottom: feat.desc ? '2px' : 0 }}>{feat.name}</p>
+                              {feat.desc && <p style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.5 }}>{feat.desc}</p>}
                             </div>
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
@@ -950,7 +962,7 @@ export default function FeaturesPage() {
                   </div>
                 </div>
 
-                {/* Right — carousel (centered via CSS, responsive via ft-carousel-col) */}
+                {/* Right — carousel */}
                 <div className="ft-carousel-col">
                   <Carousel
                     color={sec.color}
@@ -971,14 +983,14 @@ export default function FeaturesPage() {
         })}
 
         {/* ── Create once, share on your terms ── */}
-        <section aria-labelledby="create-once-h2" style={{ padding: '80px 24px', background: '#0E1523', borderBottom: '1px solid #2A3550' }}>
+        <section aria-labelledby="create-once-h2" style={{ padding: '80px 24px', background: '#FFFFFF', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ maxWidth: '960px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '52px' }}>
               <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '14px' }}>Publish on your terms</p>
-              <h2 id="create-once-h2" style={{ fontSize: 'clamp(26px,4vw,40px)', fontWeight: 800, color: '#FFFFFF', marginBottom: '16px', lineHeight: 1.2 }}>
+              <h2 id="create-once-h2" style={{ fontSize: 'clamp(26px,4vw,40px)', fontWeight: 800, color: '#0E1523', marginBottom: '16px', lineHeight: 1.2 }}>
                 Create once,<br /><span style={{ color: '#F5B731' }}>share on your terms.</span>
               </h2>
-              <p style={{ fontSize: '16px', color: '#CBD5E1', lineHeight: 1.7, maxWidth: '580px', margin: '0 auto' }}>
+              <p style={{ fontSize: '16px', color: '#475569', lineHeight: 1.7, maxWidth: '580px', margin: '0 auto' }}>
                 You control exactly where your content appears. Create an event once — then decide if it goes to your members only, your public page, or the discovery board. No duplicate entry, no copy-pasting across tools.
               </p>
             </div>
@@ -991,23 +1003,23 @@ export default function FeaturesPage() {
                 { step: '4', d: IC.globe,   title: 'Opt in to discovery',        desc: 'Verified nonprofits can also opt in to the public Syndicade discovery board.', color: '#F5B731' },
               ].map(function(step) {
                 return (
-                  <div key={step.step} style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '14px', padding: '22px', position: 'relative' }}>
+                  <div key={step.step} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '22px', position: 'relative' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '12px', background: step.color + '1A', border: '1px solid ' + step.color + '44', color: step.color, marginBottom: '12px' }}>
                       <Icon d={step.d} size={20} />
                     </div>
-                    <div style={{ position: 'absolute', top: '14px', right: '14px', fontSize: '10px', fontWeight: 700, color: '#64748B', background: '#151B2D', padding: '2px 8px', borderRadius: '99px', border: '1px solid #2A3550' }}>Step {step.step}</div>
-                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#FFFFFF', marginBottom: '6px' }}>{step.title}</h3>
-                    <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.55 }}>{step.desc}</p>
+                    <div style={{ position: 'absolute', top: '14px', right: '14px', fontSize: '10px', fontWeight: 700, color: '#94A3B8', background: '#F1F5F9', padding: '2px 8px', borderRadius: '99px', border: '1px solid #E2E8F0' }}>Step {step.step}</div>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>{step.title}</h3>
+                    <p style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.55 }}>{step.desc}</p>
                   </div>
                 );
               })}
             </div>
 
-            <div style={{ background: 'rgba(245,183,49,0.06)', border: '1px solid rgba(245,183,49,0.2)', borderRadius: '14px', padding: '24px 28px', display: 'flex', gap: '18px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ background: 'rgba(245,183,49,0.06)', border: '1px solid rgba(245,183,49,0.25)', borderRadius: '14px', padding: '24px 28px', display: 'flex', gap: '18px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ color: '#F5B731', flexShrink: 0 }}><Icon d={IC.zap} size={26} /></div>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', marginBottom: '6px' }}>The same event, visible everywhere you choose — entered once.</h3>
-                <p style={{ fontSize: '14px', color: '#CBD5E1', lineHeight: 1.65 }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>The same event, visible everywhere you choose — entered once.</h3>
+                <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.65 }}>
                   With other tools you post your event in multiple places and keep them in sync manually. With Syndicade, you create it once and opt in to wherever it should appear. One source of truth.
                 </p>
               </div>
@@ -1016,63 +1028,65 @@ export default function FeaturesPage() {
         </section>
 
         {/* ── Comparison table ── */}
-        <section aria-labelledby="compare-h2" style={{ padding: '80px 24px', background: '#151B2D', borderBottom: '1px solid #2A3550' }}>
+        <section aria-labelledby="compare-h2" style={{ padding: '80px 24px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ maxWidth: '880px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '48px' }}>
               <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731', marginBottom: '14px' }}>How we stack up</p>
-              <h2 id="compare-h2" style={{ fontSize: 'clamp(24px,4vw,36px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2 }}>
+              <h2 id="compare-h2" style={{ fontSize: 'clamp(24px,4vw,36px)', fontWeight: 800, color: '#0E1523', lineHeight: 1.2 }}>
                 Built for nonprofits.<br />Not adapted from something else.
               </h2>
             </div>
 
-            <div style={{ border: '1px solid #2A3550', borderRadius: '14px', overflow: 'hidden', marginBottom: '28px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', background: '#1E2845', padding: '11px 22px', borderBottom: '1px solid #2A3550' }}>
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: '14px', overflow: 'hidden', marginBottom: '28px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', background: '#F1F5F9', padding: '11px 22px', borderBottom: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#64748B' }}>Alternative</span>
                 <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#64748B', textAlign: 'center' }}>Typical price</span>
                 <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#64748B' }}>The catch</span>
               </div>
               {COMPARE.map(function(row, i) {
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', padding: '13px 22px', borderTop: '1px solid #1A2035', background: '#151B2D' }}>
-                    <span style={{ fontSize: '14px', color: '#CBD5E1', fontWeight: 500 }}>{row.alt}</span>
-                    <span style={{ fontSize: '13px', color: '#94A3B8', textAlign: 'center' }}>{row.price}</span>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', padding: '13px 22px', borderTop: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+                    <span style={{ fontSize: '14px', color: '#0E1523', fontWeight: 500 }}>{row.alt}</span>
+                    <span style={{ fontSize: '13px', color: '#475569', textAlign: 'center' }}>{row.price}</span>
                     <span style={{ fontSize: '13px', color: '#64748B' }}>{row.issue}</span>
                   </div>
                 );
               })}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', padding: '15px 22px', background: 'rgba(245,183,49,0.05)', borderTop: '1px solid rgba(245,183,49,0.2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', padding: '15px 22px', background: 'rgba(245,183,49,0.06)', borderTop: '1px solid rgba(245,183,49,0.25)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#FFFFFF' }}>Syndi<span style={{ color: '#F5B731' }}>cade</span></span>
-                  <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: 'rgba(245,183,49,0.15)', color: '#F5B731', border: '1px solid rgba(245,183,49,0.3)' }}>That's us</span>
+                  <span style={{ fontSize: '15px', fontWeight: 800 }}>
+                    <span style={{ color: '#0E1523' }}>Syndi</span><span style={{ color: '#F5B731' }}>cade</span>
+                  </span>
+                  <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', color: '#B45309', border: '1px solid rgba(245,183,49,0.3)' }}>That's us</span>
                 </div>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#F5B731', textAlign: 'center' }}>From $19.99/mo</span>
-                <span style={{ fontSize: '13px', color: '#4ADE80', fontWeight: 600 }}>Purpose-built for member orgs. No revenue cuts. No fragmented stack.</span>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#B45309', textAlign: 'center' }}>From $19.99/mo</span>
+                <span style={{ fontSize: '13px', color: '#15803D', fontWeight: 600 }}>Purpose-built for member orgs. No revenue cuts. No fragmented stack.</span>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '18px' }}>
-              <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '14px', padding: '22px' }}>
-                <div style={{ marginBottom: '12px', color: '#F5B731' }}><Icon d={IC.ticket} size={22} /></div>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', marginBottom: '10px' }}>The ticketing math</h3>
-                <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.65, marginBottom: '12px' }}>
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '22px' }}>
+                <div style={{ marginBottom: '12px', color: '#B45309' }}><Icon d={IC.ticket} size={22} /></div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', marginBottom: '10px' }}>The ticketing math</h3>
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.65, marginBottom: '12px' }}>
                   Selling 50 tickets at $25? Percentage platforms charge 3–5% plus per-ticket fees — often $125+ on a $1,250 event.
                 </p>
-                <div style={{ background: '#0E1523', border: '1px solid #2A3550', borderRadius: '8px', padding: '12px' }}>
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>Syndicade (flat $1/ticket)</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#4ADE80' }}>$50 total</span>
+                    <span style={{ fontSize: '12px', color: '#475569' }}>Syndicade (flat $1/ticket)</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>$50 total</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>Typical % platform</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#F87171' }}>$100–$140+</span>
+                    <span style={{ fontSize: '12px', color: '#475569' }}>Typical % platform</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#EF4444' }}>$100–$140+</span>
                   </div>
                 </div>
-                <p style={{ fontSize: '11px', color: '#64748B', marginTop: '10px' }}>Stripe processing fees apply and are paid by the buyer.</p>
+                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '10px' }}>Stripe processing fees apply and are paid by the buyer.</p>
               </div>
-              <div style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '14px', padding: '22px' }}>
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '22px' }}>
                 <div style={{ marginBottom: '12px', color: '#3B82F6' }}><Icon d={IC.share} size={22} /></div>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', marginBottom: '10px' }}>Create once, share on your terms</h3>
-                <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: 1.65, marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', marginBottom: '10px' }}>Create once, share on your terms</h3>
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.65, marginBottom: '14px' }}>
                   Create an event or program once. Then choose exactly where it appears — no copy-pasting across platforms.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
@@ -1080,7 +1094,7 @@ export default function FeaturesPage() {
                     return (
                       <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ color: '#22C55E', flexShrink: 0 }}><Icon d={IC.check} size={13} /></span>
-                        <span style={{ fontSize: '13px', color: '#CBD5E1' }}>{item}</span>
+                        <span style={{ fontSize: '13px', color: '#475569' }}>{item}</span>
                       </div>
                     );
                   })}
@@ -1091,29 +1105,31 @@ export default function FeaturesPage() {
         </section>
 
         {/* ── Final CTA ── */}
-        <section aria-labelledby="features-cta-h2" style={{ padding: '96px 24px', background: '#0E1523', textAlign: 'center' }}>
+        <section aria-labelledby="features-cta-h2" style={{ padding: '96px 24px', background: '#FFFFFF', textAlign: 'center' }}>
           <div style={{ maxWidth: '540px', margin: '0 auto' }}>
-            <img src="/mascot-pair.png" alt="" aria-hidden="true" style={{ width: '140px', height: 'auto', marginBottom: '28px' }} onError={function(e) { e.currentTarget.style.display = 'none'; }} />
-            <h2 id="features-cta-h2" style={{ fontSize: 'clamp(26px,4vw,42px)', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '16px' }}>
+            <img src="/mascot-pair.png" alt="" aria-hidden="true"
+              style={{ width: '140px', height: 'auto', marginBottom: '28px', mixBlendMode: 'multiply' }}
+              onError={function(e) { e.currentTarget.style.display = 'none'; }} />
+            <h2 id="features-cta-h2" style={{ fontSize: 'clamp(26px,4vw,42px)', fontWeight: 800, color: '#0E1523', lineHeight: 1.2, marginBottom: '16px' }}>
               Ready to replace your fragmented stack?
             </h2>
-            <p style={{ fontSize: '16px', color: '#CBD5E1', marginBottom: '12px', lineHeight: 1.6 }}>
+            <p style={{ fontSize: '16px', color: '#475569', marginBottom: '12px', lineHeight: 1.6 }}>
               Everything above is included. Start with the plan that fits and upgrade when you're ready.
             </p>
-            <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '36px' }}>14-day free trial · No credit card · Cancel any time</p>
+            <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '36px' }}>14-day free trial · No credit card · Cancel any time</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
               <button onClick={function() { navigate('/signup'); }}
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.4)' }}
+                className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', fontSize: '16px', fontWeight: 700, background: '#F5B731', color: '#111827', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(245,183,49,0.3)' }}
                 onMouseOver={function(e) { e.currentTarget.style.background = '#E5A820'; }}
                 onMouseOut={function(e) { e.currentTarget.style.background = '#F5B731'; }}>
                 Start Free — 14 Days <Icon d={IC.arrow} size={18} />
               </button>
               <Link to="/pricing"
-                className="focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded-xl"
-                style={{ display: 'inline-flex', alignItems: 'center', padding: '14px 28px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#CBD5E1', border: '1px solid #2A3550', borderRadius: '12px', textDecoration: 'none' }}
-                onMouseOver={function(e) { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.borderColor = '#94A3B8'; }}
-                onMouseOut={function(e) { e.currentTarget.style.color = '#CBD5E1'; e.currentTarget.style.borderColor = '#2A3550'; }}>
+                className="focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 rounded-xl"
+                style={{ display: 'inline-flex', alignItems: 'center', padding: '14px 28px', fontSize: '16px', fontWeight: 600, background: 'none', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '12px', textDecoration: 'none' }}
+                onMouseOver={function(e) { e.currentTarget.style.color = '#0E1523'; e.currentTarget.style.borderColor = '#94A3B8'; }}
+                onMouseOut={function(e) { e.currentTarget.style.color = '#475569'; e.currentTarget.style.borderColor = '#E2E8F0'; }}>
                 Compare Plans
               </Link>
             </div>
