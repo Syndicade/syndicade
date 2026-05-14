@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext';
 
 /**
  * PageHeader Component
@@ -25,15 +24,7 @@ function PageHeader({
   actions
 }) {
   var navigate = useNavigate();
-  var { isDark } = useTheme();
   var resolvedBackLabel = backLabel || 'Back';
-
-  var bgColor      = isDark ? '#151B2D' : '#FFFFFF';
-  var borderColor  = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary  = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary= isDark ? '#CBD5E1'  : '#475569';
-  var textMuted    = isDark ? '#94A3B8'  : '#64748B';
-  var hoverBg      = isDark ? '#1E2845'  : '#F1F5F9';
 
   function handleBack() {
     if (backTo) {
@@ -44,7 +35,7 @@ function PageHeader({
   }
 
   return (
-    <div style={{ background: bgColor, borderBottom: '1px solid ' + borderColor }}>
+    <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E2E8F0' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px 16px' }}>
 
         {/* Back button + breadcrumbs */}
@@ -54,11 +45,11 @@ function PageHeader({
               onClick={handleBack}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
-                color: textSecondary, background: 'transparent', border: 'none',
+                color: '#475569', background: 'transparent', border: 'none',
                 fontWeight: 600, cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
               }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-opacity-10"
-              onMouseEnter={function(e) { e.currentTarget.style.background = hoverBg; }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              onMouseEnter={function(e) { e.currentTarget.style.background = '#F1F5F9'; }}
               onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
               aria-label={resolvedBackLabel}
             >
@@ -70,7 +61,7 @@ function PageHeader({
 
             {organizationName && (
               <>
-                <span style={{ color: textMuted }}>/</span>
+                <span style={{ color: '#94A3B8' }}>/</span>
                 {organizationId ? (
                   <button
                     onClick={function() { navigate('/organizations/' + organizationId); }}
@@ -80,10 +71,10 @@ function PageHeader({
                     {organizationName}
                   </button>
                 ) : (
-                  <span style={{ color: textSecondary, fontWeight: 600 }}>{organizationName}</span>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>{organizationName}</span>
                 )}
-                <span style={{ color: textMuted }}>/</span>
-                <span style={{ color: textPrimary, fontWeight: 700 }}>{title}</span>
+                <span style={{ color: '#94A3B8' }}>/</span>
+                <span style={{ color: '#0E1523', fontWeight: 700 }}>{title}</span>
               </>
             )}
           </div>
@@ -99,11 +90,11 @@ function PageHeader({
                 </span>
               )}
               <div>
-                <h1 style={{ fontSize: '26px', fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.2 }}>
+                <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0E1523', margin: 0, lineHeight: 1.2 }}>
                   {title}
                 </h1>
                 {subtitle && (
-                  <p style={{ marginTop: '4px', color: textSecondary, fontSize: '14px', lineHeight: 1.5 }}>
+                  <p style={{ marginTop: '4px', color: '#475569', fontSize: '14px', lineHeight: 1.5 }}>
                     {subtitle}
                   </p>
                 )}

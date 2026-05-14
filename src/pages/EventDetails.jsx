@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { downloadICS } from '../lib/icalGenerator';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import RecurringEventOptions from '../components/RecurringEventOptions';
 import EditEvent from '../components/EditEvent';
 import AttendanceReport from '../components/AttendanceReport';
@@ -60,20 +61,32 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
     onSubmit(values);
   }
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 overflow-y-auto"
-      role="dialog" aria-modal="true" aria-labelledby="checkout-form-title">
-      <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl shadow-xl w-full max-w-lg my-8">
+  var inputStyle = {
+    width: '100%',
+    padding: '10px 14px',
+    background: '#F8FAFC',
+    border: '1px solid #E2E8F0',
+    borderRadius: '8px',
+    color: '#0E1523',
+    fontSize: '14px',
+    outline: 'none',
+  };
 
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#2A3550]">
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"
+      role="dialog" aria-modal="true" aria-labelledby="checkout-form-title">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-lg my-8"
+        style={{boxShadow:'3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'}}>
+
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
           <div>
-            <h2 id="checkout-form-title" className="text-lg font-bold text-white">Almost there</h2>
-            <p className="text-[#94A3B8] text-xs mt-0.5">
+            <h2 id="checkout-form-title" className="text-lg font-bold text-[#0E1523]">Almost there</h2>
+            <p className="text-[#64748B] text-xs mt-0.5">
               {totalQty} ticket{totalQty !== 1 ? 's' : ''} — {formatPrice(orderTotal)} total
             </p>
           </div>
           <button type="button" onClick={onCancel}
-            className="p-2 text-[#64748B] hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-2 text-[#64748B] hover:text-[#0E1523] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Cancel checkout">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -87,26 +100,27 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
               var inputId = 'cf-' + f.id;
               return (
                 <div key={f.id}>
-                  <label htmlFor={inputId} className="block text-sm font-semibold text-[#CBD5E1] mb-1.5">
+                  <label htmlFor={inputId} className="block text-sm font-semibold text-[#475569] mb-1.5">
                     {f.label}
-                    {f.is_required && <span className="text-red-400 ml-1" aria-hidden="true">*</span>}
-                    {!f.is_required && <span className="text-[#64748B] text-xs font-normal ml-1">(optional)</span>}
+                    {f.is_required && <span className="text-red-500 ml-1" aria-hidden="true">*</span>}
+                    {!f.is_required && <span className="text-[#94A3B8] text-xs font-normal ml-1">(optional)</span>}
                   </label>
                   {f.field_type === 'dropdown' ? (
                     <select id={inputId} value={values[f.id]} required={f.is_required}
                       onChange={function(e) { handleChange(f.id, e.target.value); }}
-                      className="w-full px-4 py-3 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      style={inputStyle}
+                      className="focus:ring-2 focus:ring-blue-500">
                       <option value="">Select an option...</option>
                       {(f.options || []).map(function(opt) {
                         return <option key={opt} value={opt}>{opt}</option>;
                       })}
                     </select>
                   ) : f.field_type === 'checkbox' ? (
-                    <label className="flex items-center gap-3 cursor-pointer p-3 bg-[#0E1523] border border-[#2A3550] rounded-lg">
+                    <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg">
                       <input type="checkbox" id={inputId} checked={values[f.id] === 'yes'}
                         onChange={function(e) { handleChange(f.id, e.target.checked ? 'yes' : ''); }}
-                        className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500"/>
-                      <span className="text-sm text-[#CBD5E1]">Yes</span>
+                        className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"/>
+                      <span className="text-sm text-[#475569]">Yes</span>
                     </label>
                   ) : (
                     <input id={inputId}
@@ -115,24 +129,38 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
                       required={f.is_required}
                       onChange={function(e) { handleChange(f.id, e.target.value); }}
                       placeholder={f.field_type === 'email' ? 'your@email.com' : f.field_type === 'phone' ? '(555) 000-0000' : ''}
-                      className="w-full px-4 py-3 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                      style={inputStyle}
+                      className="focus:ring-2 focus:ring-blue-500"
+                      aria-required={f.is_required}
+                    />
                   )}
                 </div>
               );
             })}
           </div>
 
-          <div className="px-6 py-4 border-t border-[#2A3550] flex items-center gap-3">
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
             <button type="button" onClick={onCancel}
-              className="px-5 py-2.5 bg-transparent border border-[#2A3550] text-[#CBD5E1] font-semibold rounded-lg hover:bg-[#1E2845] focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm">
+              className="px-5 py-2.5 bg-transparent border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm">
               Back
             </button>
             <button type="submit" disabled={submitting}
-              className="flex-1 px-5 py-2.5 bg-[#F5B731] text-[#0E1523] font-bold rounded-lg hover:bg-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
+              className="flex-1 px-5 py-2.5 bg-[#F5B731] text-[#0E1523] font-bold rounded-lg hover:bg-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
               {submitting ? (
-                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Redirecting...</>
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  Redirecting...
+                </>
               ) : (
-                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Continue to Payment — {formatPrice(orderTotal)}</>
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  </svg>
+                  Continue to Payment — {formatPrice(orderTotal)}
+                </>
               )}
             </button>
           </div>
@@ -192,7 +220,6 @@ function EventDetails() {
 
       if (eventData.visibility !== 'public' && !user) { navigate('/login'); return; }
 
-      // Fetch org — include logo_url and slug for email branding
       var { data: orgData } = await supabase
         .from('organizations')
         .select('name, logo_url, slug')
@@ -200,23 +227,22 @@ function EventDetails() {
         .single();
       if (orgData) setOrganization(orgData);
 
-// Fetch accepted co-hosts (two-step to avoid FK name guessing)
-var { data: collabRows } = await supabase
-  .from('event_collaborators')
-  .select('requesting_org_id')
-  .eq('event_id', eventData.id)
-  .eq('status', 'accepted');
+      var { data: collabRows } = await supabase
+        .from('event_collaborators')
+        .select('requesting_org_id')
+        .eq('event_id', eventData.id)
+        .eq('status', 'accepted');
 
-if (collabRows && collabRows.length > 0) {
-  var coHostOrgIds = collabRows.map(function(r) { return r.requesting_org_id; });
-  var { data: coHostOrgs } = await supabase
-    .from('organizations')
-    .select('id, name, logo_url')
-    .in('id', coHostOrgIds);
-  setCoHosts(coHostOrgs || []);
-} else {
-  setCoHosts([]);
-}
+      if (collabRows && collabRows.length > 0) {
+        var coHostOrgIds = collabRows.map(function(r) { return r.requesting_org_id; });
+        var { data: coHostOrgs } = await supabase
+          .from('organizations')
+          .select('id, name, logo_url')
+          .in('id', coHostOrgIds);
+        setCoHosts(coHostOrgs || []);
+      } else {
+        setCoHosts([]);
+      }
 
       if (user) {
         var { data: membership } = await supabase
@@ -280,7 +306,6 @@ if (collabRows && collabRows.length > 0) {
     handleRsvp('going', true);
   }, [currentUser, event]);
 
-  // Build org URL for emails
   var getOrgUrl = function() {
     if (!organization) return APP_URL;
     if (organization.slug) return APP_URL + '/org/' + organization.slug;
@@ -309,9 +334,9 @@ if (collabRows && collabRows.length > 0) {
 
       if (status === 'going') {
         if (fromTicket) {
-          toast.success('Payment confirmed — you\'re going!');
+          mascotSuccessToast("You're going!", "Payment confirmed — see you there!");
         } else {
-          toast.success('RSVP updated — you\'re going!');
+          mascotSuccessToast("You're going!", "RSVP updated successfully.");
         }
 
         var memberRes = await supabase.from('members').select('email, first_name').eq('user_id', currentUser.id).single();
@@ -392,13 +417,13 @@ if (collabRows && collabRows.length > 0) {
           }
         }
       } else {
-        toast.success('RSVP updated.');
+        mascotSuccessToast('RSVP updated.');
       }
 
       setTimeout(function() { setRsvpSuccess(false); }, 3000);
     } catch (err) {
       console.error('RSVP error:', err);
-      toast.error('Failed to update RSVP. Please try again.');
+      mascotErrorToast('Failed to update RSVP.', 'Please try again.');
     } finally {
       setRsvpLoading(false);
     }
@@ -451,7 +476,7 @@ if (collabRows && collabRows.length > 0) {
         }),
       });
     } catch (err) {
-      toast.error('Failed to submit RSVP. Please try again.');
+      mascotErrorToast('Failed to submit RSVP.', 'Please try again.');
     } finally {
       setGuestRsvpLoading(false);
     }
@@ -538,7 +563,7 @@ if (collabRows && collabRows.length > 0) {
 
     } catch (err) {
       console.error('Ticket error:', err);
-      toast.error('Could not start checkout: ' + err.message);
+      mascotErrorToast('Checkout failed.', err.message);
       setTicketLoading(false);
     }
   };
@@ -565,8 +590,11 @@ if (collabRows && collabRows.length > 0) {
     try {
       var { error } = await supabase.from('events').delete().eq('id', eventId);
       if (error) throw error;
-      toast.success('Event deleted.'); navigate('/events');
-    } catch (err) { toast.error('Failed to delete event. Please try again.'); }
+      mascotSuccessToast('Event deleted.');
+      navigate('/events');
+    } catch (err) {
+      mascotErrorToast('Failed to delete event.', 'Please try again.');
+    }
   };
 
   var handleRecurringOptionSelect = async function(option) {
@@ -584,8 +612,11 @@ if (collabRows && collabRows.length > 0) {
     try {
       var { error } = await supabase.from('events').delete().eq('id', eventId);
       if (error) throw error;
-      toast.success('Event instance deleted.'); navigate('/events');
-    } catch (err) { toast.error('Failed to delete event. Please try again.'); }
+      mascotSuccessToast('Event deleted.');
+      navigate('/events');
+    } catch (err) {
+      mascotErrorToast('Failed to delete event.', 'Please try again.');
+    }
   };
 
   var handleDeleteFutureInstances = async function() {
@@ -595,8 +626,11 @@ if (collabRows && collabRows.length > 0) {
       var { error } = await supabase.from('events').delete()
         .or('id.eq.' + eventId + ',and(parent_event_id.eq.' + parentId + ',start_time.gte.' + event.start_time + ')');
       if (error) throw error;
-      toast.success('Future instances deleted.'); navigate('/events');
-    } catch (err) { toast.error('Failed to delete future instances. Please try again.'); }
+      mascotSuccessToast('Future instances deleted.');
+      navigate('/events');
+    } catch (err) {
+      mascotErrorToast('Failed to delete event.', 'Please try again.');
+    }
   };
 
   var handleDeleteSeries = async function() {
@@ -608,8 +642,11 @@ if (collabRows && collabRows.length > 0) {
       if (e1) throw e1;
       var { error: e2 } = await supabase.from('events').delete().eq('parent_event_id', parentId).gte('start_time', now);
       if (e2) throw e2;
-      toast.success('Recurring event series deleted. Past occurrences preserved.'); navigate('/events');
-    } catch (err) { toast.error('Failed to delete series. Please try again.'); }
+      mascotSuccessToast('Series deleted.', 'Past occurrences have been preserved.');
+      navigate('/events');
+    } catch (err) {
+      mascotErrorToast('Failed to delete series.', 'Please try again.');
+    }
   };
 
   var formatDate = function(dateString) {
@@ -628,21 +665,27 @@ if (collabRows && collabRows.length > 0) {
     };
   };
 
+  // ── Loading skeleton ─────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0E1523] flex items-center justify-center">
-        <div className="space-y-4 w-full max-w-5xl mx-auto px-6">
-          <div className="h-8 bg-[#1A2035] rounded-lg animate-pulse w-48"/>
-          <div className="h-12 bg-[#1A2035] rounded-lg animate-pulse w-2/3"/>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+      <div className="min-h-screen bg-[#F8FAFC]" aria-busy="true" aria-label="Loading event details">
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-5">
+          <div className="max-w-5xl mx-auto space-y-3">
+            <div className="h-4 bg-slate-200 rounded animate-pulse w-28"/>
+            <div className="h-8 bg-slate-200 rounded-lg animate-pulse w-2/3"/>
+            <div className="h-4 bg-slate-200 rounded animate-pulse w-40"/>
+          </div>
+        </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
-              <div className="h-40 bg-[#1A2035] rounded-xl animate-pulse"/>
-              <div className="h-40 bg-[#1A2035] rounded-xl animate-pulse"/>
-              <div className="h-60 bg-[#1A2035] rounded-xl animate-pulse"/>
+              <div className="h-36 bg-slate-200 rounded-xl animate-pulse"/>
+              <div className="h-36 bg-slate-200 rounded-xl animate-pulse"/>
+              <div className="h-52 bg-slate-200 rounded-xl animate-pulse"/>
             </div>
             <div className="space-y-4">
-              <div className="h-48 bg-[#1A2035] rounded-xl animate-pulse"/>
-              <div className="h-32 bg-[#1A2035] rounded-xl animate-pulse"/>
+              <div className="h-48 bg-slate-200 rounded-xl animate-pulse"/>
+              <div className="h-32 bg-slate-200 rounded-xl animate-pulse"/>
             </div>
           </div>
         </div>
@@ -650,18 +693,22 @@ if (collabRows && collabRows.length > 0) {
     );
   }
 
+  // ── Error / not found ────────────────────────────────────────────────────
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-[#0E1523] flex items-center justify-center p-4">
-        <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-8 max-w-md w-full text-center" role="alert">
-          <div className="w-14 h-14 rounded-full bg-[#1E2845] flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-md w-full text-center"
+          style={{boxShadow:'3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'}}
+          role="alert">
+          <div className="w-14 h-14 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-4">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Event Not Found</h2>
-          <p className="text-[#94A3B8] mb-6">{error || 'This event does not exist or you do not have permission to view it.'}</p>
-          <Link to="/events" className="inline-block px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+          <h2 className="text-xl font-bold text-[#0E1523] mb-2">Event Not Found</h2>
+          <p className="text-[#64748B] mb-6">{error || 'This event does not exist or you do not have permission to view it.'}</p>
+          <Link to="/events"
+            className="inline-block px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
             Back to Events
           </Link>
         </div>
@@ -677,41 +724,62 @@ if (collabRows && collabRows.length > 0) {
   var orderTotal = getTotal();
   var showCheckIn = event.enable_check_in !== false && isEventDay(event.start_time);
 
-  return (
-    <div className="min-h-screen bg-[#0E1523]">
+  var cardStyle = {
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: '12px',
+    padding: '24px',
+    boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+  };
 
-      {/* Header */}
-      <div className="bg-[#151B2D] border-b border-[#2A3550]">
+  var sectionLabel = {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#F5B731',
+    textTransform: 'uppercase',
+    letterSpacing: '4px',
+    marginBottom: '12px',
+    display: 'block',
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC]">
+
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+
+          {/* Top bar: back + admin actions */}
           <div className="flex items-center justify-between mb-4">
             <Link to="/events"
-              className="flex items-center gap-2 text-[#CBD5E1] hover:text-white font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
+              className="flex items-center gap-2 text-[#475569] hover:text-[#0E1523] font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
               </svg>
               Back to Events
             </Link>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button onClick={function() { downloadICS(event); }}
-                className="px-3 py-2 bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-sm font-semibold rounded-lg hover:bg-[#1E2845] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#151B2D]">
+                className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                 Add to Calendar
               </button>
               <button onClick={function() { window.print(); }}
-                className="px-3 py-2 bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-sm font-semibold rounded-lg hover:bg-[#1E2845] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#151B2D]">
+                className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                 Print
               </button>
               {isAdmin && (
                 <>
                   <button onClick={function() { setShowAttendanceReport(true); }}
-                    className="px-3 py-2 bg-[#1A2035] border border-[#2A3550] text-[#CBD5E1] text-sm font-semibold rounded-lg hover:bg-[#1E2845] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#151B2D]">
+                    className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                     Full Report
                   </button>
                   <button onClick={handleEditClick}
-                    className="px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#151B2D]">
+                    className="px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                     Edit
                   </button>
                   <button onClick={handleDeleteClick}
-                    className="px-3 py-2 bg-transparent border border-[#EF4444] text-[#EF4444] text-sm font-semibold rounded-lg hover:bg-red-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-[#151B2D]">
+                    className="px-3 py-2 bg-transparent border border-red-300 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
                     Delete
                   </button>
                 </>
@@ -719,12 +787,29 @@ if (collabRows && collabRows.length > 0) {
             </div>
           </div>
 
+          {/* Title + badges */}
           <div className="flex items-start gap-3 flex-wrap">
             {event.is_recurring && (
-              <span className="inline-flex items-center px-2.5 py-0.5 mt-2 rounded-full text-xs font-semibold bg-[#1D3461] text-blue-400">Recurring</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 mt-2 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                Recurring
+              </span>
             )}
             {isPaidEvent && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-2 rounded-full text-xs font-semibold bg-[#2A1F00] border border-[#F5B731] text-[#F5B731]">
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                marginTop: '8px',
+                background: 'rgba(245,183,49,0.12)',
+                border: '1px solid rgba(245,183,49,0.35)',
+                color: '#B45309',
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 10px',
+                borderRadius: '99px',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+              }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                 </svg>
@@ -732,69 +817,60 @@ if (collabRows && collabRows.length > 0) {
               </span>
             )}
             <div className="flex-1">
-              <h1 className="text-3xl font-extrabold text-white">{event.title}</h1>
+              <h1 className="text-3xl font-extrabold text-[#0E1523]">{event.title}</h1>
               {event.is_recurring && (
-                <p className="text-sm text-blue-400 mt-1 font-semibold">
+                <p className="text-sm text-blue-600 mt-1 font-semibold">
                   {event.parent_event_id ? 'Part of recurring series' : 'Recurring event series'}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Primary org + co-hosts */}
+          {/* Org + co-hosts */}
           <div className="mt-2">
             {organization && (
-              <p className="text-[#94A3B8]">{organization.name}</p>
+              <p className="text-[#475569] font-medium">{organization.name}</p>
             )}
             {coHosts.length > 0 && (
               <div className="mt-1.5 space-y-1.5" aria-label="Co-hosting organizations">
-{coHosts.map(function(org) {
-  return (
-    <div
-      key={org.id}
-      className="flex items-center gap-2"
-      aria-label={'Co-hosted with ' + org.name}
-    >
-      <span style={{fontSize:'11px', fontWeight:600, color:'#64748B', minWidth:'84px'}}>Co-hosted with</span>
-      {org.logo_url ? (
-        <img
-          src={org.logo_url}
-          alt={org.name + ' logo'}
-          style={{width:'20px', height:'20px', borderRadius:'50%', objectFit:'cover', border:'1px solid #2A3550', flexShrink:0}}
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          style={{width:'20px', height:'20px', borderRadius:'50%', background:'#1E2845', border:'1px solid #2A3550', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'8px', fontWeight:700, color:'#94A3B8', flexShrink:0}}
-        >
-          {org.name.charAt(0).toUpperCase()}
-        </div>
-      )}
-      <span style={{fontSize:'13px', fontWeight:600, color:'#94A3B8'}}>{org.name}</span>
-    </div>
-  );
-})}
+                {coHosts.map(function(org) {
+                  return (
+                    <div key={org.id} className="flex items-center gap-2" aria-label={'Co-hosted with ' + org.name}>
+                      <span style={{fontSize:'11px', fontWeight:600, color:'#94A3B8', minWidth:'84px'}}>Co-hosted with</span>
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt={org.name + ' logo'}
+                          style={{width:'20px', height:'20px', borderRadius:'50%', objectFit:'cover', border:'1px solid #E2E8F0', flexShrink:0}}/>
+                      ) : (
+                        <div aria-hidden="true"
+                          style={{width:'20px', height:'20px', borderRadius:'50%', background:'#F1F5F9', border:'1px solid #E2E8F0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'8px', fontWeight:700, color:'#64748B', flexShrink:0}}>
+                          {org.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span style={{fontSize:'13px', fontWeight:600, color:'#475569'}}>{org.name}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
         </div>
-      </div>
+      </header>
 
-      {/* Body */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* ── Body ────────────────────────────────────────────────────────── */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          {/* Left column */}
+          {/* ── Left column ─────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
 
             {rsvpSuccess && (
-              <div className="bg-[#1B3A2F] border border-green-700 rounded-xl p-4" role="alert">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4" role="alert">
                 <div className="flex items-center gap-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  <p className="text-green-400 font-semibold text-sm">
+                  <p className="text-green-700 font-semibold text-sm">
                     {isPaidEvent ? 'Ticket confirmed — see you there!' : 'RSVP updated successfully!'}
                   </p>
                 </div>
@@ -802,39 +878,39 @@ if (collabRows && collabRows.length > 0) {
             )}
 
             {/* Date & Time */}
-            <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-              <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Date & Time</p>
+            <section aria-labelledby="section-datetime" style={cardStyle}>
+              <span id="section-datetime" style={sectionLabel}>Date &amp; Time</span>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide mb-1">Date</p>
-                  <p className="text-white font-semibold">{formatDate(event.start_time)}</p>
+                  <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">Date</p>
+                  <p className="text-[#0E1523] font-semibold">{formatDate(event.start_time)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide mb-1">Time</p>
-                  <p className="text-white font-semibold">
+                  <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">Time</p>
+                  <p className="text-[#0E1523] font-semibold">
                     {formatTime(event.start_time)}{event.end_time && ' – ' + formatTime(event.end_time)}
                   </p>
                 </div>
                 {isPastEvent && (
-                  <div className="mt-2 bg-[#1E2845] border border-[#2A3550] rounded-lg p-3">
-                    <p className="text-sm text-[#94A3B8]">This event has already occurred.</p>
+                  <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-sm text-[#64748B]">This event has already occurred.</p>
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
             {/* Location */}
-            <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-              <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>
+            <section aria-labelledby="section-location" style={cardStyle}>
+              <span id="section-location" style={sectionLabel}>
                 {event.is_virtual ? 'Virtual Event' : 'Location'}
-              </p>
+              </span>
               {event.is_virtual ? (
                 <div>
-                  <p className="text-[#CBD5E1] mb-3">This is a virtual event.</p>
+                  <p className="text-[#475569] mb-3">This is a virtual event.</p>
                   {event.virtual_link ? (
                     userRsvp === 'going' ? (
                       <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                         Join Virtual Event
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -852,44 +928,46 @@ if (collabRows && collabRows.length > 0) {
                 </div>
               ) : (
                 <div>
-                  <p className="text-white font-semibold mb-3">{event.location}</p>
+                  <p className="text-[#0E1523] font-semibold mb-3">{event.location}</p>
                   <a href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.location)}
                     target="_blank" rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                    className="text-blue-500 hover:text-blue-600 font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                     View on Map →
                   </a>
                 </div>
               )}
-            </div>
+            </section>
 
             {/* Description */}
             {event.description && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Description</p>
-                <p className="text-[#CBD5E1] whitespace-pre-wrap leading-relaxed">{event.description}</p>
-              </div>
+              <section aria-labelledby="section-description" style={cardStyle}>
+                <span id="section-description" style={sectionLabel}>Description</span>
+                <p className="text-[#475569] whitespace-pre-wrap leading-relaxed">{event.description}</p>
+              </section>
             )}
 
             {/* Capacity */}
             {event.max_attendees && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Capacity</p>
+              <section aria-labelledby="section-capacity" style={cardStyle}>
+                <span id="section-capacity" style={sectionLabel}>Capacity</span>
                 <div className="flex items-center justify-between">
-                  <p className="text-[#CBD5E1]">
-                    <span className="text-2xl font-extrabold text-white">{counts.going + guestRsvpCount}</span>
-                    <span className="text-[#94A3B8]"> / {event.max_attendees} spots filled</span>
+                  <p className="text-[#475569]">
+                    <span className="text-2xl font-extrabold text-[#0E1523]">{counts.going + guestRsvpCount}</span>
+                    <span className="text-[#64748B]"> / {event.max_attendees} spots filled</span>
                   </p>
                   {(counts.going + guestRsvpCount) >= event.max_attendees && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900 text-red-300">Event Full</span>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">
+                      Event Full
+                    </span>
                   )}
                 </div>
-              </div>
+              </section>
             )}
 
             {/* QR Code */}
             <EventQRCode event={event}/>
 
-            {/* Attendance Check-In — only on event day if enabled */}
+            {/* Attendance Check-In — event day only */}
             {showCheckIn && (
               <AttendanceCheckIn
                 event={event}
@@ -901,32 +979,32 @@ if (collabRows && collabRows.length > 0) {
 
           </div>
 
-          {/* Right column */}
+          {/* ── Right column ────────────────────────────────────────────── */}
           <div className="space-y-6">
 
             {/* RSVP / Ticket card — members only */}
             {!isPastEvent && currentUser && isMember && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
+              <section aria-labelledby="section-rsvp" style={cardStyle}>
                 {isPaidEvent ? (
                   <>
-                    <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'4px'}}>Tickets</p>
-                    <p className="text-[#94A3B8] text-xs mb-4">Processed securely via Stripe.</p>
+                    <span id="section-rsvp" style={sectionLabel}>Tickets</span>
+                    <p className="text-[#64748B] text-xs mb-4">Processed securely via Stripe.</p>
 
                     {hasTicket ? (
                       <div className="space-y-3">
-                        <div className="w-full px-4 py-3 rounded-lg font-semibold text-sm text-center bg-green-600 text-white flex items-center justify-center gap-2">
+                        <div className="w-full px-4 py-3 rounded-lg font-semibold text-sm text-center bg-green-500 text-white flex items-center justify-center gap-2">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <polyline points="20 6 9 17 4 12"/>
                           </svg>
                           Ticket Confirmed
                         </div>
-                        <div className="border-t border-[#2A3550] pt-3 space-y-2">
+                        <div className="border-t border-slate-200 pt-3 space-y-2">
                           <button onClick={function() { handleRsvp('maybe'); }} disabled={rsvpLoading}
-                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='maybe'?'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='maybe' ? 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                             Maybe
                           </button>
                           <button onClick={function() { handleRsvp('not_going'); }} disabled={rsvpLoading}
-                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='not_going'?'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='not_going' ? 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                             Can't Go
                           </button>
                         </div>
@@ -939,16 +1017,23 @@ if (collabRows && collabRows.length > 0) {
                           var remaining = tt.quantity_available != null ? tt.quantity_available - (tt.quantity_sold || 0) : null;
                           var soldOut = remaining != null && remaining <= 0;
                           return (
-                            <div key={tt.id} className={'rounded-xl border p-3 ' + (soldOut?'border-[#2A3550] opacity-50':'border-[#2A3550] bg-[#0E1523]')}>
+                            <div key={tt.id} style={{
+                              borderRadius: '12px',
+                              border: '1px solid #E2E8F0',
+                              padding: '12px',
+                              background: soldOut ? '#F8FAFC' : '#FFFFFF',
+                              opacity: soldOut ? 0.55 : 1,
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            }}>
                               <div className="flex items-start justify-between gap-2 mb-2">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-white font-semibold text-sm">{tt.name}</p>
+                                  <p className="text-[#0E1523] font-semibold text-sm">{tt.name}</p>
                                   <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                                    <span className="text-[#F5B731] font-bold text-sm">{formatPrice(active.price)}</span>
+                                    <span className="text-[#B45309] font-bold text-sm">{formatPrice(active.price)}</span>
                                     {active.isEarlyBird && (
                                       <>
-                                        <span className="text-[#64748B] line-through text-xs">{formatPrice(tt.price)}</span>
-                                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-yellow-900 text-yellow-300">Early Bird</span>
+                                        <span className="text-[#94A3B8] line-through text-xs">{formatPrice(tt.price)}</span>
+                                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Early Bird</span>
                                       </>
                                     )}
                                   </div>
@@ -956,19 +1041,19 @@ if (collabRows && collabRows.length > 0) {
                                     <p className="text-xs text-[#64748B] mt-0.5">Ends {new Date(tt.early_bird_ends_at).toLocaleDateString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</p>
                                   )}
                                   {remaining != null && !soldOut && <p className="text-xs text-[#64748B] mt-0.5">{remaining} remaining</p>}
-                                  {soldOut && <p className="text-xs text-red-400 mt-0.5 font-semibold">Sold Out</p>}
+                                  {soldOut && <p className="text-xs text-red-500 mt-0.5 font-semibold">Sold Out</p>}
                                 </div>
                                 {!soldOut && (
                                   <div className="flex items-center gap-2 flex-shrink-0">
                                     <button type="button" onClick={function() { updateQty(tt.id, -1); }} disabled={qty===0}
                                       aria-label={'Decrease quantity for ' + tt.name}
-                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
+                                      className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-[#0E1523] font-bold flex items-center justify-center hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                     </button>
-                                    <span className="w-6 text-center text-white font-bold text-sm" aria-live="polite">{qty}</span>
+                                    <span className="w-6 text-center text-[#0E1523] font-bold text-sm" aria-live="polite">{qty}</span>
                                     <button type="button" onClick={function() { updateQty(tt.id, 1); }} disabled={remaining!=null&&qty>=remaining}
                                       aria-label={'Increase quantity for ' + tt.name}
-                                      className="w-8 h-8 rounded-lg bg-[#1E2845] border border-[#2A3550] text-white font-bold flex items-center justify-center hover:bg-[#2A3550] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
+                                      className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-[#0E1523] font-bold flex items-center justify-center hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-30">
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                     </button>
                                   </div>
@@ -980,112 +1065,124 @@ if (collabRows && collabRows.length > 0) {
 
                         {totalQty > 0 && (
                           <div className="flex items-center justify-between pt-1 px-1">
-                            <span className="text-[#94A3B8] text-sm">{totalQty} ticket{totalQty!==1?'s':''}</span>
-                            <span className="text-white font-bold">{formatPrice(orderTotal)}</span>
+                            <span className="text-[#64748B] text-sm">{totalQty} ticket{totalQty!==1?'s':''}</span>
+                            <span className="text-[#0E1523] font-bold">{formatPrice(orderTotal)}</span>
                           </div>
                         )}
 
                         <button onClick={handleCheckoutClick} disabled={ticketLoading||totalQty===0}
-                          className="w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 flex items-center justify-center gap-2 bg-[#F5B731] text-[#0E1523] hover:bg-yellow-300">
+                          className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-all flex items-center justify-center gap-2 ' + (totalQty===0 ? 'bg-slate-100 text-[#94A3B8] cursor-not-allowed' : 'bg-[#F5B731] text-[#0E1523] hover:bg-yellow-300') + (ticketLoading ? ' opacity-50' : '')}>
                           {ticketLoading ? (
-                            <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Redirecting...</>
+                            <>
+                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                              Redirecting...
+                            </>
                           ) : totalQty === 0 ? 'Select tickets above' : (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Checkout — {formatPrice(orderTotal)}</>
+                            <>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                              Checkout — {formatPrice(orderTotal)}
+                            </>
                           )}
                         </button>
 
-                        <div className="border-t border-[#2A3550] pt-3 space-y-2">
+                        <div className="border-t border-slate-200 pt-3 space-y-2">
                           <button onClick={function() { handleRsvp('maybe'); }} disabled={rsvpLoading}
-                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='maybe'?'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='maybe' ? 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                             Maybe
                           </button>
                           <button onClick={function() { handleRsvp('not_going'); }} disabled={rsvpLoading}
-                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='not_going'?'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                            className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='not_going' ? 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                             Can't Go
                           </button>
                         </div>
-                        <p className="text-xs text-[#64748B] text-center">You'll be redirected to Stripe to complete payment.</p>
+                        <p className="text-xs text-[#94A3B8] text-center">You'll be redirected to Stripe to complete payment.</p>
                       </div>
                     )}
                   </>
                 ) : (
                   <>
-                    <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Your RSVP</p>
+                    <span id="section-rsvp" style={sectionLabel}>Your RSVP</span>
                     <div className="space-y-3">
                       <button onClick={function() { handleRsvp('going'); }} disabled={rsvpLoading}
-                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='going'?'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='going' ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                         Going
                       </button>
                       <button onClick={function() { handleRsvp('maybe'); }} disabled={rsvpLoading}
-                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='maybe'?'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='maybe' ? 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                         Maybe
                       </button>
                       <button onClick={function() { handleRsvp('not_going'); }} disabled={rsvpLoading}
-                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1A2035] transition-all disabled:opacity-50 ' + (userRsvp==='not_going'?'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500':'bg-[#0E1523] border border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845] focus:ring-gray-500')}>
+                        className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='not_going' ? 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
                         Can't Go
                       </button>
                     </div>
                   </>
                 )}
-              </div>
+              </section>
             )}
 
             {/* Response counts — members only */}
-            {isMember && <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-              <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Responses</p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#CBD5E1] text-sm">{isPaidEvent?'Tickets Sold':'Going'}</span>
-                  <span className="font-bold text-green-400">{counts.going}</span>
+            {isMember && (
+              <section aria-labelledby="section-responses" style={cardStyle}>
+                <span id="section-responses" style={sectionLabel}>Responses</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#475569] text-sm">{isPaidEvent ? 'Tickets Sold' : 'Going'}</span>
+                    <span className="font-bold text-green-600">{counts.going}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#475569] text-sm">Maybe</span>
+                    <span className="font-bold text-yellow-600">{counts.maybe}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#475569] text-sm">Can't Go</span>
+                    <span className="font-bold text-red-500">{counts.not_going}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#CBD5E1] text-sm">Maybe</span>
-                  <span className="font-bold text-yellow-400">{counts.maybe}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#CBD5E1] text-sm">Can't Go</span>
-                  <span className="font-bold text-red-400">{counts.not_going}</span>
-                </div>
-              </div>
-            </div>}
+              </section>
+            )}
 
             {/* Going list — members only */}
             {isMember && counts.going > 0 && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>
-                  {(isPaidEvent?'Attending (':'Going (') + counts.going + ')'}
-                </p>
+              <section aria-labelledby="section-going" style={cardStyle}>
+                <span id="section-going" style={sectionLabel}>
+                  {(isPaidEvent ? 'Attending (' : 'Going (') + counts.going + ')'}
+                </span>
                 <ul className="space-y-2" role="list">
                   {rsvps.filter(function(r) { return r.status==='going'; }).slice(0,10).map(function(rsvp) {
                     return (
                       <li key={rsvp.id} className="flex items-center gap-3" role="listitem">
                         {rsvp.members?.profile_photo_url ? (
-                          <img src={rsvp.members.profile_photo_url} alt={rsvp.members.first_name+' '+rsvp.members.last_name} className="w-8 h-8 rounded-full object-cover"/>
+                          <img src={rsvp.members.profile_photo_url}
+                            alt={rsvp.members.first_name + ' ' + rsvp.members.last_name}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200"/>
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-[#1D3461] text-blue-400 flex items-center justify-center font-bold text-xs" aria-hidden="true">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs" aria-hidden="true">
                             {rsvp.members?.first_name?.[0]}{rsvp.members?.last_name?.[0]}
                           </div>
                         )}
-                        <span className="text-sm text-[#CBD5E1]">{rsvp.members?.first_name} {rsvp.members?.last_name}</span>
+                        <span className="text-sm text-[#475569]">{rsvp.members?.first_name} {rsvp.members?.last_name}</span>
                       </li>
                     );
                   })}
-                  {counts.going > 10 && <p className="text-sm text-[#64748B] mt-2">+ {counts.going-10} more</p>}
+                  {counts.going > 10 && <p className="text-sm text-[#64748B] mt-2">+ {counts.going - 10} more</p>}
                 </ul>
-              </div>
+              </section>
             )}
 
-            {/* Guest RSVP — for non-members on free public events */}
+            {/* Guest RSVP — non-members, free public events */}
             {!isPastEvent && !isMember && !isPaidEvent && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6">
-                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>RSVP to this Event</p>
+              <section aria-labelledby="section-guest-rsvp" style={cardStyle}>
+                <span id="section-guest-rsvp" style={sectionLabel}>RSVP to this Event</span>
                 {guestRsvpSuccess ? (
                   <div className="text-center py-4" role="status">
-                    <div className="w-12 h-12 rounded-full bg-[#1B3A2F] border border-green-700 flex items-center justify-center mx-auto mb-3">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    <div className="w-12 h-12 rounded-full bg-green-50 border border-green-200 flex items-center justify-center mx-auto mb-3">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
                     </div>
-                    <p className="text-white font-bold text-base mb-1">You're on the list!</p>
-                    <p className="text-[#94A3B8] text-sm">A confirmation has been sent to {guestInfo.email}.</p>
+                    <p className="text-[#0E1523] font-bold text-base mb-1">You're on the list!</p>
+                    <p className="text-[#64748B] text-sm">A confirmation has been sent to {guestInfo.email}.</p>
                   </div>
                 ) : (
                   <form onSubmit={submitGuestRsvp} noValidate>
@@ -1097,47 +1194,53 @@ if (collabRows && collabRows.length > 0) {
                       ].map(function(f) {
                         return (
                           <div key={f.id}>
-                            <label htmlFor={f.id} className="block text-xs font-semibold text-[#CBD5E1] mb-1.5">
-                              {f.label}{f.required && <span className="text-red-400 ml-1" aria-hidden="true">*</span>}
+                            <label htmlFor={f.id} className="block text-xs font-semibold text-[#475569] mb-1.5">
+                              {f.label}
+                              {f.required && <span className="text-red-500 ml-1" aria-hidden="true">*</span>}
                             </label>
                             <input
                               id={f.id} type={f.type} required={f.required}
                               value={guestInfo[f.key]}
                               placeholder={f.placeholder}
                               onChange={function(e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function(p) { return Object.assign({}, p, u); }); }}
-                              className="w-full px-3 py-2.5 bg-[#0E1523] border border-[#2A3550] rounded-lg text-white text-sm placeholder-[#64748B] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-lg text-[#0E1523] text-sm placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-required={f.required}
                             />
                           </div>
                         );
                       })}
                       <button type="submit" disabled={guestRsvpLoading}
-                        className="w-full px-4 py-3 bg-blue-500 text-white font-bold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035] disabled:opacity-50 flex items-center justify-center gap-2">
+                        className="w-full px-4 py-3 bg-blue-500 text-white font-bold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center justify-center gap-2">
                         {guestRsvpLoading ? (
-                          <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Submitting...</>
+                          <>
+                            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                            Submitting...
+                          </>
                         ) : 'RSVP to this Event'}
                       </button>
                     </div>
                   </form>
                 )}
-              </div>
+              </section>
             )}
 
-            {/* Paid event prompt for non-members */}
+            {/* Paid event — non-members */}
             {!isPastEvent && !isMember && isPaidEvent && (
-              <div className="bg-[#1A2035] border border-[#2A3550] rounded-xl p-6 text-center">
-                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',textTransform:'uppercase',letterSpacing:'4px',marginBottom:'12px'}}>Tickets</p>
-                <p className="text-[#CBD5E1] text-sm mb-4">You need to be a member of this organization to purchase tickets.</p>
-                <Link to="/signup" className="inline-block px-5 py-2.5 bg-blue-500 text-white font-semibold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#1A2035]">
+              <section aria-labelledby="section-tickets-gate" style={cardStyle} className="text-center">
+                <span id="section-tickets-gate" style={sectionLabel}>Tickets</span>
+                <p className="text-[#475569] text-sm mb-4">You need to be a member of this organization to purchase tickets.</p>
+                <Link to="/signup"
+                  className="inline-block px-5 py-2.5 bg-blue-500 text-white font-semibold text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                   Join to Get Tickets
                 </Link>
-              </div>
+              </section>
             )}
 
           </div>
         </div>
-      </div>
+      </main>
 
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
       {showCheckoutForm && (
         <CheckoutFormModal
           fields={checkoutFields}
@@ -1149,18 +1252,30 @@ if (collabRows && collabRows.length > 0) {
       )}
 
       {showRecurringOptions && (
-        <RecurringEventOptions event={event} action={recurringAction} onSelect={handleRecurringOptionSelect}
-          onCancel={function() { setShowRecurringOptions(false); setRecurringAction(null); }}/>
+        <RecurringEventOptions
+          event={event}
+          action={recurringAction}
+          onSelect={handleRecurringOptionSelect}
+          onCancel={function() { setShowRecurringOptions(false); setRecurringAction(null); }}
+        />
       )}
 
       {showEditModal && (
-        <EditEvent isOpen={showEditModal} onClose={function() { setShowEditModal(false); setEditScope(null); }}
-          onSuccess={handleEventUpdated} event={event} editScope={editScope}
-          isRecurring={event.is_recurring||!!event.parent_event_id}/>
+        <EditEvent
+          isOpen={showEditModal}
+          onClose={function() { setShowEditModal(false); setEditScope(null); }}
+          onSuccess={handleEventUpdated}
+          event={event}
+          editScope={editScope}
+          isRecurring={event.is_recurring || !!event.parent_event_id}
+        />
       )}
 
       {showAttendanceReport && (
-        <AttendanceReport event={event} onClose={function() { setShowAttendanceReport(false); }}/>
+        <AttendanceReport
+          event={event}
+          onClose={function() { setShowAttendanceReport(false); }}
+        />
       )}
 
     </div>
