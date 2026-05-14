@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 function IconClock() {
@@ -110,16 +109,11 @@ function formatDateShort(isoStr) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 function EventCard({ event, showOrganization, compact }) {
-  var { isDark } = useTheme();
-
   if (!event || !event.id) return null;
 
-  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
-  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
-  var footerBg      = isDark ? '#151B2D' : '#F8FAFC';
-  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
-  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+  var cardShadow  = '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)';
+  var borderColor = '#E2E8F0';
+  var footerBg    = '#F8FAFC';
 
   var eventType = getEventType(event);
   var startDate = event.start_time ? new Date(event.start_time) : new Date();
@@ -127,10 +121,10 @@ function EventCard({ event, showOrganization, compact }) {
 
   // Visibility config
   var visibilityMap = {
-    public:  { icon: <IconGlobe />,    label: 'Public',       bg: isDark ? 'rgba(34,197,94,0.15)'  : '#DCFCE7', color: '#22C55E' },
-    members: { icon: <IconUsers />,    label: 'Members Only', bg: isDark ? 'rgba(59,130,246,0.15)' : '#DBEAFE', color: '#3B82F6' },
-    groups:  { icon: <IconLock />,     label: 'Groups Only',  bg: isDark ? 'rgba(139,92,246,0.15)' : '#EDE9FE', color: '#8B5CF6' },
-    draft:   { icon: <IconDraft />,    label: 'Draft',        bg: isDark ? 'rgba(100,116,139,0.15)': '#F1F5F9', color: '#64748B' },
+    public:  { icon: <IconGlobe />,  label: 'Public',       bg: '#DCFCE7', color: '#22C55E' },
+    members: { icon: <IconUsers />,  label: 'Members Only', bg: '#DBEAFE', color: '#3B82F6' },
+    groups:  { icon: <IconLock />,   label: 'Groups Only',  bg: '#EDE9FE', color: '#8B5CF6' },
+    draft:   { icon: <IconDraft />,  label: 'Draft',        bg: '#F1F5F9', color: '#64748B' },
   };
   var vis = visibilityMap[event.visibility] || visibilityMap.members;
 
@@ -148,9 +142,13 @@ function EventCard({ event, showOrganization, compact }) {
       <Link
         to={'/events/' + event.id}
         style={{
-          display: 'block', textDecoration: 'none',
-          background: cardBg, border: '1px solid ' + borderColor,
-          borderRadius: '10px', padding: '12px',
+          display: 'block',
+          textDecoration: 'none',
+          background: '#FFFFFF',
+          border: '1px solid ' + borderColor,
+          borderRadius: '10px',
+          padding: '12px',
+          boxShadow: cardShadow,
         }}
         className="focus:outline-none focus:ring-2 focus:ring-blue-500 hover:shadow-md transition-shadow"
         aria-label={'View details for ' + event.title}
@@ -167,29 +165,29 @@ function EventCard({ event, showOrganization, compact }) {
               </div>
             </div>
             {event.is_recurring && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '4px', color: textMuted }} title="Recurring">
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '4px', color: '#64748B' }} title="Recurring">
                 <IconRecurring />
               </div>
             )}
           </div>
           {/* Info */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: 700, color: textPrimary, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontWeight: 700, color: '#0E1523', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {event.title}
             </p>
             {event.start_time && (
-              <p style={{ fontSize: '12px', color: textSecondary, marginTop: '2px' }}>
+              <p style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>
                 {formatTime(event.start_time, event.event_timezone)}
               </p>
             )}
             {showOrganization && orgName && (
-              <p style={{ fontSize: '11px', color: textMuted, marginTop: '2px' }}>{orgName}</p>
+              <p style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>{orgName}</p>
             )}
             {event.is_rescheduled && (
               <span style={{
                 display: 'inline-block', marginTop: '4px',
                 padding: '1px 6px', borderRadius: '99px', fontSize: '10px', fontWeight: 700,
-                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#F5B731',
+                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#B45309',
               }}>Rescheduled</span>
             )}
           </div>
@@ -203,10 +201,13 @@ function EventCard({ event, showOrganization, compact }) {
     <Link
       to={'/events/' + event.id}
       style={{
-        display: 'block', textDecoration: 'none',
-        background: cardBg,
+        display: 'block',
+        textDecoration: 'none',
+        background: '#FFFFFF',
         border: event.is_featured ? '2px solid #F5B731' : ('1px solid ' + borderColor),
-        borderRadius: '12px', overflow: 'hidden',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: cardShadow,
       }}
       className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:shadow-lg transition-shadow"
       aria-label={'View details for ' + event.title}
@@ -227,7 +228,7 @@ function EventCard({ event, showOrganization, compact }) {
             </div>
           </div>
           {event.is_recurring && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '6px', color: textMuted }} title="Recurring event">
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '6px', color: '#64748B' }} title="Recurring event">
               <IconRecurring />
             </div>
           )}
@@ -236,16 +237,16 @@ function EventCard({ event, showOrganization, compact }) {
         {/* Details */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Org + Featured pill row */}
-          {(showOrganization && orgName) || event.is_featured ? (
+          {((showOrganization && orgName) || event.is_featured) ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               {showOrganization && orgName && (
-                <span style={{ fontSize: '12px', color: textMuted, fontWeight: 600 }}>{orgName}</span>
+                <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>{orgName}</span>
               )}
               {event.is_featured && (
                 <span style={{
                   marginLeft: 'auto', flexShrink: 0,
                   background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)',
-                  color: '#F5B731', fontSize: '10px', fontWeight: 700,
+                  color: '#B45309', fontSize: '10px', fontWeight: 700,
                   padding: '2px 8px', borderRadius: '99px',
                   textTransform: 'uppercase', letterSpacing: '1px',
                 }}>Featured</span>
@@ -254,7 +255,7 @@ function EventCard({ event, showOrganization, compact }) {
           ) : null}
 
           {/* Title */}
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, marginBottom: '8px', lineHeight: 1.3 }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0E1523', marginBottom: '8px', lineHeight: 1.3 }}>
             {event.title}
           </h3>
 
@@ -263,10 +264,10 @@ function EventCard({ event, showOrganization, compact }) {
             <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{
                 padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700,
-                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#F5B731',
+                background: 'rgba(245,183,49,0.15)', border: '1px solid rgba(245,183,49,0.4)', color: '#B45309',
               }}>Rescheduled</span>
               {event.original_start_time && (
-                <span style={{ fontSize: '12px', color: textMuted, textDecoration: 'line-through' }}>
+                <span style={{ fontSize: '12px', color: '#64748B', textDecoration: 'line-through' }}>
                   Was: {formatDateShort(event.original_start_time)}
                 </span>
               )}
@@ -275,7 +276,7 @@ function EventCard({ event, showOrganization, compact }) {
 
           {/* Time */}
           {event.start_time && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textSecondary, marginBottom: '5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', marginBottom: '5px' }}>
               <IconClock />
               <span>
                 {formatTime(event.start_time, event.event_timezone)}
@@ -285,14 +286,14 @@ function EventCard({ event, showOrganization, compact }) {
           )}
 
           {/* Location / type */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textSecondary, marginBottom: '5px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', marginBottom: '5px' }}>
             {typeDisplay.icon}
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{typeDisplay.label}</span>
           </div>
 
           {/* Description */}
           {event.description && (
-            <p style={{ fontSize: '13px', color: textMuted, marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '13px', color: '#64748B', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
               {event.description}
             </p>
           )}
@@ -301,7 +302,8 @@ function EventCard({ event, showOrganization, compact }) {
 
       {/* Footer */}
       <div style={{
-        padding: '10px 16px', background: footerBg,
+        padding: '10px 16px',
+        background: footerBg,
         borderTop: '1px solid ' + borderColor,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap',
       }}>
@@ -320,15 +322,14 @@ function EventCard({ event, showOrganization, compact }) {
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px',
               padding: '3px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
-              background: isDark ? 'rgba(100,116,139,0.15)' : '#F1F5F9',
-              border: '1px solid ' + borderColor, color: textMuted,
+              background: '#F1F5F9', border: '1px solid ' + borderColor, color: '#64748B',
             }}>
               <IconUsers />
               Max {event.max_attendees}
             </span>
           )}
         </div>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: textMuted, fontWeight: 500 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
           Details <IconChevronRight />
         </span>
       </div>

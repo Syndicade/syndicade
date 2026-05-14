@@ -2,25 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { et } from '../lib/eventDiscoveryTranslations';
-import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
 import DemoBadge from '../components/DemoBadge';
-
-var EVENT_TYPE_COLORS = {
-  'advocacy-event':        { bg: '#3B1A1A', color: '#F87171' },
-  'blood-drive':           { bg: '#3B1A2A', color: '#FB7185' },
-  'clothing-drive':        { bg: '#2D1B4E', color: '#C084FC' },
-  'community-meeting':     { bg: '#1D3461', color: '#60A5FA' },
-  'cultural-event':        { bg: '#3B2A1A', color: '#FB923C' },
-  'education-workshop':    { bg: '#1A2E3B', color: '#22D3EE' },
-  'faith-based-event':     { bg: '#1E1B4B', color: '#818CF8' },
-  'food-drive':            { bg: '#3B3A1A', color: '#FBBF24' },
-  'fundraiser':            { bg: '#1B3A2F', color: '#4ADE80' },
-  'health-wellness':       { bg: '#1B3A2F', color: '#34D399' },
-  'volunteer-opportunity': { bg: '#1A3B3B', color: '#2DD4BF' },
-  'youth-event':           { bg: '#3B1A2E', color: '#F472B6' },
-};
 
 var EVENT_TYPE_COLORS_LIGHT = {
   'advocacy-event':        { bg: '#FEE2E2', color: '#B91C1C' },
@@ -140,19 +124,13 @@ function formatEventDate(startTime, endTime) {
 }
 
 export default function EventDiscoveryCard({ event, lang, session, initialSaved, adminOrgs, coHosts }) {
-  var { isDark } = useTheme();
   var navigate = useNavigate();
   lang = lang || 'en';
   initialSaved = initialSaved || false;
   adminOrgs = adminOrgs || [];
   coHosts = coHosts || [];
 
-  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
-  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
-  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
-  var tackCore      = isDark ? '#1D4ED8'  : '#2563EB';
+  var borderColor = '#E2E8F0';
 
   var [saved, setSaved] = useState(initialSaved);
   var [saveLoading, setSaveLoading] = useState(false);
@@ -165,7 +143,6 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
   var showCollaborate = eligibleOrgs.length > 0;
   var isFeatured      = event.is_featured;
   var eventUrl        = '/events/' + event.id;
-  var typeColors      = isDark ? EVENT_TYPE_COLORS : EVENT_TYPE_COLORS_LIGHT;
 
   async function handleSave(e) {
     e.stopPropagation();
@@ -192,13 +169,13 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
     var url = window.location.origin + eventUrl;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success(et(lang, 'linkCopied') || 'Link copied!');
+      mascotSuccessToast(et(lang, 'linkCopied') || 'Link copied!');
     } catch { toast.error('Could not copy link'); }
   }
 
   function handleAddToCalendar(e) {
     e.stopPropagation();
-    try { generateICS(event); toast.success('Calendar file downloaded'); }
+    try { generateICS(event); mascotSuccessToast('Calendar file downloaded'); }
     catch { toast.error('Could not generate calendar file'); }
   }
 
@@ -267,36 +244,26 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
       <article
         onClick={handleCardClick}
         style={{
-          background: cardBg,
+          background: '#FFFFFF',
           border: isFeatured ? '2px solid #F5B731' : ('1px solid ' + borderColor),
           borderRadius: '12px',
-          overflow: 'visible',
+          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          marginTop: '10px',
           cursor: 'pointer',
+          boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
           transition: 'box-shadow 0.15s',
         }}
         aria-label={'Event: ' + event.title}
         role="article"
       >
-        {/* Brand tack */}
-        <div aria-hidden="true" style={{
-          width: '16px', height: '16px', borderRadius: '50%',
-          position: 'absolute', top: '-8px', left: '50%', transform: 'translateX(-50%)',
-          background: isFeatured
-            ? 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.55) 0%, #B45309 52%, rgba(0,0,0,0.25) 100%)'
-            : 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.55) 0%, ' + tackCore + ' 52%, rgba(0,0,0,0.25) 100%)',
-          boxShadow: '0 2px 5px rgba(0,0,0,0.35)', zIndex: 2,
-        }} />
-
-        <div style={{ padding: '18px 16px 14px', display: 'flex', flexDirection: 'column', gap: '10px', borderRadius: '12px', overflow: 'hidden' }}>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
 
           {/* ── Header: title + org + co-hosts + save/share ── */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, lineHeight: 1.3 }}>{event.title}</h2>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', lineHeight: 1.3 }}>{event.title}</h2>
               {event.org_name && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
                   <Link
@@ -309,7 +276,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                     {event.org_name}
                   </Link>
                   {isFeatured && (
-                    <span style={{ marginLeft: 'auto', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#F5B731', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>
+                    <span style={{ marginLeft: 'auto', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#B45309', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>
                       Featured
                     </span>
                   )}
@@ -328,27 +295,34 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                 <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} aria-label="Co-hosting organizations">
                   {coHosts.map(function(name) {
                     return (
-                      <span
-                        key={name}
-                        style={{ fontSize: '12px', color: textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <span style={{ fontSize: '10px', fontWeight: 600, color: textMuted, opacity: 0.7 }}>+ co-hosted with</span>
-                        <span style={{ fontWeight: 600, color: textSecondary }}>{name}</span>
+                      <span key={name} style={{ fontSize: '12px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#94A3B8' }}>+ co-hosted with</span>
+                        <span style={{ fontWeight: 600, color: '#475569' }}>{name}</span>
                       </span>
                     );
                   })}
                 </div>
               )}
             </div>
+
+            {/* Save + Share */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-              <button onClick={handleSave} disabled={saveLoading} aria-label={saved ? 'Unsave event' : 'Save event'} aria-pressed={saved}
-                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: saveLoading ? 'not-allowed' : 'pointer', color: saved ? '#F5B731' : textMuted, opacity: saveLoading ? 0.5 : 1 }}
-                className="hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400">
+              <button
+                onClick={handleSave}
+                disabled={saveLoading}
+                aria-label={saved ? 'Unsave event' : 'Save event'}
+                aria-pressed={saved}
+                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: saveLoading ? 'not-allowed' : 'pointer', color: saved ? '#F5B731' : '#64748B', opacity: saveLoading ? 0.5 : 1 }}
+                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              >
                 <BookmarkIcon filled={saved} />
               </button>
-              <button onClick={handleShare} aria-label="Share event"
-                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: textMuted }}
-                className="hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <button
+                onClick={handleShare}
+                aria-label="Share event"
+                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B' }}
+                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 <ShareIcon />
               </button>
             </div>
@@ -356,12 +330,12 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
 
           {/* ── Date & Location ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textMuted }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
               <CalendarIcon />
               {formatEventDate(event.start_time, event.end_time)}
             </span>
             {(locationDisplay || event.is_virtual) && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textMuted }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
                 <MapPinIcon />
                 {event.is_virtual
                   ? (event.location ? ('Hybrid \u00b7 ' + locationDisplay) : 'Virtual')
@@ -374,7 +348,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
           {((event.event_types && event.event_types.length > 0) || (event.audience && event.audience.length > 0)) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} aria-label="Event tags">
               {(event.event_types || []).slice(0, 2).map(function(type) {
-                var c = typeColors[type] || { bg: isDark ? '#1A2035' : '#F1F5F9', color: textMuted };
+                var c = EVENT_TYPE_COLORS_LIGHT[type] || { bg: '#F1F5F9', color: '#64748B' };
                 return (
                   <span key={type} style={{ background: c.bg, color: c.color, fontSize: '11px', fontWeight: 600, padding: '2px 9px', borderRadius: '99px' }}>
                     {et(lang, type)}
@@ -383,7 +357,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               })}
               {(event.audience || []).slice(0, 2).map(function(a) {
                 return (
-                  <span key={a} style={{ background: isDark ? '#1E2845' : '#F1F5F9', color: textMuted, fontSize: '11px', fontWeight: 500, padding: '2px 9px', borderRadius: '99px' }}>
+                  <span key={a} style={{ background: '#F1F5F9', color: '#64748B', fontSize: '11px', fontWeight: 500, padding: '2px 9px', borderRadius: '99px' }}>
                     {et(lang, a)}
                   </span>
                 );
@@ -395,15 +369,15 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', marginTop: 'auto', borderTop: '1px solid ' + borderColor, flexWrap: 'wrap', gap: '8px' }}>
 
             {/* Left meta */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: textMuted, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: '#64748B', flexWrap: 'wrap' }}>
               {event.languages && event.languages.length > 0 && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <GlobeIcon />
                   {event.languages.map(function(l) { return LANGUAGE_LABELS[l] || l; }).join(', ')}
                 </span>
               )}
-              {event.volunteer_signup && <span style={{ color: '#2DD4BF', fontWeight: 600 }}>Volunteer</span>}
-              {event.donation_dropoff  && <span style={{ color: '#FB923C', fontWeight: 600 }}>Donations</span>}
+              {event.volunteer_signup && <span style={{ color: '#0F766E', fontWeight: 600 }}>Volunteer</span>}
+              {event.donation_dropoff  && <span style={{ color: '#C2410C', fontWeight: 600 }}>Donations</span>}
             </div>
 
             {/* Right action buttons */}
@@ -411,8 +385,8 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               <button
                 onClick={handleAddToCalendar}
                 aria-label={'Add ' + event.title + ' to calendar'}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                className="hover:border-blue-500 hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <CalendarAddIcon />
                 Add to Calendar
@@ -421,7 +395,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               {showCollaborate && (
                 <button
                   onClick={openColabModal}
-                  style={{ fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '8px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#A78BFA', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  style={{ fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '8px', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', color: '#7C3AED', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   aria-label={'Request to collaborate on ' + event.title}
                   className="focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
@@ -434,7 +408,7 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                 onClick={function(e) { e.stopPropagation(); }}
                 style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', padding: '6px 14px', borderRadius: '8px', background: '#3B82F6', textDecoration: 'none', whiteSpace: 'nowrap' }}
                 aria-label={'View event: ' + event.title}
-                className="hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 View Event
               </Link>
@@ -446,36 +420,36 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
       {/* Collaborate Modal */}
       {colabModal && (
         <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
           onClick={closeColabModal}
           role="dialog"
           aria-modal="true"
           aria-labelledby="collab-modal-title"
         >
           <div
-            style={{ background: isDark ? '#1A2035' : '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: '448px', width: '100%' }}
+            style={{ background: '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxWidth: '448px', width: '100%' }}
             onClick={function(e) { e.stopPropagation(); }}
           >
             <div style={{ padding: '16px 24px', borderBottom: '1px solid ' + borderColor }}>
-              <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: textPrimary }}>Request Collaboration</h2>
-              <p style={{ fontSize: '14px', color: textMuted, marginTop: '4px' }}>{event.title}</p>
+              <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0E1523' }}>Request Collaboration</h2>
+              <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px' }}>{event.title}</p>
             </div>
 
             <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ fontSize: '14px', color: textSecondary }}>
+              <p style={{ fontSize: '14px', color: '#475569' }}>
                 Your collaboration request will be sent to the admins of this organization. If accepted, both org names will appear on the event.
               </p>
 
               {eligibleOrgs.length > 1 && (
                 <div>
-                  <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
+                  <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
                     Requesting as <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
                   </label>
                   <select
                     id="collab-org-select"
                     value={selectedOrgId}
                     onChange={function(e) { setSelectedOrgId(e.target.value); }}
-                    style={{ width: '100%', padding: '8px 12px', background: isDark ? '#0E1523' : '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none' }}
+                    style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
                     aria-required="true"
                     className="focus:ring-2 focus:ring-blue-500"
                   >
@@ -486,14 +460,14 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               )}
 
               {eligibleOrgs.length === 1 && (
-                <p style={{ fontSize: '14px', color: textSecondary }}>
-                  Requesting as <span style={{ color: textPrimary, fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
+                <p style={{ fontSize: '14px', color: '#475569' }}>
+                  Requesting as <span style={{ color: '#0E1523', fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
                 </p>
               )}
 
               <div>
-                <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>
-                  Message <span style={{ color: textMuted, fontWeight: 400 }}>(optional)</span>
+                <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
+                  Message <span style={{ color: '#64748B', fontWeight: 400 }}>(optional)</span>
                 </label>
                 <textarea
                   id="collab-message"
@@ -502,10 +476,10 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
                   placeholder="Introduce your organization or explain how you'd like to collaborate..."
                   rows={3}
                   maxLength={500}
-                  style={{ width: '100%', padding: '8px 12px', background: isDark ? '#0E1523' : '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: '#0E1523', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
                   className="focus:ring-2 focus:ring-purple-500"
                 />
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: textMuted, textAlign: 'right' }}>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748B', textAlign: 'right' }}>
                   {colabMessage.length}/500
                 </p>
               </div>
@@ -515,8 +489,8 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
               <button
                 onClick={closeColabModal}
                 disabled={colabLoading}
-                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: textSecondary, cursor: 'pointer' }}
-                className="focus:outline-none focus:ring-2 focus:ring-gray-500"
+                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: '#475569', cursor: 'pointer' }}
+                className="focus:outline-none focus:ring-2 focus:ring-slate-400 hover:bg-slate-50"
               >
                 Cancel
               </button>
