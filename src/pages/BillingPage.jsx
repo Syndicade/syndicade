@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
@@ -74,19 +73,18 @@ var PLANS = [
 ];
 
 var STATUS_LABELS = {
-  trialing:   { label: 'Free Trial',  color: 'bg-blue-100 text-blue-800'    },
-  active:     { label: 'Active',      color: 'bg-green-100 text-green-800'  },
-  paused:     { label: 'Paused',      color: 'bg-yellow-100 text-yellow-800'},
-  past_due:   { label: 'Past Due',    color: 'bg-red-100 text-red-800'      },
-  canceled:   { label: 'Canceled',    color: 'bg-gray-100 text-gray-600'    },
-  incomplete: { label: 'Incomplete',  color: 'bg-yellow-100 text-yellow-800'},
+  trialing:   { label: 'Free Trial',  color: 'bg-blue-100 text-blue-700'    },
+  active:     { label: 'Active',      color: 'bg-green-100 text-green-700'  },
+  paused:     { label: 'Paused',      color: 'bg-yellow-100 text-yellow-700'},
+  past_due:   { label: 'Past Due',    color: 'bg-red-100 text-red-700'      },
+  canceled:   { label: 'Canceled',    color: 'bg-slate-100 text-slate-600'  },
+  incomplete: { label: 'Incomplete',  color: 'bg-yellow-100 text-yellow-700'},
 };
 
 function BillingPage() {
   var { organizationId } = useParams();
   var navigate = useNavigate();
   var [searchParams] = useSearchParams();
-  var { isDark } = useTheme();
 
   var [subscription, setSubscription] = useState(null);
   var [orgData, setOrgData] = useState(null);
@@ -133,7 +131,6 @@ function BillingPage() {
   }
 
   async function handleSelectPlan(planId) {
-    // Student plan: no annual billing
     var interval = (planId === 'student') ? 'month' : billingInterval;
     setCheckoutLoading(planId);
     try {
@@ -188,11 +185,8 @@ function BillingPage() {
     if (!pauseResumeDate) { toast.error('Please select a resume date.'); return; }
     setPauseLoading(true);
     try {
-      // Pause starts at beginning of next billing cycle (end of current month)
       var now = new Date();
-      var pauseStart = new Date(now.getFullYear(), now.getMonth() + 1, 1); // first of next month
-
-      // Check 6-month limit
+      var pauseStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       var currentYear = now.getFullYear();
       var monthsUsed = (orgData.pause_year === currentYear ? orgData.pause_months_used_this_year : 0) || 0;
       var resumeDate = new Date(pauseResumeDate);
@@ -238,48 +232,37 @@ function BillingPage() {
     }
   }
 
-  var currentPlan = PLANS.find(function(p) { return p.id === subscription?.plan; }) || null;
+  var currentPlan = PLANS.find(function(p) { return p.id === (subscription && subscription.plan); }) || null;
   var statusInfo = subscription ? (STATUS_LABELS[subscription.status] || STATUS_LABELS['active']) : null;
-  var orgStatus = orgData?.account_status;
+  var orgStatus = orgData && orgData.account_status;
   var isPaused = orgStatus === 'paused';
-  var hasPauseScheduled = orgData?.pause_starts_at && !isPaused;
-  var isStudent = subscription?.plan === 'student';
-  var trialEnds = subscription?.trial_ends_at ? new Date(subscription.trial_ends_at) : null;
-  var periodEnds = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
+  var hasPauseScheduled = orgData && orgData.pause_starts_at && !isPaused;
+  var isStudent = subscription && subscription.plan === 'student';
+  var trialEnds = subscription && subscription.trial_ends_at ? new Date(subscription.trial_ends_at) : null;
+  var periodEnds = subscription && subscription.current_period_end ? new Date(subscription.current_period_end) : null;
   var daysLeftInTrial = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / (1000 * 60 * 60 * 24))) : 0;
   var planMemberLimit = currentPlan ? currentPlan.members : null;
   var memberOverage = planMemberLimit !== null && memberCount > planMemberLimit ? memberCount - planMemberLimit : 0;
   var overageCost = memberOverage * 1;
 
-  // Pause months remaining this year
   var currentYear = new Date().getFullYear();
-  var monthsUsedThisYear = (orgData?.pause_year === currentYear ? orgData?.pause_months_used_this_year : 0) || 0;
+  var monthsUsedThisYear = (orgData && orgData.pause_year === currentYear ? orgData.pause_months_used_this_year : 0) || 0;
   var pauseMonthsRemaining = Math.max(0, 6 - monthsUsedThisYear);
 
-  // Min resume date = 1 month from next billing cycle start
   var minResumeDate = new Date();
   minResumeDate.setMonth(minResumeDate.getMonth() + 2);
   minResumeDate.setDate(1);
   var minResumeDateStr = minResumeDate.toISOString().split('T')[0];
 
-  // Theme
-  var pageBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-50';
-  var cardBg = isDark ? 'bg-[#1A2035]' : 'bg-white';
-  var cardBorder = isDark ? 'border-[#2A3550]' : 'border-gray-200';
-  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
-  var textSecondary = isDark ? 'text-[#CBD5E1]' : 'text-gray-600';
-  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-gray-400';
-  var textTertiary = isDark ? 'text-[#64748B]' : 'text-gray-400';
-  var skeletonClass = isDark ? 'bg-[#2A3550]' : 'bg-gray-200';
-
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className={'min-h-screen py-8 ' + pageBg}>
+      <div className="min-h-screen py-8 bg-[#F8FAFC]" aria-busy="true" aria-label="Loading billing">
         <div className="max-w-5xl mx-auto px-4 space-y-6">
-          <div className={'animate-pulse rounded h-6 w-16 ' + skeletonClass} aria-hidden="true" />
-          <div className={'animate-pulse rounded-xl h-32 w-full ' + skeletonClass} aria-hidden="true" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1,2,3].map(function(i) { return <div key={i} className={'animate-pulse rounded-xl h-96 ' + skeletonClass} aria-hidden="true" />; })}
+          <div className="animate-pulse rounded h-6 w-16 bg-slate-200" aria-hidden="true" />
+          <div className="animate-pulse rounded-xl h-32 w-full bg-slate-200" aria-hidden="true" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(function(i) { return <div key={i} className="animate-pulse rounded-xl h-80 bg-slate-200" aria-hidden="true" />; })}
           </div>
         </div>
       </div>
@@ -287,62 +270,64 @@ function BillingPage() {
   }
 
   return (
-    <div className={'min-h-screen py-8 ' + pageBg}>
+    <div className="min-h-screen py-8 bg-[#F8FAFC]">
       <div className="max-w-5xl mx-auto px-4 space-y-8">
 
         {/* Header */}
         <div>
           <button
             onClick={function() { navigate(-1); }}
-            className={'text-sm flex items-center gap-1 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded ' + textSecondary}
+            className="text-sm flex items-center gap-1 mb-4 text-[#475569] hover:text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
             aria-label="Go back"
           >
             <Icon path={ICONS.back} className="h-4 w-4" />
             Back
           </button>
-          <h1 className={'text-2xl font-bold ' + textPrimary}>Billing & Subscription</h1>
-          <p className={'text-sm mt-1 ' + textSecondary}>{orgData?.name}</p>
+          <h1 className="text-2xl font-bold text-[#0E1523]">Billing &amp; Subscription</h1>
+          <p className="text-sm mt-1 text-[#475569]">{orgData && orgData.name}</p>
         </div>
 
-        {/* Current subscription status */}
+        {/* Current subscription status card */}
         {subscription && (
           <div className={'p-5 rounded-xl border-2 ' + (subscription.status === 'past_due'
-            ? (isDark ? 'border-red-800 bg-red-900/20' : 'border-red-300 bg-red-50')
+            ? 'border-red-300 bg-red-50'
             : isPaused
-              ? (isDark ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')
-              : (isDark ? 'border-blue-800 bg-blue-900/20' : 'border-blue-200 bg-blue-50'))}>
+              ? 'border-yellow-300 bg-yellow-50'
+              : 'border-blue-200 bg-blue-50')}>
             <div className="flex items-start justify-between flex-wrap gap-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className={'text-base font-bold ' + textPrimary}>
+                  <span className="text-base font-bold text-[#0E1523]">
                     {currentPlan ? currentPlan.name : 'Unknown'} Plan
                   </span>
-                  <span className={'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ' + (statusInfo ? statusInfo.color : '')}>
-                    {isPaused ? 'Paused' : (statusInfo ? statusInfo.label : subscription.status)}
-                  </span>
+                  {statusInfo && (
+                    <span className={'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ' + statusInfo.color}>
+                      {isPaused ? 'Paused' : statusInfo.label}
+                    </span>
+                  )}
                   {isStudent && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                       .edu
                     </span>
                   )}
                 </div>
 
-                {isPaused && orgData?.pause_resumes_at && (
-                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-yellow-400' : 'text-yellow-700')}>
+                {isPaused && orgData && orgData.pause_resumes_at && (
+                  <p className="text-sm flex items-center gap-1 text-yellow-700">
                     <Icon path={ICONS.play} className="h-4 w-4" />
                     {'Resumes ' + new Date(orgData.pause_resumes_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </p>
                 )}
 
                 {hasPauseScheduled && (
-                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-yellow-400' : 'text-yellow-700')}>
+                  <p className="text-sm flex items-center gap-1 text-yellow-700">
                     <Icon path={ICONS.pause} className="h-4 w-4" />
                     {'Pause scheduled ' + new Date(orgData.pause_starts_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) + ' · Resumes ' + new Date(orgData.pause_resumes_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </p>
                 )}
 
                 {subscription.status === 'trialing' && trialEnds && !isPaused && (
-                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-blue-400' : 'text-blue-700')}>
+                  <p className="text-sm flex items-center gap-1 text-blue-700">
                     <Icon path={ICONS.clock} className="h-4 w-4" />
                     {daysLeftInTrial > 0 ? daysLeftInTrial + ' days left in your free trial' : 'Trial ending soon'}
                     {' · No credit card required yet'}
@@ -350,25 +335,25 @@ function BillingPage() {
                 )}
 
                 {subscription.status === 'active' && periodEnds && !isPaused && !hasPauseScheduled && (
-                  <p className={'text-sm ' + textSecondary}>
+                  <p className="text-sm text-[#475569]">
                     {'Renews ' + periodEnds.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                     {subscription.cancel_at_period_end ? ' · Cancels at end of period' : ''}
                   </p>
                 )}
 
                 {subscription.status === 'past_due' && (
-                  <p className={'text-sm flex items-center gap-1 ' + (isDark ? 'text-red-400' : 'text-red-700')}>
+                  <p className="text-sm flex items-center gap-1 text-red-700">
                     <Icon path={ICONS.alert} className="h-4 w-4" />
                     Payment failed. Please update your payment method.
                   </p>
                 )}
 
                 {memberOverage > 0 && (
-                  <div className={'mt-3 p-3 rounded-lg border ' + (isDark ? 'bg-red-900/20 border-red-800/40' : 'bg-red-50 border-red-200')}>
-                    <p className={'text-sm font-semibold ' + (isDark ? 'text-red-400' : 'text-red-700')}>
+                  <div className="mt-3 p-3 rounded-lg border bg-red-50 border-red-200">
+                    <p className="text-sm font-semibold text-red-700">
                       {'Member overage: ' + memberOverage + ' ' + (memberOverage === 1 ? 'member' : 'members') + ' over plan limit'}
                     </p>
-                    <p className={'text-xs mt-0.5 ' + (isDark ? 'text-red-400/70' : 'text-red-600')}>
+                    <p className="text-xs mt-0.5 text-red-600">
                       {'$' + overageCost + '/mo extra · $1 per member over your ' + planMemberLimit + '-member limit. Upgrade to avoid overage charges.'}
                     </p>
                   </div>
@@ -378,18 +363,17 @@ function BillingPage() {
                   <button
                     onClick={handleManageSubscription}
                     disabled={checkoutLoading === 'portal'}
-                    className={'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 ' + (isDark ? 'bg-[#2A3550] hover:bg-[#1E2845] text-white focus:ring-blue-500' : 'bg-gray-900 hover:bg-gray-700 text-white focus:ring-gray-500')}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-[#0E1523] hover:bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
                     aria-label="Manage subscription in Stripe portal"
                   >
                     <Icon path={ICONS.settings} className="h-4 w-4" />
                     {checkoutLoading === 'portal' ? 'Loading...' : 'Manage Subscription'}
                   </button>
 
-                  {/* Student pause controls */}
                   {isStudent && !isPaused && !hasPauseScheduled && pauseMonthsRemaining > 0 && (
                     <button
                       onClick={function() { setShowPauseModal(true); }}
-                      className={'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ' + (isDark ? 'border-yellow-700 text-yellow-400 hover:bg-yellow-900/20 focus:ring-yellow-500' : 'border-yellow-400 text-yellow-700 hover:bg-yellow-50 focus:ring-yellow-500')}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-yellow-400 text-yellow-700 hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors"
                       aria-label="Schedule a pause for your account"
                     >
                       <Icon path={ICONS.pause} className="h-4 w-4" />
@@ -401,7 +385,7 @@ function BillingPage() {
                     <button
                       onClick={handleCancelPause}
                       disabled={pauseLoading}
-                      className={'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 ' + (isDark ? 'border-[#2A3550] text-[#94A3B8] hover:text-white focus:ring-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-100 focus:ring-gray-500')}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
                       aria-label="Cancel scheduled pause"
                     >
                       {pauseLoading ? 'Cancelling...' : 'Cancel Pause'}
@@ -409,20 +393,19 @@ function BillingPage() {
                   )}
                 </div>
 
-                {/* Student pause months remaining */}
                 {isStudent && (
-                  <p className={'text-xs mt-3 ' + textTertiary}>
+                  <p className="text-xs mt-3 text-[#94A3B8]">
                     {'Pause available: ' + pauseMonthsRemaining + ' of 6 months remaining this year'}
                   </p>
                 )}
               </div>
 
               <div className="text-right flex-shrink-0">
-                <p className={'text-xs uppercase tracking-wide font-semibold ' + textMuted}>
+                <p className="text-xs uppercase tracking-wide font-semibold text-[#64748B]">
                   {subscription.billing_interval === 'year' ? 'Annual billing' : 'Monthly billing'}
                 </p>
                 {currentPlan && (
-                  <p className={'text-lg font-bold ' + textPrimary}>
+                  <p className="text-lg font-bold text-[#0E1523]">
                     {'$' + (subscription.billing_interval === 'year' ? currentPlan.annualPrice.toFixed(2) + '/yr' : currentPlan.monthlyPrice.toFixed(2) + '/mo')}
                   </p>
                 )}
@@ -434,27 +417,27 @@ function BillingPage() {
         {/* Pause scheduling modal */}
         {showPauseModal && (
           <div
+            style={{ background:'rgba(0,0,0,0.45)' }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{background: 'rgba(0,0,0,0.6)'}}
             role="dialog"
             aria-modal="true"
             aria-labelledby="pause-modal-title"
           >
-            <div className={'w-full max-w-md rounded-2xl border p-6 ' + cardBg + ' ' + cardBorder}>
-              <h2 id="pause-modal-title" className={'text-lg font-bold mb-2 ' + textPrimary}>Schedule Account Pause</h2>
-              <p className={'text-sm mb-4 ' + textSecondary}>
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 p-6 bg-white shadow-xl">
+              <h2 id="pause-modal-title" className="text-lg font-bold mb-2 text-[#0E1523]">Schedule Account Pause</h2>
+              <p className="text-sm mb-4 text-[#475569]">
                 Billing stops at the start of your next billing cycle. Select the date you want to resume — your account reactivates automatically.
               </p>
 
-              <div className={'p-3 rounded-lg mb-4 ' + (isDark ? 'bg-[#0E1523] border border-[#2A3550]' : 'bg-gray-50 border border-gray-200')}>
-                <p className={'text-xs font-semibold mb-1 ' + textMuted}>Pause starts</p>
-                <p className={'text-sm font-bold ' + textPrimary}>
+              <div className="p-3 rounded-lg mb-4 bg-slate-50 border border-slate-200">
+                <p className="text-xs font-semibold mb-1 text-[#64748B]">Pause starts</p>
+                <p className="text-sm font-bold text-[#0E1523]">
                   {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
-                <p className={'text-xs mt-1 ' + textTertiary}>Billing stops on this date. Current month is not refunded.</p>
+                <p className="text-xs mt-1 text-[#94A3B8]">Billing stops on this date. Current month is not refunded.</p>
               </div>
 
-              <label htmlFor="resume-date" className={'block text-sm font-semibold mb-1 ' + textPrimary}>
+              <label htmlFor="resume-date" className="block text-sm font-semibold mb-1 text-[#0E1523]">
                 Resume date
               </label>
               <input
@@ -464,9 +447,9 @@ function BillingPage() {
                 value={pauseResumeDate}
                 onChange={function(e) { setPauseResumeDate(e.target.value); }}
                 aria-required="true"
-                className={'w-full px-3 py-2 rounded-lg border text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isDark ? 'bg-[#0E1523] border-[#2A3550] text-white' : 'bg-white border-gray-300 text-gray-900')}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-[#0E1523] text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className={'text-xs mb-5 ' + textTertiary}>
+              <p className="text-xs mb-5 text-[#94A3B8]">
                 {'You have ' + pauseMonthsRemaining + ' pause months remaining this year.'}
               </p>
 
@@ -481,7 +464,7 @@ function BillingPage() {
                 </button>
                 <button
                   onClick={function() { setShowPauseModal(false); setPauseResumeDate(''); }}
-                  className={'flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isDark ? 'border-[#2A3550] text-[#94A3B8] hover:text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-100')}
+                  className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
                   aria-label="Cancel and close"
                 >
                   Cancel
@@ -491,35 +474,55 @@ function BillingPage() {
           </div>
         )}
 
-        {/* Trial callout for no subscription */}
+        {/* No subscription — trial callout */}
         {!subscription && (
-          <div className={'p-5 rounded-xl border-2 ' + (isDark ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')}>
+          <div className="p-5 rounded-xl border-2 border-yellow-300 bg-yellow-50">
             <div className="flex items-center gap-3">
-              <Icon path={ICONS.star} className={'h-6 w-6 flex-shrink-0 ' + (isDark ? 'text-yellow-400' : 'text-yellow-500')} />
+              <Icon path={ICONS.star} className="h-6 w-6 flex-shrink-0 text-yellow-500" />
               <div>
-                <p className={'font-bold ' + textPrimary}>Start your 14-day free trial</p>
-                <p className={'text-sm mt-0.5 ' + textSecondary}>No credit card required. Full access to all features during your trial.</p>
+                <p className="font-bold text-[#0E1523]">Start your 14-day free trial</p>
+                <p className="text-sm mt-0.5 text-[#475569]">No credit card required. Full access to all features during your trial.</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Billing interval toggle — hidden for student plan */}
-        {subscription?.plan !== 'student' && (
+        {subscription && subscription.plan !== 'student' && (
           <div className="flex items-center justify-center gap-3">
-            <span className={'text-sm font-medium ' + (billingInterval === 'month' ? textPrimary : textMuted)}>Monthly</span>
+            <span className={'text-sm font-medium ' + (billingInterval === 'month' ? 'text-[#0E1523]' : 'text-[#94A3B8]')}>Monthly</span>
             <button
               onClick={function() { setBillingInterval(billingInterval === 'month' ? 'year' : 'month'); }}
               role="switch"
               aria-checked={billingInterval === 'year'}
               aria-label="Toggle annual billing"
-              className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : (isDark ? 'bg-[#2A3550]' : 'bg-gray-300'))}
+              className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : 'bg-slate-300')}
             >
               <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (billingInterval === 'year' ? 'left-[26px]' : 'left-0.5')} aria-hidden="true" />
             </button>
-            <span className={'text-sm font-medium ' + (billingInterval === 'year' ? textPrimary : textMuted)}>
+            <span className={'text-sm font-medium ' + (billingInterval === 'year' ? 'text-[#0E1523]' : 'text-[#94A3B8]')}>
               Annual
-              <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">2 months free</span>
+              <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">2 months free</span>
+            </span>
+          </div>
+        )}
+
+        {/* Also show toggle when no subscription yet */}
+        {!subscription && (
+          <div className="flex items-center justify-center gap-3">
+            <span className={'text-sm font-medium ' + (billingInterval === 'month' ? 'text-[#0E1523]' : 'text-[#94A3B8]')}>Monthly</span>
+            <button
+              onClick={function() { setBillingInterval(billingInterval === 'month' ? 'year' : 'month'); }}
+              role="switch"
+              aria-checked={billingInterval === 'year'}
+              aria-label="Toggle annual billing"
+              className={'relative w-12 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (billingInterval === 'year' ? 'bg-blue-500' : 'bg-slate-300')}
+            >
+              <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (billingInterval === 'year' ? 'left-[26px]' : 'left-0.5')} aria-hidden="true" />
+            </button>
+            <span className={'text-sm font-medium ' + (billingInterval === 'year' ? 'text-[#0E1523]' : 'text-[#94A3B8]')}>
+              Annual
+              <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">2 months free</span>
             </span>
           </div>
         )}
@@ -527,7 +530,7 @@ function BillingPage() {
         {/* Plan cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" role="list" aria-label="Available plans">
           {PLANS.map(function(plan) {
-            var isCurrent = subscription?.plan === plan.id && subscription?.status !== 'canceled';
+            var isCurrent = subscription && subscription.plan === plan.id && subscription.status !== 'canceled';
             var isLoading = checkoutLoading === plan.id;
             var price = (plan.isStudent || billingInterval === 'month') ? plan.monthlyPrice : plan.annualMonthly;
             var totalPrice = (!plan.isStudent && billingInterval === 'year') ? plan.annualPrice : null;
@@ -536,15 +539,15 @@ function BillingPage() {
               <div
                 key={plan.id}
                 role="listitem"
-                className={'relative flex flex-col rounded-xl border-2 overflow-hidden ' + (plan.popular ? 'border-blue-500' : (isDark ? 'border-[#2A3550]' : 'border-gray-200')) + (isCurrent ? ' ring-2 ring-green-400' : '')}
+                className={'relative flex flex-col rounded-xl border-2 overflow-hidden bg-white ' + (plan.popular ? 'border-blue-500 shadow-md' : 'border-slate-200') + (isCurrent ? ' ring-2 ring-green-400' : '')}
               >
-                {plan.popular && (
+                {plan.popular && !isCurrent && (
                   <div className="bg-blue-500 text-white text-xs font-bold text-center py-1.5 tracking-wide uppercase">
                     Most Popular
                   </div>
                 )}
-                {plan.isStudent && (
-                  <div className={'text-xs font-bold text-center py-1.5 tracking-wide uppercase ' + (isDark ? 'bg-[#1D3461] text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                {plan.isStudent && !isCurrent && (
+                  <div className="bg-blue-100 text-blue-700 text-xs font-bold text-center py-1.5 tracking-wide uppercase">
                     Student — .edu required
                   </div>
                 )}
@@ -554,25 +557,25 @@ function BillingPage() {
                   </div>
                 )}
 
-                <div className={(isDark ? 'bg-[#1A2035]' : 'bg-white') + ' p-5 flex flex-col flex-1'}>
-                  <h3 className={'text-lg font-bold mb-1 ' + textPrimary}>{plan.name}</h3>
-                  <p className={'text-xs mb-4 ' + textMuted}>Up to {plan.members} members · {plan.storage}</p>
+                <div className="p-5 flex flex-col flex-1">
+                  <h3 className="text-lg font-bold mb-1 text-[#0E1523]">{plan.name}</h3>
+                  <p className="text-xs mb-4 text-[#64748B]">Up to {plan.members} members · {plan.storage}</p>
 
                   <div className="mb-4">
-                    <span className={'text-3xl font-extrabold ' + textPrimary}>{'$' + price.toFixed(2)}</span>
-                    <span className={'text-sm ' + textSecondary}>/mo</span>
+                    <span className="text-3xl font-extrabold text-[#0E1523]">{'$' + price.toFixed(2)}</span>
+                    <span className="text-sm text-[#475569]">/mo</span>
                     {totalPrice && (
-                      <p className={'text-xs mt-0.5 ' + textTertiary}>{'$' + totalPrice.toFixed(2) + ' billed annually'}</p>
+                      <p className="text-xs mt-0.5 text-[#94A3B8]">{'$' + totalPrice.toFixed(2) + ' billed annually'}</p>
                     )}
                     {plan.isStudent && (
-                      <p className={'text-xs mt-0.5 ' + textTertiary}>Monthly only · Pause up to 6 mo/yr</p>
+                      <p className="text-xs mt-0.5 text-[#94A3B8]">Monthly only · Pause up to 6 mo/yr</p>
                     )}
                   </div>
 
                   <ul className="space-y-2 mb-6 flex-1" aria-label={plan.name + ' features'}>
                     {plan.features.map(function(feature, i) {
                       return (
-                        <li key={i} className={'flex items-start gap-2 text-sm ' + textSecondary}>
+                        <li key={i} className="flex items-start gap-2 text-sm text-[#475569]">
                           <Icon path={ICONS.check} className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
                           {feature}
                         </li>
@@ -587,7 +590,7 @@ function BillingPage() {
                       ? 'bg-green-100 text-green-700 border border-green-300 focus:ring-green-500'
                       : plan.popular
                         ? 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-500'
-                        : (isDark ? 'bg-[#2A3550] hover:bg-[#1E2845] text-white focus:ring-blue-500' : 'bg-gray-900 hover:bg-gray-800 text-white focus:ring-gray-500')
+                        : 'bg-[#0E1523] hover:bg-slate-800 text-white focus:ring-slate-500'
                     )}
                     aria-label={isCurrent ? 'Current plan' : 'Select ' + plan.name + ' plan'}
                   >
@@ -601,10 +604,10 @@ function BillingPage() {
 
         {/* Fine print */}
         <div className="text-center space-y-1 pb-8">
-          <p className={'text-xs ' + textTertiary}>14-day free trial on all plans. No credit card required to start.</p>
-          <p className={'text-xs ' + textTertiary}>No revenue cut on payments. Stripe processing fees apply.</p>
-          <p className={'text-xs ' + textTertiary}>Verified 501(c)(3) nonprofits receive an additional free month.</p>
-          <p className={'text-xs ' + textTertiary}>Student plan requires a valid .edu email. Monthly billing only. Pause up to 6 months/year.</p>
+          <p className="text-xs text-[#94A3B8]">14-day free trial on all plans. No credit card required to start.</p>
+          <p className="text-xs text-[#94A3B8]">No revenue cut on payments. Stripe processing fees apply.</p>
+          <p className="text-xs text-[#94A3B8]">Verified 501(c)(3) nonprofits receive an additional free month.</p>
+          <p className="text-xs text-[#94A3B8]">Student plan requires a valid .edu email. Monthly billing only. Pause up to 6 months/year.</p>
         </div>
 
       </div>
