@@ -404,7 +404,7 @@ export default function OrganizationDiscovery() {
             {/* Skeleton loading */}
             {loading && (
               <div
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}
                 aria-label="Loading organizations"
                 aria-busy="true"
               >
@@ -472,7 +472,7 @@ export default function OrganizationDiscovery() {
             {/* Results grid */}
             {!loading && !error && orgs.length > 0 && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px'}}>
                   {orgs.map(function (org) {
                     return <OrgCard key={org.id} org={org} lang={lang} session={session} initialFollowed={followedOrgs.has(org.id)} />;
                   })}

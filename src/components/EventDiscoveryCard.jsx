@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useNavigate, Link } from 'react-router-dom';
 import { et } from '../lib/eventDiscoveryTranslations';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
 import DemoBadge from '../components/DemoBadge';
+
+// NOTE: Collaborate button + modal → EventDetails.jsx (admin-only)
+// NOTE: Save/Bookmark → EventDetails.jsx (all logged-in users, event_saves table)
+// NOTE: Co-hosts → EventDetails.jsx
+// NOTE: Remove "Featured events are promoted by their organizations for 7 days." from EventDiscovery.jsx
 
 var EVENT_TYPE_COLORS_LIGHT = {
   'advocacy-event':        { bg: '#FEE2E2', color: '#B91C1C' },
@@ -19,11 +22,6 @@ var EVENT_TYPE_COLORS_LIGHT = {
   'health-wellness':       { bg: '#D1FAE5', color: '#065F46' },
   'volunteer-opportunity': { bg: '#CCFBF1', color: '#0F766E' },
   'youth-event':           { bg: '#FCE7F3', color: '#BE185D' },
-};
-
-var LANGUAGE_LABELS = {
-  en: 'English', es: 'Español', zh: '中文',
-  tl: 'Tagalog', vi: 'Tiếng Việt', ar: 'العربية',
 };
 
 function formatICSDate(dateStr) {
@@ -62,9 +60,13 @@ function generateICS(event) {
 /* ── Icons ── */
 function CalendarIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '13px', height: '13px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+function VerifiedDot() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '15px', height: '15px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="#22C55E" strokeWidth={2} aria-label="Verified nonprofit" title="Verified nonprofit">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
+  );
+}
   );
 }
 
@@ -86,26 +88,18 @@ function MapPinIcon() {
   );
 }
 
-function GlobeIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '12px', height: '12px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
-    </svg>
-  );
-}
-
-function BookmarkIcon({ filled }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '16px', height: '16px' }} fill={filled ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
-    </svg>
-  );
-}
-
 function ShareIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '16px', height: '16px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+    </svg>
+  );
+}
+
+function VerifiedDot() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '15px', height: '15px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="#22C55E" strokeWidth={2} aria-label="Verified nonprofit" title="Verified nonprofit">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }
@@ -123,45 +117,20 @@ function formatEventDate(startTime, endTime) {
   return dateStr + ' \u00b7 ' + timeStr;
 }
 
-export default function EventDiscoveryCard({ event, lang, session, initialSaved, adminOrgs, coHosts }) {
+export default function EventDiscoveryCard({ event, lang }) {
   var navigate = useNavigate();
   lang = lang || 'en';
-  initialSaved = initialSaved || false;
-  adminOrgs = adminOrgs || [];
-  coHosts = coHosts || [];
 
   var borderColor = '#E2E8F0';
+  var isFeatured  = event.is_featured;
+  var eventUrl    = '/events/' + event.id;
 
-  var [saved, setSaved] = useState(initialSaved);
-  var [saveLoading, setSaveLoading] = useState(false);
-  var [colabModal, setColabModal] = useState(false);
-  var [selectedOrgId, setSelectedOrgId] = useState('');
-  var [colabLoading, setColabLoading] = useState(false);
-  var [colabMessage, setColabMessage] = useState('');
-
-  var eligibleOrgs    = adminOrgs.filter(function(org) { return org.id !== event.organization_id; });
-  var showCollaborate = eligibleOrgs.length > 0;
-  var isFeatured      = event.is_featured;
-  var eventUrl        = '/events/' + event.id;
-
-  async function handleSave(e) {
-    e.stopPropagation();
-    if (!session) { toast(et(lang, 'signInToSave') || 'Sign in to save events'); return; }
-    setSaveLoading(true);
-    try {
-      if (saved) {
-        var r = await supabase.from('event_saves').delete().eq('event_id', event.id).eq('user_id', session.user.id);
-        if (r.error) throw r.error;
-        setSaved(false);
-        toast('Removed from saved events');
-      } else {
-        var r2 = await supabase.from('event_saves').insert({ event_id: event.id, user_id: session.user.id });
-        if (r2.error) throw r2.error;
-        setSaved(true);
-        mascotSuccessToast('Event saved!');
-      }
-    } catch { toast.error('Could not update saved events'); }
-    finally { setSaveLoading(false); }
+  // Location: prefer venue/address, fall back to city+state, then virtual
+  var locationDisplay = '';
+  if (event.is_virtual) {
+    locationDisplay = event.location ? ('Hybrid \u00b7 ' + event.location) : 'Virtual';
+  } else {
+    locationDisplay = event.location || [event.city, event.state].filter(Boolean).join(', ') || '';
   }
 
   async function handleShare(e) {
@@ -184,328 +153,131 @@ export default function EventDiscoveryCard({ event, lang, session, initialSaved,
     navigate(eventUrl);
   }
 
-  function openColabModal(e) {
-    e.stopPropagation();
-    if (eligibleOrgs.length === 1) setSelectedOrgId(eligibleOrgs[0].id);
-    setColabModal(true);
-  }
-
-  function closeColabModal() {
-    setColabModal(false);
-    setColabMessage('');
-    setSelectedOrgId('');
-  }
-
-  async function submitCollab() {
-    var orgId = selectedOrgId || (eligibleOrgs.length === 1 ? eligibleOrgs[0].id : '');
-    if (!orgId) { toast.error('Please select an organization'); return; }
-    setColabLoading(true);
-    try {
-      var org = eligibleOrgs.find(function(o) { return o.id === orgId; });
-      var orgName = org ? org.name : 'An organization';
-      var collabRes = await supabase.from('event_collaborators').insert({
-        event_id: event.id,
-        requesting_org_id: orgId,
-        host_org_id: event.organization_id,
-        status: 'pending',
-        message: colabMessage.trim() || null,
-      });
-      if (collabRes.error) {
-        if (collabRes.error.code === '23505') throw new Error('You have already sent a collaboration request for this event');
-        throw collabRes.error;
-      }
-      var hostRes = await supabase.from('memberships').select('member_id').eq('organization_id', event.organization_id).eq('role', 'admin').eq('status', 'active');
-      if (hostRes.data && hostRes.data.length > 0) {
-        var notifications = hostRes.data.map(function(m) {
-          return {
-            user_id: m.member_id,
-            organization_id: event.organization_id,
-            type: 'collaboration_request',
-            title: 'Collaboration Request',
-            message: orgName + ' wants to collaborate on "' + event.title + '"',
-            link: '/org/' + event.organization_id + '/events',
-            read: false,
-          };
-        });
-        await supabase.from('notifications').insert(notifications);
-      }
-      mascotSuccessToast('Collaboration request sent!');
-      window.dispatchEvent(new CustomEvent('notificationCreated'));
-      setColabMessage('');
-      closeColabModal();
-    } catch (err) { toast.error(err.message || 'Could not send request'); }
-    finally { setColabLoading(false); }
-  }
-
-  var locationDisplay = [event.city, event.state].filter(Boolean).join(', ');
-
   return (
-    <>
-      <article
-        onClick={handleCardClick}
-        style={{
-          background: '#FFFFFF',
-          border: isFeatured ? '2px solid #F5B731' : ('1px solid ' + borderColor),
-          borderRadius: '12px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          cursor: 'pointer',
-          boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
-          transition: 'box-shadow 0.15s',
-        }}
-        aria-label={'Event: ' + event.title}
-        role="article"
-      >
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <article
+      onClick={handleCardClick}
+      style={{
+        background: '#FFFFFF',
+        border: isFeatured ? '2px solid #F5B731' : ('1px solid ' + borderColor),
+        borderRadius: '12px',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: 'pointer',
+        boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+        transition: 'box-shadow 0.15s',
+      }}
+      aria-label={'Event: ' + event.title}
+      role="article"
+    >
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-          {/* ── Header: title + org + co-hosts + save/share ── */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', lineHeight: 1.3 }}>{event.title}</h2>
-              {event.org_name && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                  <Link
-                    to={'/org/' + (event.org_slug || event.organization_id)}
-                    onClick={function(e) { e.stopPropagation(); }}
-                    style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}
-                    aria-label={'Hosted by ' + event.org_name}
-                    className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                  >
-                    {event.org_name}
-                  </Link>
-                  {isFeatured && (
-                    <span style={{ marginLeft: 'auto', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#B45309', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px', flexShrink: 0 }}>
-                      Featured
-                    </span>
-                  )}
-                  {event.is_demo && <DemoBadge size="sm" />}
-                  {event.org_is_verified_nonprofit && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '99px', padding: '2px 7px', flexShrink: 0 }} aria-label="Verified nonprofit">
-                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '9px', height: '9px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                      Verified
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Co-hosts */}
-              {coHosts.length > 0 && (
-                <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} aria-label="Co-hosting organizations">
-                  {coHosts.map(function(name) {
-                    return (
-                      <span key={name} style={{ fontSize: '12px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#94A3B8' }}>+ co-hosted with</span>
-                        <span style={{ fontWeight: 600, color: '#475569' }}>{name}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Save + Share */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-              <button
-                onClick={handleSave}
-                disabled={saveLoading}
-                aria-label={saved ? 'Unsave event' : 'Save event'}
-                aria-pressed={saved}
-                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: saveLoading ? 'not-allowed' : 'pointer', color: saved ? '#F5B731' : '#64748B', opacity: saveLoading ? 0.5 : 1 }}
-                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-              >
-                <BookmarkIcon filled={saved} />
-              </button>
-              <button
-                onClick={handleShare}
-                aria-label="Share event"
-                style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B' }}
-                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <ShareIcon />
-              </button>
-            </div>
-          </div>
-
-          {/* ── Date & Location ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
-              <CalendarIcon />
-              {formatEventDate(event.start_time, event.end_time)}
-            </span>
-            {(locationDisplay || event.is_virtual) && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
-                <MapPinIcon />
-                {event.is_virtual
-                  ? (event.location ? ('Hybrid \u00b7 ' + locationDisplay) : 'Virtual')
-                  : (locationDisplay || event.location || 'Location not listed')}
+        {/* ── Header: featured pill + title + org + share ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {isFeatured && (
+              <span style={{ display: 'inline-block', marginBottom: '5px', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)', color: '#B45309', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Featured
               </span>
+            )}
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', lineHeight: 1.3, margin: 0 }}>{event.title}</h2>
+            {event.org_name && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                <Link
+                  to={'/org/' + (event.org_slug || event.organization_id)}
+                  onClick={function(e) { e.stopPropagation(); }}
+                  style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}
+                  aria-label={'Hosted by ' + event.org_name}
+                  className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                >
+                  {event.org_name}
+                </Link>
+                {event.org_is_verified_nonprofit && <VerifiedDot />}
+                {event.is_demo && (
+  <span style={{ fontSize: '10px', fontWeight: 700, color: '#92400E', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>
+    Sample Data
+  </span>
+)}
+              </div>
             )}
           </div>
 
-          {/* ── Event type + audience tags ── */}
-          {((event.event_types && event.event_types.length > 0) || (event.audience && event.audience.length > 0)) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} aria-label="Event tags">
-              {(event.event_types || []).slice(0, 2).map(function(type) {
-                var c = EVENT_TYPE_COLORS_LIGHT[type] || { bg: '#F1F5F9', color: '#64748B' };
-                return (
-                  <span key={type} style={{ background: c.bg, color: c.color, fontSize: '11px', fontWeight: 600, padding: '2px 9px', borderRadius: '99px' }}>
-                    {et(lang, type)}
-                  </span>
-                );
-              })}
-              {(event.audience || []).slice(0, 2).map(function(a) {
-                return (
-                  <span key={a} style={{ background: '#F1F5F9', color: '#64748B', fontSize: '11px', fontWeight: 500, padding: '2px 9px', borderRadius: '99px' }}>
-                    {et(lang, a)}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── Footer ── */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', marginTop: 'auto', borderTop: '1px solid ' + borderColor, flexWrap: 'wrap', gap: '8px' }}>
-
-            {/* Left meta */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: '#64748B', flexWrap: 'wrap' }}>
-              {event.languages && event.languages.length > 0 && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <GlobeIcon />
-                  {event.languages.map(function(l) { return LANGUAGE_LABELS[l] || l; }).join(', ')}
-                </span>
-              )}
-              {event.volunteer_signup && <span style={{ color: '#0F766E', fontWeight: 600 }}>Volunteer</span>}
-              {event.donation_dropoff  && <span style={{ color: '#C2410C', fontWeight: 600 }}>Donations</span>}
-            </div>
-
-            {/* Right action buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                onClick={handleAddToCalendar}
-                aria-label={'Add ' + event.title + ' to calendar'}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <CalendarAddIcon />
-                Add to Calendar
-              </button>
-
-              {showCollaborate && (
-                <button
-                  onClick={openColabModal}
-                  style={{ fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '8px', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', color: '#7C3AED', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  aria-label={'Request to collaborate on ' + event.title}
-                  className="focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  Collaborate
-                </button>
-              )}
-
-              <Link
-                to={eventUrl}
-                onClick={function(e) { e.stopPropagation(); }}
-                style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', padding: '6px 14px', borderRadius: '8px', background: '#3B82F6', textDecoration: 'none', whiteSpace: 'nowrap' }}
-                aria-label={'View event: ' + event.title}
-                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                View Event
-              </Link>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      {/* Collaborate Modal */}
-      {colabModal && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
-          onClick={closeColabModal}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="collab-modal-title"
-        >
-          <div
-            style={{ background: '#FFFFFF', border: '1px solid ' + borderColor, borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxWidth: '448px', width: '100%' }}
-            onClick={function(e) { e.stopPropagation(); }}
+          {/* Share */}
+          <button
+            onClick={handleShare}
+            aria-label="Share event"
+            style={{ padding: '6px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748B', flexShrink: 0 }}
+            className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid ' + borderColor }}>
-              <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0E1523' }}>Request Collaboration</h2>
-              <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px' }}>{event.title}</p>
-            </div>
+            <ShareIcon />
+          </button>
+        </div>
 
-            <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ fontSize: '14px', color: '#475569' }}>
-                Your collaboration request will be sent to the admins of this organization. If accepted, both org names will appear on the event.
-              </p>
+        {/* ── Location (venue first) ── */}
+        {locationDisplay && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
+            <MapPinIcon />
+            {locationDisplay}
+          </span>
+        )}
 
-              {eligibleOrgs.length > 1 && (
-                <div>
-                  <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
-                    Requesting as <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
-                  </label>
-                  <select
-                    id="collab-org-select"
-                    value={selectedOrgId}
-                    onChange={function(e) { setSelectedOrgId(e.target.value); }}
-                    style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
-                    aria-required="true"
-                    className="focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select your organization...</option>
-                    {eligibleOrgs.map(function(org) { return <option key={org.id} value={org.id}>{org.name}</option>; })}
-                  </select>
-                </div>
-              )}
-
-              {eligibleOrgs.length === 1 && (
-                <p style={{ fontSize: '14px', color: '#475569' }}>
-                  Requesting as <span style={{ color: '#0E1523', fontWeight: 700 }}>{eligibleOrgs[0].name}</span>
-                </p>
-              )}
-
-              <div>
-                <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
-                  Message <span style={{ color: '#64748B', fontWeight: 400 }}>(optional)</span>
-                </label>
-                <textarea
-                  id="collab-message"
-                  value={colabMessage}
-                  onChange={function(e) { setColabMessage(e.target.value); }}
-                  placeholder="Introduce your organization or explain how you'd like to collaborate..."
-                  rows={3}
-                  maxLength={500}
-                  style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: '#0E1523', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-                  className="focus:ring-2 focus:ring-purple-500"
-                />
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748B', textAlign: 'right' }}>
-                  {colabMessage.length}/500
-                </p>
-              </div>
-            </div>
-
-            <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid ' + borderColor }}>
-              <button
-                onClick={closeColabModal}
-                disabled={colabLoading}
-                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', border: '1px solid ' + borderColor, color: '#475569', cursor: 'pointer' }}
-                className="focus:outline-none focus:ring-2 focus:ring-slate-400 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitCollab}
-                disabled={colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)}
-                style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 700, borderRadius: '8px', background: '#3B82F6', color: '#FFFFFF', border: 'none', cursor: (colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)) ? 'not-allowed' : 'pointer', opacity: (colabLoading || (eligibleOrgs.length > 1 && !selectedOrgId)) ? 0.5 : 1 }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {colabLoading ? 'Sending...' : 'Send Request'}
-              </button>
-            </div>
+        {/* ── Date row with inline action buttons ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', marginTop: '4px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748B' }}>
+            <CalendarIcon />
+            {formatEventDate(event.start_time, event.end_time)}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              onClick={handleAddToCalendar}
+              aria-label={'Add ' + event.title + ' to calendar'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px', background: 'transparent', border: '1px solid ' + borderColor, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <CalendarAddIcon />
+              Add to Calendar
+            </button>
+            <Link
+              to={eventUrl}
+              onClick={function(e) { e.stopPropagation(); }}
+              style={{ fontSize: '11px', fontWeight: 700, color: '#FFFFFF', padding: '4px 12px', borderRadius: '6px', background: '#3B82F6', textDecoration: 'none', whiteSpace: 'nowrap' }}
+              aria-label={'View event: ' + event.title}
+              className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              View
+            </Link>
           </div>
         </div>
-      )}
-    </>
+
+        {/* ── Description ── */}
+        {event.description && (
+          <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {event.description}
+          </p>
+        )}
+
+        {/* ── Event type + audience tags ── */}
+        {((event.event_types && event.event_types.length > 0) || (event.audience && event.audience.length > 0)) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', marginTop: '4px' }}>
+            {(event.event_types || []).slice(0, 2).map(function(type) {
+              var c = EVENT_TYPE_COLORS_LIGHT[type] || { bg: '#F1F5F9', color: '#64748B' };
+              return (
+                <span key={type} style={{ background: c.bg, color: c.color, fontSize: '11px', fontWeight: 600, padding: '2px 9px', borderRadius: '99px' }}>
+                  {et(lang, type)}
+                </span>
+              );
+            })}
+            {(event.audience || []).slice(0, 2).map(function(a) {
+              return (
+                <span key={a} style={{ background: '#F1F5F9', color: '#64748B', fontSize: '11px', fontWeight: 500, padding: '2px 9px', borderRadius: '99px' }}>
+                  {et(lang, a)}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+    </article>
   );
 }

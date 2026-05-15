@@ -1,93 +1,268 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, ChevronDown, Building2, AlertCircle, Tag, BadgeCheck } from 'lucide-react';
+import { BadgeCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { t } from '../lib/discoveryTranslations';
-import OrgCard from '../components/OrgCard';
-import DiscoveryFilters from '../components/DiscoveryFilters';
+import { et } from '../lib/eventDiscoveryTranslations';
+import EventDiscoveryCard from '../components/EventDiscoveryCard';
+import EventDiscoveryFilters from '../components/EventDiscoveryFilters';
+import ProgramDiscoveryCard from '../components/ProgramDiscoveryCard';
+import DiscoveryCalendar from '../components/DiscoveryCalendar';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast } from '../components/MascotToast';
 
+var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE';
 var PAGE_SIZE = 20;
 
 var SORT_OPTIONS = [
-  { value: 'name',            labelKey: 'alphabetical' },
-  { value: 'last_active',     labelKey: 'lastActive' },
-  { value: 'upcoming_events', labelKey: 'upcomingEventsSort' },
-  { value: 'distance',        labelKey: 'distance' },
+  { value: 'start_time',     labelKey: 'soonest' },
+  { value: 'ending_soon',    labelKey: 'endingSoon' },
+  { value: 'recently_added', labelKey: 'recentlyAdded' },
+];
+
+var PROGRAM_STATUS_OPTIONS = [
+  { value: '',         label: 'All Statuses' },
+  { value: 'active',   label: 'Active' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'closed',   label: 'Closed' },
 ];
 
 var DEFAULT_FILTERS = {
-  state: '', city: '', county: '', zip: '',
-  radius: 25, categories: [], orgType: '',
-  languagesServed: [], tags: [], uiLang: 'en',
+  eventTypes: [], audience: [], languages: [], orgType: '',
+  dateRange: '', dateFrom: '', dateTo: '',
+  state: '', city: '', zip: '',
+  requiresRsvp: null, volunteerSignup: null, donationDropoff: null,
+  uiLang: 'en',
 };
 
-function OrgCardSkeleton() {
+/* ─── Calendar range helpers ────────────────────────────────── */
+
+function toDateStr(d) {
+  var y   = d.getFullYear();
+  var m   = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function getCalendarRange(date, subView) {
+  if (subView === 'month') {
+    var year  = date.getFullYear();
+    var month = date.getMonth();
+    var first = new Date(year, month, 1);
+    var from  = new Date(first);
+    from.setDate(1 - first.getDay());
+    var to    = new Date(from);
+    to.setDate(from.getDate() + 41);
+    return { from: toDateStr(from), to: toDateStr(to) };
+  }
+  if (subView === 'week') {
+    var d   = new Date(date);
+    d.setDate(d.getDate() - d.getDay());
+    var from2 = new Date(d);
+    var to2   = new Date(d);
+    to2.setDate(d.getDate() + 6);
+    return { from: toDateStr(from2), to: toDateStr(to2) };
+  }
+  return { from: toDateStr(date), to: toDateStr(date) };
+}
+
+/* ─── Icons ─────────────────────────────────────────────────── */
+
+function SearchIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+    </svg>
+  );
+}
+
+function XIcon({ size }) {
+  var cls = size === 14 ? 'h-3.5 w-3.5' : 'h-4.5 w-4.5';
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function CalendarXIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function ProgramsEmptyIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
+function AlertCircleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+/* ─── Skeletons ─────────────────────────────────────────────── */
+
+function EventCardSkeleton() {
   return (
     <div
       style={{
         background: '#FFFFFF',
         border: '1px solid #E2E8F0',
         borderRadius: '12px',
-        padding: '20px 16px 14px',
+        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
         boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
       }}
       aria-hidden="true"
+      className="animate-pulse"
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ width: '48px', height: '48px', borderRadius: '10px', background: '#F1F5F9', flexShrink: 0 }} className="animate-pulse" />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ height: '14px', borderRadius: '6px', background: '#F1F5F9', width: '70%' }} className="animate-pulse" />
-          <div style={{ height: '11px', borderRadius: '6px', background: '#F1F5F9', width: '45%' }} className="animate-pulse" />
+          <div style={{ height: '16px', background: '#E2E8F0', borderRadius: '4px', width: '75%' }} />
+          <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '33%' }} />
         </div>
-        <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#F1F5F9' }} className="animate-pulse" />
-      </div>
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <div style={{ height: '20px', width: '72px', borderRadius: '99px', background: '#F1F5F9' }} className="animate-pulse" />
-        <div style={{ height: '20px', width: '60px', borderRadius: '99px', background: '#F1F5F9' }} className="animate-pulse" />
-        <div style={{ height: '20px', width: '80px', borderRadius: '99px', background: '#F1F5F9' }} className="animate-pulse" />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ height: '11px', width: '100px', borderRadius: '6px', background: '#F1F5F9' }} className="animate-pulse" />
-          <div style={{ height: '11px', width: '80px', borderRadius: '6px', background: '#F1F5F9' }} className="animate-pulse" />
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ width: '28px', height: '28px', background: '#F1F5F9', borderRadius: '8px' }} />
+          <div style={{ width: '28px', height: '28px', background: '#F1F5F9', borderRadius: '8px' }} />
         </div>
-        <div style={{ height: '32px', width: '80px', borderRadius: '8px', background: '#F1F5F9' }} className="animate-pulse" />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '66%' }} />
+        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '50%' }} />
+      </div>
+      <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '100%' }} />
+      <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '80%' }} />
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ height: '20px', width: '80px', background: '#F1F5F9', borderRadius: '99px' }} />
+        <div style={{ height: '20px', width: '80px', background: '#F1F5F9', borderRadius: '99px' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+        <div style={{ height: '12px', width: '96px', background: '#F1F5F9', borderRadius: '4px' }} />
+        <div style={{ height: '28px', width: '96px', background: '#E2E8F0', borderRadius: '8px' }} />
       </div>
     </div>
   );
 }
 
-export default function OrganizationDiscovery() {
+function ProgramCardSkeleton() {
+  return (
+    <div
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '12px',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+      }}
+      aria-hidden="true"
+      className="animate-pulse"
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#E2E8F0' }} />
+        <div style={{ height: '12px', width: '120px', background: '#F1F5F9', borderRadius: '4px' }} />
+      </div>
+      <div style={{ height: '18px', width: '65%', background: '#E2E8F0', borderRadius: '4px' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '100%' }} />
+        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '85%' }} />
+        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '70%' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+        <div style={{ height: '11px', width: '80px', background: '#F1F5F9', borderRadius: '4px' }} />
+        <div style={{ height: '28px', width: '96px', background: '#E2E8F0', borderRadius: '8px' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Component ─────────────────────────────────────────────── */
+
+export default function EventDiscovery() {
   var [session, setSession] = useState(null);
   var [sessionLoading, setSessionLoading] = useState(true);
+  var [viewMode, setViewMode] = useState('events');
+  var [verifiedOnly, setVerifiedOnly] = useState(true);
   var [filters, setFilters] = useState(DEFAULT_FILTERS);
   var [keyword, setKeyword] = useState('');
   var [debouncedKeyword, setDebouncedKeyword] = useState('');
-  var [sortBy, setSortBy] = useState('name');
-  var [verifiedOnly, setVerifiedOnly] = useState(true);
-  var [orgs, setOrgs] = useState([]);
+  var [sortBy, setSortBy] = useState('start_time');
+  var [programStatus, setProgramStatus] = useState('');
+
+  var [events, setEvents] = useState([]);
   var [totalCount, setTotalCount] = useState(0);
   var [page, setPage] = useState(1);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
-  var [userLocation, setUserLocation] = useState(null);
-  var [locationLoading, setLocationLoading] = useState(false);
-  var [locationError, setLocationError] = useState(false);
+
+  var [programs, setPrograms] = useState([]);
+  var [programsTotalCount, setProgramsTotalCount] = useState(0);
+  var [programsPage, setProgramsPage] = useState(1);
+  var [programsLoading, setProgramsLoading] = useState(false);
+  var [programsError, setProgramsError] = useState(null);
+  var [savedPrograms, setSavedPrograms] = useState(new Set());
+
+  var [calendarDate, setCalendarDate] = useState(function () { return new Date(); });
+  var [calendarSubView, setCalendarSubView] = useState('month');
+  var [calendarEvents, setCalendarEvents] = useState([]);
+  var [calendarLoading, setCalendarLoading] = useState(false);
+
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  var [followedOrgs, setFollowedOrgs] = useState(new Set());
+  var [savedEvents, setSavedEvents] = useState(new Set());
+  var [adminOrgs, setAdminOrgs] = useState([]);
+  var [coHostsMap, setCoHostsMap] = useState({});
+
+  var [selectedEvent, setSelectedEvent] = useState(null);
+  var [guestRSVPModal, setGuestRSVPModal] = useState(false);
+  var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
+  var [rsvpLoading, setRsvpLoading] = useState(false);
+  var [rsvpSuccess, setRsvpSuccess] = useState(false);
+
   var searchRef = useRef(null);
   var lang = filters.uiLang || 'en';
 
   useEffect(function () {
-    supabase.auth.getSession().then(function (r) {
-      setSession(r.data.session);
+    supabase.auth.getSession().then(function (res) {
+      setSession(res.data.session);
       setSessionLoading(false);
     });
     var sub = supabase.auth.onAuthStateChange(function (_e, s) { setSession(s); });
@@ -96,9 +271,22 @@ export default function OrganizationDiscovery() {
 
   useEffect(function () {
     if (!session) return;
-    supabase.from('org_followers').select('org_id').eq('user_id', session.user.id)
-      .then(function (r) {
-        if (r.data) setFollowedOrgs(new Set(r.data.map(function (x) { return x.org_id; })));
+    supabase.from('memberships').select('organization_id, organizations(id, name)')
+      .eq('member_id', session.user.id).eq('role', 'admin').eq('status', 'active')
+      .then(function (res) {
+        if (res.data) setAdminOrgs(res.data.map(function (m) { return { id: m.organization_id, name: m.organizations && m.organizations.name }; }));
+      });
+  }, [session]);
+
+  useEffect(function () {
+    if (!session) return;
+    supabase.from('event_saves').select('event_id').eq('user_id', session.user.id)
+      .then(function (res) {
+        if (res.data) setSavedEvents(new Set(res.data.map(function (r) { return r.event_id; })));
+      });
+    supabase.from('program_saves').select('program_id').eq('user_id', session.user.id)
+      .then(function (res) {
+        if (res.data) setSavedPrograms(new Set(res.data.map(function (r) { return r.program_id; })));
       });
   }, [session]);
 
@@ -107,115 +295,261 @@ export default function OrganizationDiscovery() {
     return function () { clearTimeout(timer); };
   }, [keyword]);
 
-  useEffect(function () { setPage(1); }, [debouncedKeyword, filters, sortBy, verifiedOnly]);
+  useEffect(function () {
+    setPage(1);
+    setProgramsPage(1);
+  }, [debouncedKeyword, filters, sortBy, programStatus, viewMode, verifiedOnly]);
 
-  var fetchOrgs = useCallback(function () {
+  /* ─── Fetch events ── */
+  var fetchEvents = useCallback(async function () {
+    if (viewMode !== 'events') return;
     setLoading(true);
     setError(null);
-    var offset = (page - 1) * PAGE_SIZE;
-    var searchKw   = debouncedKeyword || null;
-    var filterTags = (filters.tags || []).length > 0 ? filters.tags : null;
-
-    var run = async function () {
-      try {
-        if (userLocation && sortBy === 'distance') {
-          var r = await supabase.rpc('search_orgs_by_radius', {
-            search_lat: userLocation.lat, search_lng: userLocation.lng,
-            radius_miles: filters.radius, page_limit: PAGE_SIZE, page_offset: offset,
+    try {
+      var offset = (page - 1) * PAGE_SIZE;
+      var res = await supabase.rpc('get_public_events', {
+        search_keyword:      debouncedKeyword || null,
+        filter_tags:         (filters.tags || []).length > 0 ? filters.tags : null,
+        filter_event_types:  filters.eventTypes.length > 0 ? filters.eventTypes : null,
+        filter_audience:     filters.audience.length > 0 ? filters.audience : null,
+        filter_languages:    filters.languages.length > 0 ? filters.languages : null,
+        filter_org_type:     filters.orgType || null,
+        filter_state:        filters.state || null,
+        filter_city:         filters.city || null,
+        filter_zip:          filters.zip || null,
+        filter_volunteer:    filters.volunteerSignup || null,
+        filter_donation:     filters.donationDropoff || null,
+        filter_rsvp:         filters.requiresRsvp || null,
+        filter_date_range:   filters.dateRange
+          ? (filters.dateRange === 'thisWeek' ? 'this_week'
+            : filters.dateRange === 'thisMonth' ? 'this_month'
+            : filters.dateRange === 'customRange' ? 'custom'
+            : filters.dateRange)
+          : null,
+        filter_date_from:    filters.dateRange === 'customRange' && filters.dateFrom ? filters.dateFrom : null,
+        filter_date_to:      filters.dateRange === 'customRange' && filters.dateTo ? filters.dateTo : null,
+        sort_by:             sortBy,
+        page_limit:          PAGE_SIZE,
+        page_offset:         offset,
+        filter_verified_only: verifiedOnly,
+      });
+      if (res.error) throw res.error;
+      var sorted = (res.data || []).slice().sort(function (a, b) {
+        if (a.is_featured && !b.is_featured) return -1;
+        if (!a.is_featured && b.is_featured) return 1;
+        return 0;
+      });
+      var withDemo = sorted.map(function (e) {
+        return Object.assign({}, e, { is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001' });
+      });
+      setEvents(withDemo);
+      if (withDemo.length > 0) {
+        var eventIds = withDemo.map(function (e) { return e.id; });
+        var collabRes = await supabase
+          .from('event_collaborators')
+          .select('event_id, requesting_org_id')
+          .in('event_id', eventIds)
+          .eq('status', 'accepted');
+        if (collabRes.data && collabRes.data.length > 0) {
+          var coOrgIds = collabRes.data.map(function (r) { return r.requesting_org_id; });
+          var coOrgsRes = await supabase.from('organizations').select('id, name').in('id', coOrgIds);
+          var orgLookup = {};
+          if (coOrgsRes.data) coOrgsRes.data.forEach(function (o) { orgLookup[o.id] = o.name; });
+          var newMap = {};
+          collabRes.data.forEach(function (r) {
+            if (!newMap[r.event_id]) newMap[r.event_id] = [];
+            if (orgLookup[r.requesting_org_id]) newMap[r.event_id].push(orgLookup[r.requesting_org_id]);
           });
-          if (r.error) throw r.error;
-          setOrgs(r.data || []);
-          setTotalCount(r.data && r.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + ((r.data || []).length));
+          setCoHostsMap(newMap);
         } else {
-          var r2 = await supabase.rpc('get_public_orgs', {
-            search_keyword:       searchKw,
-            filter_state:         filters.state || null,
-            filter_city:          filters.city || null,
-            filter_county:        filters.county || null,
-            filter_zip:           filters.zip || null,
-            filter_categories:    (filters.categories || []).length > 0 ? filters.categories : null,
-            filter_org_type:      filters.orgType || null,
-            filter_languages:     (filters.languagesServed || []).length > 0 ? filters.languagesServed : null,
-            filter_tags:          filterTags,
-            sort_by:              sortBy,
-            page_limit:           PAGE_SIZE,
-            page_offset:          offset,
-            filter_verified_only: verifiedOnly,
-          });
-          if (r2.error) throw r2.error;
-          setOrgs(r2.data || []);
-          setTotalCount(r2.data && r2.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + ((r2.data || []).length));
+          setCoHostsMap({});
         }
-      } catch (err) {
-        console.error('Discovery fetch error:', err);
-        setError(err.message || 'Failed to load organizations');
-        toast.error(t(lang, 'errorDesc') || 'Failed to load organizations');
-      } finally {
-        setLoading(false);
       }
-    };
-    run();
-  }, [page, debouncedKeyword, filters, sortBy, userLocation, lang, verifiedOnly]);
+      setTotalCount(res.data && res.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : offset + (res.data ? res.data.length : 0));
+    } catch (err) {
+      console.error('Event discovery fetch error:', err);
+      setError(err.message || 'Failed to load events');
+      toast.error(et(lang, 'errorDesc'));
+    } finally {
+      setLoading(false);
+    }
+  }, [viewMode, page, debouncedKeyword, filters, sortBy, lang, verifiedOnly]);
 
-  useEffect(function () { fetchOrgs(); }, [fetchOrgs]);
+  /* ─── Fetch programs ── */
+  var fetchPrograms = useCallback(async function () {
+    if (viewMode !== 'programs') return;
+    setProgramsLoading(true);
+    setProgramsError(null);
+    try {
+      var offset = (programsPage - 1) * PAGE_SIZE;
+      var query = supabase
+        .from('org_programs')
+        .select('*, organizations!inner(id, name, slug, logo_url, type, city, state, county, is_public, is_verified_nonprofit)')
+        .eq('is_public', true)
+        .eq('publish_to_discovery', true)
+        .eq('organizations.is_public', true);
+
+      if (verifiedOnly) query = query.eq('organizations.is_verified_nonprofit', true);
+      if (programStatus) query = query.eq('status', programStatus);
+      if (filters.state) query = query.ilike('organizations.state', filters.state);
+      if (filters.city)  query = query.ilike('organizations.city', '%' + filters.city + '%');
+      if (debouncedKeyword) query = query.or('name.ilike.%' + debouncedKeyword + '%,description.ilike.%' + debouncedKeyword + '%');
+
+      query = query.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
+
+      var res = await query;
+      if (res.error) throw res.error;
+      var safeData = (res.data || []).filter(function (p) { return p && p.id; }).map(function (p) {
+        return Object.assign({}, p, {
+          org_name:     p.organizations ? p.organizations.name : '',
+          org_slug:     p.organizations ? p.organizations.slug : '',
+          org_logo_url: p.organizations ? p.organizations.logo_url : null,
+          org_type:     p.organizations ? p.organizations.type : '',
+          org_city:     p.organizations ? p.organizations.city : '',
+          org_state:    p.organizations ? p.organizations.state : '',
+          org_county:   p.organizations ? p.organizations.county : '',
+        });
+      });
+      setPrograms(safeData);
+      setProgramsTotalCount(safeData.length === PAGE_SIZE ? programsPage * PAGE_SIZE + 1 : offset + safeData.length);
+    } catch (err) {
+      console.error('Program discovery fetch error:', err);
+      setProgramsError(err.message || 'Failed to load programs');
+      toast.error('Failed to load programs');
+    } finally {
+      setProgramsLoading(false);
+    }
+  }, [viewMode, programsPage, debouncedKeyword, filters, programStatus, verifiedOnly]);
+
+  /* ─── Fetch calendar events ── */
+  var fetchCalendarEvents = useCallback(async function () {
+    if (viewMode !== 'calendar') return;
+    setCalendarLoading(true);
+    try {
+      var range = getCalendarRange(calendarDate, calendarSubView);
+      var res = await supabase.rpc('get_public_events', {
+        search_keyword:       debouncedKeyword || null,
+        filter_tags:          (filters.tags || []).length > 0 ? filters.tags : null,
+        filter_event_types:   filters.eventTypes.length > 0 ? filters.eventTypes : null,
+        filter_audience:      filters.audience.length > 0 ? filters.audience : null,
+        filter_languages:     filters.languages.length > 0 ? filters.languages : null,
+        filter_org_type:      filters.orgType || null,
+        filter_state:         filters.state || null,
+        filter_city:          filters.city || null,
+        filter_zip:           filters.zip || null,
+        filter_volunteer:     filters.volunteerSignup || null,
+        filter_donation:      filters.donationDropoff || null,
+        filter_rsvp:          filters.requiresRsvp || null,
+        filter_date_range:    'custom',
+        filter_date_from:     range.from,
+        filter_date_to:       range.to,
+        sort_by:              'start_time',
+        page_limit:           300,
+        page_offset:          0,
+        filter_verified_only: verifiedOnly,
+      });
+      if (res.error) throw res.error;
+      setCalendarEvents(res.data || []);
+    } catch (err) {
+      console.error('Calendar fetch error:', err);
+      toast.error('Failed to load calendar events');
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [viewMode, calendarDate, calendarSubView, debouncedKeyword, filters, verifiedOnly]);
+
+  useEffect(function () { fetchEvents(); },         [fetchEvents]);
+  useEffect(function () { fetchPrograms(); },       [fetchPrograms]);
+  useEffect(function () { fetchCalendarEvents(); }, [fetchCalendarEvents]);
 
   function handleFilterChange(key, value) {
-    if (key === 'uiLang') { setFilters(function (p) { return Object.assign({}, p, { uiLang: value }); }); return; }
-    setFilters(function (p) { return Object.assign({}, p, { [key]: value }); });
+    setFilters(function (prev) { var u = {}; u[key] = value; return Object.assign({}, prev, u); });
   }
 
   function handleReset() {
-    setFilters(DEFAULT_FILTERS); setKeyword(''); setSortBy('name'); setUserLocation(null);
+    setFilters(DEFAULT_FILTERS);
+    setKeyword('');
+    setSortBy('start_time');
+    setProgramStatus('');
     if (searchRef.current) searchRef.current.focus();
   }
 
-  function handleRequestLocation() {
-    if (!navigator.geolocation) { setLocationError(true); toast.error(t(lang, 'locationError') || 'Location unavailable'); return; }
-    setLocationLoading(true); setLocationError(false);
-    navigator.geolocation.getCurrentPosition(
-      function (pos) {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setSortBy('distance');
-        setLocationLoading(false);
-        mascotSuccessToast('Location detected');
-      },
-      function () {
-        setLocationError(true);
-        setLocationLoading(false);
-        toast.error(t(lang, 'locationError') || 'Could not get location');
+  function handleGuestRSVP(event) {
+    setSelectedEvent(event);
+    setGuestRSVPModal(true);
+    setRsvpSuccess(false);
+  }
+
+  async function submitGuestRSVP(e) {
+    e.preventDefault();
+    setRsvpLoading(true);
+    try {
+      if (!guestInfo.name.trim() || !guestInfo.email.trim()) throw new Error('Please provide your name and email');
+      var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(guestInfo.email)) throw new Error('Please enter a valid email address');
+      var rsvpRes = await supabase.from('guest_rsvps').insert([{
+        event_id:    selectedEvent.id,
+        guest_email: guestInfo.email.toLowerCase().trim(),
+        guest_name:  guestInfo.name.trim(),
+        guest_phone: guestInfo.phone.trim() || null,
+        status:      guestInfo.status,
+        guest_count: parseInt(guestInfo.guestCount) || 1,
+      }]);
+      if (rsvpRes.error) {
+        if (rsvpRes.error.code === '23505') throw new Error("You have already RSVP'd to this event");
+        throw rsvpRes.error;
       }
-    );
+      setRsvpSuccess(true);
+      setGuestInfo({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
+      mascotSuccessToast("You're on the list!", 'Your RSVP was submitted successfully.');
+      var eventDate = new Date(selectedEvent.start_time).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      var eventTime = new Date(selectedEvent.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({
+          type: 'guest_rsvp_confirmation',
+          data: {
+            guestEmail:    guestInfo.email.toLowerCase().trim(),
+            guestName:     guestInfo.name.trim(),
+            guestCount:    parseInt(guestInfo.guestCount) || 1,
+            eventTitle:    selectedEvent.title,
+            orgName:       selectedEvent.org_name || '',
+            orgLogoUrl:    selectedEvent.org_logo_url || '',
+            eventDate:     eventDate + ' at ' + eventTime,
+            eventLocation: selectedEvent.is_virtual ? 'Virtual Event' : (selectedEvent.location || ''),
+            eventId:       selectedEvent.id,
+            startISO:      selectedEvent.start_time,
+            endISO:        selectedEvent.end_time || selectedEvent.start_time,
+            eventUrl:      window.location.origin + '/events/' + selectedEvent.id,
+          },
+        }),
+      });
+      setTimeout(function () { setGuestRSVPModal(false); setRsvpSuccess(false); }, 3000);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRsvpLoading(false);
+    }
   }
 
-  var activeChips = [];
-  (filters.categories || []).forEach(function (c) { activeChips.push({ type: 'category', value: c, label: c.replace(/-/g, ' ') }); });
-  if (filters.orgType) activeChips.push({ type: 'orgType', value: filters.orgType, label: filters.orgType.replace(/_/g, ' ') });
-  (filters.languagesServed || []).forEach(function (l) { activeChips.push({ type: 'lang', value: l, label: l }); });
-  (filters.tags || []).forEach(function (tag) { activeChips.push({ type: 'tag', value: tag, label: tag }); });
-  if (filters.state) activeChips.push({ type: 'state', value: filters.state, label: 'State: ' + filters.state.toUpperCase() });
-  if (filters.city)  activeChips.push({ type: 'city',  value: filters.city,  label: 'City: ' + filters.city });
-
-  function removeChip(chip) {
-    if (chip.type === 'category')  setFilters(function (p) { return Object.assign({}, p, { categories: p.categories.filter(function (c) { return c !== chip.value; }) }); });
-    else if (chip.type === 'orgType')   setFilters(function (p) { return Object.assign({}, p, { orgType: '' }); });
-    else if (chip.type === 'lang')  setFilters(function (p) { return Object.assign({}, p, { languagesServed: p.languagesServed.filter(function (l) { return l !== chip.value; }) }); });
-    else if (chip.type === 'tag')   setFilters(function (p) { return Object.assign({}, p, { tags: p.tags.filter(function (t) { return t !== chip.value; }) }); });
-    else if (chip.type === 'state') setFilters(function (p) { return Object.assign({}, p, { state: '' }); });
-    else if (chip.type === 'city')  setFilters(function (p) { return Object.assign({}, p, { city: '' }); });
-  }
-
-  var totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  var isRTL = lang === 'ar';
+  var isLoading      = viewMode === 'events' ? loading : programsLoading;
+  var currentError   = viewMode === 'events' ? error : programsError;
+  var currentTotal   = viewMode === 'events' ? totalCount : programsTotalCount;
+  var currentPage    = viewMode === 'events' ? page : programsPage;
+  var setCurrentPage = viewMode === 'events' ? setPage : setProgramsPage;
+  var totalPages     = Math.ceil(currentTotal / PAGE_SIZE);
+  var isRTL          = lang === 'ar';
 
   var pageContent = (
     <div
-      style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}
+      style={{ minHeight: '100vh', background: '#FFFFFF', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
 
       {/* Sticky Search + Toggle Bar */}
-      <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: session ? 0 : 64, zIndex: 30 }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: session ? 0 : 64, zIndex: 30 }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
 
           {/* Nonprofits / All toggle */}
           <div
@@ -247,275 +581,366 @@ export default function OrganizationDiscovery() {
               }}
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              All Organizations
+              All
             </button>
           </div>
 
-          {/* Search */}
+          {/* Search input */}
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search size={15} color="#94A3B8" aria-hidden="true" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none', display: 'flex' }}>
+              <SearchIcon />
+            </span>
             <input
               ref={searchRef}
               type="search"
               value={keyword}
               onChange={function (e) { setKeyword(e.target.value); }}
-              placeholder={t(lang, 'searchPlaceholder') || 'Search by name or description...'}
-              aria-label={t(lang, 'searchPlaceholder') || 'Search organizations'}
-              style={{ width: '100%', paddingLeft: '38px', paddingRight: keyword ? '36px' : '14px', paddingTop: '9px', paddingBottom: '9px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '10px', fontSize: '13px', color: '#0E1523', boxSizing: 'border-box' }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={viewMode === 'events' || viewMode === 'calendar' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
+              aria-label={viewMode === 'programs' ? 'Search programs' : et(lang, 'searchPlaceholder')}
+              style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
+              className="focus:ring-2 focus:ring-blue-500"
             />
             {keyword && (
               <button
                 onClick={function () { setKeyword(''); }}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }}
                 aria-label="Clear search"
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center' }}
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               >
-                <X size={13} aria-hidden="true" />
+                <XIcon size={14} />
               </button>
             )}
           </div>
 
           <button
             onClick={function () { setMobileFiltersOpen(true); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Open filters"
             aria-expanded={mobileFiltersOpen}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', fontSize: '13px', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}
-            className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <SlidersHorizontal size={14} aria-hidden="true" />
-            {t(lang, 'filtersHeading') || 'Filters'}
+            <FilterIcon />
+            {et(lang, 'filtersHeading')}
           </button>
         </div>
       </div>
 
-      {/* Body */}
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 20px' }}>
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+        <div style={{ display: 'flex', gap: '24px' }}>
 
           {/* Desktop Sidebar */}
-          <div className="hidden lg:block" style={{ width: '240px', flexShrink: 0 }}>
-            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', position: 'sticky', top: '120px' }}>
-              <DiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} onRequestLocation={handleRequestLocation} locationLoading={locationLoading} locationError={locationError} />
+          <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', position: 'sticky', top: session ? 80 : 144 }}>
+              <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
             </div>
           </div>
 
-          {/* Mobile Drawer */}
+          {/* Mobile Filter Drawer */}
           {mobileFiltersOpen && (
-            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={et(lang, 'filtersHeading')}>
               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={function () { setMobileFiltersOpen(false); }} aria-hidden="true" />
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '300px', maxWidth: '100%', background: '#FFFFFF', overflowY: 'auto', padding: '16px', boxShadow: '4px 0 24px rgba(0,0,0,0.15)' }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '320px', maxWidth: '100%', background: '#FFFFFF', boxShadow: '4px 0 24px rgba(0,0,0,0.15)', overflowY: 'auto', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>Filters</h2>
+                  <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>{et(lang, 'filtersHeading')}</h2>
                   <button
                     onClick={function () { setMobileFiltersOpen(false); }}
+                    style={{ padding: '6px', borderRadius: '8px', color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' }}
                     aria-label="Close filters"
-                    style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex' }}
                     className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <X size={18} aria-hidden="true" />
+                    <XIcon size={18} />
                   </button>
                 </div>
-                <DiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} onRequestLocation={handleRequestLocation} locationLoading={locationLoading} locationError={locationError} />
+                <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
                 <button
                   onClick={function () { setMobileFiltersOpen(false); }}
-                  style={{ marginTop: '20px', width: '100%', padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, borderRadius: '10px', border: 'none', cursor: 'pointer' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  Show Results
+                  {et(lang, 'results')}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Main */}
-          <main style={{ flex: 1, minWidth: 0 }} aria-label="Organization results">
+          {/* Main Content */}
+          <main style={{ flex: 1, minWidth: 0 }} aria-label="Discovery results">
 
-            <div style={{ marginBottom: '20px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0E1523', marginBottom: '4px' }}>
-                {verifiedOnly ? 'Verified Nonprofits' : (t(lang, 'pageTitle') || 'Discover Local Organizations')}
-              </h1>
-              <p style={{ fontSize: '13px', color: '#64748B' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0E1523' }}>
                 {verifiedOnly
-                  ? 'Verified 501(c)(3) nonprofits in your community.'
-                  : (t(lang, 'pageSubtitle') || 'Explore nonprofits and community groups in your area.')}
+                  ? (viewMode === 'programs' ? 'Nonprofit Programs' : 'Nonprofit Events')
+                  : et(lang, 'pageTitle')}
+              </h1>
+              <p style={{ color: '#64748B', fontSize: '14px', marginTop: '4px' }}>
+                {verifiedOnly ? 'Events and programs from verified 501(c)(3) nonprofits.' : et(lang, 'pageSubtitle')}
               </p>
             </div>
 
-            {/* Active filter chips */}
-            {activeChips.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role="list" aria-label="Active filters">
-                {activeChips.map(function (chip) {
-                  return (
-                    <span
-                      key={chip.type + '-' + chip.value}
-                      role="listitem"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}
-                    >
-                      {chip.type === 'tag' && <Tag size={9} color="#F5B731" aria-hidden="true" />}
-                      {chip.label}
-                      <button
-                        onClick={function () { removeChip(chip); }}
-                        aria-label={'Remove filter: ' + chip.label}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }}
-                        className="focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full"
-                      >
-                        <X size={10} aria-hidden="true" />
-                      </button>
-                    </span>
-                  );
-                })}
-                <button
-                  onClick={handleReset}
-                  style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-
-            {/* Results count + sort */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-              <p style={{ fontSize: '13px', color: '#64748B' }} aria-live="polite" aria-atomic="true">
-                {!loading && !error && <>{totalCount} {t(lang, 'results') || 'results'}</>}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label htmlFor="sort-select" style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap' }}>
-                  {t(lang, 'sortBy') || 'Sort by'}:
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <select
-                    id="sort-select"
-                    value={sortBy}
-                    onChange={function (e) { setSortBy(e.target.value); }}
-                    style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 28px 6px 10px', fontSize: '12px', color: '#374151', appearance: 'none', cursor: 'pointer' }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {SORT_OPTIONS.map(function (opt) {
-                      return <option key={opt.value} value={opt.value}>{t(lang, opt.labelKey) || opt.labelKey}</option>;
-                    })}
-                  </select>
-                  <ChevronDown size={12} color="#64748B" aria-hidden="true" style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Skeleton loading */}
-            {loading && (
-              <div
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}
-                aria-label="Loading organizations"
-                aria-busy="true"
+            {/* Events / Programs / Calendar tabs */}
+            <div
+              style={{ display: 'inline-flex', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '3px', marginBottom: '20px' }}
+              role="tablist"
+              aria-label="View mode"
+            >
+              <button
+                role="tab"
+                aria-selected={viewMode === 'events'}
+                onClick={function () { setViewMode('events'); }}
+                style={{
+                  padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: viewMode === 'events' ? '#3B82F6' : 'transparent',
+                  color: viewMode === 'events' ? '#FFFFFF' : '#64748B',
+                }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {Array.from({ length: 6 }).map(function (_, i) { return <OrgCardSkeleton key={i} />; })}
-              </div>
+                Events
+              </button>
+              <button
+                role="tab"
+                aria-selected={viewMode === 'programs'}
+                onClick={function () { setViewMode('programs'); }}
+                style={{
+                  padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: viewMode === 'programs' ? '#8B5CF6' : 'transparent',
+                  color: viewMode === 'programs' ? '#FFFFFF' : '#64748B',
+                }}
+                className="focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                Programs
+              </button>
+              <button
+                role="tab"
+                aria-selected={viewMode === 'calendar'}
+                onClick={function () { setViewMode('calendar'); }}
+                style={{
+                  padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: viewMode === 'calendar' ? '#F5B731' : 'transparent',
+                  color: viewMode === 'calendar' ? '#0E1523' : '#64748B',
+                }}
+                className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              >
+                Calendar
+              </button>
+            </div>
+
+            {/* Calendar view */}
+            {viewMode === 'calendar' && (
+              <DiscoveryCalendar
+                events={calendarEvents}
+                loading={calendarLoading}
+                calendarDate={calendarDate}
+                onNavigate={setCalendarDate}
+                subView={calendarSubView}
+                onSubViewChange={setCalendarSubView}
+              />
             )}
 
-            {/* Error state */}
-            {!loading && error && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }} role="alert">
-                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                  <AlertCircle size={32} color="#EF4444" aria-hidden="true" />
-                </div>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-                  {t(lang, 'errorTitle') || 'Something went wrong'}
-                </h2>
-                <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '24px', maxWidth: '360px' }}>
-                  {t(lang, 'errorDesc') || 'Failed to load organizations. Please try again.'}
-                </p>
-                <button
-                  onClick={fetchOrgs}
-                  style={{ padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: 'none', cursor: 'pointer' }}
-                  className="hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  {t(lang, 'tryAgain') || 'Try Again'}
-                </button>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!loading && !error && orgs.length === 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                  <Building2 size={32} color="#CBD5E1" aria-hidden="true" />
-                </div>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-                  {verifiedOnly ? 'No verified nonprofits found' : (t(lang, 'noResults') || 'No organizations found')}
-                </h2>
-                <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '24px', maxWidth: '360px' }}>
-                  {verifiedOnly
-                    ? 'Try adjusting your filters, or switch to All Organizations to see all groups.'
-                    : (t(lang, 'noResultsDesc') || 'Try adjusting your filters or search terms.')}
-                </p>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {verifiedOnly && (
-                    <button
-                      onClick={function () { setVerifiedOnly(false); }}
-                      style={{ padding: '10px 24px', background: '#22C55E', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: 'none', cursor: 'pointer' }}
-                      className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    >
-                      Show All Organizations
-                    </button>
-                  )}
-                  <button
-                    onClick={handleReset}
-                    style={{ padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, borderRadius: '10px', border: 'none', cursor: 'pointer' }}
-                    className="hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    {t(lang, 'resetFilters') || 'Reset Filters'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Results grid */}
-            {!loading && !error && orgs.length > 0 && (
+            {/* List / grid views */}
+            {viewMode !== 'calendar' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
-                  {orgs.map(function (org) {
-                    return <OrgCard key={org.id} org={org} lang={lang} session={session} initialFollowed={followedOrgs.has(org.id)} />;
-                  })}
+                {/* Results bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                  <p style={{ fontSize: '14px', color: '#64748B' }} aria-live="polite" aria-atomic="true">
+                    {!isLoading && !currentError && (currentTotal + ' ' + et(lang, 'results'))}
+                  </p>
+                  {viewMode === 'events' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: '#475569', whiteSpace: 'nowrap' }}>{et(lang, 'sortBy')}:</label>
+                      <select
+                        id="event-sort-select"
+                        value={sortBy}
+                        onChange={function (e) { setSortBy(e.target.value); }}
+                        style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
+                        className="focus:ring-2 focus:ring-blue-500"
+                      >
+                        {SORT_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>; })}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label htmlFor="program-status-select" style={{ fontSize: '14px', color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
+                      <select
+                        id="program-status-select"
+                        value={programStatus}
+                        onChange={function (e) { setProgramStatus(e.target.value); }}
+                        style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
+                        className="focus:ring-2 focus:ring-purple-500"
+                      >
+                        {PROGRAM_STATUS_OPTIONS.map(function (opt) { return <option key={opt.value} value={opt.value}>{opt.label}</option>; })}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {totalPages > 1 && (
+                {/* Skeletons */}
+                {isLoading && (
+                  <div className={'grid grid-cols-1 gap-4 ' + (viewMode === 'events' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')} aria-label={'Loading ' + viewMode} aria-busy="true">
+                    {[1, 2, 3, 4, 5, 6].map(function (i) {
+                      return viewMode === 'events'
+                        ? <EventCardSkeleton key={i} />
+                        : <ProgramCardSkeleton key={i} />;
+                    })}
+                  </div>
+                )}
+
+                {/* Error state */}
+                {!isLoading && currentError && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} role="alert">
+                    <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                      <span style={{ color: '#EF4444' }}><AlertCircleIcon /></span>
+                    </div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
+                    <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
+                    <button
+                      onClick={viewMode === 'events' ? fetchEvents : fetchPrograms}
+                      style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                      className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      {et(lang, 'tryAgain')}
+                    </button>
+                  </div>
+                )}
+
+                {/* Empty — events */}
+                {!isLoading && !currentError && viewMode === 'events' && events.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                      <span style={{ color: '#CBD5E1' }}><CalendarXIcon /></span>
+                    </div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
+                      {verifiedOnly ? 'No nonprofit events found' : et(lang, 'noResults')}
+                    </h2>
+                    <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
+                      {verifiedOnly ? 'Try adjusting your filters, or switch to All to see every event.' : et(lang, 'noResultsDesc')}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {verifiedOnly && (
+                        <button
+                          onClick={function () { setVerifiedOnly(false); }}
+                          style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                          className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                          Show All Events
+                        </button>
+                      )}
+                      <button
+                        onClick={handleReset}
+                        style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                        className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        {et(lang, 'resetFilters')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty — programs */}
+                {!isLoading && !currentError && viewMode === 'programs' && programs.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                      <span style={{ color: '#CBD5E1' }}><ProgramsEmptyIcon /></span>
+                    </div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
+                      {verifiedOnly ? 'No nonprofit programs found' : 'No programs found'}
+                    </h2>
+                    <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
+                      {verifiedOnly ? 'Try switching to All to see programs from all organizations.' : 'Try adjusting your search or filters.'}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {verifiedOnly && (
+                        <button
+                          onClick={function () { setVerifiedOnly(false); }}
+                          style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                          className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                          Show All Programs
+                        </button>
+                      )}
+                      <button
+                        onClick={handleReset}
+                        style={{ padding: '10px 20px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                        className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                      >
+                        {et(lang, 'resetFilters')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Events grid */}
+                {!isLoading && !currentError && viewMode === 'events' && events.length > 0 && (
+                  <>
+                    {events.filter(function (e) { return e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
+                        {events.filter(function (e) { return e.is_featured; }).map(function (event) {
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} />;
+                        })}
+                      </div>
+                    )}
+                    {events.filter(function (e) { return !e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+{events.filter(function (e) { return !e.is_featured; }).map(function (event) {
+                          return <EventDiscoveryCard key={event.id} event={event} lang={lang} />;
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Programs grid */}
+                {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {programs.filter(function (p) { return p && p.id; }).map(function (program) {
+                      return <ProgramDiscoveryCard key={program.id} program={program} session={session} initialSaved={savedPrograms.has(program.id)} />;
+                    })}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {!isLoading && !currentError && totalPages > 1 && (
                   <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
                     <button
-                      onClick={function () { setPage(function (p) { return Math.max(1, p - 1); }); }}
-                      disabled={page === 1}
-                      aria-label="Previous page"
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '12px', color: page === 1 ? '#CBD5E1' : '#374151', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+                      onClick={function () { setCurrentPage(function (p) { return Math.max(1, p - 1); }); }}
+                      disabled={currentPage === 1}
+                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }}
+                      aria-label={et(lang, 'previous')}
                       className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <ChevronLeft size={13} aria-hidden="true" />
-                      {t(lang, 'previous') || 'Prev'}
+                      <ChevronLeftIcon />
+                      {et(lang, 'previous')}
                     </button>
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {Array.from({ length: Math.min(5, totalPages) }, function (_, i) {
-                        var pn = totalPages <= 5 ? i + 1 : page <= 3 ? i + 1 : page >= totalPages - 2 ? totalPages - 4 + i : page - 2 + i;
+                        var pageNum;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (currentPage <= 3) pageNum = i + 1;
+                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = currentPage - 2 + i;
+                        var isActive = pageNum === currentPage;
                         return (
                           <button
-                            key={pn}
-                            onClick={function () { setPage(pn); }}
-                            aria-label={'Page ' + pn}
-                            aria-current={pn === page ? 'page' : undefined}
-                            style={{ width: '34px', height: '34px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, border: '1px solid ' + (pn === page ? '#3B82F6' : '#E2E8F0'), background: pn === page ? '#3B82F6' : '#FFFFFF', color: pn === page ? '#FFFFFF' : '#374151', cursor: 'pointer' }}
+                            key={pageNum}
+                            onClick={function () { setCurrentPage(pageNum); }}
+                            style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : '1px solid #E2E8F0', background: isActive ? (viewMode === 'programs' ? '#8B5CF6' : '#3B82F6') : '#FFFFFF', color: isActive ? '#FFFFFF' : '#475569', cursor: 'pointer' }}
+                            aria-label={et(lang, 'page') + ' ' + pageNum}
+                            aria-current={isActive ? 'page' : undefined}
                             className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            {pn}
+                            {pageNum}
                           </button>
                         );
                       })}
                     </div>
                     <button
-                      onClick={function () { setPage(function (p) { return Math.min(totalPages, p + 1); }); }}
-                      disabled={page === totalPages}
-                      aria-label="Next page"
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '12px', color: page === totalPages ? '#CBD5E1' : '#374151', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+                      onClick={function () { setCurrentPage(function (p) { return Math.min(totalPages, p + 1); }); }}
+                      disabled={currentPage === totalPages}
+                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }}
+                      aria-label={et(lang, 'next')}
                       className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {t(lang, 'next') || 'Next'}
-                      <ChevronRight size={13} aria-hidden="true" />
+                      {et(lang, 'next')}
+                      <ChevronRightIcon />
                     </button>
                   </nav>
                 )}
@@ -524,6 +949,107 @@ export default function OrganizationDiscovery() {
           </main>
         </div>
       </div>
+
+      {/* Guest RSVP Modal */}
+      {guestRSVPModal && selectedEvent && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          onClick={function () { if (!rsvpSuccess) setGuestRSVPModal(false); }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rsvp-modal-title"
+        >
+          <div
+            style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxWidth: '448px', width: '100%' }}
+            onClick={function (e) { e.stopPropagation(); }}
+          >
+            <div style={{ borderBottom: '1px solid #E2E8F0', padding: '16px 24px' }}>
+              <h2 id="rsvp-modal-title" style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523' }}>RSVP to Event</h2>
+              <p style={{ color: '#64748B', fontSize: '14px', marginTop: '4px' }}>{selectedEvent.title}</p>
+            </div>
+            {rsvpSuccess ? (
+              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523', marginBottom: '8px' }}>You're All Set!</h3>
+                <p style={{ color: '#64748B', fontSize: '14px' }}>We've received your RSVP. Check your email for confirmation.</p>
+              </div>
+            ) : (
+              <form onSubmit={submitGuestRSVP} style={{ padding: '16px 24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {[
+                    { id: 'guest-name',  label: 'Your Name',        type: 'text',  required: true,  value: guestInfo.name,  key: 'name',  placeholder: 'Jane Doe' },
+                    { id: 'guest-email', label: 'Your Email',       type: 'email', required: true,  value: guestInfo.email, key: 'email', placeholder: 'jane@example.com' },
+                    { id: 'guest-phone', label: 'Phone (Optional)', type: 'tel',   required: false, value: guestInfo.phone, key: 'phone', placeholder: '(555) 123-4567' },
+                  ].map(function (f) {
+                    return (
+                      <div key={f.id}>
+                        <label htmlFor={f.id} style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
+                          {f.label}{f.required && <span style={{ color: '#EF4444' }} aria-hidden="true"> *</span>}
+                        </label>
+                        <input
+                          id={f.id}
+                          type={f.type}
+                          required={f.required}
+                          value={f.value}
+                          placeholder={f.placeholder}
+                          onChange={function (e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function (p) { return Object.assign({}, p, u); }); }}
+                          style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }}
+                          className="focus:ring-2 focus:ring-blue-500"
+                          aria-required={f.required}
+                        />
+                      </div>
+                    );
+                  })}
+                  <div>
+                    <label htmlFor="guest-status" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>RSVP Status</label>
+                    <select
+                      id="guest-status"
+                      value={guestInfo.status}
+                      onChange={function (e) { setGuestInfo(function (p) { return Object.assign({}, p, { status: e.target.value }); }); }}
+                      style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="interested">Interested</option>
+                      <option value="going">Going</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="guest-count" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>Number of Guests</label>
+                    <input
+                      id="guest-count"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={guestInfo.guestCount}
+                      onChange={function (e) { setGuestInfo(function (p) { return Object.assign({}, p, { guestCount: e.target.value }); }); }}
+                      style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+                  <button
+                    type="button"
+                    onClick={function () { setGuestRSVPModal(false); }}
+                    disabled={rsvpLoading}
+                    style={{ padding: '8px 16px', border: '1px solid #E2E8F0', color: '#475569', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
+                    className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rsvpLoading}
+                    style={{ padding: '8px 16px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: rsvpLoading ? 'not-allowed' : 'pointer', opacity: rsvpLoading ? 0.6 : 1 }}
+                    className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    {rsvpLoading ? 'Submitting...' : 'Submit RSVP'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 
