@@ -58,6 +58,7 @@ var ICONS = {
   folder:     'M3 7a2 2 0 012-2h3.586a1 1 0 01.707.293L10.414 6.5A1 1 0 0011.121 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
   photo:      ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
   polls:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7H9m3 0h.01M9 16h.01'],
+  surveys: ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'],
   forms:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
   programs:   ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
   approvals:  ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
@@ -94,7 +95,8 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
     {
       label: 'Tools',
       items: [
-        { id:'polls',       label:'Polls & Surveys', iconKey:'polls',       route:'polls',           path: base + '/polls' },
+        { id:'polls',   label:'Polls',   iconKey:'polls',   route:'polls',   path: base + '/polls'   },
+        { id:'surveys', label:'Surveys', iconKey:'surveys', route:'surveys', path: base + '/surveys' },
         { id:'forms',       label:'Sign-Up Forms',   iconKey:'forms',       route:'signup-forms',    path: base + '/signup-forms' },
         { id:'programs',    label:'Programs',        iconKey:'programs',    route:'programs',         path: base + '/programs' },
         { id:'scheduling',  label:'Scheduling',      iconKey:'scheduling',  route:'scheduling',      path: base + '/scheduling', externalLink: base + '/scheduling' },
