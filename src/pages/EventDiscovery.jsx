@@ -407,7 +407,8 @@ export default function EventDiscovery() {
           org_type:     p.organizations ? p.organizations.type : '',
           org_city:     p.organizations ? p.organizations.city : '',
           org_state:    p.organizations ? p.organizations.state : '',
-          org_county:   p.organizations ? p.organizations.county : '',
+          org_county:              p.organizations ? p.organizations.county : '',
+org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprofit : false,
         });
       });
       setPrograms(safeData);
@@ -775,7 +776,7 @@ export default function EventDiscovery() {
 
                 {/* Skeletons */}
                 {isLoading && (
-                  <div className={'grid grid-cols-1 gap-4 ' + (viewMode === 'events' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')} aria-label={'Loading ' + viewMode} aria-busy="true">
+                  <div className={'grid grid-cols-1 gap-4 ' + (viewMode === 'events' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3')} aria-label={'Loading ' + viewMode} aria-busy="true">
                     {[1, 2, 3, 4, 5, 6].map(function (i) {
                       return viewMode === 'events'
                         ? <EventCardSkeleton key={i} />
@@ -890,11 +891,11 @@ export default function EventDiscovery() {
 
                 {/* Programs grid */}
                 {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {programs.filter(function (p) { return p && p.id; }).map(function (program) {
-                      return <ProgramDiscoveryCard key={program.id} program={program} session={session} initialSaved={savedPrograms.has(program.id)} />;
-                    })}
-                  </div>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {programs.filter(function (p) { return p && p.id; }).map(function (program) {
+    return <ProgramDiscoveryCard key={program.id} program={program} session={session} initialSaved={savedPrograms.has(program.id)} />;
+  })}
+</div>
                 )}
 
                 {/* Pagination */}

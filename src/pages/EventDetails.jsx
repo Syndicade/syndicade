@@ -35,6 +35,127 @@ function isEventDay(startTime) {
     now.getDate() === eventDate.getDate();
 }
 
+// ── Add to Calendar dropdown ─────────────────────────────────────────────────
+function AddToCalendarButton({ event }) {
+  var [open, setOpen] = useState(false);
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toIcsDate(d) {
+    var dt = new Date(d);
+    return dt.getUTCFullYear() + pad(dt.getUTCMonth()+1) + pad(dt.getUTCDate()) +
+      'T' + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + '00Z';
+  }
+  function toOutlookDate(d) { return new Date(d).toISOString(); }
+
+  var start = event.start_time;
+  var end = event.end_time || event.start_time;
+  var title = encodeURIComponent(event.title || '');
+  var loc = encodeURIComponent(event.location || '');
+  var desc = encodeURIComponent(event.description || '');
+
+  var googleUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+    '&text=' + title +
+    '&dates=' + toIcsDate(start) + '/' + toIcsDate(end) +
+    '&details=' + desc +
+    '&location=' + loc;
+
+  var outlookUrl = 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' + title +
+    '&startdt=' + toOutlookDate(start) +
+    '&enddt=' + toOutlookDate(end) +
+    '&location=' + loc +
+    '&body=' + desc;
+
+  var yahooUrl = 'https://calendar.yahoo.com/?v=60&title=' + title +
+    '&st=' + toIcsDate(start) +
+    '&et=' + toIcsDate(end) +
+    '&desc=' + desc +
+    '&in_loc=' + loc;
+
+  function handleDownloadIcs(e) {
+    e.preventDefault();
+    downloadICS(event);
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={function() { setOpen(function(v) { return !v; }); }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+        className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Add to Calendar
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={function() { setOpen(false); }} aria-hidden="true" />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '180px', overflow: 'hidden' }} role="menu">
+            {[
+              { label: 'Google Calendar', href: googleUrl, icon: 'M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18' },
+              { label: 'Outlook', href: outlookUrl, icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+              { label: 'Yahoo Calendar', href: yahooUrl, icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
+            ].map(function(item) {
+              return (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={function() { setOpen(false); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', fontSize: '13px', color: '#475569', textDecoration: 'none' }}
+                  className="hover:bg-slate-50 focus:outline-none focus:bg-slate-50"
+                  role="menuitem"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={item.icon}/>
+                  </svg>
+                  {item.label}
+                </a>
+              );
+            })}
+            <button
+              onClick={handleDownloadIcs}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', fontSize: '13px', color: '#475569', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', borderTop: '1px solid #F1F5F9' }}
+              className="hover:bg-slate-50 focus:outline-none focus:bg-slate-50"
+              role="menuitem"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download .ics
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Map embed ────────────────────────────────────────────────────────────────
+function MapEmbed({ location }) {
+  if (!location) return null;
+  var src = 'https://maps.google.com/maps?q=' + encodeURIComponent(location) + '&output=embed&z=15';
+  return (
+    <div style={{ marginTop: '16px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+      <iframe
+        title="Event location map"
+        src={src}
+        width="100%"
+        height="220"
+        style={{ border: 0, display: 'block' }}
+        allowFullScreen
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    </div>
+  );
+}
+
 // ── Checkout Form Modal ──────────────────────────────────────────────────────
 function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal }) {
   var [values, setValues] = useState(function() {
@@ -77,7 +198,6 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
       role="dialog" aria-modal="true" aria-labelledby="checkout-form-title">
       <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-lg my-8"
         style={{boxShadow:'3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'}}>
-
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
           <div>
             <h2 id="checkout-form-title" className="text-lg font-bold text-[#0E1523]">Almost there</h2>
@@ -93,7 +213,6 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
             </svg>
           </button>
         </div>
-
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
             {fields.map(function(f) {
@@ -138,7 +257,6 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
               );
             })}
           </div>
-
           <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
             <button type="button" onClick={onCancel}
               className="px-5 py-2.5 bg-transparent border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm">
@@ -170,11 +288,193 @@ function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal })
   );
 }
 
+// ── Collaborate Modal ────────────────────────────────────────────────────────
+function CollaborateModal({ event, userAdminOrgs, onClose }) {
+  var [selectedOrgId, setSelectedOrgId] = useState(userAdminOrgs.length === 1 ? userAdminOrgs[0].id : '');
+  var [message, setMessage] = useState('');
+  var [sending, setSending] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!selectedOrgId) { toast.error('Please select your organization'); return; }
+    setSending(true);
+    try {
+      var { data: existing } = await supabase
+        .from('event_collaborators')
+        .select('id, status')
+        .eq('event_id', event.id)
+        .eq('requesting_org_id', selectedOrgId)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.status === 'accepted') {
+          toast.error('Your organization is already a co-host for this event');
+          setSending(false);
+          return;
+        }
+        if (existing.status === 'pending') {
+          toast.error('A collaboration request is already pending for this event');
+          setSending(false);
+          return;
+        }
+        // Re-send if previously declined/withdrawn
+        var { error: updateErr } = await supabase
+          .from('event_collaborators')
+          .update({ status: 'pending', message: message.trim() || null, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        if (updateErr) throw updateErr;
+      } else {
+        var { error: insertErr } = await supabase
+          .from('event_collaborators')
+          .insert([{
+            event_id: event.id,
+            requesting_org_id: selectedOrgId,
+            host_org_id: event.organization_id,
+            status: 'pending',
+            message: message.trim() || null,
+          }]);
+        if (insertErr) throw insertErr;
+      }
+
+      // Notify host org via email
+      var selectedOrg = userAdminOrgs.find(function(o) { return o.id === selectedOrgId; });
+      fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({
+          type: 'collab_request',
+          data: {
+            eventId: event.id,
+            eventTitle: event.title,
+            requestingOrgId: selectedOrgId,
+            requestingOrgName: selectedOrg ? selectedOrg.name : '',
+            hostOrgId: event.organization_id,
+            message: message.trim() || '',
+          },
+        }),
+      });
+
+      mascotSuccessToast('Collaboration request sent!', 'The event organizer will review your request.');
+      onClose();
+    } catch (err) {
+      mascotErrorToast('Failed to send request.', 'Please try again.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="collab-modal-title"
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '480px' }}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
+          <div>
+            <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0E1523', margin: 0 }}>Request to Co-host</h2>
+            <p style={{ fontSize: '13px', color: '#64748B', margin: '4px 0 0' }}>{event.title}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+            className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            aria-label="Close"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {userAdminOrgs.length > 1 && (
+              <div>
+                <label htmlFor="collab-org-select" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
+                  Representing <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="collab-org-select"
+                  value={selectedOrgId}
+                  onChange={function(e) { setSelectedOrgId(e.target.value); }}
+                  required
+                  style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
+                  className="focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Select your organization...</option>
+                  {userAdminOrgs.map(function(org) {
+                    return <option key={org.id} value={org.id}>{org.name}</option>;
+                  })}
+                </select>
+              </div>
+            )}
+            {userAdminOrgs.length === 1 && (
+              <div style={{ padding: '10px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#475569' }}>
+                Sending as <strong style={{ color: '#0E1523' }}>{userAdminOrgs[0].name}</strong>
+              </div>
+            )}
+            <div>
+              <label htmlFor="collab-message" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
+                Message <span style={{ fontSize: '11px', fontWeight: 400, color: '#94A3B8' }}>(optional)</span>
+              </label>
+              <textarea
+                id="collab-message"
+                value={message}
+                onChange={function(e) { setMessage(e.target.value); }}
+                placeholder="Briefly describe how your organization would like to collaborate..."
+                rows={3}
+                style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                className="focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>
+              The event organizer will receive your request and can accept or decline it in their inbox.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', padding: '16px 24px', borderTop: '1px solid #E2E8F0' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', color: '#475569', fontSize: '13px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
+              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={sending || (!selectedOrgId)}
+              style={{ flex: 2, padding: '10px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            >
+              {sending ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  Sending...
+                </>
+              ) : 'Send Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 function EventDetails() {
   var { eventId } = useParams();
   var navigate = useNavigate();
-
   var [event, setEvent] = useState(null);
   var [organization, setOrganization] = useState(null);
   var [coHosts, setCoHosts] = useState([]);
@@ -187,12 +487,10 @@ function EventDetails() {
   var [rsvpLoading, setRsvpLoading] = useState(false);
   var [rsvpSuccess, setRsvpSuccess] = useState(false);
   var [ticketLoading, setTicketLoading] = useState(false);
-
   var [ticketTypes, setTicketTypes] = useState([]);
   var [selections, setSelections] = useState({});
   var [checkoutFields, setCheckoutFields] = useState([]);
   var [showCheckoutForm, setShowCheckoutForm] = useState(false);
-
   var [showRecurringOptions, setShowRecurringOptions] = useState(false);
   var [recurringAction, setRecurringAction] = useState(null);
   var [showEditModal, setShowEditModal] = useState(false);
@@ -203,36 +501,36 @@ function EventDetails() {
   var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '' });
   var [guestRsvpLoading, setGuestRsvpLoading] = useState(false);
   var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
+  // Save event
+  var [savedEvent, setSavedEvent] = useState(false);
+  var [savingEvent, setSavingEvent] = useState(false);
+  // Collaborate
+  var [showCollabModal, setShowCollabModal] = useState(false);
+  var [userAdminOrgs, setUserAdminOrgs] = useState([]);
 
   var fetchEvent = async function() {
     try {
       setLoading(true);
       setError(null);
-
       var { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-
       var { data: eventData, error: eventError } = await supabase
         .from('events').select('*').eq('id', eventId).single();
       if (eventError) throw eventError;
       if (!eventData) { setError('Event not found'); setLoading(false); return; }
       setEvent(eventData);
-
       if (eventData.visibility !== 'public' && !user) { navigate('/login'); return; }
-
       var { data: orgData } = await supabase
         .from('organizations')
         .select('name, logo_url, slug')
         .eq('id', eventData.organization_id)
         .single();
       if (orgData) setOrganization(orgData);
-
       var { data: collabRows } = await supabase
         .from('event_collaborators')
         .select('requesting_org_id')
         .eq('event_id', eventData.id)
         .eq('status', 'accepted');
-
       if (collabRows && collabRows.length > 0) {
         var coHostOrgIds = collabRows.map(function(r) { return r.requesting_org_id; });
         var { data: coHostOrgs } = await supabase
@@ -243,7 +541,6 @@ function EventDetails() {
       } else {
         setCoHosts([]);
       }
-
       if (user) {
         var { data: membership } = await supabase
           .from('memberships').select('role')
@@ -252,14 +549,37 @@ function EventDetails() {
           setIsMember(true);
           if (membership.role === 'admin') setIsAdmin(true);
         }
+        // Load save state
+        var saveResult = await supabase
+          .from('event_saves')
+          .select('event_id')
+          .eq('user_id', user.id)
+          .eq('event_id', eventId)
+          .maybeSingle();
+        setSavedEvent(!!saveResult.data);
+        // Load orgs this user admins (excluding host org) for collaborate button
+        var { data: adminMemberships } = await supabase
+          .from('memberships')
+          .select('organization_id, organizations(id, name, logo_url)')
+          .eq('member_id', user.id)
+          .eq('role', 'admin')
+          .eq('status', 'active')
+          .neq('organization_id', eventData.organization_id);
+        if (adminMemberships) {
+          setUserAdminOrgs(adminMemberships.map(function(m) {
+            return {
+              id: m.organization_id,
+              name: m.organizations ? m.organizations.name : '',
+              logo_url: m.organizations ? m.organizations.logo_url : null,
+            };
+          }));
+        }
       }
-
       var { count: guestCount } = await supabase
         .from('guest_rsvps')
         .select('*', { count: 'exact', head: true })
         .eq('event_id', eventId);
       setGuestRsvpCount(guestCount || 0);
-
       var { data: rsvpData } = await supabase
         .from('event_rsvps')
         .select('*, members(first_name, last_name, profile_photo_url)')
@@ -271,7 +591,6 @@ function EventDetails() {
           if (userResponse) setUserRsvp(userResponse.status);
         }
       }
-
       if (eventData.is_paid) {
         var { data: ttData } = await supabase
           .from('event_ticket_types').select('*').eq('event_id', eventData.id).order('sort_order');
@@ -285,7 +604,6 @@ function EventDetails() {
           .from('event_checkout_fields').select('*').eq('event_id', eventData.id).order('sort_order');
         if (cfData) setCheckoutFields(cfData);
       }
-
     } catch (err) {
       console.error('Error fetching event details:', err);
       setError(err.message);
@@ -306,6 +624,34 @@ function EventDetails() {
     handleRsvp('going', true);
   }, [currentUser, event]);
 
+  var handleSaveEvent = async function() {
+    if (!currentUser) { toast.error('Please log in to save events'); return; }
+    setSavingEvent(true);
+    try {
+      if (savedEvent) {
+        var { error: delErr } = await supabase
+          .from('event_saves')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('event_id', eventId);
+        if (delErr) throw delErr;
+        setSavedEvent(false);
+        toast('Removed from saved events');
+      } else {
+        var { error: insErr } = await supabase
+          .from('event_saves')
+          .insert([{ user_id: currentUser.id, event_id: eventId }]);
+        if (insErr) throw insErr;
+        setSavedEvent(true);
+        mascotSuccessToast('Event saved!');
+      }
+    } catch (err) {
+      toast.error('Could not update saved events');
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
   var getOrgUrl = function() {
     if (!organization) return APP_URL;
     if (organization.slug) return APP_URL + '/org/' + organization.slug;
@@ -317,28 +663,23 @@ function EventDetails() {
     try {
       setRsvpLoading(true);
       setRsvpSuccess(false);
-
       var { error: upsertErr } = await supabase.from('event_rsvps')
         .upsert(
           { event_id: eventId, member_id: currentUser.id, status: status, guest_count: 0, updated_at: new Date().toISOString() },
           { onConflict: 'event_id,member_id' }
         );
       if (upsertErr) throw upsertErr;
-
       setUserRsvp(status);
       setRsvpSuccess(true);
-
       var { data: updatedRsvps } = await supabase
         .from('event_rsvps').select('*, members(first_name, last_name, profile_photo_url)').eq('event_id', eventId);
       if (updatedRsvps) setRsvps(updatedRsvps);
-
       if (status === 'going') {
         if (fromTicket) {
           mascotSuccessToast("You're going!", "Payment confirmed — see you there!");
         } else {
           mascotSuccessToast("You're going!", "RSVP updated successfully.");
         }
-
         var memberRes = await supabase.from('members').select('email, first_name').eq('user_id', currentUser.id).single();
         if (memberRes.data && memberRes.data.email) {
           var eventDate = new Date(event.start_time).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
@@ -357,7 +698,6 @@ function EventDetails() {
                 : APP_URL;
             }
           }
-
           if (fromTicket) {
             var purchaseRes = await supabase.from('ticket_purchases').select('*')
               .eq('event_id', event.id).eq('member_id', currentUser.id).order('purchased_at', { ascending: false }).limit(10);
@@ -419,7 +759,6 @@ function EventDetails() {
       } else {
         mascotSuccessToast('RSVP updated.');
       }
-
       setTimeout(function() { setRsvpSuccess(false); }, 3000);
     } catch (err) {
       console.error('RSVP error:', err);
@@ -527,7 +866,6 @@ function EventDetails() {
     setShowCheckoutForm(false);
     try {
       setTicketLoading(true);
-
       if (formResponses && checkoutFields.length > 0) {
         await supabase.from('ticket_checkout_responses').insert([{
           event_id: event.id,
@@ -535,19 +873,15 @@ function EventDetails() {
           responses: formResponses,
         }]);
       }
-
       var memberRes = await supabase.from('members').select('email').eq('user_id', currentUser.id).single();
       var memberEmail = memberRes.data ? memberRes.data.email : '';
-
       var selArray = [];
       ticketTypes.forEach(function(tt) {
         var qty = selections[tt.id] || 0;
         if (qty > 0) selArray.push({ ticket_type_id: tt.id, quantity: qty });
       });
-
       var successUrl = window.location.origin + window.location.pathname + '?ticket_success=1';
       var cancelUrl = window.location.href;
-
       var res = await fetch(SUPABASE_URL + '/functions/v1/create-ticket-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
@@ -556,11 +890,9 @@ function EventDetails() {
           selections: selArray, success_url: successUrl, cancel_url: cancelUrl,
         }),
       });
-
       var data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || 'Could not create checkout session');
       window.location.href = data.url;
-
     } catch (err) {
       console.error('Ticket error:', err);
       mascotErrorToast('Checkout failed.', err.message);
@@ -744,26 +1076,42 @@ function EventDetails() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-
-          {/* Top bar: back + admin actions */}
+          {/* Top bar: back + save + admin actions */}
           <div className="flex items-center justify-between mb-4">
-            <Link to="/events"
-              className="flex items-center gap-2 text-[#475569] hover:text-[#0E1523] font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1">
+            <button
+              onClick={function() { navigate(-1); }}
+              className="flex items-center gap-2 text-[#475569] hover:text-[#0E1523] font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
               </svg>
-              Back to Events
-            </Link>
-
+              Back
+            </button>
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              <button onClick={function() { downloadICS(event); }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
-                Add to Calendar
-              </button>
+              {/* Save / Bookmark */}
+              {currentUser && (
+                <button
+                  onClick={handleSaveEvent}
+                  disabled={savingEvent}
+                  aria-label={savedEvent ? 'Remove from saved events' : 'Save this event'}
+                  aria-pressed={savedEvent}
+                  className={'px-3 py-2 rounded-lg text-sm font-semibold border focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 flex items-center gap-1.5 ' + (savedEvent ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200')}
+                >
+                  {savedEvent ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#F5B731" stroke="#F5B731" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                    </svg>
+                  )}
+                  {savedEvent ? 'Saved' : 'Save'}
+                </button>
+              )}
               <button onClick={function() { window.print(); }}
                 className="px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                 Print
@@ -786,7 +1134,6 @@ function EventDetails() {
               )}
             </div>
           </div>
-
           {/* Title + badges */}
           <div className="flex items-start gap-3 flex-wrap">
             {event.is_recurring && (
@@ -825,7 +1172,6 @@ function EventDetails() {
               )}
             </div>
           </div>
-
           {/* Org + co-hosts */}
           <div className="mt-2">
             {organization && (
@@ -853,17 +1199,14 @@ function EventDetails() {
               </div>
             )}
           </div>
-
         </div>
       </header>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
           {/* ── Left column ─────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
-
             {rsvpSuccess && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-4" role="alert">
                 <div className="flex items-center gap-2">
@@ -876,68 +1219,142 @@ function EventDetails() {
                 </div>
               </div>
             )}
-
-            {/* Date & Time */}
+            {/* When, Where & Price — combined compact card */}
             <section aria-labelledby="section-datetime" style={cardStyle}>
-              <span id="section-datetime" style={sectionLabel}>Date &amp; Time</span>
-              <div className="space-y-3">
+              <span id="section-datetime" style={sectionLabel}>When &amp; Where</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                {/* Date row */}
                 <div>
-                  <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">Date</p>
-                  <p className="text-[#0E1523] font-semibold">{formatDate(event.start_time)}</p>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Date</p>
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>{formatDate(event.start_time)}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">Time</p>
-                  <p className="text-[#0E1523] font-semibold">
-                    {formatTime(event.start_time)}{event.end_time && ' – ' + formatTime(event.end_time)}
+
+                {/* Time + Add to Calendar inline */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Time</p>
+                    <p style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>
+                      {formatTime(event.start_time)}{event.end_time && ' – ' + formatTime(event.end_time)}
+                    </p>
+                  </div>
+                  <AddToCalendarButton event={event} />
+                </div>
+
+                {/* Location / Virtual */}
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '14px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                    {event.is_virtual ? 'Format' : 'Location'}
                   </p>
+                  {event.is_virtual ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523', margin: 0 }}>Virtual Event</p>
+                      </div>
+                      {event.virtual_link ? (
+                        userRsvp === 'going' ? (
+                          <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm">
+                            Join Virtual Event
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                          </a>
+                        ) : (
+                          <p style={{ fontSize: '13px', color: '#64748B' }}>
+                            {isPaidEvent ? 'Purchase a ticket to see the virtual event link.' : 'RSVP "Going" to see the virtual event link.'}
+                          </p>
+                        )
+                      ) : (
+                        <p style={{ fontSize: '13px', color: '#64748B' }}>Virtual event link will be shared closer to the event date.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      {event.location_name && (
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523', marginBottom: '2px' }}>{event.location_name}</p>
+                      )}
+                      {event.location && (
+                        <p style={{ fontSize: '13px', color: '#475569', marginBottom: '8px' }}>{event.location}</p>
+                      )}
+                      {event.location && (
+                        <>
+                          <a
+                            href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent((event.location_name ? event.location_name + ', ' : '') + (event.location || ''))}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize: '13px', color: '#3B82F6', fontWeight: 600 }}
+                            className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                          >
+                            Open in Maps →
+                          </a>
+                          <MapEmbed location={(event.location_name ? event.location_name + ', ' : '') + (event.location || '')} />
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Price */}
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '14px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Price</p>
+                  {isPaidEvent && ticketTypes.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {ticketTypes.map(function(tt) {
+                        var active = getActivePrice(tt);
+                        return (
+                          <div key={tt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
+                            <span style={{ color: '#475569' }}>{tt.name}</span>
+                            <span style={{ fontWeight: 700, color: '#0E1523' }}>{formatPrice(active.price)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#22C55E' }}>Free</span>
+                    </div>
+                  )}
+                </div>
+
                 {isPastEvent && (
-                  <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                    <p className="text-sm text-[#64748B]">This event has already occurred.</p>
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px' }}>
+                    <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>This event has already occurred.</p>
                   </div>
                 )}
               </div>
             </section>
-
-            {/* Location */}
-            <section aria-labelledby="section-location" style={cardStyle}>
-              <span id="section-location" style={sectionLabel}>
-                {event.is_virtual ? 'Virtual Event' : 'Location'}
-              </span>
-              {event.is_virtual ? (
-                <div>
-                  <p className="text-[#475569] mb-3">This is a virtual event.</p>
-                  {event.virtual_link ? (
-                    userRsvp === 'going' ? (
-                      <a href={event.virtual_link} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                        Join Virtual Event
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                          <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                      </a>
-                    ) : (
-                      <p className="text-sm text-[#64748B]">
-                        {isPaidEvent ? 'Purchase a ticket to see the virtual event link.' : 'RSVP "Going" to see the virtual event link.'}
-                      </p>
-                    )
-                  ) : (
-                    <p className="text-sm text-[#64748B]">Virtual event link will be shared closer to the event date.</p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <p className="text-[#0E1523] font-semibold mb-3">{event.location}</p>
-                  <a href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.location)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-blue-500 hover:text-blue-600 font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
-                    View on Map →
-                  </a>
-                </div>
-              )}
-            </section>
-
+            {/* Event flier */}
+            {event.flier_url && (
+              <section aria-labelledby="section-flier" style={cardStyle}>
+                <span id="section-flier" style={sectionLabel}>Event Flier</span>
+                <a href={event.flier_url} target="_blank" rel="noopener noreferrer" aria-label="View full event flier">
+                  <img
+                    src={event.flier_url}
+                    alt={'Flier for ' + event.title}
+                    style={{ width: '100%', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'block' }}
+                  />
+                </a>
+                <a
+                  href={event.flier_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '10px', fontSize: '13px', color: '#3B82F6', fontWeight: 600 }}
+                  className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download flier
+                </a>
+              </section>
+            )}
             {/* Description */}
             {event.description && (
               <section aria-labelledby="section-description" style={cardStyle}>
@@ -945,7 +1362,6 @@ function EventDetails() {
                 <p className="text-[#475569] whitespace-pre-wrap leading-relaxed">{event.description}</p>
               </section>
             )}
-
             {/* Capacity */}
             {event.max_attendees && (
               <section aria-labelledby="section-capacity" style={cardStyle}>
@@ -963,10 +1379,8 @@ function EventDetails() {
                 </div>
               </section>
             )}
-
             {/* QR Code */}
-            <EventQRCode event={event}/>
-
+            <EventQRCode event={event} hideUrl />
             {/* Attendance Check-In — event day only */}
             {showCheckIn && (
               <AttendanceCheckIn
@@ -976,12 +1390,10 @@ function EventDetails() {
                 organizationId={event.organization_id}
               />
             )}
-
           </div>
 
           {/* ── Right column ────────────────────────────────────────────── */}
           <div className="space-y-6">
-
             {/* RSVP / Ticket card — members only */}
             {!isPastEvent && currentUser && isMember && (
               <section aria-labelledby="section-rsvp" style={cardStyle}>
@@ -989,7 +1401,6 @@ function EventDetails() {
                   <>
                     <span id="section-rsvp" style={sectionLabel}>Tickets</span>
                     <p className="text-[#64748B] text-xs mb-4">Processed securely via Stripe.</p>
-
                     {hasTicket ? (
                       <div className="space-y-3">
                         <div className="w-full px-4 py-3 rounded-lg font-semibold text-sm text-center bg-green-500 text-white flex items-center justify-center gap-2">
@@ -1062,14 +1473,12 @@ function EventDetails() {
                             </div>
                           );
                         })}
-
                         {totalQty > 0 && (
                           <div className="flex items-center justify-between pt-1 px-1">
                             <span className="text-[#64748B] text-sm">{totalQty} ticket{totalQty!==1?'s':''}</span>
                             <span className="text-[#0E1523] font-bold">{formatPrice(orderTotal)}</span>
                           </div>
                         )}
-
                         <button onClick={handleCheckoutClick} disabled={ticketLoading||totalQty===0}
                           className={'w-full px-4 py-3 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-all flex items-center justify-center gap-2 ' + (totalQty===0 ? 'bg-slate-100 text-[#94A3B8] cursor-not-allowed' : 'bg-[#F5B731] text-[#0E1523] hover:bg-yellow-300') + (ticketLoading ? ' opacity-50' : '')}>
                           {ticketLoading ? (
@@ -1084,7 +1493,6 @@ function EventDetails() {
                             </>
                           )}
                         </button>
-
                         <div className="border-t border-slate-200 pt-3 space-y-2">
                           <button onClick={function() { handleRsvp('maybe'); }} disabled={rsvpLoading}
                             className={'w-full px-4 py-2.5 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 ' + (userRsvp==='maybe' ? 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500' : 'bg-white border border-slate-200 text-[#475569] hover:bg-slate-50 focus:ring-slate-400')}>
@@ -1120,7 +1528,6 @@ function EventDetails() {
                 )}
               </section>
             )}
-
             {/* Response counts — members only */}
             {isMember && (
               <section aria-labelledby="section-responses" style={cardStyle}>
@@ -1141,7 +1548,6 @@ function EventDetails() {
                 </div>
               </section>
             )}
-
             {/* Going list — members only */}
             {isMember && counts.going > 0 && (
               <section aria-labelledby="section-going" style={cardStyle}>
@@ -1169,7 +1575,6 @@ function EventDetails() {
                 </ul>
               </section>
             )}
-
             {/* Guest RSVP — non-members, free public events */}
             {!isPastEvent && !isMember && !isPaidEvent && (
               <section aria-labelledby="section-guest-rsvp" style={cardStyle}>
@@ -1223,7 +1628,6 @@ function EventDetails() {
                 )}
               </section>
             )}
-
             {/* Paid event — non-members */}
             {!isPastEvent && !isMember && isPaidEvent && (
               <section aria-labelledby="section-tickets-gate" style={cardStyle} className="text-center">
@@ -1235,7 +1639,26 @@ function EventDetails() {
                 </Link>
               </section>
             )}
-
+            {/* Co-host request — org admins of other orgs */}
+            {currentUser && userAdminOrgs.length > 0 && (
+              <section aria-labelledby="section-cohost" style={cardStyle}>
+                <span id="section-cohost" style={sectionLabel}>Co-host This Event</span>
+                <p className="text-[#475569] text-sm mb-3">Interested in co-hosting? Send a collaboration request to the event organizer.</p>
+                <button
+                  onClick={function() { setShowCollabModal(true); }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 16px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                  className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  Request to Co-host
+                </button>
+              </section>
+            )}
           </div>
         </div>
       </main>
@@ -1250,7 +1673,13 @@ function EventDetails() {
           onCancel={function() { setShowCheckoutForm(false); }}
         />
       )}
-
+      {showCollabModal && (
+        <CollaborateModal
+          event={event}
+          userAdminOrgs={userAdminOrgs}
+          onClose={function() { setShowCollabModal(false); }}
+        />
+      )}
       {showRecurringOptions && (
         <RecurringEventOptions
           event={event}
@@ -1259,7 +1688,6 @@ function EventDetails() {
           onCancel={function() { setShowRecurringOptions(false); setRecurringAction(null); }}
         />
       )}
-
       {showEditModal && (
         <EditEvent
           isOpen={showEditModal}
@@ -1270,14 +1698,12 @@ function EventDetails() {
           isRecurring={event.is_recurring || !!event.parent_event_id}
         />
       )}
-
       {showAttendanceReport && (
         <AttendanceReport
           event={event}
           onClose={function() { setShowAttendanceReport(false); }}
         />
       )}
-
     </div>
   );
 }

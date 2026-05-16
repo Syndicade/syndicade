@@ -84,8 +84,7 @@ export default function EventQRCode({ event }) {
 
         {/* Info + actions */}
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <p style={{ color:'#0E1523', fontSize:'14px', fontWeight:600, marginBottom:'4px' }}>Scan to view event</p>
-          <p style={{ color:'#94A3B8', fontSize:'12px', marginBottom:'16px', wordBreak:'break-all' }}>{eventUrl}</p>
+          <p style={{ color:'#0E1523', fontSize:'14px', fontWeight:600, marginBottom:'16px' }}>Scan to view event</p>
 
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
             <button
