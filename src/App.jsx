@@ -24,6 +24,7 @@ import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrgLayout from './pages/OrgLayout';
 import AdminInbox from './pages/AdminInbox';
+import AdminContacts from './pages/AdminContacts';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
 import MemberDirectory from './pages/MemberDirectory';
@@ -197,6 +198,7 @@ var hideChrome = (
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />
               <Route path="inbox" element={<AdminInbox />} />
+              <Route path="contacts" element={<AdminContacts />} />
               <Route path="page-editor" element={<OrgPageEditor />} />
               <Route path="billing" element={<BillingPage />} />
               <Route path="community-board" element={<CommunityBoard />} />

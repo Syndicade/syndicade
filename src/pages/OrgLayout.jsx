@@ -106,7 +106,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       items: [
         { id:'approvals',    label:'Approvals',    iconKey:'approvals', route:'approvals',    path: base + '/approvals',    badge: pendingCount },
         { id:'inbox',        label:'Inbox',        iconKey:'inbox',     route:'inbox',        path: base + '/inbox',        badge: unreadCount },
-        { id:'contacts',     label:'Contacts',     iconKey:'contacts',  route:'contacts',     path: base + '/contacts',     comingSoon: true },
+        { id:'contacts', label:'Contacts', iconKey:'contacts', route:'contacts', path: base + '/contacts' },
         { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics',    lock:'growth' },
         { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey:'tour-public-page-nav', adminOnly: true },
         { id:'email-blasts', label:'Email Blasts', iconKey:'email',     route:'email-blasts', path: base + '/email-blasts', adminOnly: true, lock:'growth' },
