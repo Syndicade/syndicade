@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
@@ -98,20 +97,38 @@ function IconChat({ size }) {
   );
 }
 
-function SkeletonList({ t }) {
+// Light theme tokens — hardcoded, no useTheme
+var t = {
+  bgPage:        '#F8FAFC',
+  bgHeader:      '#FFFFFF',
+  bgCard:        '#FFFFFF',
+  bgElevated:    '#F1F5F9',
+  bgSecondary:   '#F1F5F9',
+  bgInput:       '#FFFFFF',
+  bgChatBox:     '#F8FAFC',
+  border:        '#E2E8F0',
+  textPrimary:   '#0F172A',
+  textSecondary: '#475569',
+  textMuted:     '#64748B',
+  textTertiary:  '#94A3B8',
+  selectedBg:    '#EFF6FF',
+  unreadBg:      'rgba(59,130,246,0.04)',
+};
+
+function SkeletonList() {
   return (
     <div aria-label="Loading messages" aria-busy="true">
       {[1, 2, 3, 4].map(function(i) {
         return (
           <div key={i} style={{ padding: '16px', borderBottom: '1px solid ' + t.border }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: t.border }} />
+              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: t.border }} className="animate-pulse" />
               <div>
-                <div style={{ width: '120px', height: '12px', background: t.border, borderRadius: '4px', marginBottom: '6px' }} />
-                <div style={{ width: '80px', height: '10px', background: t.bgElevated, borderRadius: '4px' }} />
+                <div style={{ width: '120px', height: '12px', background: t.border, borderRadius: '4px', marginBottom: '6px' }} className="animate-pulse" />
+                <div style={{ width: '80px', height: '10px', background: t.bgElevated, borderRadius: '4px' }} className="animate-pulse" />
               </div>
             </div>
-            <div style={{ width: '90%', height: '10px', background: t.bgElevated, borderRadius: '4px' }} />
+            <div style={{ width: '90%', height: '10px', background: t.bgElevated, borderRadius: '4px' }} className="animate-pulse" />
           </div>
         );
       })}
@@ -119,7 +136,7 @@ function SkeletonList({ t }) {
   );
 }
 
-function SkeletonChat({ t }) {
+function SkeletonChat() {
   return (
     <div aria-label="Loading chat" aria-busy="true" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {[1, 2, 3].map(function(i) {
@@ -127,8 +144,8 @@ function SkeletonChat({ t }) {
         return (
           <div key={i} style={{ display: 'flex', justifyContent: isRight ? 'flex-end' : 'flex-start' }}>
             <div style={{ maxWidth: '60%' }}>
-              <div style={{ width: '60px', height: '9px', background: t.border, borderRadius: '4px', marginBottom: '5px', marginLeft: isRight ? 'auto' : '0' }} />
-              <div style={{ height: '36px', background: t.bgElevated, borderRadius: '10px', width: '180px' }} />
+              <div style={{ width: '60px', height: '9px', background: t.border, borderRadius: '4px', marginBottom: '5px', marginLeft: isRight ? 'auto' : '0' }} className="animate-pulse" />
+              <div style={{ height: '36px', background: t.bgElevated, borderRadius: '10px', width: '180px' }} className="animate-pulse" />
             </div>
           </div>
         );
@@ -137,7 +154,7 @@ function SkeletonChat({ t }) {
   );
 }
 
-function EmptyState({ icon, title, description, t }) {
+function EmptyState({ icon, title, description }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '48px 24px', textAlign: 'center' }}>
       <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: t.bgElevated, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', color: t.textTertiary }}>
@@ -204,25 +221,6 @@ function StatusBadge({ status }) {
 export default function AdminInbox({ organizationId: propOrgId }) {
   var { organizationId: paramOrgId } = useParams();
   var orgId = propOrgId || paramOrgId;
-  var { isDark } = useTheme();
-
-  // ── Theme tokens ─────────────────────────────────────────────────────────────
-  var t = {
-    bgPage:       isDark ? '#0E1523'  : '#F8FAFC',
-    bgHeader:     isDark ? '#151B2D'  : '#FFFFFF',
-    bgCard:       isDark ? '#1A2035'  : '#FFFFFF',
-    bgElevated:   isDark ? '#1E2845'  : '#F1F5F9',
-    bgSecondary:  isDark ? '#151B2D'  : '#F1F5F9',
-    bgInput:      isDark ? '#1A2035'  : '#FFFFFF',
-    bgChatBox:    isDark ? '#0E1523'  : '#F8FAFC',
-    border:       isDark ? '#2A3550'  : '#E2E8F0',
-    textPrimary:  isDark ? '#FFFFFF'  : '#0F172A',
-    textSecondary:isDark ? '#CBD5E1'  : '#475569',
-    textMuted:    isDark ? '#94A3B8'  : '#64748B',
-    textTertiary: isDark ? '#64748B'  : '#94A3B8',
-    selectedBg:   isDark ? '#1A2035'  : '#EFF6FF',
-    unreadBg:     isDark ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.04)',
-  };
 
   var [activeTab, setActiveTab] = useState('inquiries');
 
@@ -250,13 +248,12 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   var chatChannelRef = useRef(null);
 
   // Unread tracking
-  var [latestMsgMap, setLatestMsgMap] = useState({}); // { collabId: { created_at, sender_org_id } }
-  var lastVisitedMapRef = useRef({});                  // { collabId: ISOString }
+  var [latestMsgMap, setLatestMsgMap] = useState({});
+  var lastVisitedMapRef = useRef({});
   var prevMsgCountRef = useRef(0);
   var selectedCollabIdRef = useRef(null);
   var hasDispatchedRef = useRef(false);
 
-  // Keep selectedCollabIdRef in sync
   useEffect(function() {
     selectedCollabIdRef.current = selectedCollab ? selectedCollab.id : null;
   }, [selectedCollab]);
@@ -275,7 +272,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   var unreadCollabCount = collabItems.filter(function(c) { return isUnread(c); }).length;
 
-  // Sort: unread first → pending → latest message time desc
   var sortedCollabItems = collabItems.slice().sort(function(a, b) {
     var aU = isUnread(a), bU = isUnread(b);
     if (aU && !bU) return -1;
@@ -287,7 +283,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     return new Date(bTime) - new Date(aTime);
   });
 
-  // Scroll chat container only when new messages arrive
   useEffect(function() {
     if (chatMessages.length > prevMsgCountRef.current) {
       prevMsgCountRef.current = chatMessages.length;
@@ -296,7 +291,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     }
   }, [chatMessages]);
 
-  // Poll selected collab chat every 4s
   useEffect(function() {
     var collabId = selectedCollab ? selectedCollab.id : null;
     var collabStatus = selectedCollab ? selectedCollab.status : null;
@@ -315,9 +309,8 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     return function() { if (chatChannelRef.current) { clearInterval(chatChannelRef.current); chatChannelRef.current = null; } };
   }, [selectedCollab ? selectedCollab.id : null, selectedCollab ? selectedCollab.status : null]);
 
-  // Background poll: check latest message across ALL active collabs every 10s for unread detection
   useEffect(function() {
-  if (!orgId || collabItems.length === 0) return;
+    if (!orgId || collabItems.length === 0) return;
 
     function checkAllCollabs() {
       var ids = collabItems
@@ -358,7 +351,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           return Object.assign({}, prev, { [collabId]: { created_at: latest.created_at, sender_org_id: latest.sender_org_id } });
         });
       }
-      // Keep lastVisited current while actively viewing
       if (collabId === selectedCollabIdRef.current) {
         lastVisitedMapRef.current[collabId] = new Date().toISOString();
       }
@@ -418,10 +410,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   useEffect(function() { if (orgId) fetchInquiries(); }, [orgId]);
   useEffect(function() { if (orgId) fetchCollabData(); }, [orgId]);
-useEffect(function() { if (orgId && activeTab === 'collab' && collabItems.length === 0) fetchCollabData(); }, [activeTab]);
+  useEffect(function() { if (orgId && activeTab === 'collab' && collabItems.length === 0) fetchCollabData(); }, [activeTab]);
 
-// Dispatch total to OrgLayout nav badge
-useEffect(function() {
+  useEffect(function() {
     var total = unreadCount + unreadCollabCount;
     if (total > 0 || hasDispatchedRef.current) {
       hasDispatchedRef.current = true;
@@ -482,7 +473,6 @@ useEffect(function() {
       setCollabItems(enriched);
       if (!selectedCollab && enriched.length > 0) setSelectedCollab(enriched[0]);
 
-      // Fetch latest message per collab for initial unread state
       var collabIds = enriched.map(function(r) { return r.id; });
       if (collabIds.length > 0) {
         var { data: latestMsgs } = await supabase
@@ -610,7 +600,7 @@ useEffect(function() {
     { key: 'collab',    label: 'Collaboration',   icon: <IconHandshake size={15} />, count: pendingCollabCount + unreadCollabCount },
   ];
 
-  // ── Collab list item ─────────────────────────────────────────────────────────
+  // ── Collab list item ──────────────────────────────────────────────────────
   function renderCollabListItem(item) {
     var isSelected = selectedCollab && selectedCollab.id === item.id;
     var orgName = item.other_org ? item.other_org.name : 'Unknown Organization';
@@ -668,7 +658,7 @@ useEffect(function() {
     );
   }
 
-  // ── Chat thread ──────────────────────────────────────────────────────────────
+  // ── Chat thread ───────────────────────────────────────────────────────────
   function renderChatThread(item, chatActive) {
     var otherOrgName = item.other_org ? item.other_org.name : 'Co-host';
     var myOrgInitial = currentOrgName ? currentOrgName.charAt(0).toUpperCase() : '?';
@@ -690,7 +680,7 @@ useEffect(function() {
           aria-live="polite"
           style={{ background: t.bgChatBox, border: '1px solid ' + t.border, borderRadius: '10px', minHeight: '160px', maxHeight: '280px', overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}
         >
-          {chatLoading ? <SkeletonChat t={t} /> : chatMessages.length === 0 ? (
+          {chatLoading ? <SkeletonChat /> : chatMessages.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', textAlign: 'center' }}>
               <div style={{ color: t.border, marginBottom: '8px' }}><IconChat size={22} /></div>
               <p style={{ fontSize: '12px', color: t.textTertiary, margin: 0 }}>No messages yet. Start the conversation.</p>
@@ -702,7 +692,7 @@ useEffect(function() {
               var avatarInitial = isMine ? myOrgInitial : otherOrgInitial;
               var avatarBg = isMine ? 'rgba(59,130,246,0.15)' : 'rgba(167,139,250,0.12)';
               var avatarColor = isMine ? '#3B82F6' : '#A78BFA';
-              var bubbleBg = isMine ? (isDark ? '#1E2845' : '#EFF6FF') : (isDark ? '#1A2035' : '#F1F5F9');
+              var bubbleBg = isMine ? '#EFF6FF' : '#F1F5F9';
               var bubbleBorder = isMine ? '1px solid rgba(59,130,246,0.2)' : '1px solid ' + t.border;
 
               return (
@@ -758,9 +748,9 @@ useEffect(function() {
     );
   }
 
-  // ── Collab detail panel ──────────────────────────────────────────────────────
+  // ── Collab detail panel ───────────────────────────────────────────────────
   function renderCollabDetail() {
-    if (!selectedCollab) return <EmptyState icon={<IconHandshake size={28} />} title="Select a collaboration request" description="Choose a request from the list to view details and take action." t={t} />;
+    if (!selectedCollab) return <EmptyState icon={<IconHandshake size={28} />} title="Select a collaboration request" description="Choose a request from the list to view details and take action." />;
 
     var item = selectedCollab;
     var isIncoming = item.direction === 'incoming';
@@ -792,7 +782,7 @@ useEffect(function() {
           </div>
         </div>
 
-        {/* Mark as unread — only when messages exist */}
+        {/* Mark as unread */}
         {latestMsgMap[item.id] && (
           <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
             <button
@@ -924,7 +914,7 @@ useEffect(function() {
     );
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ background: t.bgPage, minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
@@ -934,7 +924,7 @@ useEffect(function() {
           <div style={{ color: '#F5B731' }}><IconInbox size={20} /></div>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 800, color: t.textPrimary, margin: 0 }}>Inbox</h1>
-<p style={{ fontSize: '12px', color: t.textTertiary, margin: 0 }}>
+            <p style={{ fontSize: '12px', color: t.textTertiary, margin: 0 }}>
               {(function() { var total = unreadCount + unreadCollabCount; return total > 0 ? total + ' unread message' + (total > 1 ? 's' : '') : 'All caught up'; })()}
             </p>
           </div>
@@ -975,8 +965,8 @@ useEffect(function() {
 
           {activeTab === 'inquiries' && (
             <>
-              {loading ? <SkeletonList t={t} /> : inquiries.length === 0 ? (
-                <EmptyState icon={<IconMail size={24} />} title="No inquiries yet" description="When someone submits your public Join Us form, their message will appear here." t={t} />
+              {loading ? <SkeletonList /> : inquiries.length === 0 ? (
+                <EmptyState icon={<IconMail size={24} />} title="No inquiries yet" description="When someone submits your public Join Us form, their message will appear here." />
               ) : (
                 <div role="list" aria-label="Contact inquiries">
                   {inquiries.map(function(inq) {
@@ -1016,12 +1006,12 @@ useEffect(function() {
             </>
           )}
 
-          {activeTab === 'members' && <EmptyState icon={<IconUsers size={24} />} title="Member messaging coming soon" description="Direct messages between members will appear here once the chat feature is live." t={t} />}
+          {activeTab === 'members' && <EmptyState icon={<IconUsers size={24} />} title="Member messaging coming soon" description="Direct messages between members will appear here once the chat feature is live." />}
 
           {activeTab === 'collab' && (
             <>
-              {collabLoading ? <SkeletonList t={t} /> : collabItems.length === 0 ? (
-                <EmptyState icon={<IconHandshake size={24} />} title="No collaboration requests" description="Co-host requests you send or receive will appear here." t={t} />
+              {collabLoading ? <SkeletonList /> : collabItems.length === 0 ? (
+                <EmptyState icon={<IconHandshake size={24} />} title="No collaboration requests" description="Co-host requests you send or receive will appear here." />
               ) : (
                 <div role="list" aria-label="Collaboration requests">
                   {sortedCollabItems.map(function(item) { return renderCollabListItem(item); })}
@@ -1033,7 +1023,7 @@ useEffect(function() {
 
         {/* Right Panel */}
         <div style={{ flex: 1, overflowY: 'auto', background: t.bgPage }}>
-          {activeTab === 'inquiries' && !selected && !loading && <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." t={t} />}
+          {activeTab === 'inquiries' && !selected && !loading && <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." />}
 
           {activeTab === 'inquiries' && selected && (
             <div style={{ padding: '28px 32px', maxWidth: '680px' }}>
@@ -1084,7 +1074,7 @@ useEffect(function() {
             </div>
           )}
 
-          {activeTab === 'members' && <EmptyState icon={<IconMessage size={28} />} title="Coming soon" description="This will be wired up as part of the chat feature in the next build session." t={t} />}
+          {activeTab === 'members' && <EmptyState icon={<IconMessage size={28} />} title="Coming soon" description="This will be wired up as part of the chat feature in the next build session." />}
 
           {activeTab === 'collab' && renderCollabDetail()}
         </div>

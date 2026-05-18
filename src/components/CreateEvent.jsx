@@ -351,7 +351,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     schedule:[{date:'',startTime:'',endTime:''}],
     locationName:'', fullAddress:'', city:'', state:'', zipCode:'',
     virtualLink:'', locationLink:'', maxAttendees:'',
-    visibility:'members', requireRSVP:false, enableCheckIn:true,
+visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
   });
 
   var [loading, setLoading] = useState(false);
@@ -461,11 +461,11 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
       state:editingEvent.state||'', zipCode:editingEvent.zip_code||'',
       virtualLink:editingEvent.virtual_link||'', locationLink:'',
       maxAttendees:editingEvent.max_attendees?String(editingEvent.max_attendees):'',
-      visibility:editingEvent.visibility||'members',
+visibility:editingEvent.visibility||'members',
       requireRSVP:editingEvent.require_rsvp||false,
       enableCheckIn:editingEvent.enable_check_in!==false,
+      displayPrice:editingEvent.display_price!=null?String(editingEvent.display_price):'',
     });
-
     setEventTypes(editingEvent.event_types||[]);
     setAudience(editingEvent.audience||[]);
     setLanguages(editingEvent.languages||[]);
@@ -526,7 +526,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
 
   function resetAll() {
     setActiveTab('details');
-    setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false,enableCheckIn:true});
+setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false,enableCheckIn:true,displayPrice:''});
     setShowTimezoneSelector(false); setSelectedTimezone(null);
     setAddressInput(''); setAddressSuggestions([]); setShowSuggestions(false);
     setSelectedGroupIds([]); setAvailableGroups([]);
@@ -897,7 +897,8 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
         is_public:form.visibility==='public'||publishToDiscovery,
         publish_to_discovery:publishToDiscovery, publish_to_website:publishToWebsite,
         is_paid:isPaid, is_featured:isGrowthPlus?isFeatured:false,
-        enable_check_in:form.enableCheckIn,
+enable_check_in:form.enableCheckIn,
+        display_price:form.displayPrice!==''?parseFloat(form.displayPrice):null,
         approval_status:approvalStatus, flier_url:flierUrl,
       };
 
@@ -994,6 +995,52 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
             placeholder="Describe what this event is about…" rows={3} maxLength={1000}
             className={inputCls+' resize-none'} aria-describedby="desc-count"/>
           <p id="desc-count" className="text-xs text-gray-400 mt-1" aria-live="polite">{form.description.length}/1000</p>
+        </div>
+
+        {/* Admission Cost */}
+        <div>
+          <label className={labelCls}>Admission Cost</label>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: form.displayPrice !== '' ? '12px' : '0' }}>
+            <button
+              type="button"
+              onClick={function() { setForm(function(p) { return Object.assign({}, p, { displayPrice: '' }); }); }}
+              className={'flex-1 py-3 rounded-lg text-sm font-semibold border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (form.displayPrice === '' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+              aria-pressed={form.displayPrice === ''}>
+              Free
+            </button>
+            <button
+              type="button"
+              onClick={function() { if (form.displayPrice === '') setForm(function(p) { return Object.assign({}, p, { displayPrice: '' }); }); setForm(function(p) { return Object.assign({}, p, { displayPrice: p.displayPrice !== '' ? p.displayPrice : '0' }); }); }}
+              className={'flex-1 py-3 rounded-lg text-sm font-semibold border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (form.displayPrice !== '' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+              aria-pressed={form.displayPrice !== ''}>
+              Paid / Donation
+            </button>
+          </div>
+          {form.displayPrice !== '' && (
+            <div>
+              <label htmlFor="display-price" className="block text-xs font-semibold text-gray-700 mb-1">
+                Amount <span className="text-red-500" aria-hidden="true">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm" aria-hidden="true">$</span>
+                <input
+                  id="display-price"
+                  name="displayPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.displayPrice}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                  className={inputCls + ' pl-7'}
+                  aria-describedby="display-price-hint"
+                />
+              </div>
+              <p id="display-price-hint" className="text-xs text-gray-400 mt-1.5">
+                Shows the cost on the event listing. Collect payment in person — or upgrade to Growth to accept online payments.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Event Format */}
