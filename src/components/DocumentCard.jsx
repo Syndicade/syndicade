@@ -4,7 +4,6 @@ import EditDocumentModal from './EditDocumentModal';
 import DocumentPreviewModal from './DocumentPreviewModal';
 import MoveDocumentModal from './MoveDocumentModal';
 import DocumentViewersModal from './DocumentViewersModal';
-import { useTheme } from '../context/ThemeContext';
 import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import toast from 'react-hot-toast';
 import {
@@ -20,19 +19,9 @@ import {
   User
 } from 'lucide-react';
 
-/**
- * DocumentCard
- *
- * Props:
- * - document: object from DB (includes uploader, view_count)
- * - viewMode: 'grid' | 'list'
- * - userRole: 'admin' | 'editor' | 'member'
- * - organizationId: string
- * - onDelete: function(documentId)
- * - onUpdate: function(updatedDoc) — optional
- */
+var iconBtnBase = 'p-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors';
+
 function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDelete, onUpdate }) {
-  var { isDark } = useTheme();
   var [downloading, setDownloading] = useState(false);
   var [showEditModal, setShowEditModal] = useState(false);
   var [showPreview, setShowPreview] = useState(false);
@@ -43,29 +32,16 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
   var canManage = userRole === 'admin' || userRole === 'editor';
   var canSeeViewers = userRole === 'admin' || userRole === 'editor';
 
-  // Theme tokens
-  var card = isDark
-    ? 'bg-[#1A2035] border-[#2A3550] hover:border-[#3B82F6]'
-    : 'bg-white border-gray-200 hover:border-blue-400';
-  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
-  var textSecondary = isDark ? 'text-[#CBD5E1]' : 'text-[#475569]';
-  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-[#64748B]';
-  var previewBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-100';
-  var badgeBg = isDark ? 'bg-[#0E1523] text-[#94A3B8]' : 'bg-gray-100 text-gray-600';
-  var dividerColor = isDark ? 'bg-[#2A3550]' : 'bg-gray-200';
-  var iconBtnBase = 'p-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors';
-
   var isImage = localDoc.file_type && localDoc.file_type.startsWith('image/');
   var isPDF = localDoc.file_type && localDoc.file_type.includes('pdf');
   var uploaderName = getUploaderName(localDoc.uploader);
 
-  // Safe integer extraction — guards against Supabase returning {count:N} objects
   var rawCount = localDoc.view_count;
   var viewCount = (typeof rawCount === 'number') ? rawCount : 0;
 
   function getFileIconNode(sizeClass) {
     if (isImage) return <Image className={sizeClass + ' text-purple-400'} aria-hidden="true" />;
-    if (isPDF) return <FileText className={sizeClass + ' text-red-400'} aria-hidden="true" />;
+    if (isPDF)   return <FileText className={sizeClass + ' text-red-400'} aria-hidden="true" />;
     return <File className={sizeClass + ' text-blue-400'} aria-hidden="true" />;
   }
 
@@ -74,7 +50,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
     await recordDocumentView(localDoc.id);
     setLocalDoc(function(prev) {
       var current = (typeof prev.view_count === 'number') ? prev.view_count : 0;
-      return { ...prev, view_count: current + 1 };
+      return Object.assign({}, prev, { view_count: current + 1 });
     });
   }
 
@@ -107,15 +83,9 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
     if (onUpdate) onUpdate(movedDoc);
   }
 
-  // ─── INLINE HELPERS (not JSX components — called as expressions) ──────────
-
-  function renderFileIcon(sizeClass) {
-    return getFileIconNode(sizeClass);
-  }
-
   function renderUploaderRow() {
     return (
-      <p className={'flex items-center gap-1 text-xs truncate ' + textMuted}>
+      <p className="flex items-center gap-1 text-xs truncate text-[#64748B]">
         <User className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
         {uploaderName}
       </p>
@@ -128,8 +98,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
       return (
         <button
           onClick={function() { setShowViewers(true); }}
-          className={'flex items-center gap-1 text-xs rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors '
-            + (isDark ? 'text-[#94A3B8] hover:text-blue-400' : 'text-[#64748B] hover:text-blue-500')}
+          className="flex items-center gap-1 text-xs rounded text-[#64748B] hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
           aria-label={'See ' + viewCount + ' members who viewed this document'}
           title="See who viewed this document"
         >
@@ -139,7 +108,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
       );
     }
     return (
-      <span className={'flex items-center gap-1 text-xs ' + textMuted} aria-label={viewCount + ' views'}>
+      <span className="flex items-center gap-1 text-xs text-[#64748B]" aria-label={viewCount + ' views'}>
         <Eye className="w-3 h-3" aria-hidden="true" />
         {viewCount}
       </span>
@@ -220,16 +189,16 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
   if (viewMode === 'list') {
     return (
       <>
-        <div className={'border rounded-xl p-4 flex items-center gap-4 transition-all ' + card}>
-          <div className={'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + previewBg}>
-            {renderFileIcon('w-5 h-5')}
+        <div className="border rounded-xl p-4 flex items-center gap-4 transition-all bg-white border-gray-200 hover:border-blue-400">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+            {getFileIconNode('w-5 h-5')}
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className={'font-semibold truncate text-sm ' + textPrimary}>{localDoc.title}</h3>
-            <p className={'text-xs truncate mt-0.5 ' + textMuted}>{localDoc.file_name}</p>
+            <h3 className="font-semibold truncate text-sm text-gray-900">{localDoc.title}</h3>
+            <p className="text-xs truncate mt-0.5 text-[#64748B]">{localDoc.file_name}</p>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
-              <span className={'text-xs ' + textMuted}>
+              <span className="text-xs text-[#64748B]">
                 {formatFileSize(localDoc.file_size_bytes)}
                 {' \u2022 '}
                 {new Date(localDoc.uploaded_at).toLocaleDateString()}
@@ -245,8 +214,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={handlePreviewOpen}
-              className={'px-3 py-1.5 text-sm rounded-lg border font-medium flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors '
-                + (isDark ? 'border-[#2A3550] text-[#CBD5E1] hover:bg-[#1E2845]' : 'border-gray-300 text-gray-700 hover:bg-gray-50')}
+              className="px-3 py-1.5 text-sm rounded-lg border font-medium flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors border-gray-300 text-gray-700 hover:bg-gray-50"
               aria-label={'Preview ' + localDoc.title}
             >
               <Eye className="w-4 h-4" aria-hidden="true" />
@@ -267,7 +235,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
 
             {canManage && (
               <>
-                <div className={'w-px h-5 flex-shrink-0 ' + dividerColor} aria-hidden="true" />
+                <div className="w-px h-5 flex-shrink-0 bg-gray-200" aria-hidden="true" />
                 {renderManageButtons()}
               </>
             )}
@@ -281,11 +249,11 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
   // ─── GRID VIEW ────────────────────────────────────────────────────────────
   return (
     <>
-      <div className={'border rounded-xl overflow-hidden transition-all group ' + card}>
+      <div className="border rounded-xl overflow-hidden transition-all group bg-white border-gray-200 hover:border-blue-400">
 
         <button
           onClick={handlePreviewOpen}
-          className={'w-full h-40 flex items-center justify-center relative overflow-hidden transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ' + previewBg}
+          className="w-full h-40 flex items-center justify-center relative overflow-hidden transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-gray-100"
           aria-label={'Preview ' + localDoc.title}
         >
           {isImage ? (
@@ -296,8 +264,8 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
               loading="lazy"
             />
           ) : (
-            <div className={'w-16 h-16 rounded-2xl flex items-center justify-center ' + (isDark ? 'bg-[#1A2035]' : 'bg-white shadow-sm')}>
-              {renderFileIcon('w-8 h-8')}
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-white shadow-sm">
+              {getFileIconNode('w-8 h-8')}
             </div>
           )}
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -308,10 +276,10 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
         </button>
 
         <div className="p-4">
-          <h3 className={'font-semibold truncate text-sm mb-0.5 ' + textPrimary} title={localDoc.title}>
+          <h3 className="font-semibold truncate text-sm mb-0.5 text-gray-900" title={localDoc.title}>
             {localDoc.title}
           </h3>
-          <p className={'text-xs truncate mb-1 ' + textMuted} title={localDoc.file_name}>
+          <p className="text-xs truncate mb-1 text-[#64748B]" title={localDoc.file_name}>
             {localDoc.file_name}
           </p>
 
@@ -319,13 +287,13 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             {renderUploaderRow()}
           </div>
 
-          <div className={'flex items-center justify-between text-xs mb-3 ' + textMuted}>
+          <div className="flex items-center justify-between text-xs mb-3 text-[#64748B]">
             <span>{formatFileSize(localDoc.file_size_bytes)}</span>
             <span>{new Date(localDoc.uploaded_at).toLocaleDateString()}</span>
           </div>
 
           {localDoc.description && (
-            <p className={'text-xs mb-3 line-clamp-2 ' + textSecondary}>
+            <p className="text-xs mb-3 line-clamp-2 text-[#475569]">
               {localDoc.description}
             </p>
           )}
@@ -347,8 +315,8 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
           </div>
 
           <div className="mt-3 flex items-center justify-between">
-            <span className={'inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ' + badgeBg}>
-              {renderFileIcon('w-3 h-3')}
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide bg-gray-100 text-gray-600">
+              {getFileIconNode('w-3 h-3')}
               {localDoc.file_extension ? localDoc.file_extension.toUpperCase() : 'FILE'}
             </span>
             {renderViewCount()}

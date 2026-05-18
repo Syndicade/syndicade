@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import { format, differenceInDays } from 'date-fns';
 import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
+
+var CARD_BG      = '#EFF6FF';
+var CARD_BDR     = '#BFDBFE';
+var TITLE_COLOR  = '#1E3A5F';
+var BODY_COLOR   = '#374151';
+var META_COLOR   = '#6B7280';
+var META_VAL     = '#4B5563';
+var DIVIDER      = '#BFDBFE';
+var CARD_SHADOW  = '0 1px 4px rgba(0,0,0,0.08)';
 
 function AnnouncementCard({
   announcement,
@@ -11,31 +19,18 @@ function AnnouncementCard({
   isAdmin,
   showOrganization
 }) {
-  var { isDark } = useTheme();
   var [isRead, setIsRead] = useState(announcement.is_read || false);
   var [marking, setMarking] = useState(false);
   var [deleting, setDeleting] = useState(false);
   var [confirmDelete, setConfirmDelete] = useState(false);
 
-  // "New" badge only within 7 days and unread
   var daysSinceCreated = differenceInDays(new Date(), new Date(announcement.created_at));
   var isNew = !isRead && daysSinceCreated <= 7;
   var isExpired = announcement.expires_at && new Date(announcement.expires_at) < new Date();
 
-  // Both modes use a blue-toned card — darker blue in dark mode, lighter blue in light mode
-var cardBg       = '#EFF6FF';
-var cardBorder   = '#BFDBFE';
-var titleColor   = '#1E3A5F';
-var bodyColor    = '#374151';
-var metaColor    = '#6B7280';
-var metaVal      = '#4B5563';
-var dividerColor = '#BFDBFE';
-  var cardShadow   = isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.08)';
-
-  // Left-border accent by priority
   var accentLeft = announcement.priority === 'urgent' ? '#EF4444'
-    : announcement.priority === 'low' ? (isDark ? '#334155' : '#94A3B8')
-    : (isDark ? '#1E3A5F' : '#BFDBFE');
+    : announcement.priority === 'low' ? '#94A3B8'
+    : '#BFDBFE';
 
   async function handleMarkAsRead() {
     if (isRead || marking) return;
@@ -44,11 +39,9 @@ var dividerColor = '#BFDBFE';
       var authRes = await supabase.auth.getUser();
       var user = authRes.data.user;
       if (!user) throw new Error('Not authenticated');
-
       var res = await supabase
         .from('announcement_reads')
         .insert([{ announcement_id: announcement.id, member_id: user.id }]);
-
       if (res.error && res.error.code !== '23505') throw res.error;
       setIsRead(true);
       if (onRead) onRead(announcement.id);
@@ -79,8 +72,8 @@ var dividerColor = '#BFDBFE';
   return (
     <article
       style={{
-        background: cardBg,
-        border: '1px solid ' + cardBorder,
+        background: CARD_BG,
+        border: '1px solid ' + CARD_BDR,
         borderLeft: '4px solid ' + accentLeft,
         borderRadius: '12px',
         padding: '20px',
@@ -91,13 +84,12 @@ var dividerColor = '#BFDBFE';
         transition: 'opacity 0.2s',
         height: '100%',
         boxSizing: 'border-box',
-        boxShadow: cardShadow,
+        boxShadow: CARD_SHADOW,
       }}
       aria-label={announcement.title + ' announcement'}
     >
       {/* Badge row + actions */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
 
           {announcement.is_pinned && (
@@ -126,7 +118,7 @@ var dividerColor = '#BFDBFE';
 
           {announcement.priority === 'low' && (
             <span
-              style={{ padding: '2px 8px', background: isDark ? 'rgba(51,65,85,0.4)' : 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.25)', color: isDark ? '#94A3B8' : '#6B7280', fontSize: '11px', fontWeight: 700, borderRadius: '99px' }}
+              style={{ padding: '2px 8px', background: 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.25)', color: '#6B7280', fontSize: '11px', fontWeight: 700, borderRadius: '99px' }}
               aria-label="Priority: Low"
             >
               Low
@@ -145,7 +137,7 @@ var dividerColor = '#BFDBFE';
 
           {isExpired && (
             <span
-              style={{ padding: '2px 8px', background: isDark ? 'rgba(51,65,85,0.3)' : '#F3F4F6', border: '1px solid rgba(100,116,139,0.2)', color: metaColor, fontSize: '11px', fontWeight: 700, borderRadius: '99px' }}
+              style={{ padding: '2px 8px', background: '#F3F4F6', border: '1px solid rgba(100,116,139,0.2)', color: META_COLOR, fontSize: '11px', fontWeight: 700, borderRadius: '99px' }}
               aria-label="Expired"
             >
               Expired
@@ -169,7 +161,7 @@ var dividerColor = '#BFDBFE';
 
           {isAdmin && !confirmDelete && (
             <button
-              onClick={function () { setConfirmDelete(true); }}
+              onClick={function() { setConfirmDelete(true); }}
               disabled={deleting}
               style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', fontSize: '12px', fontWeight: 600, color: '#EF4444', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
               className="hover:bg-red-500 hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -195,8 +187,8 @@ var dividerColor = '#BFDBFE';
                 {deleting ? '...' : 'Yes'}
               </button>
               <button
-                onClick={function () { setConfirmDelete(false); }}
-                style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 700, color: metaColor, background: 'transparent', border: '1px solid ' + dividerColor, borderRadius: '6px', cursor: 'pointer' }}
+                onClick={function() { setConfirmDelete(false); }}
+                style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 700, color: META_COLOR, background: 'transparent', border: '1px solid ' + DIVIDER, borderRadius: '6px', cursor: 'pointer' }}
                 className="focus:outline-none focus:ring-2 focus:ring-gray-500"
                 aria-label="Cancel delete"
               >
@@ -208,27 +200,27 @@ var dividerColor = '#BFDBFE';
       </div>
 
       {/* Title */}
-      <h3 style={{ color: titleColor, fontSize: '16px', fontWeight: 700, lineHeight: 1.35, margin: 0 }}>
+      <h3 style={{ color: TITLE_COLOR, fontSize: '16px', fontWeight: 700, lineHeight: 1.35, margin: 0 }}>
         {announcement.title}
       </h3>
 
       {showOrganization && announcement.organization_name && (
-        <p style={{ color: metaColor, fontSize: '13px', margin: 0 }}>
+        <p style={{ color: META_COLOR, fontSize: '13px', margin: 0 }}>
           From: <span style={{ fontWeight: 600 }}>{announcement.organization_name}</span>
         </p>
       )}
 
-      <p style={{ color: bodyColor, fontSize: '14px', lineHeight: 1.6, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+      <p style={{ color: BODY_COLOR, fontSize: '14px', lineHeight: 1.6, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
         {announcement.content}
       </p>
 
-      <div style={{ borderTop: '1px solid ' + dividerColor, paddingTop: '12px', marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-        <span style={{ color: metaColor, fontSize: '12px' }}>
-          Posted: <span style={{ color: metaVal }}>{format(new Date(announcement.created_at), 'MMM d, yyyy h:mm a')}</span>
+      <div style={{ borderTop: '1px solid ' + DIVIDER, paddingTop: '12px', marginTop: 'auto', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+        <span style={{ color: META_COLOR, fontSize: '12px' }}>
+          Posted: <span style={{ color: META_VAL }}>{format(new Date(announcement.created_at), 'MMM d, yyyy h:mm a')}</span>
         </span>
         {announcement.expires_at && (
-          <span style={{ color: metaColor, fontSize: '12px' }}>
-            Expires: <span style={{ color: metaVal }}>{format(new Date(announcement.expires_at), 'MMM d, yyyy')}</span>
+          <span style={{ color: META_COLOR, fontSize: '12px' }}>
+            Expires: <span style={{ color: META_VAL }}>{format(new Date(announcement.expires_at), 'MMM d, yyyy')}</span>
           </span>
         )}
       </div>

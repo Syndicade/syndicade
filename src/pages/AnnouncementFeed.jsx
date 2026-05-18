@@ -1,15 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
+var TITLE_COLOR  = '#0E1523';
+var SUBTITLE_COLOR = '#6B7280';
+var CONTROL_BG   = '#FFFFFF';
+var CONTROL_BDR  = '#E5E7EB';
+var INPUT_BG     = '#F9FAFB';
+var INPUT_BDR    = '#D1D5DB';
+var INPUT_COLOR  = '#0E1523';
+var LABEL_COLOR  = '#374151';
+var SKEL_BASE    = '#E5E7EB';
+
 function AnnouncementFeed() {
   var { organizationId } = useParams();
-  var { isDark } = useTheme();
 
   var [announcements, setAnnouncements] = useState([]);
   var [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
@@ -23,19 +31,7 @@ function AnnouncementFeed() {
   var [showCreateModal, setShowCreateModal] = useState(false);
   var [markingAllRead, setMarkingAllRead] = useState(false);
 
-  // Theme tokens
-  var pageBg       = isDark ? 'transparent' : 'transparent';
-  var titleColor   = isDark ? '#FFFFFF' : '#111827';
-  var subtitleColor = isDark ? '#94A3B8' : '#6B7280';
-  var controlBg    = isDark ? '#1A2035' : '#FFFFFF';
-  var controlBorder = isDark ? '#2A3550' : '#E5E7EB';
-  var inputBg      = isDark ? '#0E1523' : '#F9FAFB';
-  var inputBorder  = isDark ? '#2A3550' : '#D1D5DB';
-  var inputColor   = isDark ? '#FFFFFF' : '#111827';
-  var labelColor   = isDark ? '#CBD5E1' : '#374151';
-  var skelBase     = isDark ? '#1E2845' : '#E5E7EB';
-
-  useEffect(function () {
+  useEffect(function() {
     async function fetchOrganization() {
       try {
         var authRes = await supabase.auth.getUser();
@@ -47,7 +43,6 @@ function AnnouncementFeed() {
           .select('*')
           .eq('id', organizationId)
           .single();
-
         if (orgRes.error) throw orgRes.error;
         setOrganization(orgRes.data);
 
@@ -58,7 +53,6 @@ function AnnouncementFeed() {
           .eq('member_id', user.id)
           .eq('status', 'active')
           .single();
-
         if (memberRes.error && memberRes.error.code !== 'PGRST116') throw memberRes.error;
         setIsAdmin(memberRes.data?.role === 'admin');
       } catch (err) {
@@ -66,11 +60,10 @@ function AnnouncementFeed() {
         setError(err.message);
       }
     }
-
     if (organizationId) fetchOrganization();
   }, [organizationId]);
 
-  useEffect(function () {
+  useEffect(function() {
     async function fetchAnnouncements() {
       try {
         var authRes = await supabase.auth.getUser();
@@ -83,22 +76,21 @@ function AnnouncementFeed() {
           .eq('organization_id', organizationId)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false });
-
         if (annRes.error) throw annRes.error;
 
-        var processed = annRes.data.map(function (a) {
+        var processed = annRes.data.map(function(a) {
           return Object.assign({}, a, {
-            is_read: a.announcement_reads?.some(function (r) { return r.member_id === user.id; }) || false
+            is_read: a.announcement_reads?.some(function(r) { return r.member_id === user.id; }) || false
           });
         });
 
-        var active = processed.filter(function (a) {
+        var active = processed.filter(function(a) {
           return !a.expires_at || new Date(a.expires_at) > new Date();
         });
 
         setAnnouncements(active);
         setFilteredAnnouncements(active);
-        setUnreadCount(active.filter(function (a) { return !a.is_read; }).length);
+        setUnreadCount(active.filter(function(a) { return !a.is_read; }).length);
       } catch (err) {
         console.error('Error fetching announcements:', err);
         setError(err.message);
@@ -106,25 +98,24 @@ function AnnouncementFeed() {
         setLoading(false);
       }
     }
-
     if (organizationId) fetchAnnouncements();
   }, [organizationId]);
 
-  useEffect(function () {
+  useEffect(function() {
     var filtered = announcements.slice();
 
     if (searchTerm.trim()) {
       var term = searchTerm.toLowerCase();
-      filtered = filtered.filter(function (a) {
+      filtered = filtered.filter(function(a) {
         return a.title.toLowerCase().includes(term) || a.content.toLowerCase().includes(term);
       });
     }
 
     if (priorityFilter !== 'all') {
-      filtered = filtered.filter(function (a) { return a.priority === priorityFilter; });
+      filtered = filtered.filter(function(a) { return a.priority === priorityFilter; });
     }
 
-    filtered.sort(function (a, b) {
+    filtered.sort(function(a, b) {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
       var order = { urgent: 0, normal: 1, low: 2 };
@@ -137,23 +128,22 @@ function AnnouncementFeed() {
   }, [announcements, searchTerm, priorityFilter]);
 
   function handleAnnouncementRead(announcementId) {
-    setAnnouncements(function (prev) {
-      return prev.map(function (a) {
+    setAnnouncements(function(prev) {
+      return prev.map(function(a) {
         return a.id === announcementId ? Object.assign({}, a, { is_read: true }) : a;
       });
     });
-    setUnreadCount(function (prev) { return Math.max(0, prev - 1); });
+    setUnreadCount(function(prev) { return Math.max(0, prev - 1); });
   }
 
   function handleAnnouncementDelete(announcementId) {
-    setAnnouncements(function (prev) { return prev.filter(function (a) { return a.id !== announcementId; }); });
+    setAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
   }
 
   function handleAnnouncementCreated(newAnnouncement) {
-    setAnnouncements(function (prev) {
+    setAnnouncements(function(prev) {
       return [Object.assign({}, newAnnouncement, { is_read: false }), ...prev];
     });
-    mascotSuccessToast('Announcement posted!', 'Your members will see it now.');
   }
 
   async function handleMarkAllAsRead() {
@@ -161,19 +151,19 @@ function AnnouncementFeed() {
     var user = authRes.data.user;
     if (!user) return;
 
-    var unread = announcements.filter(function (a) { return !a.is_read; });
+    var unread = announcements.filter(function(a) { return !a.is_read; });
     if (unread.length === 0) { toast.error('All announcements are already read.'); return; }
 
     setMarkingAllRead(true);
     var loadingToast = toast.loading('Marking all as read...');
 
     try {
-      var records = unread.map(function (a) { return { announcement_id: a.id, member_id: user.id }; });
+      var records = unread.map(function(a) { return { announcement_id: a.id, member_id: user.id }; });
       var res = await supabase.from('announcement_reads').insert(records);
       if (res.error) throw res.error;
 
-      setAnnouncements(function (prev) {
-        return prev.map(function (a) { return Object.assign({}, a, { is_read: true }); });
+      setAnnouncements(function(prev) {
+        return prev.map(function(a) { return Object.assign({}, a, { is_read: true }); });
       });
       setUnreadCount(0);
       toast.dismiss(loadingToast);
@@ -192,26 +182,26 @@ function AnnouncementFeed() {
       <main style={{ padding: '24px 32px' }} aria-label="Loading announcements">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
-            <div style={{ background: skelBase, borderRadius: '8px', height: '32px', width: '200px', marginBottom: '8px' }} aria-hidden="true" />
-            <div style={{ background: skelBase, borderRadius: '6px', height: '16px', width: '140px' }} aria-hidden="true" />
+            <div style={{ background: SKEL_BASE, borderRadius: '8px', height: '32px', width: '200px', marginBottom: '8px' }} className="animate-pulse" aria-hidden="true" />
+            <div style={{ background: SKEL_BASE, borderRadius: '6px', height: '16px', width: '140px' }} className="animate-pulse" aria-hidden="true" />
           </div>
-          <div style={{ background: skelBase, borderRadius: '8px', height: '44px', width: '190px' }} aria-hidden="true" />
+          <div style={{ background: SKEL_BASE, borderRadius: '8px', height: '44px', width: '190px' }} className="animate-pulse" aria-hidden="true" />
         </div>
-        <div style={{ background: controlBg, border: '1px solid ' + controlBorder, borderRadius: '12px', padding: '16px', marginBottom: '24px' }} aria-hidden="true">
+        <div style={{ background: CONTROL_BG, border: '1px solid ' + CONTROL_BDR, borderRadius: '12px', padding: '16px', marginBottom: '24px' }} aria-hidden="true">
           <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ background: skelBase, borderRadius: '8px', height: '40px', flex: 1 }} />
-            <div style={{ background: skelBase, borderRadius: '8px', height: '40px', width: '160px' }} />
+            <div style={{ background: SKEL_BASE, borderRadius: '8px', height: '40px', flex: 1 }} className="animate-pulse" />
+            <div style={{ background: SKEL_BASE, borderRadius: '8px', height: '40px', width: '160px' }} className="animate-pulse" />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-          {[1, 2, 3, 4].map(function (n) {
+          {[1, 2, 3, 4].map(function(n) {
             return (
-              <div key={n} style={{ background: isDark ? '#1A2035' : '#EFF6FF', border: '1px solid ' + (isDark ? '#2A3550' : '#BFDBFE'), borderRadius: '12px', padding: '24px' }} aria-hidden="true">
-                <div style={{ background: skelBase, borderRadius: '99px', height: '22px', width: '64px', marginBottom: '14px' }} />
-                <div style={{ background: skelBase, borderRadius: '6px', height: '22px', width: '80%', marginBottom: '10px' }} />
-                <div style={{ background: skelBase, borderRadius: '6px', height: '14px', width: '100%', marginBottom: '6px' }} />
-                <div style={{ background: skelBase, borderRadius: '6px', height: '14px', width: '70%', marginBottom: '16px' }} />
-                <div style={{ background: skelBase, borderRadius: '6px', height: '13px', width: '110px' }} />
+              <div key={n} style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '12px', padding: '24px' }} aria-hidden="true">
+                <div style={{ background: SKEL_BASE, borderRadius: '99px', height: '22px', width: '64px', marginBottom: '14px' }} className="animate-pulse" />
+                <div style={{ background: SKEL_BASE, borderRadius: '6px', height: '22px', width: '80%', marginBottom: '10px' }} className="animate-pulse" />
+                <div style={{ background: SKEL_BASE, borderRadius: '6px', height: '14px', width: '100%', marginBottom: '6px' }} className="animate-pulse" />
+                <div style={{ background: SKEL_BASE, borderRadius: '6px', height: '14px', width: '70%', marginBottom: '16px' }} className="animate-pulse" />
+                <div style={{ background: SKEL_BASE, borderRadius: '6px', height: '13px', width: '110px' }} className="animate-pulse" />
               </div>
             );
           })}
@@ -225,16 +215,16 @@ function AnnouncementFeed() {
     return (
       <main style={{ padding: '24px 32px' }}>
         <div
-          style={{ background: isDark ? '#1A2035' : '#FEF2F2', border: '1px solid #EF4444', borderRadius: '12px', padding: '48px 32px', textAlign: 'center', maxWidth: '480px', margin: '0 auto' }}
+          style={{ background: '#FEF2F2', border: '1px solid #EF4444', borderRadius: '12px', padding: '48px 32px', textAlign: 'center', maxWidth: '480px', margin: '0 auto' }}
           role="alert" aria-live="assertive"
         >
           <svg style={{ margin: '0 auto 16px', color: '#EF4444' }} width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
-          <p style={{ color: isDark ? '#FFFFFF' : '#111827', fontWeight: 700, fontSize: '18px', marginBottom: '8px' }}>Failed to Load Announcements</p>
-          <p style={{ color: isDark ? '#94A3B8' : '#6B7280', marginBottom: '24px' }}>{error}</p>
+          <p style={{ color: '#0E1523', fontWeight: 700, fontSize: '18px', marginBottom: '8px' }}>Failed to Load Announcements</p>
+          <p style={{ color: '#6B7280', marginBottom: '24px' }}>{error}</p>
           <button
-            onClick={function () { window.location.reload(); }}
+            onClick={function() { window.location.reload(); }}
             className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Try Again
@@ -251,15 +241,15 @@ function AnnouncementFeed() {
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ color: titleColor, fontSize: '28px', fontWeight: 800, marginBottom: '4px' }}>Announcements</h1>
-          <p style={{ color: subtitleColor, fontSize: '14px' }}>
+          <h1 style={{ color: TITLE_COLOR, fontSize: '28px', fontWeight: 800, marginBottom: '4px' }}>Announcements</h1>
+          <p style={{ color: SUBTITLE_COLOR, fontSize: '14px' }}>
             {announcements.length} announcement{announcements.length !== 1 ? 's' : ''}
             {unreadCount > 0 ? ' — ' + unreadCount + ' unread' : ''}
           </p>
         </div>
         {isAdmin && (
           <button
-            onClick={function () { setShowCreateModal(true); }}
+            onClick={function() { setShowCreateModal(true); }}
             className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
             aria-label="Create a new announcement"
             style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
@@ -274,7 +264,7 @@ function AnnouncementFeed() {
 
       {/* Controls */}
       <div
-        style={{ background: controlBg, border: '1px solid ' + controlBorder, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}
+        style={{ background: CONTROL_BG, border: '1px solid ' + CONTROL_BDR, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}
         role="search"
         aria-label="Announcement filters"
       >
@@ -294,27 +284,27 @@ function AnnouncementFeed() {
               type="search"
               placeholder="Search announcements..."
               value={searchTerm}
-              onChange={function (e) { setSearchTerm(e.target.value); }}
+              onChange={function(e) { setSearchTerm(e.target.value); }}
               style={{
                 width: '100%', paddingLeft: '40px', paddingRight: '16px', paddingTop: '10px', paddingBottom: '10px',
-                background: inputBg, border: '1px solid ' + inputBorder, borderRadius: '8px',
-                color: inputColor, fontSize: '14px', outline: 'none', boxSizing: 'border-box'
+                background: INPUT_BG, border: '1px solid ' + INPUT_BDR, borderRadius: '8px',
+                color: INPUT_COLOR, fontSize: '14px', outline: 'none', boxSizing: 'border-box'
               }}
-              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; e.target.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.2)'; }}
-              onBlur={function (e) { e.target.style.borderColor = inputBorder; e.target.style.boxShadow = 'none'; }}
+              onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; e.target.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.2)'; }}
+              onBlur={function(e) { e.target.style.borderColor = INPUT_BDR; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
           {/* Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label htmlFor="priority-filter" style={{ color: labelColor, fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            <label htmlFor="priority-filter" style={{ color: LABEL_COLOR, fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap' }}>
               Filter:
             </label>
             <select
               id="priority-filter"
               value={priorityFilter}
-              onChange={function (e) { setPriorityFilter(e.target.value); }}
-              style={{ padding: '10px 12px', background: inputBg, border: '1px solid ' + inputBorder, borderRadius: '8px', color: inputColor, fontSize: '14px', cursor: 'pointer' }}
+              onChange={function(e) { setPriorityFilter(e.target.value); }}
+              style={{ padding: '10px 12px', background: INPUT_BG, border: '1px solid ' + INPUT_BDR, borderRadius: '8px', color: INPUT_COLOR, fontSize: '14px', cursor: 'pointer' }}
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All ({announcements.length})</option>
@@ -332,8 +322,8 @@ function AnnouncementFeed() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '10px 16px',
-                background: isDark ? '#1B3A2F' : '#F0FDF4',
-                border: '1px solid ' + (isDark ? '#22C55E' : '#86EFAC'),
+                background: '#F0FDF4',
+                border: '1px solid #86EFAC',
                 borderRadius: '8px', color: '#16A34A', fontSize: '14px', fontWeight: 600,
                 cursor: markingAllRead ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
                 opacity: markingAllRead ? 0.6 : 1
@@ -350,14 +340,14 @@ function AnnouncementFeed() {
         </div>
       </div>
 
-      {/* Announcements */}
+      {/* Announcements grid */}
       {filteredAnnouncements.length === 0 ? (
         <div style={{ textAlign: 'center', paddingTop: '64px', paddingBottom: '64px' }} role="region" aria-label="No announcements found">
-          <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '220px', margin: '0 auto 24px' }} />
-          <h2 style={{ color: titleColor, fontSize: '22px', fontWeight: 700, marginBottom: '12px' }}>
+          <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '220px', margin: '0 auto 24px', mixBlendMode: 'multiply' }} />
+          <h2 style={{ color: TITLE_COLOR, fontSize: '22px', fontWeight: 700, marginBottom: '12px' }}>
             {searchTerm || priorityFilter !== 'all' ? 'No announcements match your filters' : 'No announcements yet'}
           </h2>
-          <p style={{ color: subtitleColor, maxWidth: '380px', margin: '0 auto 32px' }}>
+          <p style={{ color: SUBTITLE_COLOR, maxWidth: '380px', margin: '0 auto 32px' }}>
             {searchTerm || priorityFilter !== 'all'
               ? 'Try adjusting your search or clearing the filters.'
               : isAdmin ? 'Post your first announcement to keep members informed.'
@@ -365,7 +355,7 @@ function AnnouncementFeed() {
           </p>
           {isAdmin && !searchTerm && priorityFilter === 'all' && (
             <button
-              onClick={function () { setShowCreateModal(true); }}
+              onClick={function() { setShowCreateModal(true); }}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
             >
@@ -377,9 +367,9 @@ function AnnouncementFeed() {
           )}
           {(searchTerm || priorityFilter !== 'all') && (
             <button
-              onClick={function () { setSearchTerm(''); setPriorityFilter('all'); }}
+              onClick={function() { setSearchTerm(''); setPriorityFilter('all'); }}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}
-              className="px-6 py-3 bg-transparent border border-gray-400 text-gray-500 font-semibold rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              className="px-6 py-3 bg-transparent border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
             >
               Clear Filters
             </button>
@@ -394,7 +384,7 @@ function AnnouncementFeed() {
             aria-live="polite"
             aria-atomic="false"
           >
-            {filteredAnnouncements.map(function (announcement) {
+            {filteredAnnouncements.map(function(announcement) {
               return (
                 <div key={announcement.id} role="listitem">
                   <AnnouncementCard
@@ -408,7 +398,7 @@ function AnnouncementFeed() {
               );
             })}
           </div>
-          <p style={{ textAlign: 'center', color: subtitleColor, fontSize: '13px', marginTop: '24px' }} aria-live="polite">
+          <p style={{ textAlign: 'center', color: SUBTITLE_COLOR, fontSize: '13px', marginTop: '24px' }} aria-live="polite">
             Showing {filteredAnnouncements.length} of {announcements.length} announcement{announcements.length !== 1 ? 's' : ''}
           </p>
         </>
@@ -417,7 +407,7 @@ function AnnouncementFeed() {
       {/* Create modal */}
       <CreateAnnouncement
         isOpen={showCreateModal}
-        onClose={function () { setShowCreateModal(false); }}
+        onClose={function() { setShowCreateModal(false); }}
         onSuccess={handleAnnouncementCreated}
         organizationId={organizationId}
         organizationName={organization?.name || 'Organization'}

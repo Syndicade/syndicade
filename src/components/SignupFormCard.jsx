@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
 import { Calendar, Users, Check, X, Trash2, ClipboardList } from 'lucide-react';
 
-function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
-  var { isDark } = useTheme();
+var CARD_BG      = '#FFFFFF';
+var CARD_BDR     = '#E2E8F0';
+var TEXT_PRIMARY = '#0E1523';
+var TEXT_SEC     = '#475569';
+var TEXT_MUTED   = '#64748B';
+var ITEM_BG      = '#F8FAFC';
+var RESPONSES_BG = '#F1F5F9';
+
+function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, memberCount, onDuplicate }) {
   var [items, setItems] = useState([]);
   var [responses, setResponses] = useState([]);
   var [loading, setLoading] = useState(true);
@@ -126,56 +132,45 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
 
   var isClosed = form.status === 'closed' || (form.closes_at && new Date(form.closes_at) < new Date());
 
-  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
-  var cardBorder = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF' : '#0F172A';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
-  var textMuted = isDark ? '#94A3B8' : '#64748B';
-  var itemBg = isDark ? '#0E1523' : '#F8FAFC';
-  var itemBorder = isDark ? '#2A3550' : '#E2E8F0';
-  var responsesBg = isDark ? '#151B2D' : '#F1F5F9';
-  var inputBg = isDark ? '#1E2845' : '#FFFFFF';
-  var inputBorder = isDark ? '#2A3550' : '#CBD5E1';
-
   if (loading) {
     return (
-      <div style={{ background: cardBg, border: '1px solid ' + cardBorder, borderRadius: '12px', padding: '24px' }}>
+      <div style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', padding: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ height: '24px', borderRadius: '6px', background: isDark ? '#1E2845' : '#E2E8F0', width: '60%' }} className="animate-pulse" />
-          <div style={{ height: '16px', borderRadius: '6px', background: isDark ? '#1E2845' : '#E2E8F0', width: '40%' }} className="animate-pulse" />
-          <div style={{ height: '80px', borderRadius: '8px', background: isDark ? '#1E2845' : '#E2E8F0' }} className="animate-pulse" />
-          <div style={{ height: '80px', borderRadius: '8px', background: isDark ? '#1E2845' : '#E2E8F0' }} className="animate-pulse" />
+          <div style={{ height: '24px', borderRadius: '6px', background: '#E2E8F0', width: '60%' }} className="animate-pulse" />
+          <div style={{ height: '16px', borderRadius: '6px', background: '#E2E8F0', width: '40%' }} className="animate-pulse" />
+          <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
+          <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
         </div>
       </div>
     );
   }
 
   return (
-    <article style={{ background: cardBg, border: '1px solid ' + cardBorder, borderRadius: '12px', overflow: 'hidden' }}>
+    <article style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '24px', borderBottom: '1px solid ' + cardBorder }}>
+      <div style={{ padding: '24px', borderBottom: '1px solid ' + CARD_BDR }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, margin: 0 }}>{form.title}</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: TEXT_PRIMARY, margin: 0 }}>{form.title}</h3>
               {isClosed && (
-                <span style={{ padding: '2px 8px', background: isDark ? '#1E2845' : '#F1F5F9', color: textMuted, fontSize: '11px', fontWeight: 600, borderRadius: '99px', border: '1px solid ' + cardBorder }}>
+                <span style={{ padding: '2px 8px', background: '#F1F5F9', color: TEXT_MUTED, fontSize: '11px', fontWeight: 600, borderRadius: '99px', border: '1px solid ' + CARD_BDR }}>
                   Closed
                 </span>
               )}
             </div>
             {form.description && (
-              <p style={{ fontSize: '14px', color: textSecondary, marginBottom: '12px', lineHeight: '1.6' }}>{form.description}</p>
+              <p style={{ fontSize: '14px', color: TEXT_SEC, marginBottom: '12px', lineHeight: '1.6' }}>{form.description}</p>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textMuted }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: TEXT_MUTED }}>
                 <Calendar size={14} aria-hidden="true" />
                 <span>Created {formatDate(form.created_at)}</span>
               </div>
               {form.closes_at && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: textMuted }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: isClosed ? TEXT_MUTED : '#B45309' }}>
                   <Calendar size={14} aria-hidden="true" />
-                  <span>Closes {formatDate(form.closes_at)}</span>
+                  <span>{isClosed ? 'Closed' : 'Closes'} {formatDate(form.closes_at)}</span>
                 </div>
               )}
             </div>
@@ -198,8 +193,8 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {items.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <ClipboardList size={36} style={{ color: textMuted, margin: '0 auto 12px' }} aria-hidden="true" />
-            <p style={{ fontSize: '14px', color: textMuted }}>No items in this form yet.</p>
+            <ClipboardList size={36} style={{ color: TEXT_MUTED, margin: '0 auto 12px' }} aria-hidden="true" />
+            <p style={{ fontSize: '14px', color: TEXT_MUTED }}>No items in this form yet.</p>
           </div>
         ) : (
           items.map(function(item) {
@@ -211,19 +206,19 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
             return (
               <div
                 key={item.id}
-                style={{ background: itemBg, border: '1px solid ' + itemBorder, borderRadius: '10px', padding: '16px' }}
+                style={{ background: ITEM_BG, border: '1px solid ' + CARD_BDR, borderRadius: '10px', padding: '16px' }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                   <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: '15px', fontWeight: 600, color: textPrimary, margin: '0 0 4px' }}>{item.item_name}</h4>
+                    <h4 style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, margin: '0 0 4px' }}>{item.item_name}</h4>
                     {item.description && (
-                      <p style={{ fontSize: '13px', color: textSecondary, marginBottom: '8px' }}>{item.description}</p>
+                      <p style={{ fontSize: '13px', color: TEXT_SEC, marginBottom: '8px' }}>{item.description}</p>
                     )}
 
                     {/* Slots */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <Users size={14} style={{ color: itemFull ? '#EF4444' : '#3B82F6', flexShrink: 0 }} aria-hidden="true" />
-                      <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : textSecondary, fontWeight: itemFull ? 600 : 400 }}>
+                      <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : TEXT_SEC, fontWeight: itemFull ? 600 : 400 }}>
                         {item.current_signups} of {item.max_slots} {item.max_slots === 1 ? 'spot' : 'spots'} filled
                       </span>
                       {!itemFull && spotsRemaining > 0 && (
@@ -235,14 +230,14 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
 
                     {/* Who signed up */}
                     {form.show_responses && itemResponses.length > 0 && (
-                      <div style={{ background: responsesBg, borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
-                        <p style={{ fontSize: '11px', fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
+                      <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           {itemResponses.map(function(response) {
                             return (
                               <div key={response.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
                                 <Check size={13} style={{ color: '#22C55E', flexShrink: 0 }} aria-hidden="true" />
-                                <span style={{ color: textSecondary }}>
+                                <span style={{ color: TEXT_SEC }}>
                                   {response.member?.first_name} {response.member?.last_name}
                                   {response.quantity > 1 && (
                                     <span style={{ color: '#3B82F6', fontWeight: 600 }}> &times;{response.quantity}</span>
@@ -277,7 +272,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
                         <>
                           {item.max_slots > 1 && !itemFull && (
                             <div>
-                              <label htmlFor={'qty-' + item.id} style={{ fontSize: '11px', fontWeight: 600, color: textMuted, display: 'block', marginBottom: '4px' }}>
+                              <label htmlFor={'qty-' + item.id} style={{ fontSize: '11px', fontWeight: 600, color: TEXT_MUTED, display: 'block', marginBottom: '4px' }}>
                                 Quantity
                               </label>
                               <input
@@ -288,7 +283,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
                                 value={signupQuantities[item.id] || ''}
                                 placeholder="1"
                                 onChange={function(e) { setSignupQuantities(function(prev) { return Object.assign({}, prev, { [item.id]: e.target.value }); }); }}
-                                style={{ width: '100%', padding: '6px 10px', background: inputBg, border: '1px solid ' + inputBorder, borderRadius: '6px', color: textPrimary, fontSize: '13px' }}
+                                style={{ width: '100%', padding: '6px 10px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: TEXT_PRIMARY, fontSize: '13px' }}
                                 disabled={submitting}
                                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 aria-label={'Quantity for ' + item.item_name}
@@ -298,7 +293,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate }) {
                           <button
                             onClick={function() { handleSignUp(item.id); }}
                             disabled={submitting || itemFull}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: itemFull ? (isDark ? '#1E2845' : '#E2E8F0') : '#3B82F6', color: itemFull ? textMuted : '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: (submitting || itemFull) ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: itemFull ? '#E2E8F0' : '#3B82F6', color: itemFull ? TEXT_MUTED : '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: (submitting || itemFull) ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
                             aria-label={itemFull ? (item.item_name + ' is full') : ('Sign up for ' + item.item_name)}
                             className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                           >

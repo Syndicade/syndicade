@@ -9,7 +9,7 @@ function Icon({ path, size }) {
   return (
     <svg width={s} height={s} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       {Array.isArray(path)
-        ? path.map(function (d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d} />; })
+        ? path.map(function(d, i) { return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={d} />; })
         : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />}
     </svg>
   );
@@ -17,10 +17,18 @@ function Icon({ path, size }) {
 
 var ICONS = {
   megaphone: ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
-  x:         'M6 18L18 6M6 6l12 12',
-  pin:       'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z',
-  check:     'M5 13l4 4L19 7',
-  spinner:   null,
+  x:    'M6 18L18 6M6 6l12 12',
+  pin:  'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z',
+};
+
+var inputStyle = {
+  width: '100%', padding: '12px 16px', background: '#FFFFFF', border: '1px solid #CBD5E1',
+  borderRadius: '8px', color: '#0E1523', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+  fontFamily: 'inherit'
+};
+
+var labelStyle = {
+  display: 'block', color: '#475569', fontSize: '13px', fontWeight: 600, marginBottom: '6px'
 };
 
 function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organizationName }) {
@@ -35,15 +43,15 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
   var [error, setError] = useState(null);
 
   var priorityOptions = [
-    { value: 'urgent', label: 'Urgent',      description: 'Critical, time-sensitive' },
-    { value: 'normal', label: 'Normal',       description: 'Standard announcement' },
-    { value: 'low',    label: 'Low Priority', description: 'FYI, non-urgent' },
+    { value: 'urgent', label: 'Urgent',       description: 'Critical, time-sensitive' },
+    { value: 'normal', label: 'Normal',        description: 'Standard announcement' },
+    { value: 'low',    label: 'Low Priority',  description: 'FYI, non-urgent' },
   ];
 
   function handleChange(e) {
     var name = e.target.name;
     var value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setFormData(function (prev) { return Object.assign({}, prev, { [name]: value }); });
+    setFormData(function(prev) { return Object.assign({}, prev, { [name]: value }); });
   }
 
   function resetForm() {
@@ -108,7 +116,6 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
       var newAnnouncement = insertRes.data;
 
       if (approvalStatus === 'approved') {
-        // In-app notifications
         try {
           var notifRes = await notifyOrganizationMembers({
             organizationId: organizationId,
@@ -125,7 +132,6 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
           console.error('Notification failed (announcement still created):', notifErr);
         }
 
-        // Email all members if urgent
         if (formData.priority === 'urgent') {
           try {
             var membersRes = await supabase
@@ -138,8 +144,8 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
               var announcementUrl = window.location.origin + '/organizations/' + organizationId;
               var emailPromises = membersRes.data
-                .filter(function (m) { return m.members && m.members.email; })
-                .map(function (m) {
+                .filter(function(m) { return m.members && m.members.email; })
+                .map(function(m) {
                   return fetch(SUPABASE_URL + '/functions/v1/send-email', {
                     method: 'POST',
                     headers: {
@@ -191,37 +197,28 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
 
   var isSubmitDisabled = loading || formData.title.trim().length < 3 || formData.content.trim().length < 10;
 
-  // Shared input style
-  var inputStyle = {
-    width: '100%', padding: '12px 16px', background: '#0E1523', border: '1px solid #2A3550',
-    borderRadius: '8px', color: '#FFFFFF', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
-    fontFamily: 'inherit'
-  };
-
-  var labelStyle = { display: 'block', color: '#CBD5E1', fontSize: '13px', fontWeight: 600, marginBottom: '6px' };
-
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
       onClick={handleClose}
-      onKeyDown={function (e) { if (e.key === 'Escape') handleClose(); }}
+      onKeyDown={function(e) { if (e.key === 'Escape') handleClose(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-announcement-title"
     >
       <div
-        style={{ background: '#1A2035', border: '1px solid #2A3550', borderRadius: '16px', maxWidth: '640px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}
-        onClick={function (e) { e.stopPropagation(); }}
+        style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', maxWidth: '640px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}
+        onClick={function(e) { e.stopPropagation(); }}
       >
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #2A3550', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', background: 'rgba(59,130,246,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6', flexShrink: 0 }} aria-hidden="true">
+            <div style={{ width: '36px', height: '36px', background: 'rgba(59,130,246,0.1)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6', flexShrink: 0 }} aria-hidden="true">
               <Icon path={ICONS.megaphone} size={18} />
             </div>
             <div>
-              <h2 id="create-announcement-title" style={{ color: '#FFFFFF', fontSize: '18px', fontWeight: 700, margin: 0 }}>
+              <h2 id="create-announcement-title" style={{ color: '#0E1523', fontSize: '18px', fontWeight: 700, margin: 0 }}>
                 Create Announcement
               </h2>
               <p style={{ color: '#64748B', fontSize: '13px', margin: 0 }}>{organizationName}</p>
@@ -231,7 +228,7 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
             type="button"
             onClick={handleClose}
             style={{ padding: '8px', color: '#64748B', background: 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            className="hover:bg-white hover:bg-opacity-5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Close dialog"
           >
             <Icon path={ICONS.x} size={18} />
@@ -243,7 +240,7 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
 
           {error && (
             <div
-              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '12px 16px' }}
+              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '12px 16px' }}
               role="alert"
             >
               <p style={{ color: '#EF4444', fontSize: '14px', margin: 0, fontWeight: 600 }}>{error}</p>
@@ -266,8 +263,9 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               placeholder="e.g., Important Meeting Update"
               style={inputStyle}
               maxLength={200}
-              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
-              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
+              onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function(e) { e.target.style.borderColor = '#CBD5E1'; }}
+              className="focus:outline-none"
             />
             <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }} aria-live="polite">{formData.title.length}/200</p>
           </div>
@@ -288,8 +286,9 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               rows={6}
               style={Object.assign({}, inputStyle, { resize: 'none' })}
               maxLength={2000}
-              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
-              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
+              onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function(e) { e.target.style.borderColor = '#CBD5E1'; }}
+              className="focus:outline-none"
             />
             <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }} aria-live="polite">{formData.content.length}/2000</p>
           </div>
@@ -303,10 +302,11 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               value={formData.priority}
               onChange={handleChange}
               style={Object.assign({}, inputStyle, { cursor: 'pointer' })}
-              onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
-              onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
+              onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+              onBlur={function(e) { e.target.style.borderColor = '#CBD5E1'; }}
+              className="focus:outline-none"
             >
-              {priorityOptions.map(function (opt) {
+              {priorityOptions.map(function(opt) {
                 return (
                   <option key={opt.value} value={opt.value}>
                     {opt.label + ' — ' + opt.description}
@@ -329,8 +329,8 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
               htmlFor="ann-pin"
               style={{
                 display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '16px',
-                background: formData.is_pinned ? 'rgba(59,130,246,0.08)' : '#0E1523',
-                border: '1px solid ' + (formData.is_pinned ? '#3B82F6' : '#2A3550'),
+                background: formData.is_pinned ? 'rgba(59,130,246,0.06)' : '#F8FAFC',
+                border: '1px solid ' + (formData.is_pinned ? '#3B82F6' : '#E2E8F0'),
                 borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s'
               }}
             >
@@ -348,7 +348,7 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
                   <Icon path={ICONS.pin} size={15} />
                 </span>
                 <div>
-                  <p style={{ color: '#FFFFFF', fontSize: '13px', fontWeight: 600, margin: 0 }}>Pin Announcement</p>
+                  <p style={{ color: '#0E1523', fontSize: '13px', fontWeight: 600, margin: 0 }}>Pin Announcement</p>
                   <p style={{ color: '#64748B', fontSize: '12px', margin: '2px 0 0' }}>Keep at top of feed</p>
                 </div>
               </div>
@@ -365,9 +365,10 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
                 type="datetime-local"
                 value={formData.expires_at}
                 onChange={handleChange}
-                style={Object.assign({}, inputStyle, { colorScheme: 'dark' })}
-                onFocus={function (e) { e.target.style.borderColor = '#3B82F6'; }}
-                onBlur={function (e) { e.target.style.borderColor = '#2A3550'; }}
+                style={inputStyle}
+                onFocus={function(e) { e.target.style.borderColor = '#3B82F6'; }}
+                onBlur={function(e) { e.target.style.borderColor = '#CBD5E1'; }}
+                className="focus:outline-none"
               />
               <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }}>Auto-hide after this date</p>
             </div>
@@ -376,13 +377,13 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', borderTop: '1px solid #2A3550', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', borderTop: '1px solid #E2E8F0', flexShrink: 0 }}>
           <button
             type="button"
             onClick={handleClose}
             disabled={loading}
-            style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #2A3550', color: '#CBD5E1', fontWeight: 600, borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: loading ? 0.5 : 1 }}
-            className="hover:bg-white hover:bg-opacity-5 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #E2E8F0', color: '#475569', fontWeight: 600, borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: loading ? 0.5 : 1 }}
+            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
           >
             Cancel
           </button>
@@ -390,7 +391,7 @@ function CreateAnnouncement({ isOpen, onClose, onSuccess, organizationId, organi
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitDisabled}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: isSubmitDisabled ? '#1E2845' : '#3B82F6', border: 'none', color: isSubmitDisabled ? '#64748B' : '#FFFFFF', fontWeight: 600, borderRadius: '8px', cursor: isSubmitDisabled ? 'not-allowed' : 'pointer', fontSize: '14px', transition: 'background 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: isSubmitDisabled ? '#E2E8F0' : '#3B82F6', border: 'none', color: isSubmitDisabled ? '#94A3B8' : '#FFFFFF', fontWeight: 600, borderRadius: '8px', cursor: isSubmitDisabled ? 'not-allowed' : 'pointer', fontSize: '14px', transition: 'background 0.15s' }}
             className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             {loading ? (
