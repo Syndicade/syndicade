@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Check, X, Trash2, ClipboardList } from 'lucide-react';
+import { Calendar, Users, Check, X, Trash2, ClipboardList, Pin, Download, Copy, Lock, Unlock } from 'lucide-react';
 
 var CARD_BG      = '#FFFFFF';
 var CARD_BDR     = '#E2E8F0';
@@ -17,11 +17,22 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
   var [responses, setResponses] = useState([]);
   var [loading, setLoading] = useState(true);
   var [submitting, setSubmitting] = useState(false);
+  var [adminActing, setAdminActing] = useState(false);
   var [signupQuantities, setSignupQuantities] = useState({});
+  var pinnedInit = false;
+  if (form !== null && form !== undefined) { pinnedInit = form.is_pinned === true; }
+  var [isPinned, setIsPinned] = useState(pinnedInit);
 
-  useEffect(function() { fetchData(); }, [form.id]);
+  var closedInit = false;
+  if (form !== null && form !== undefined) {
+    closedInit = form.status === 'closed' || !!(form.closes_at && new Date(form.closes_at) < new Date());
+  }
+  var [isClosed, setIsClosed] = useState(closedInit);
 
-  var fetchData = async function() {
+  var formId = (form !== null && form !== undefined) ? form.id : null;
+  useEffect(function () { if (form) fetchData(); }, [formId]);
+
+  var fetchData = async function () {
     try {
       setLoading(true);
       var { data: itemsData, error: itemsError } = await supabase
@@ -32,36 +43,218 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
       if (itemsError) throw itemsError;
       setItems(itemsData || []);
 
-      var { data: responsesData, error: responsesError } = await supabase
-        .from('signup_responses')
-        .select('*, member:members!signup_responses_member_id_fkey(user_id,first_name,last_name,email)')
-        .in('item_id', (itemsData || []).map(function(i) { return i.id; }));
-      if (responsesError) throw responsesError;
-      setResponses(responsesData || []);
+      var itemIds = (itemsData || []).map(function (i) { return i.id; });
+      if (itemIds.length > 0) {
+        var { data: responsesData, error: responsesError } = await supabase
+          .from('signup_responses')
+          .select('*, member:members!signup_responses_member_id_fkey(user_id,first_name,last_name,email)')
+          .in('item_id', itemIds);
+        if (responsesError) throw responsesError;
+        setResponses(responsesData || []);
+      } else {
+        setResponses([]);
+      }
     } catch (err) {
       console.error('Error fetching signup data:', err);
-      toast.error('Failed to load sign-up data.');
+      mascotErrorToast('Failed to load sign-up data.', err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  var hasUserSignedUp = function(itemId) {
-    return responses.some(function(r) { return r.item_id === itemId && r.member_id === currentUserId; });
+  var hasUserSignedUp = function (itemId) {
+    return responses.some(function (r) { return r.item_id === itemId && r.member_id === currentUserId; });
   };
 
-  var getItemResponses = function(itemId) {
-    return responses.filter(function(r) { return r.item_id === itemId; });
+  var getItemResponses = function (itemId) {
+    return responses.filter(function (r) { return r.item_id === itemId; });
   };
 
-  var isItemFull = function(item) {
+  var isItemFull = function (item) {
     return item.current_signups >= item.max_slots;
   };
 
-  var handleSignUp = async function(itemId) {
+  var totalSlots = items.reduce(function (sum, item) { return sum + (item.max_slots || 0); }, 0);
+  var totalSignups = responses.length;
+  var responseRate = (memberCount && memberCount > 0)
+    ? Math.round((totalSignups / memberCount) * 100)
+    : null;
+
+  var getRetentionLabel = function (days) {
+    if (!days) return null;
+    if (days === 30) return '30 days';
+    if (days === 90) return '90 days';
+    if (days === 365) return '1 year';
+    return days + ' days';
+  };
+
+  var formatDate = function (dateString) {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+  };
+
+  var formatDateShort = function (dateString) {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  };
+
+  var isClosingSoon = function () {
+    if (!form.closes_at || isClosed) return false;
+    var diff = new Date(form.closes_at) - new Date();
+    return diff > 0 && diff < 86400000 * 3;
+  };
+
+  // ── Admin actions ──────────────────────────────────────────────
+
+  var handlePinToggle = async function () {
+    if (adminActing) return;
+    try {
+      setAdminActing(true);
+      var newPinned = !isPinned;
+      var { error } = await supabase
+        .from('signup_forms')
+        .update({ is_pinned: newPinned })
+        .eq('id', form.id);
+      if (error) throw error;
+setIsPinned(newPinned);
+      mascotSuccessToast(newPinned ? 'Form pinned.' : 'Form unpinned.');
+    } catch (err) {
+      mascotErrorToast('Failed to update pin.', err.message);
+    } finally {
+      setAdminActing(false);
+    }
+  };
+
+  var handleCloseToggle = async function () {
+    if (adminActing) return;
+    try {
+      setAdminActing(true);
+      var newStatus = isClosed ? 'active' : 'closed';
+      var { error } = await supabase
+        .from('signup_forms')
+        .update({ status: newStatus })
+        .eq('id', form.id);
+      if (error) throw error;
+setIsClosed(!isClosed);
+      mascotSuccessToast(isClosed ? 'Form reopened.' : 'Form closed.');
+    } catch (err) {
+      mascotErrorToast('Failed to update form status.', err.message);
+    } finally {
+      setAdminActing(false);
+    }
+  };
+
+  var handleDuplicate = async function () {
+    if (adminActing) return;
+    try {
+      setAdminActing(true);
+      var { data: newForm, error: formError } = await supabase
+        .from('signup_forms')
+        .insert({
+          organization_id: form.organization_id,
+          title: form.title + ' (Copy)',
+          description: form.description,
+          status: 'active',
+          show_responses: form.show_responses,
+          visibility: form.visibility,
+          retention_days: form.retention_days,
+          is_pinned: false
+        })
+        .select()
+        .single();
+      if (formError) throw formError;
+
+      if (items.length > 0) {
+        var itemInserts = items.map(function (item) {
+          return {
+            form_id: newForm.id,
+            item_name: item.item_name,
+            description: item.description,
+            max_slots: item.max_slots,
+            current_signups: 0,
+            order_number: item.order_number
+          };
+        });
+        var { error: itemsError } = await supabase
+          .from('signup_items')
+          .insert(itemInserts);
+        if (itemsError) throw itemsError;
+      }
+
+      mascotSuccessToast('Form duplicated.', form.title + ' (Copy) created.');
+      if (onDuplicate) onDuplicate();
+    } catch (err) {
+      mascotErrorToast('Failed to duplicate form.', err.message);
+    } finally {
+      setAdminActing(false);
+    }
+  };
+
+  var handleExportCSV = function () {
+    var rows = [['Form', 'Item', 'Member Name', 'Email', 'Quantity', 'Signed Up At']];
+    items.forEach(function (item) {
+      var itemResponses = getItemResponses(item.id);
+      if (itemResponses.length === 0) {
+        rows.push([form.title, item.item_name, '', '', '', '']);
+      } else {
+        itemResponses.forEach(function (r) {
+          var name = r.member
+            ? ((r.member.first_name || '') + ' ' + (r.member.last_name || '')).trim()
+            : 'Unknown';
+          rows.push([
+            form.title,
+            item.item_name,
+            name,
+            r.member ? (r.member.email || '') : '',
+            r.quantity || 1,
+            r.created_at ? new Date(r.created_at).toLocaleString() : ''
+          ]);
+        });
+      }
+    });
+    var csv = rows.map(function (row) {
+      return row.map(function (cell) {
+        var str = String(cell === null || cell === undefined ? '' : cell);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      }).join(',');
+    }).join('\n');
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = form.title.replace(/[^a-z0-9]/gi, '_') + '_signups.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  var handleDelete = async function () {
+    if (!window.confirm('Delete this sign-up form? This cannot be undone.')) return;
+    try {
+      var { error: deleteError } = await supabase
+        .from('signup_forms')
+        .delete()
+        .eq('id', form.id);
+      if (deleteError) throw deleteError;
+      mascotSuccessToast('Form deleted.');
+      if (onDelete) onDelete();
+    } catch (err) {
+      mascotErrorToast('Failed to delete form.', err.message);
+    }
+  };
+
+  // ── Member actions ──────────────────────────────────────────────
+
+  var handleSignUp = async function (itemId) {
     if (submitting) return;
     var quantity = parseInt(signupQuantities[itemId]) || 1;
-    var item = items.find(function(i) { return i.id === itemId; });
+    var item = items.find(function (i) { return i.id === itemId; });
     var available = item.max_slots - item.current_signups;
     if (quantity > available) {
       toast.error('Only ' + available + ' slot' + (available !== 1 ? 's' : '') + ' available.');
@@ -73,19 +266,18 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
         .from('signup_responses')
         .insert({ item_id: itemId, member_id: currentUserId, quantity: quantity });
       if (signupError) throw signupError;
-      setSignupQuantities(function(prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
+      setSignupQuantities(function (prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
       await fetchData();
       if (onUpdate) onUpdate();
       mascotSuccessToast('Signed up!', item.item_name);
     } catch (err) {
-      console.error('Error signing up:', err);
       mascotErrorToast('Failed to sign up.', err.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  var handleUnsignUp = async function(itemId) {
+  var handleUnsignUp = async function (itemId) {
     if (submitting) return;
     try {
       setSubmitting(true);
@@ -95,42 +287,20 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
         .eq('item_id', itemId)
         .eq('member_id', currentUserId);
       if (deleteError) throw deleteError;
-      setSignupQuantities(function(prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
+      setSignupQuantities(function (prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
       await fetchData();
       if (onUpdate) onUpdate();
       mascotSuccessToast('Removed from sign-up.');
     } catch (err) {
-      console.error('Error unsigning up:', err);
       mascotErrorToast('Failed to remove sign-up.', err.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  var handleDelete = async function() {
-    if (!window.confirm('Delete this sign-up form? This cannot be undone.')) return;
-    try {
-      var { error: deleteError } = await supabase
-        .from('signup_forms')
-        .delete()
-        .eq('id', form.id);
-      if (deleteError) throw deleteError;
-      mascotSuccessToast('Form deleted.');
-      if (onDelete) onDelete();
-    } catch (err) {
-      console.error('Error deleting form:', err);
-      mascotErrorToast('Failed to delete form.', err.message);
-    }
-  };
+  // ── Render ──────────────────────────────────────────────────────
 
-  var formatDate = function(dateString) {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
-    });
-  };
-
-  var isClosed = form.status === 'closed' || (form.closes_at && new Date(form.closes_at) < new Date());
+  if (!form) return null;
 
   if (loading) {
     return (
@@ -145,59 +315,136 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     );
   }
 
+  var retentionLabel = getRetentionLabel(form.retention_days);
+
   return (
-    <article style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', overflow: 'hidden' }}>
+    <article
+      style={{
+        background: CARD_BG,
+        border: isPinned ? '2px solid #F5B731' : '1px solid ' + CARD_BDR,
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: isPinned
+          ? '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05), inset 0 0 0 2px #F5B731'
+          : '0 1px 3px rgba(0,0,0,0.05)'
+      }}
+      aria-label={'Sign-up form: ' + form.title}
+    >
       {/* Header */}
-      <div style={{ padding: '24px', borderBottom: '1px solid ' + CARD_BDR }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+      <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + CARD_BDR }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            {/* Title + badges */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: TEXT_PRIMARY, margin: 0 }}>{form.title}</h3>
+              {isPinned && (
+                <span style={{ padding: '2px 8px', background: 'rgba(245,183,49,0.12)', color: '#B45309', fontSize: '11px', fontWeight: 700, borderRadius: '99px', border: '1px solid rgba(245,183,49,0.35)' }}>
+                  Pinned
+                </span>
+              )}
               {isClosed && (
                 <span style={{ padding: '2px 8px', background: '#F1F5F9', color: TEXT_MUTED, fontSize: '11px', fontWeight: 600, borderRadius: '99px', border: '1px solid ' + CARD_BDR }}>
                   Closed
                 </span>
               )}
             </div>
+
             {form.description && (
-              <p style={{ fontSize: '14px', color: TEXT_SEC, marginBottom: '12px', lineHeight: '1.6' }}>{form.description}</p>
+              <p style={{ fontSize: '14px', color: TEXT_SEC, marginBottom: '10px', lineHeight: '1.6' }}>{form.description}</p>
             )}
+
+            {/* Meta row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: TEXT_MUTED }}>
-                <Calendar size={14} aria-hidden="true" />
-                <span>Created {formatDate(form.created_at)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: TEXT_MUTED }}>
+                <Calendar size={13} aria-hidden="true" />
+                <span>Created {formatDateShort(form.created_at)}</span>
               </div>
               {form.closes_at && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: isClosed ? TEXT_MUTED : '#B45309' }}>
-                  <Calendar size={14} aria-hidden="true" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: isClosed ? TEXT_MUTED : (isClosingSoon() ? '#EF4444' : '#B45309') }}>
+                  <Calendar size={13} aria-hidden="true" />
                   <span>{isClosed ? 'Closed' : 'Closes'} {formatDate(form.closes_at)}</span>
                 </div>
               )}
+              {retentionLabel && (
+                <span style={{ fontSize: '12px', color: TEXT_MUTED }}>
+                  Retained: {retentionLabel}
+                </span>
+              )}
             </div>
           </div>
-
-          {userRole === 'admin' && (
-            <button
-              onClick={handleDelete}
-              style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              aria-label={'Delete form: ' + form.title}
-              className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-            >
-              <Trash2 size={18} />
-            </button>
-          )}
         </div>
       </div>
+
+      {/* Admin action bar */}
+      {userRole === 'admin' && (
+        <div style={{ padding: '10px 24px', borderBottom: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handlePinToggle}
+            disabled={adminActing}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: isPinned ? 'rgba(245,183,49,0.1)' : '#FFFFFF', color: isPinned ? '#B45309' : TEXT_SEC, border: '1px solid ' + (isPinned ? 'rgba(245,183,49,0.4)' : CARD_BDR), borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
+            aria-label={isPinned ? 'Unpin form' : 'Pin form'}
+            className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+          >
+            <Pin size={13} aria-hidden="true" />
+            {isPinned ? 'Unpin' : 'Pin'}
+          </button>
+
+          <button
+            onClick={handleCloseToggle}
+            disabled={adminActing}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: isClosed ? '#22C55E' : TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
+            aria-label={isClosed ? 'Reopen form' : 'Close form now'}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+          >
+            {isClosed ? <Unlock size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}
+            {isClosed ? 'Reopen' : 'Close Now'}
+          </button>
+
+          <button
+            onClick={handleDuplicate}
+            disabled={adminActing}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
+            aria-label="Duplicate form"
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+          >
+            <Copy size={13} aria-hidden="true" />
+            Duplicate
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+            aria-label="Export responses as CSV"
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+          >
+            <Download size={13} aria-hidden="true" />
+            Export CSV
+          </button>
+
+          <div style={{ marginLeft: 'auto' }}>
+            <button
+              onClick={handleDelete}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+              aria-label={'Delete form: ' + form.title}
+              className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+            >
+              <Trash2 size={13} aria-hidden="true" />
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Items */}
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <ClipboardList size={36} style={{ color: TEXT_MUTED, margin: '0 auto 12px' }} aria-hidden="true" />
-            <p style={{ fontSize: '14px', color: TEXT_MUTED }}>No items in this form yet.</p>
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <ClipboardList size={36} style={{ color: TEXT_MUTED, margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
+            <p style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, marginBottom: '4px' }}>No items yet</p>
+            <p style={{ fontSize: '14px', color: TEXT_MUTED }}>This form has no sign-up slots added.</p>
           </div>
         ) : (
-          items.map(function(item) {
+          items.map(function (item) {
             var itemResponses = getItemResponses(item.id);
             var userSignedUp = hasUserSignedUp(item.id);
             var itemFull = isItemFull(item);
@@ -215,25 +462,23 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                       <p style={{ fontSize: '13px', color: TEXT_SEC, marginBottom: '8px' }}>{item.description}</p>
                     )}
 
-                    {/* Slots */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    {/* Slot count */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: itemResponses.length > 0 ? '8px' : 0 }}>
                       <Users size={14} style={{ color: itemFull ? '#EF4444' : '#3B82F6', flexShrink: 0 }} aria-hidden="true" />
                       <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : TEXT_SEC, fontWeight: itemFull ? 600 : 400 }}>
                         {item.current_signups} of {item.max_slots} {item.max_slots === 1 ? 'spot' : 'spots'} filled
                       </span>
                       {!itemFull && spotsRemaining > 0 && (
-                        <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>
-                          ({spotsRemaining} left)
-                        </span>
+                        <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>({spotsRemaining} left)</span>
                       )}
                     </div>
 
                     {/* Who signed up */}
                     {form.show_responses && itemResponses.length > 0 && (
-                      <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
+                      <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
                         <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {itemResponses.map(function(response) {
+                          {itemResponses.map(function (response) {
                             return (
                               <div key={response.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
                                 <Check size={13} style={{ color: '#22C55E', flexShrink: 0 }} aria-hidden="true" />
@@ -254,12 +499,12 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                     )}
                   </div>
 
-                  {/* Action column */}
+                  {/* Sign-up action column — shown for everyone when form is open */}
                   {!isClosed && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '120px' }}>
                       {userSignedUp ? (
                         <button
-                          onClick={function() { handleUnsignUp(item.id); }}
+                          onClick={function () { handleUnsignUp(item.id); }}
                           disabled={submitting}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
                           aria-label={'Remove sign-up for ' + item.item_name}
@@ -282,7 +527,11 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                                 max={spotsRemaining}
                                 value={signupQuantities[item.id] || ''}
                                 placeholder="1"
-                                onChange={function(e) { setSignupQuantities(function(prev) { return Object.assign({}, prev, { [item.id]: e.target.value }); }); }}
+                                onChange={function (e) {
+                                  setSignupQuantities(function (prev) {
+                                    return Object.assign({}, prev, { [item.id]: e.target.value });
+                                  });
+                                }}
                                 style={{ width: '100%', padding: '6px 10px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: TEXT_PRIMARY, fontSize: '13px' }}
                                 disabled={submitting}
                                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -291,7 +540,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                             </div>
                           )}
                           <button
-                            onClick={function() { handleSignUp(item.id); }}
+                            onClick={function () { handleSignUp(item.id); }}
                             disabled={submitting || itemFull}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: itemFull ? '#E2E8F0' : '#3B82F6', color: itemFull ? TEXT_MUTED : '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: (submitting || itemFull) ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
                             aria-label={itemFull ? (item.item_name + ' is full') : ('Sign up for ' + item.item_name)}
@@ -310,6 +559,21 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
           })
         )}
       </div>
+
+      {/* Footer — response rate */}
+      {totalSignups > 0 && (
+        <div style={{ padding: '12px 24px', borderTop: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: '13px', color: TEXT_MUTED }}>
+            {totalSignups} {totalSignups === 1 ? 'response' : 'responses'}
+            {responseRate !== null && ' (' + responseRate + '% of members)'}
+          </span>
+          {totalSlots > 0 && (
+            <span style={{ fontSize: '12px', color: TEXT_MUTED }}>
+              {Math.round((totalSignups / totalSlots) * 100)}% capacity filled
+            </span>
+          )}
+        </div>
+      )}
     </article>
   );
 }

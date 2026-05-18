@@ -108,16 +108,18 @@ function SignupFormsList() {
       });
     }
 
-    // Sort
     filtered.sort(function(a, b) {
+      if (sortBy === 'pinned') {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        return new Date(b.created_at) - new Date(a.created_at);
+      }
       if (sortBy === 'closing') {
-        // Forms with no closes_at go last
         if (!a.closes_at && !b.closes_at) return 0;
         if (!a.closes_at) return 1;
         if (!b.closes_at) return -1;
         return new Date(a.closes_at) - new Date(b.closes_at);
       }
-      // Default: most recent
       return new Date(b.created_at) - new Date(a.created_at);
     });
 
@@ -137,11 +139,10 @@ function SignupFormsList() {
     fetchForms();
   };
 
-  // Stats
   var activeForms = forms.filter(function(f) { return !isFormClosed(f); }).length;
   var closedForms = forms.filter(function(f) { return isFormClosed(f); }).length;
+  var pinnedForms = forms.filter(function(f) { return f.is_pinned; }).length;
 
-  // Skeleton
   if (loading) {
     return (
       <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms">
@@ -203,24 +204,22 @@ function SignupFormsList() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }} role="region" aria-label="Sign-up forms summary">
         <div style={{ background: '#DBEAFE', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#2563EB' }}>{forms.length}</div>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Total Forms</div>
-        </div>
-        <div style={{ background: '#DCFCE7', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#16A34A' }}>{activeForms}</div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#2563EB' }}>{activeForms}</div>
           <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Active</div>
         </div>
         <div style={{ background: '#F1F5F9', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
           <div style={{ fontSize: '28px', fontWeight: 800, color: '#64748B' }}>{closedForms}</div>
           <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Closed</div>
         </div>
+        <div style={{ background: 'rgba(245,183,49,0.1)', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#B45309' }}>{pinnedForms}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Pinned</div>
+        </div>
       </div>
 
       {/* Search + Filter bar */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '12px', alignItems: 'center' }}>
-
-          {/* Search */}
           <div style={{ position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <input
@@ -233,8 +232,6 @@ function SignupFormsList() {
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          {/* Status filter */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Filter size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <select
@@ -249,8 +246,6 @@ function SignupFormsList() {
               <option value="closed">Closed</option>
             </select>
           </div>
-
-          {/* Sort */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <ArrowUpDown size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <select
@@ -261,11 +256,11 @@ function SignupFormsList() {
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="recent">Most Recent</option>
+              <option value="pinned">Pinned First</option>
               <option value="closing">Closing Soon</option>
             </select>
           </div>
         </div>
-
         <p style={{ fontSize: '13px', color: '#64748B', marginTop: '10px' }}>
           Showing {filteredForms.length} of {forms.length} form{forms.length !== 1 ? 's' : ''}
         </p>
@@ -285,7 +280,7 @@ function SignupFormsList() {
       {/* Empty state */}
       {filteredForms.length === 0 ? (
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '64px 24px', textAlign: 'center' }}>
-          <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px' }} aria-hidden="true" />
+          <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
             {forms.length === 0 ? 'No Sign-Up Forms Yet' : 'No Forms Match Your Search'}
           </h2>
@@ -328,7 +323,6 @@ function SignupFormsList() {
         </div>
       )}
 
-      {/* Create modal */}
       {showCreateModal && (
         <CreateSignupForm
           organizationId={organizationId}
