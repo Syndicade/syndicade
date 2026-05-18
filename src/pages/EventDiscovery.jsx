@@ -6,7 +6,6 @@ import { et } from '../lib/eventDiscoveryTranslations';
 import EventDiscoveryCard from '../components/EventDiscoveryCard';
 import EventDiscoveryFilters from '../components/EventDiscoveryFilters';
 import ProgramDiscoveryCard from '../components/ProgramDiscoveryCard';
-import DiscoveryCalendar from '../components/DiscoveryCalendar';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
@@ -37,35 +36,21 @@ var DEFAULT_FILTERS = {
   uiLang: 'en',
 };
 
-/* ─── Calendar range helpers ────────────────────────────────── */
+/* ─── Date picker helpers ───────────────────────────────────── */
 
-function toDateStr(d) {
-  var y   = d.getFullYear();
-  var m   = String(d.getMonth() + 1).padStart(2, '0');
-  var day = String(d.getDate()).padStart(2, '0');
-  return y + '-' + m + '-' + day;
+function buildCalendarGrid(month) {
+  var year = month.getFullYear();
+  var mon = month.getMonth();
+  var firstDay = new Date(year, mon, 1).getDay();
+  var daysInMonth = new Date(year, mon + 1, 0).getDate();
+  var days = [];
+  for (var i = 0; i < firstDay; i++) { days.push(null); }
+  for (var d = 1; d <= daysInMonth; d++) { days.push(new Date(year, mon, d)); }
+  return days;
 }
 
-function getCalendarRange(date, subView) {
-  if (subView === 'month') {
-    var year  = date.getFullYear();
-    var month = date.getMonth();
-    var first = new Date(year, month, 1);
-    var from  = new Date(first);
-    from.setDate(1 - first.getDay());
-    var to    = new Date(from);
-    to.setDate(from.getDate() + 41);
-    return { from: toDateStr(from), to: toDateStr(to) };
-  }
-  if (subView === 'week') {
-    var d   = new Date(date);
-    d.setDate(d.getDate() - d.getDay());
-    var from2 = new Date(d);
-    var to2   = new Date(d);
-    to2.setDate(d.getDate() + 6);
-    return { from: toDateStr(from2), to: toDateStr(to2) };
-  }
-  return { from: toDateStr(date), to: toDateStr(date) };
+function formatDisplayDate(date) {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /* ─── Icons ─────────────────────────────────────────────────── */
@@ -107,6 +92,14 @@ function ChevronRightIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   );
 }
@@ -241,10 +234,10 @@ export default function EventDiscovery() {
   var [programsError, setProgramsError] = useState(null);
   var [savedPrograms, setSavedPrograms] = useState(new Set());
 
-  var [calendarDate, setCalendarDate] = useState(function () { return new Date(); });
-  var [calendarSubView, setCalendarSubView] = useState('month');
-  var [calendarEvents, setCalendarEvents] = useState([]);
-  var [calendarLoading, setCalendarLoading] = useState(false);
+  var [datePickerOpen, setDatePickerOpen] = useState(false);
+  var [datePickerMonth, setDatePickerMonth] = useState(function () { return new Date(); });
+  var [selectedFilterDate, setSelectedFilterDate] = useState(null);
+  var datePickerRef = useRef(null);
 
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   var [savedEvents, setSavedEvents] = useState(new Set());
@@ -422,48 +415,7 @@ org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprof
     }
   }, [viewMode, programsPage, debouncedKeyword, filters, programStatus, verifiedOnly]);
 
-  /* ─── Fetch calendar events ── */
-  var fetchCalendarEvents = useCallback(async function () {
-    if (viewMode !== 'calendar') return;
-    setCalendarLoading(true);
-    try {
-      var range = getCalendarRange(calendarDate, calendarSubView);
-      var res = await supabase.rpc('get_public_events', {
-        search_keyword:       debouncedKeyword || null,
-        filter_tags:          (filters.tags || []).length > 0 ? filters.tags : null,
-        filter_event_types:   filters.eventTypes.length > 0 ? filters.eventTypes : null,
-        filter_audience:      filters.audience.length > 0 ? filters.audience : null,
-        filter_languages:     filters.languages.length > 0 ? filters.languages : null,
-        filter_org_type:      filters.orgType || null,
-        filter_state:         filters.state || null,
-        filter_city:          filters.city || null,
-        filter_zip:           filters.zip || null,
-        filter_volunteer:     filters.volunteerSignup || null,
-        filter_donation:      filters.donationDropoff || null,
-        filter_rsvp:          filters.requiresRsvp || null,
-        filter_date_range:    'custom',
-        filter_date_from:     range.from,
-        filter_date_to:       range.to,
-        sort_by:              'start_time',
-        page_limit:           300,
-        page_offset:          0,
-        filter_verified_only: verifiedOnly,
-      });
-      if (res.error) throw res.error;
-      setCalendarEvents(res.data || []);
-    } catch (err) {
-      console.error('Calendar fetch error:', err);
-      toast.error('Failed to load calendar events');
-    } finally {
-      setCalendarLoading(false);
-    }
-  }, [viewMode, calendarDate, calendarSubView, debouncedKeyword, filters, verifiedOnly]);
-
-  useEffect(function () { fetchEvents(); },         [fetchEvents]);
-  useEffect(function () { fetchPrograms(); },       [fetchPrograms]);
-  useEffect(function () { fetchCalendarEvents(); }, [fetchCalendarEvents]);
-
-  function handleFilterChange(key, value) {
+function handleFilterChange(key, value) {
     setFilters(function (prev) { var u = {}; u[key] = value; return Object.assign({}, prev, u); });
   }
 
@@ -472,9 +424,37 @@ org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprof
     setKeyword('');
     setSortBy('start_time');
     setProgramStatus('');
+    setSelectedFilterDate(null);
+    setDatePickerOpen(false);
     if (searchRef.current) searchRef.current.focus();
   }
 
+  function applyDateFilter(date) {
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, '0');
+    var d = String(date.getDate()).padStart(2, '0');
+    var str = y + '-' + m + '-' + d;
+    setSelectedFilterDate(date);
+    setFilters(function (prev) { return Object.assign({}, prev, { dateRange: 'customRange', dateFrom: str, dateTo: str }); });
+    setDatePickerOpen(false);
+  }
+
+  function clearDateFilter() {
+    setSelectedFilterDate(null);
+    setFilters(function (prev) { return Object.assign({}, prev, { dateRange: '', dateFrom: '', dateTo: '' }); });
+  }
+
+    useEffect(function () { fetchEvents(); },   [fetchEvents]);
+  useEffect(function () { fetchPrograms(); }, [fetchPrograms]);
+  useEffect(function () {
+    function handleClickOutside(e) {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target)) {
+        setDatePickerOpen(false);
+      }
+    }
+    if (datePickerOpen) document.addEventListener('mousedown', handleClickOutside);
+    return function () { document.removeEventListener('mousedown', handleClickOutside); };
+  }, [datePickerOpen]);
   function handleGuestRSVP(event) {
     setSelectedEvent(event);
     setGuestRSVPModal(true);
@@ -596,7 +576,7 @@ org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprof
               type="search"
               value={keyword}
               onChange={function (e) { setKeyword(e.target.value); }}
-              placeholder={viewMode === 'events' || viewMode === 'calendar' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
+placeholder={viewMode === 'events' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
               aria-label={viewMode === 'programs' ? 'Search programs' : et(lang, 'searchPlaceholder')}
               style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
               className="focus:ring-2 focus:ring-blue-500"
@@ -710,43 +690,113 @@ org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprof
               >
                 Programs
               </button>
-              <button
-                role="tab"
-                aria-selected={viewMode === 'calendar'}
-                onClick={function () { setViewMode('calendar'); }}
-                style={{
-                  padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-                  background: viewMode === 'calendar' ? '#F5B731' : 'transparent',
-                  color: viewMode === 'calendar' ? '#0E1523' : '#64748B',
-                }}
-                className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
-              >
-                Calendar
-              </button>
             </div>
-
-            {/* Calendar view */}
-            {viewMode === 'calendar' && (
-              <DiscoveryCalendar
-                events={calendarEvents}
-                loading={calendarLoading}
-                calendarDate={calendarDate}
-                onNavigate={setCalendarDate}
-                subView={calendarSubView}
-                onSubViewChange={setCalendarSubView}
-              />
-            )}
-
-            {/* List / grid views */}
-            {viewMode !== 'calendar' && (
               <>
                 {/* Results bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                   <p style={{ fontSize: '14px', color: '#64748B' }} aria-live="polite" aria-atomic="true">
                     {!isLoading && !currentError && (currentTotal + ' ' + et(lang, 'results'))}
                   </p>
-                  {viewMode === 'events' ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+{viewMode === 'events' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {/* Date picker */}
+                      <div ref={datePickerRef} style={{ position: 'relative' }}>
+                        <button
+                          onClick={function () { setDatePickerOpen(function (o) { return !o; }); }}
+                          aria-label="Filter by date"
+                          aria-expanded={datePickerOpen}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: selectedFilterDate ? '#EFF6FF' : '#FFFFFF', border: '1px solid ' + (selectedFilterDate ? '#3B82F6' : '#E2E8F0'), borderRadius: '8px', fontSize: '14px', color: selectedFilterDate ? '#3B82F6' : '#475569', cursor: 'pointer', fontWeight: selectedFilterDate ? 600 : 400 }}
+                          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <CalendarIcon />
+                          {selectedFilterDate ? formatDisplayDate(selectedFilterDate) : 'Any date'}
+                          {selectedFilterDate && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label="Clear date filter"
+                              onClick={function (e) { e.stopPropagation(); clearDateFilter(); }}
+                              onKeyDown={function (e) { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); clearDateFilter(); } }}
+                              style={{ display: 'flex', alignItems: 'center', marginLeft: '2px', cursor: 'pointer' }}
+                            >
+                              <XIcon size={14} />
+                            </span>
+                          )}
+                        </button>
+                        {datePickerOpen && (
+                          <div
+                            style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '12px', zIndex: 40, width: '268px' }}
+                            role="dialog"
+                            aria-label="Date picker"
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <button
+                                onClick={function () { setDatePickerMonth(function (m) { return new Date(m.getFullYear(), m.getMonth() - 1, 1); }); }}
+                                aria-label="Previous month"
+                                style={{ padding: '4px 6px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#475569', display: 'flex' }}
+                                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <ChevronLeftIcon />
+                              </button>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523' }}>
+                                {datePickerMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                              </span>
+                              <button
+                                onClick={function () { setDatePickerMonth(function (m) { return new Date(m.getFullYear(), m.getMonth() + 1, 1); }); }}
+                                aria-label="Next month"
+                                style={{ padding: '4px 6px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#475569', display: 'flex' }}
+                                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <ChevronRightIcon />
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+                              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(function (d) {
+                                return <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, color: '#94A3B8', padding: '2px 0' }}>{d}</div>;
+                              })}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                              {buildCalendarGrid(datePickerMonth).map(function (date, i) {
+                                if (!date) return <div key={'e-' + i} />;
+                                var today = new Date();
+                                var isToday = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+                                var isSel = selectedFilterDate && date.getFullYear() === selectedFilterDate.getFullYear() && date.getMonth() === selectedFilterDate.getMonth() && date.getDate() === selectedFilterDate.getDate();
+                                return (
+                                  <button
+                                    key={date.toISOString()}
+                                    onClick={function () { applyDateFilter(date); }}
+                                    aria-label={date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                    aria-pressed={isSel}
+                                    style={{ padding: '5px 0', fontSize: '13px', fontWeight: isSel ? 700 : 400, borderRadius: '6px', border: isToday && !isSel ? '1px solid #3B82F6' : '1px solid transparent', background: isSel ? '#3B82F6' : 'transparent', color: isSel ? '#FFFFFF' : isToday ? '#3B82F6' : '#0E1523', cursor: 'pointer', textAlign: 'center' }}
+                                    className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    {date.getDate()}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between' }}>
+                              <button
+                                onClick={function () { setDatePickerMonth(new Date()); }}
+                                style={{ fontSize: '12px', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: '4px 8px', borderRadius: '4px' }}
+                                className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                Today
+                              </button>
+                              {selectedFilterDate && (
+                                <button
+                                  onClick={clearDateFilter}
+                                  style={{ fontSize: '12px', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: '4px 8px', borderRadius: '4px' }}
+                                  className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                >
+                                  Clear date
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Sort by */}
                       <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: '#475569', whiteSpace: 'nowrap' }}>{et(lang, 'sortBy')}:</label>
                       <select
                         id="event-sort-select"
@@ -944,9 +994,8 @@ org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprof
                       <ChevronRightIcon />
                     </button>
                   </nav>
-                )}
-              </>
-            )}
+              )}
+            </>
           </main>
         </div>
       </div>
