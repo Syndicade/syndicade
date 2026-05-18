@@ -140,12 +140,16 @@ function PostItEventCard({ event, colorScheme, isOrgScoped }) {
 }
 
 function EventList() {
-  var { organizationId } = useParams();
+var params = useParams();
+  var organizationId = params.organizationId || params.id || null;
 
   var outletContext = null;
   try { outletContext = useOutletContext(); } catch(e) {}
   var isAdmin    = !!(outletContext && outletContext.isAdmin);
   var orgName    = outletContext && outletContext.organization ? outletContext.organization.name : '';
+  if (!organizationId && outletContext && outletContext.organization) {
+    organizationId = outletContext.organization.id;
+  }
   var isOrgScoped = !!organizationId;
 
   var [events, setEvents]                   = useState([]);
@@ -342,8 +346,8 @@ function EventList() {
           )}
         </div>
 
-        {/* Org color customizer — shown when orgs are loaded */}
-        {!loading && organizations.length > 0 && (
+{/* Org color customizer — only shown on unified list view */}
+        {!isOrgScoped && !loading && organizations.length > 0 && (
           <div style={{ background:'#FFFFFF', border:'1px solid #E2E8F0', borderRadius:'12px', padding:'16px', marginTop:'12px', boxShadow:cardShadow }}>
             <p style={{ fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'12px' }}>Card Colors</p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:'10px' }}>

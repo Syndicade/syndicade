@@ -60,12 +60,16 @@ var cardShadow = '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)';
 
 function EventCalendar() {
   var navigate = useNavigate();
-  var { organizationId } = useParams();
+var params = useParams();
+  var organizationId = params.organizationId || params.id || null;
 
   var outletContext = null;
   try { outletContext = useOutletContext(); } catch(e) {}
   var isAdmin    = !!(outletContext && outletContext.isAdmin);
   var orgName    = outletContext && outletContext.organization ? outletContext.organization.name : '';
+  if (!organizationId && outletContext && outletContext.organization) {
+    organizationId = outletContext.organization.id;
+  }
   var isOrgScoped = !!organizationId;
 
   var [events, setEvents]                   = useState([]);
@@ -95,12 +99,18 @@ function EventCalendar() {
         .from('dashboard_preferences').select('org_colors').eq('user_id', user.id).single();
       if (prefData && prefData.org_colors) setSavedOrgColors(prefData.org_colors);
 
-      var { data: memberships, error: membershipsError } = await supabase
-        .from('memberships').select('organization_id, organizations(id, name)')
-        .eq('member_id', user.id).eq('status', 'active');
-      if (membershipsError) throw membershipsError;
-
-      var userOrgs = (memberships || []).map(function(m) { return { id:m.organizations.id, name:m.organizations.name }; });
+var userOrgs = [];
+      if (isOrgScoped) {
+        var { data: orgData } = await supabase
+          .from('organizations').select('id, name').eq('id', organizationId).single();
+        if (orgData) userOrgs = [{ id: orgData.id, name: orgData.name }];
+      } else {
+        var { data: memberships, error: membershipsError } = await supabase
+          .from('memberships').select('organization_id, organizations(id, name)')
+          .eq('member_id', user.id).eq('status', 'active');
+        if (membershipsError) throw membershipsError;
+        userOrgs = (memberships || []).map(function(m) { return { id:m.organizations.id, name:m.organizations.name }; });
+      }
       setOrganizations(userOrgs);
 
       var eventsQuery;
@@ -295,8 +305,8 @@ function EventCalendar() {
 
         ) : (
           <>
-            {/* Org legend + color pickers */}
-            {organizations.length > 0 && events.length > 0 && (
+{/* Org legend + color pickers — only shown on unified calendar */}
+            {!isOrgScoped && organizations.length > 0 && events.length > 0 && (
               <div style={{ marginTop:'24px', background:'#FFFFFF', border:'1px solid #E2E8F0', borderRadius:'12px', padding:'16px', boxShadow:cardShadow }}>
                 <p style={{ fontSize:'11px', fontWeight:700, color:'#F5B731', textTransform:'uppercase', letterSpacing:'4px', marginBottom:'12px' }}>Organizations</p>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:'10px' }}>
