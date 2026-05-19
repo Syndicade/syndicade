@@ -92,33 +92,49 @@ function UsageBar({ used, limit }) {
 
 function BodyEditor({ value, onChange }) {
   var editorRef = useRef(null);
+  var lastValueRef = useRef(value);
 
   useEffect(function() {
     if (editorRef.current) {
-      editorRef.current.style.direction = 'ltr';
-      editorRef.current.setAttribute('dir', 'ltr');
+      editorRef.current.innerHTML = value || '';
+      lastValueRef.current = value;
     }
   }, []);
+
+  useEffect(function() {
+    if (editorRef.current && value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      editorRef.current.innerHTML = value || '';
+    }
+  }, [value]);
 
   function wrap(tag) {
     if (editorRef.current) editorRef.current.focus();
     var sel = window.getSelection();
     if (sel && sel.toString()) {
       document.execCommand('insertHTML', false, '<' + tag + '>' + sel.toString() + '</' + tag + '>');
-      if (editorRef.current) onChange(editorRef.current.innerHTML);
+      if (editorRef.current) {
+        var newVal = editorRef.current.innerHTML;
+        lastValueRef.current = newVal;
+        onChange(newVal);
+      }
     }
   }
 
   function insertTag(tag) {
     if (editorRef.current) editorRef.current.focus();
     document.execCommand('insertText', false, tag);
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    if (editorRef.current) {
+      var newVal = editorRef.current.innerHTML;
+      lastValueRef.current = newVal;
+      onChange(newVal);
+    }
   }
 
-  var mergeTags = ['{{first_name}}', '{{org_name}}', '{{event_name}}', '{{event_date}}'];
+  var mergeTags = ['{{first_name}}', '{{last_name}}'];
 
   return (
-    <div dir="ltr" className="border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+    <div className="border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200 flex-wrap">
         {[{ label: 'Bold', tag: 'b', display: 'B' }, { label: 'Italic', tag: 'i', display: 'I' }, { label: 'Underline', tag: 'u', display: 'U' }].map(function(btn) {
           return (
@@ -145,16 +161,17 @@ function BodyEditor({ value, onChange }) {
       </div>
       <div
         ref={editorRef}
-        dir="ltr"
         contentEditable
         suppressContentEditableWarning
         role="textbox"
         aria-multiline="true"
         aria-label="Email body"
         className="min-h-[240px] p-4 text-sm text-slate-700 bg-white outline-none"
-        style={{ direction: 'ltr', unicodeBidi: 'embed', writingMode: 'horizontal-tb' }}
-        dangerouslySetInnerHTML={{ __html: value }}
-        onInput={function(e) { onChange(e.currentTarget.innerHTML); }}
+        onInput={function(e) {
+          var newVal = e.currentTarget.innerHTML;
+          lastValueRef.current = newVal;
+          onChange(newVal);
+        }}
       />
     </div>
   );
@@ -203,7 +220,6 @@ function HistoryRow({ blast, blastStats, planKey, onViewAnalytics }) {
   var date = new Date(blast.sent_at);
   var formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   var time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  var audienceLabel = blast.audience === 'all_members' ? 'All Members' : 'Admins Only';
   var isGrowthPlus = planKey === 'growth' || planKey === 'pro';
   var stats = blastStats[blast.id] || null;
   return (
@@ -219,7 +235,9 @@ function HistoryRow({ blast, blastStats, planKey, onViewAnalytics }) {
           </div>
         )}
       </td>
-      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{audienceLabel}</td>
+      <td className="px-4 py-3 text-sm text-slate-500 max-w-[180px]">
+        <span className="truncate block">{blast.audience || '—'}</span>
+      </td>
       <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">
         <span className="flex items-center gap-1"><Users size={12} aria-hidden="true" />{blast.recipient_count}</span>
       </td>
@@ -241,6 +259,210 @@ function HistoryRow({ blast, blastStats, planKey, onViewAnalytics }) {
   );
 }
 
+// ── Recipient Builder ─────────────────────────────────────────────────────────
+function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEvents, organizationId, allOrgMembers, membersLoaded, onLoadMembers }) {
+  var [showPicker, setShowPicker] = useState(false);
+  var [searchQuery, setSearchQuery] = useState('');
+  var pickerRef = useRef(null);
+
+  useEffect(function() {
+    function handleClick(e) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setShowPicker(false);
+        setSearchQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return function() { document.removeEventListener('mousedown', handleClick); };
+  }, []);
+
+  function openPicker() {
+    setShowPicker(!showPicker);
+    if (!membersLoaded) onLoadMembers();
+  }
+
+  function addAudience(aud) {
+    var exists = audiences.some(function(a) {
+      if (a.type !== aud.type) return false;
+      if (aud.type === 'group') return a.group_id === aud.group_id;
+      if (aud.type === 'event') return a.event_id === aud.event_id;
+      if (aud.type === 'individual') return a.email === aud.email;
+      return true;
+    });
+    if (!exists) onChange(audiences.concat([aud]));
+  }
+
+  function removeAudience(index) {
+    onChange(audiences.filter(function(_, i) { return i !== index; }));
+  }
+
+  var searchResults = searchQuery.trim()
+    ? allOrgMembers.filter(function(m) {
+        var name = (m.members.full_name || '').toLowerCase();
+        var email = (m.members.email || '').toLowerCase();
+        var q = searchQuery.toLowerCase();
+        return name.includes(q) || email.includes(q);
+      }).slice(0, 8)
+    : [];
+
+  var CHIP_COLORS = {
+    all_active:             { bg: '#DBEAFE', text: '#1e3a8a' },
+    all_including_inactive: { bg: '#E0E7FF', text: '#3730a3' },
+    admins_only:            { bg: '#EDE9FE', text: '#4c1d95' },
+    group:                  { bg: '#D1FAE5', text: '#064e3b' },
+    event:                  { bg: '#FEF3C7', text: '#78350f' },
+    individual:             { bg: '#F1F5F9', text: '#334155' },
+  };
+
+  var presets = [
+    { type: 'all_active',             label: 'All Active Members' },
+    { type: 'all_including_inactive', label: 'All Members (incl. inactive)' },
+    { type: 'admins_only',            label: 'Admins Only' },
+  ];
+
+  return (
+    <div>
+      {/* Selected chips */}
+      {audiences.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {audiences.map(function(aud, i) {
+            var colors = CHIP_COLORS[aud.type] || CHIP_COLORS.individual;
+            return (
+              <span key={i} style={{ background: colors.bg, color: colors.text }}
+                className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold">
+                {aud.label}
+                <button onClick={function() { removeAudience(i); }} aria-label={'Remove ' + aud.label}
+                  style={{ color: colors.text }}
+                  className="w-4 h-4 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <X size={10} aria-hidden="true" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Picker trigger */}
+      <div ref={pickerRef} className="relative inline-block">
+        <button onClick={openPicker} aria-expanded={showPicker} aria-haspopup="listbox"
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+          <Plus size={14} aria-hidden="true" />Add Recipients
+          <ChevronDown size={13} aria-hidden="true" />
+        </button>
+
+        {showPicker && (
+          <div role="listbox" aria-label="Select recipients"
+            className="absolute top-full mt-1.5 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto"
+            style={{ minWidth: '288px', maxHeight: '420px' }}>
+
+            {/* Preset audiences */}
+            <div className="py-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Member Groups</p>
+              {presets.map(function(preset) {
+                var isSelected = audiences.some(function(a) { return a.type === preset.type; });
+                return (
+                  <button key={preset.type} role="option" aria-selected={isSelected}
+                    onClick={function() { addAudience(preset); }}
+                    className={'w-full flex items-center justify-between px-4 py-2 text-sm text-left hover:bg-slate-50 focus:outline-none focus:bg-slate-50 transition-colors ' + (isSelected ? 'text-blue-500 font-semibold' : 'text-slate-700')}>
+                    {preset.label}
+                    {isSelected && <CheckCircle size={13} className="text-blue-500 flex-shrink-0" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Groups */}
+            {orgGroups.length > 0 && (
+              <div className="py-2 border-t border-slate-100">
+                <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Groups</p>
+                {orgGroups.map(function(group) {
+                  var isSelected = audiences.some(function(a) { return a.type === 'group' && a.group_id === group.id; });
+                  return (
+                    <button key={group.id} role="option" aria-selected={isSelected}
+                      onClick={function() { addAudience({ type: 'group', group_id: group.id, label: group.name }); }}
+                      className={'w-full flex items-center justify-between px-4 py-2 text-sm text-left hover:bg-slate-50 focus:outline-none focus:bg-slate-50 transition-colors ' + (isSelected ? 'text-blue-500 font-semibold' : 'text-slate-700')}>
+                      {group.name}
+                      {isSelected && <CheckCircle size={13} className="text-blue-500 flex-shrink-0" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Event attendees */}
+            {orgEvents.length > 0 && (
+              <div className="py-2 border-t border-slate-100">
+                <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Event Attendees</p>
+                {orgEvents.map(function(event) {
+                  var isSelected = audiences.some(function(a) { return a.type === 'event' && a.event_id === event.id; });
+                  var eventDate = event.start_time ? new Date(event.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                  return (
+                    <button key={event.id} role="option" aria-selected={isSelected}
+                      onClick={function() { addAudience({ type: 'event', event_id: event.id, label: event.title + ' attendees' }); }}
+                      className={'w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-slate-50 focus:outline-none focus:bg-slate-50 transition-colors ' + (isSelected ? 'text-blue-500' : 'text-slate-700')}>
+                      <span className="flex-1 text-sm truncate">{event.title}</span>
+                      {eventDate && <span className="text-xs text-slate-400 flex-shrink-0">{eventDate}</span>}
+                      {isSelected && <CheckCircle size={13} className="text-blue-500 flex-shrink-0" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Individual member search */}
+            <div className="py-2 border-t border-slate-100">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Individual Members</p>
+              <div className="px-3 pb-2">
+                <input type="text" value={searchQuery}
+                  onChange={function(e) { setSearchQuery(e.target.value); }}
+                  placeholder="Search by name or email..."
+                  aria-label="Search individual members"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              {!membersLoaded && (
+                <p className="text-xs text-slate-400 px-4 py-1">Loading members...</p>
+              )}
+              {membersLoaded && searchQuery && searchResults.length === 0 && (
+                <p className="text-xs text-slate-400 px-4 py-1">No members found</p>
+              )}
+              {membersLoaded && !searchQuery && (
+                <p className="text-xs text-slate-400 px-4 py-1">Type a name or email to search</p>
+              )}
+              {searchResults.map(function(m) {
+                var email = m.members.email;
+                var name = m.members.full_name || email;
+                var isSelected = audiences.some(function(a) { return a.type === 'individual' && a.email === email; });
+                return (
+                  <button key={m.member_id} role="option" aria-selected={isSelected}
+                    onClick={function() { addAudience({ type: 'individual', email: email, name: name, label: name }); }}
+                    className={'w-full flex items-center justify-between px-4 py-2 text-left hover:bg-slate-50 focus:outline-none focus:bg-slate-50 transition-colors ' + (isSelected ? 'bg-blue-50' : '')}>
+                    <div>
+                      <p className={'text-sm font-medium ' + (isSelected ? 'text-blue-500' : 'text-slate-900')}>{name}</p>
+                      <p className="text-xs text-slate-400">{email}</p>
+                    </div>
+                    {isSelected && <CheckCircle size={13} className="text-blue-500 flex-shrink-0" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Estimate */}
+      {audiences.length > 0 && (
+        <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+          <Users size={11} aria-hidden="true" />
+          {audiences.length === 1 && audiences[0].type === 'all_active'
+            ? 'Estimated: ' + memberCount + ' active member' + (memberCount !== 1 ? 's' : '')
+            : 'Sending to: ' + audiences.map(function(a) { return a.label; }).join(', ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function EmailBlasts() {
   var context = useOutletContext();
   var organization = context ? context.organization : null;
@@ -253,7 +475,7 @@ export default function EmailBlasts() {
   var [sending, setSending] = useState(false);
   var [subject, setSubject] = useState('');
   var [body, setBody] = useState('');
-  var [audience, setAudience] = useState('all_members');
+  var [audiences, setAudiences] = useState([{ type: 'all_active', label: 'All Active Members' }]);
   var [activeTemplateName, setActiveTemplateName] = useState('');
   var [blastHistory, setBlastHistory] = useState([]);
   var [customTemplates, setCustomTemplates] = useState([]);
@@ -268,6 +490,12 @@ export default function EmailBlasts() {
   var [showPreview, setShowPreview] = useState(false);
   var [showConfirm, setShowConfirm] = useState(false);
   var [analyticsBlast, setAnalyticsBlast] = useState(null);
+
+  // Recipient builder state
+  var [orgGroups, setOrgGroups] = useState([]);
+  var [orgEvents, setOrgEvents] = useState([]);
+  var [allOrgMembers, setAllOrgMembers] = useState([]);
+  var [membersLoaded, setMembersLoaded] = useState(false);
 
   var planLimit = PLAN_LIMITS[planKey] !== undefined ? PLAN_LIMITS[planKey] : 0;
   var remainingEmails = planLimit === Infinity ? Infinity : Math.max(0, planLimit - usedThisMonth);
@@ -312,8 +540,30 @@ export default function EmailBlasts() {
 
       var { data: templates } = await supabase.from('email_templates').select('*').eq('org_id', organizationId).order('created_at', { ascending: false });
       setCustomTemplates(templates || []);
+
       var { count } = await supabase.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'active');
       setMemberCount(count || 0);
+
+      // Load groups for recipient builder
+      // NOTE: adjust table name below if your groups table is named differently
+      try {
+        var { data: groups } = await supabase
+          .from('org_groups')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .order('name');
+        setOrgGroups(groups || []);
+      } catch (_) { setOrgGroups([]); }
+
+      // Load recent events for recipient builder
+      var { data: recentEvents } = await supabase
+        .from('events')
+        .select('id, title, start_time')
+        .eq('organization_id', organizationId)
+        .order('start_time', { ascending: false })
+        .limit(20);
+      setOrgEvents(recentEvents || []);
+
     } catch (err) {
       toast.error('Failed to load email data');
     } finally {
@@ -321,8 +571,26 @@ export default function EmailBlasts() {
     }
   }
 
+  async function loadAllMembers() {
+    if (membersLoaded) return;
+    try {
+      var { data } = await supabase
+        .from('memberships')
+        .select('member_id, members!inner(email, full_name)')
+        .eq('organization_id', organizationId)
+        .eq('status', 'active');
+      setAllOrgMembers(data || []);
+    } catch (_) {
+      setAllOrgMembers([]);
+    } finally {
+      setMembersLoaded(true);
+    }
+  }
+
   function useTemplate(template) {
-    setSubject(template.subject); setBody(template.body); setActiveTemplateName(template.name);
+    setSubject(template.subject);
+    setBody(template.body);
+    setActiveTemplateName(template.name);
     setTab('compose');
     toast('Template loaded — customize it before sending.', { icon: null });
   }
@@ -341,15 +609,22 @@ export default function EmailBlasts() {
         if (insertError) throw insertError;
         mascotSuccessToast('Template saved!', saveName.trim() + ' is now in your templates.');
       }
-      setShowSaveModal(false); setSaveName(''); setEditingTemplate(null);
+      setShowSaveModal(false);
+      setSaveName('');
+      setEditingTemplate(null);
       loadData();
     } catch (err) { mascotErrorToast('Failed to save template.', err.message || ''); }
   }
 
   function openEditTemplate(template) {
-    setSubject(template.subject); setBody(template.body); setActiveTemplateName(template.name);
-    setEditingTemplate(template); setSaveName(template.name); setSaveCategory(template.category);
-    setShowSaveModal(true); setTab('compose');
+    setSubject(template.subject);
+    setBody(template.body);
+    setActiveTemplateName(template.name);
+    setEditingTemplate(template);
+    setSaveName(template.name);
+    setSaveCategory(template.category);
+    setShowSaveModal(true);
+    setTab('compose');
   }
 
   async function deleteTemplate(id) {
@@ -362,26 +637,37 @@ export default function EmailBlasts() {
   }
 
   async function sendBlast() {
-    setShowConfirm(false); setSending(true);
+    setShowConfirm(false);
+    setSending(true);
     try {
       var { data: { session } } = await supabase.auth.getSession();
       var res = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-blast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-        body: JSON.stringify({ org_id: organizationId, subject: subject, html_body: body, audience: audience, template_name: activeTemplateName || null })
+        body: JSON.stringify({
+          org_id: organizationId,
+          subject: subject,
+          html_body: body,
+          audiences: audiences,
+          template_name: activeTemplateName || null
+        })
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Send failed');
-      mascotSuccessToast('Email blast sent!', data.sent_count + ' member' + (data.sent_count !== 1 ? 's' : '') + ' received your message.');
-      setSubject(''); setBody(''); setActiveTemplateName(''); setAudience('all_members');
-      loadData(); setTab('history');
+      mascotSuccessToast('Email blast sent!', data.sent_count + ' recipient' + (data.sent_count !== 1 ? 's' : '') + ' received your message.');
+      setSubject('');
+      setBody('');
+      setActiveTemplateName('');
+      setAudiences([{ type: 'all_active', label: 'All Active Members' }]);
+      loadData();
+      setTab('history');
     } catch (err) {
       mascotErrorToast('Failed to send email blast.', err.message || '');
     } finally { setSending(false); }
   }
 
-  var canSend = subject.trim() && body.trim() && !sending && isGrowthPlus && (planLimit === Infinity || usedThisMonth < planLimit);
-  var recipientEstimate = audience === 'admins_only' ? 'Admins only' : memberCount + ' active member' + (memberCount !== 1 ? 's' : '');
+  var canSend = subject.trim() && body.trim() && !sending && isGrowthPlus && audiences.length > 0 && (planLimit === Infinity || usedThisMonth < planLimit);
+  var audienceSummary = audiences.map(function(a) { return a.label; }).join(', ');
 
   if (!isAdmin) {
     return (
@@ -466,7 +752,7 @@ export default function EmailBlasts() {
                 className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
                 Upgrade to Growth <ArrowRight size={16} aria-hidden="true" />
               </button>
-              <p className="text-xs text-slate-400 mt-3 text-center">$39/mo — or $390/yr (2 months free)</p>
+              <p className="text-xs text-slate-400 mt-3 text-center">$49.99/mo — or $499.90/yr (2 months free)</p>
             </div>
           </div>
         </div>
@@ -533,20 +819,22 @@ export default function EmailBlasts() {
               <input id="blast-subject" type="text" value={subject} onChange={function(e) { setSubject(e.target.value); }} placeholder="Enter email subject..." aria-required="true"
                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
+
             <div>
-              <label htmlFor="blast-audience" className="block text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-2">Send To</label>
-              <div className="relative">
-                <select id="blast-audience" value={audience} onChange={function(e) { setAudience(e.target.value); }}
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-10">
-                  <option value="all_members">All Active Members ({memberCount})</option>
-                  <option value="admins_only">Admins Only</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-              </div>
-              <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
-                <Users size={11} aria-hidden="true" />Estimated recipients: {recipientEstimate}
-              </p>
+              <label className="block text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-2">Send To</label>
+              <RecipientBuilder
+                audiences={audiences}
+                onChange={setAudiences}
+                memberCount={memberCount}
+                orgGroups={orgGroups}
+                orgEvents={orgEvents}
+                organizationId={organizationId}
+                allOrgMembers={allOrgMembers}
+                membersLoaded={membersLoaded}
+                onLoadMembers={loadAllMembers}
+              />
             </div>
+
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-2">Message Body</label>
               <BodyEditor value={body} onChange={setBody} />
@@ -628,7 +916,7 @@ export default function EmailBlasts() {
                     <thead>
                       <tr className="bg-slate-50 text-left border-b border-slate-200">
                         <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Subject</th>
-                        <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Audience</th>
+                        <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Sent To</th>
                         <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Recipients</th>
                         <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Sent</th>
                         <th scope="col" className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-[#F5B731]">Status</th>
@@ -646,6 +934,7 @@ export default function EmailBlasts() {
         )}
       </div>
 
+      {/* Preview modal */}
       {showPreview && (
         <div role="dialog" aria-modal="true" aria-labelledby="preview-title" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-xl">
@@ -678,6 +967,7 @@ export default function EmailBlasts() {
         </div>
       )}
 
+      {/* Confirm send modal */}
       {showConfirm && (
         <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-xl">
@@ -688,8 +978,8 @@ export default function EmailBlasts() {
               <div>
                 <h2 id="confirm-title" className="text-base font-bold text-slate-900 mb-1">Confirm Send</h2>
                 <p className="text-sm text-slate-500">
-                  You're about to send <strong className="text-slate-900">"{subject}"</strong> to <strong className="text-slate-900">{recipientEstimate}</strong>.
-                  {planLimit !== Infinity && <span className="block mt-1 text-xs text-slate-400">This will use approximately {audience === 'admins_only' ? 'a few' : memberCount} of your {remainingEmails} remaining emails this month.</span>}
+                  You're about to send <strong className="text-slate-900">"{subject}"</strong> to <strong className="text-slate-900">{audienceSummary}</strong>.
+                  {planLimit !== Infinity && <span className="block mt-1 text-xs text-slate-400">{remainingEmails} emails remaining this month after sending.</span>}
                 </p>
               </div>
             </div>
@@ -703,6 +993,7 @@ export default function EmailBlasts() {
         </div>
       )}
 
+      {/* Save template modal */}
       {showSaveModal && (
         <div role="dialog" aria-modal="true" aria-labelledby="save-template-title" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-xl">

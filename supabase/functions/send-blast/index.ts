@@ -6,7 +6,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024 // 5MB per file
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+
+interface Recipient { email: string; full_name: string }
+interface AudienceConfig {
+  type: string
+  label?: string
+  group_id?: string
+  event_id?: string
+  email?: string
+  name?: string
+}
+
+async function resolveAudience(aud: AudienceConfig, org_id: string, supabase: any): Promise<Recipient[]> {
+  if (aud.type === 'all_active') {
+    var { data } = await supabase
+      .from('memberships')
+      .select('members!inner(email, full_name)')
+      .eq('organization_id', org_id)
+      .eq('status', 'active')
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+
+  } else if (aud.type === 'all_including_inactive') {
+    var { data } = await supabase
+      .from('memberships')
+      .select('members!inner(email, full_name)')
+      .eq('organization_id', org_id)
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+
+  } else if (aud.type === 'admins_only') {
+    var { data } = await supabase
+      .from('memberships')
+      .select('members!inner(email, full_name)')
+      .eq('organization_id', org_id)
+      .eq('status', 'active')
+      .eq('role', 'admin')
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+
+  } else if (aud.type === 'group' && aud.group_id) {
+    // NOTE: Adjust table name if needed — uses org_group_members joined to members
+    var { data } = await supabase
+      .from('org_group_members')
+      .select('member_id, members!inner(email, full_name)')
+      .eq('group_id', aud.group_id)
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+
+  } else if (aud.type === 'event' && aud.event_id) {
+    var allRecs: Recipient[] = []
+
+    // Paid ticket holders — get user_ids then fetch member info
+    var { data: tickets } = await supabase
+      .from('ticket_purchases')
+      .select('user_id')
+      .eq('event_id', aud.event_id)
+
+    if (tickets && tickets.length > 0) {
+      var userIds = (tickets as any[]).map(t => t.user_id).filter(Boolean)
+      if (userIds.length > 0) {
+        var { data: memberData } = await supabase
+          .from('members')
+          .select('email, full_name')
+          .in('user_id', userIds)
+        allRecs.push(...(memberData || []).map((m: any) => ({ email: m.email, full_name: m.full_name || '' })))
+      }
+    }
+
+    // Guest RSVPs (non-members with direct email)
+    var { data: guests } = await supabase
+      .from('guest_rsvps')
+      .select('email, name')
+      .eq('event_id', aud.event_id)
+    allRecs.push(...(guests || []).filter((g: any) => g.email).map((g: any) => ({ email: g.email, full_name: g.name || '' })))
+
+    return allRecs
+
+  } else if (aud.type === 'individual' && aud.email) {
+    return [{ email: aud.email, full_name: aud.name || '' }]
+  }
+
+  return []
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -23,7 +102,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
     var userClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -36,19 +114,17 @@ serve(async (req) => {
     }
 
     var body = await req.json()
-    var { org_id, subject, html_body, audience, template_name, attachments } = body
+    var { org_id, subject, html_body, audience, audiences, template_name, attachments } = body
 
-    if (!org_id || !subject || !html_body || !audience) {
+    if (!org_id || !subject || !html_body) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: corsHeaders })
     }
 
     // Validate attachments
-    // attachments: Array<{ filename: string, content: string (base64), type: string }>
-    var safeAttachments = []
+    var safeAttachments: any[] = []
     if (Array.isArray(attachments) && attachments.length > 0) {
       for (var att of attachments) {
         if (!att.filename || !att.content || !att.type) continue
-        // Check size — base64 is ~4/3 of binary size
         var approxBytes = Math.ceil(att.content.length * 0.75)
         if (approxBytes > MAX_ATTACHMENT_BYTES) {
           return new Response(
@@ -73,33 +149,41 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Admin access required' }), { status: 403, headers: corsHeaders })
     }
 
-    // Get org info
     var { data: org } = await supabase
       .from('organizations')
       .select('name, logo_url, slug, contact_email')
       .eq('id', org_id)
       .single()
 
-    // Get recipients based on audience
-    var membersQuery = supabase
-      .from('memberships')
-      .select('member_id, members!inner(email, full_name)')
-      .eq('organization_id', org_id)
-      .eq('status', 'active')
+    // Resolve recipients from new audiences array or legacy audience string
+    var allRecipients: Recipient[] = []
+    var audienceLabel = ''
 
-    if (audience === 'admins_only') {
-      membersQuery = membersQuery.eq('role', 'admin')
+    if (Array.isArray(audiences) && audiences.length > 0) {
+      for (var aud of audiences as AudienceConfig[]) {
+        var recs = await resolveAudience(aud, org_id, supabase)
+        allRecipients.push(...recs)
+      }
+      audienceLabel = (audiences as AudienceConfig[]).map(a => a.label || a.type).join(', ')
+    } else if (audience) {
+      // Legacy single audience string (backward compat)
+      var legacyType = audience === 'admins_only' ? 'admins_only' : 'all_active'
+      var recs = await resolveAudience({ type: legacyType }, org_id, supabase)
+      allRecipients.push(...recs)
+      audienceLabel = audience === 'admins_only' ? 'Admins Only' : 'All Active Members'
+    } else {
+      return new Response(JSON.stringify({ error: 'No audience specified' }), { status: 400, headers: corsHeaders })
     }
 
-    var { data: memberships, error: membersError } = await membersQuery
-
-    if (membersError) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch members' }), { status: 500, headers: corsHeaders })
-    }
-
-    var recipients = (memberships || []).map(function(m) {
-      return { email: m.members.email, name: m.members.full_name || '' }
-    }).filter(function(r) { return !!r.email })
+    // De-duplicate by email
+    var seen = new Set<string>()
+    var recipients = allRecipients.filter(r => {
+      if (!r.email) return false
+      var key = r.email.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
     if (recipients.length === 0) {
       return new Response(JSON.stringify({ error: 'No recipients found' }), { status: 400, headers: corsHeaders })
@@ -107,11 +191,18 @@ serve(async (req) => {
 
     var RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
     var FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>'
-
     var sentCount = 0
-    var errors = []
+    var errors: any[] = []
 
     for (var recipient of recipients) {
+      var nameParts = (recipient.full_name || '').trim().split(' ')
+      var firstName = nameParts[0] || ''
+      var lastName = nameParts.slice(1).join(' ') || ''
+
+      var personalizedBody = html_body
+        .replace(/\{\{first_name\}\}/g, firstName)
+        .replace(/\{\{last_name\}\}/g, lastName)
+
       var emailHtml = `
         <!DOCTYPE html>
         <html>
@@ -122,17 +213,13 @@ serve(async (req) => {
               <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">
                 <tr>
                   <td style="background:#0E1523;padding:24px 32px;text-align:center;">
-                    ${org?.logo_url
-                      ? `<img src="${org.logo_url}" alt="${org?.name || ''} logo" style="height:48px;border-radius:50%;margin-bottom:8px;" /><br/>`
-                      : ''
-                    }
+                    ${org?.logo_url ? `<img src="${org.logo_url}" alt="${org?.name || ''} logo" style="height:48px;border-radius:50%;margin-bottom:8px;" /><br/>` : ''}
                     <span style="font-size:20px;font-weight:800;color:#ffffff;">${org?.name || 'Your Organization'}</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:32px;">
-                    ${recipient.name ? `<p style="font-size:15px;color:#374151;margin:0 0 16px;">Hi ${recipient.name},</p>` : ''}
-                    <div style="font-size:15px;color:#374151;line-height:1.7;">${html_body}</div>
+                    <div style="font-size:15px;color:#374151;line-height:1.7;">${personalizedBody}</div>
                   </td>
                 </tr>
                 <tr>
@@ -150,7 +237,7 @@ serve(async (req) => {
         </html>
       `
 
-      var resendBody = {
+      var resendBody: any = {
         from: FROM_ADDRESS,
         to: recipient.email,
         subject: subject,
@@ -158,19 +245,13 @@ serve(async (req) => {
         reply_to: org?.contact_email || undefined
       }
 
-      // Attach files if present
       if (safeAttachments.length > 0) {
-        resendBody.attachments = safeAttachments.map(function(a) {
-          return { filename: a.filename, content: a.content }
-        })
+        resendBody.attachments = safeAttachments.map((a: any) => ({ filename: a.filename, content: a.content }))
       }
 
       var res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + RESEND_API_KEY,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify(resendBody)
       })
 
@@ -182,13 +263,12 @@ serve(async (req) => {
       }
     }
 
-    // Log the blast
     await supabase.from('email_blasts').insert({
       org_id: org_id,
       subject: subject,
       body: html_body,
       template_name: template_name || null,
-      audience: audience,
+      audience: audienceLabel,
       recipient_count: sentCount,
       sent_by: user.id,
       status: sentCount > 0 ? 'sent' : 'failed'
@@ -199,14 +279,11 @@ serve(async (req) => {
       sent_count: sentCount,
       total_recipients: recipients.length,
       errors: errors
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
 })

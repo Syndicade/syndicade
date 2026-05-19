@@ -255,23 +255,39 @@ function SectionDivider({ label }) {
 // ── Rich text editor ──────────────────────────────────────────────────────────
 function RichEditor({ value, onChange, id, minHeight }) {
   var editorRef = useRef(null);
+  var lastValueRef = useRef(value);
 
   useEffect(function() {
     if (editorRef.current) {
-      editorRef.current.style.direction = 'ltr';
-      editorRef.current.setAttribute('dir', 'ltr');
+      editorRef.current.innerHTML = value || '';
+      lastValueRef.current = value;
     }
   }, []);
 
+  useEffect(function() {
+    if (editorRef.current && value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      editorRef.current.innerHTML = value || '';
+    }
+  }, [value]);
+
   function exec(cmd, val) {
     document.execCommand(cmd, false, val || null);
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    if (editorRef.current) {
+      var newVal = editorRef.current.innerHTML;
+      lastValueRef.current = newVal;
+      onChange(newVal);
+    }
   }
   function insertLink() { var url = prompt('Enter URL:'); if (url) exec('createLink', url); }
   function insertTag(tag) {
     if (editorRef.current) editorRef.current.focus();
     document.execCommand('insertText', false, tag);
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    if (editorRef.current) {
+      var newVal = editorRef.current.innerHTML;
+      lastValueRef.current = newVal;
+      onChange(newVal);
+    }
   }
 
   var toolBtns = [
@@ -285,11 +301,10 @@ function RichEditor({ value, onChange, id, minHeight }) {
     { cmd:'justifyCenter', Icon:AlignCenter, label:'Center' },
     { cmd:'justifyRight', Icon:AlignRight, label:'Right' }
   ];
-  var mergeTags = ['{{first_name}}', '{{org_name}}', '{{event_name}}', '{{event_date}}'];
+  var mergeTags = ['{{first_name}}', '{{last_name}}'];
 
   return (
-    <div dir="ltr" style={{ border:'1px solid #E2E8F0', borderRadius:'8px', overflow:'hidden' }}>
-      {/* Format toolbar */}
+    <div style={{ border:'1px solid #E2E8F0', borderRadius:'8px', overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', gap:'2px', padding:'6px 8px', background:'#F1F5F9', borderBottom:'1px solid #E2E8F0', flexWrap:'wrap' }}>
         {toolBtns.map(function(btn) {
           return (
@@ -339,7 +354,6 @@ function RichEditor({ value, onChange, id, minHeight }) {
           <Link size={13} aria-hidden="true" />
         </button>
       </div>
-      {/* Merge tag row */}
       <div style={{ display:'flex', alignItems:'center', gap:'4px', padding:'5px 8px', background:'#F8FAFC', borderBottom:'1px solid #E2E8F0', flexWrap:'wrap' }}>
         <span style={{ fontSize:'10px', color:'#94A3B8', fontWeight:600, marginRight:'2px', whiteSpace:'nowrap' }}>INSERT:</span>
         {mergeTags.map(function(tag) {
@@ -353,12 +367,21 @@ function RichEditor({ value, onChange, id, minHeight }) {
           );
         })}
       </div>
-      {/* Content */}
-      <div ref={editorRef} id={id} dir="ltr" contentEditable suppressContentEditableWarning
-        role="textbox" aria-multiline="true" aria-label="Email content"
-        style={{ padding:'12px', fontSize:'14px', color:'#374151', background:'#FFFFFF', outline:'none', minHeight:minHeight||'140px', fontFamily:'Arial,sans-serif', lineHeight:1.6, direction:'ltr', unicodeBidi:'embed', writingMode:'horizontal-tb' }}
-        dangerouslySetInnerHTML={{ __html: value }}
-        onInput={function(e) { onChange(e.currentTarget.innerHTML); }} />
+      <div
+        ref={editorRef}
+        id={id}
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-multiline="true"
+        aria-label="Email content"
+        style={{ padding:'12px', fontSize:'14px', color:'#374151', background:'#FFFFFF', outline:'none', minHeight:minHeight||'140px', fontFamily:'Arial,sans-serif', lineHeight:1.6 }}
+        onInput={function(e) {
+          var newVal = e.currentTarget.innerHTML;
+          lastValueRef.current = newVal;
+          onChange(newVal);
+        }}
+      />
     </div>
   );
 }
