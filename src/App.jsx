@@ -15,7 +15,6 @@ import AboutPage from './pages/AboutPage';
 import WelcomePage from './pages/WelcomePage';
 import UnifiedDashboard from './pages/UnifiedDashboard';
 import VerifyEmailPage from './pages/VerifyEmailPage';
-import MemberProfileSettings from './components/MemberProfileSettings';
 import EventList from './pages/EventList';
 import EventDetails from './pages/EventDetails';
 import EventCalendar from './pages/EventCalendar';
@@ -167,7 +166,6 @@ var hideChrome = (
 
             {/* ── Account / profile ──────────────────────────────── */}
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
-            <Route path="/profile/settings" element={<MemberProfileSettings />} />
             <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
 
             {/* ── Organization list ──────────────────────────────── */}

@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import NotificationBell from './NotificationBell';
-import { useLocation } from 'react-router-dom';
 
 function Header() {
-  var navigate = useNavigate();
-  var location = useLocation();
+  var navigate  = useNavigate();
+  var location  = useLocation();
 
   var [currentUser, setCurrentUser]     = useState(null);
   var [userMenuOpen, setUserMenuOpen]   = useState(false);
@@ -15,13 +14,11 @@ function Header() {
   var userMenuRef = useRef(null);
 
   useEffect(function() {
-    supabase.auth.getUser().then(function({ data: { user } }) {
-      setCurrentUser(user);
+    supabase.auth.getUser().then(function(result) { setCurrentUser(result.data.user || null); });
+    var sub = supabase.auth.onAuthStateChange(function(_event, session) {
+      setCurrentUser(session ? session.user : null);
     });
-    var { data: { subscription } } = supabase.auth.onAuthStateChange(function(_event, session) {
-      setCurrentUser(session?.user || null);
-    });
-    return function() { subscription.unsubscribe(); };
+    return function() { sub.data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(function() {
@@ -34,9 +31,7 @@ function Header() {
       .eq('status', 'active')
       .limit(1)
       .single()
-      .then(function({ data }) {
-        if (data) setFirstAdminOrg(data.organizations);
-      });
+      .then(function(result) { if (result.data) setFirstAdminOrg(result.data.organizations); });
   }, [currentUser]);
 
   useEffect(function() {
@@ -52,23 +47,23 @@ function Header() {
     navigate('/login');
   }
 
-  var userInitial = currentUser?.user_metadata?.full_name?.charAt(0).toUpperCase()
-    || currentUser?.email?.charAt(0).toUpperCase()
-    || '?';
-  var userName = currentUser?.user_metadata?.full_name
-    || currentUser?.email?.split('@')[0]
-    || 'User';
+  var userInitial = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name)
+    ? currentUser.user_metadata.full_name.charAt(0).toUpperCase()
+    : (currentUser && currentUser.email ? currentUser.email.charAt(0).toUpperCase() : '?');
 
-  var headerBg      = '#FFFFFF';
+  var userName = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name)
+    ? currentUser.user_metadata.full_name
+    : (currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'User');
+
   var headerBorder  = '#E2E8F0';
-  var textPrimary   = '#0E1523';
   var textSecondary = '#475569';
+  var textPrimary   = '#0E1523';
   var textMuted     = '#94A3B8';
   var cardBg        = '#FFFFFF';
   var hoverBg       = '#F1F5F9';
 
   return (
-    <header style={{ background: headerBg, borderBottom: '1px solid ' + headerBorder }} className="sticky top-0 z-40">
+    <header style={{ background: '#FFFFFF', borderBottom: '1px solid ' + headerBorder }} className="sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
 
@@ -82,7 +77,7 @@ function Header() {
             <span style={{ color: '#F5B731', fontWeight: 800, fontSize: '22px' }}>cade</span>
           </button>
 
-          {/* Nav — logged IN */}
+          {/* Nav — logged in */}
           {currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
               {[
@@ -118,61 +113,23 @@ function Header() {
             </nav>
           )}
 
-          {/* Nav — logged OUT */}
+          {/* Nav — logged out */}
           {!currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
-
               {location.pathname !== '/features' && (
-                <button
-                  onClick={function() { navigate('/features'); }}
-                  style={{ color: textSecondary }}
-                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                  onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-                >
-                  Features
-                </button>
+                <button onClick={function() { navigate('/features'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Features</button>
               )}
-
               {location.pathname !== '/pricing' && (
-                <button
-                  onClick={function() { navigate('/pricing'); }}
-                  style={{ color: textSecondary }}
-                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                  onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-                >
-                  Pricing
-                </button>
+                <button onClick={function() { navigate('/pricing'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Pricing</button>
               )}
-
-              <button
-                onClick={function() { navigate('/discover'); }}
-                className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                style={{ color: textSecondary }}
-                onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-              >
-                Discover Events
-              </button>
-
-              <button
-                onClick={function() { navigate('/explore'); }}
-                className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                style={{ color: textSecondary }}
-                onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-              >
-                Explore Orgs
-              </button>
-
+              <button onClick={function() { navigate('/discover'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Discover Events</button>
+              <button onClick={function() { navigate('/explore'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Explore Orgs</button>
             </nav>
           )}
 
           {/* Right side */}
           <div className="flex items-center gap-2">
 
-            {/* Logged-in: notification bell + avatar menu */}
             {currentUser && (
               <>
                 <NotificationBell />
@@ -191,11 +148,7 @@ function Header() {
                     <span className="hidden sm:block text-sm font-medium max-w-[100px] truncate" style={{ color: textSecondary }}>
                       {userName}
                     </span>
-                    <svg
-                      className={'h-4 w-4 transition-transform ' + (userMenuOpen ? 'rotate-180' : '')}
-                      style={{ color: textMuted }}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"
-                    >
+                    <svg className={'h-4 w-4 transition-transform ' + (userMenuOpen ? 'rotate-180' : '')} style={{ color: textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
@@ -212,20 +165,7 @@ function Header() {
                         <p className="text-xs truncate" style={{ color: textMuted }}>{currentUser.email}</p>
                       </div>
 
-                      <button
-                        onClick={function() { setUserMenuOpen(false); navigate('/profile/settings'); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm focus:outline-none transition-colors text-left"
-                        style={{ color: textSecondary }}
-                        onMouseEnter={function(e) { e.currentTarget.style.background = hoverBg; }}
-                        onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
-                        role="menuitem"
-                      >
-                        <svg className="h-4 w-4" style={{ color: textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Profile Settings
-                      </button>
-
+                      {/* Single "Account Settings" entry — covers profile + account + privacy */}
                       <button
                         onClick={function() { setUserMenuOpen(false); navigate('/account-settings'); }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm focus:outline-none transition-colors text-left"
@@ -260,27 +200,10 @@ function Header() {
               </>
             )}
 
-            {/* Logged-out: Log In + Get Started */}
             {!currentUser && (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={function() { navigate('/login'); }}
-                  className="hidden sm:block text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-2 transition-colors"
-                  style={{ color: textSecondary, background: 'none', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; }}
-                >
-                  Log In
-                </button>
-                <button
-                  onClick={function() { navigate('/signup'); }}
-                  className="text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg px-4 py-2 transition-colors"
-                  style={{ color: '#111827', background: '#F5B731', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(245,183,49,0.35)' }}
-                  onMouseEnter={function(e) { e.currentTarget.style.background = '#E5A820'; }}
-                  onMouseLeave={function(e) { e.currentTarget.style.background = '#F5B731'; }}
-                >
-                  Get Started Free
-                </button>
+                <button onClick={function() { navigate('/login'); }} className="hidden sm:block text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-3 py-2 transition-colors" style={{ color: textSecondary }} onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; }}>Log In</button>
+                <button onClick={function() { navigate('/signup'); }} className="text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg px-4 py-2 transition-colors" style={{ color: '#111827', background: '#F5B731', boxShadow: '0 2px 6px rgba(245,183,49,0.35)' }} onMouseEnter={function(e) { e.currentTarget.style.background = '#E5A820'; }} onMouseLeave={function(e) { e.currentTarget.style.background = '#F5B731'; }}>Get Started Free</button>
               </div>
             )}
 
