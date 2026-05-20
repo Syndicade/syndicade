@@ -504,8 +504,19 @@ export default function PricingPage() {
               </div>
             </div>
           </div>
-        </section>
-
+<div style={{ textAlign: 'center', marginTop: '32px' }}>
+  <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '8px' }}>
+    Need to make the case to your board?
+  </p>
+  <a
+    href="/compare"
+    style={{ fontSize: '14px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
+    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+  >
+    Compare your current tool costs vs Syndicade →
+  </a>
+</div>
+</section>
         {/* ── Final CTA ── */}
         <section className="bg-white border-t border-slate-200 py-20 px-6 text-center" aria-labelledby="cta-heading">
           <img
