@@ -1,175 +1,51 @@
 /**
- * Syndicade — CommunityBoard.jsx v2
- * - Status badges (Open / Pending / Completed)
- * - Post date/time on every card
- * - Edit (poster only) + Delete with confirmation (poster only)
- * - Action buttons: Offer Help / Get More Info / Message Org Admin
- * - Member Orgs tab — opted-in orgs filtered by county + opt-in toggle
- * - Responding auto-sets post to Pending
+ * Syndicade — CommunityBoard.jsx
+ * Individual board page. Scoped to a single community board by boardId.
+ * Tabs: Ask · Offer · Collaboration · Recommendations
+ * Board admin panel: approve/deny requests, manage members, edit settings.
  */
 
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
-// ─── Board config ──────────────────────────────────────────────────────────────
+// ─── Patrick Hand font ─────────────────────────────────────────────────────────
 
-var BOARD_CONFIG = {
-  ask: {
-    label: 'The Ask Board',
-    tabColor: '#A78BFA',
-    description: 'Post what your community needs — supplies, volunteers, skills, or anything else a fellow org might have.',
-    buttonLabel: 'Post an Ask',
-    cardBg: '#E1BEE7',
-    tagBg: '#9C27B0',
-    tagText: '#F3E5F5',
-    tackColor: '#6A1B9A',
-    emptyTitle: 'No asks posted yet',
-    emptyDesc: 'Be the first to post something your org needs. Fellow admins are here to help.',
-    categories: ['Supplies', 'Volunteers', 'Skills', 'Space', 'Equipment', 'Funding', 'Other']
-  },
-  offer: {
-    label: 'The Offer Board',
-    tabColor: '#22C55E',
-    description: 'Share what your org has to give — surplus donations, unused equipment, available expertise.',
-    buttonLabel: 'Post an Offer',
-    cardBg: '#C8E6C9',
-    tagBg: '#66BB6A',
-    tagText: '#1B5E20',
-    tackColor: '#2E7D32',
-    emptyTitle: 'No offers posted yet',
-    emptyDesc: 'Share surplus supplies, skills, or equipment with fellow nonprofits in your community.',
-    categories: ['Supplies', 'Volunteers', 'Skills', 'Space', 'Equipment', 'Other']
-  },
-  collab: {
-    label: 'Collaboration Requests',
-    tabColor: '#3B82F6',
-    description: 'Find partner orgs to co-host events, run joint programs, or pool resources on larger projects.',
-    buttonLabel: 'Post a Request',
-    cardBg: '#BBDEFB',
-    tagBg: '#42A5F5',
-    tagText: '#0D47A1',
-    tackColor: '#1565C0',
-    emptyTitle: 'No collaboration requests yet',
-    emptyDesc: 'Invite other orgs to co-host events, build programs, or run joint campaigns together.',
-    categories: ['Co-Host', 'Program', 'Campaign', 'Fundraiser', 'Advocacy', 'Other']
-  }
-};
-
-var TABS = [
-  { key: 'ask',    label: 'The Ask Board',         color: '#A78BFA' },
-  { key: 'offer',  label: 'The Offer Board',        color: '#22C55E' },
-  { key: 'collab', label: 'Collaboration Requests', color: '#3B82F6' },
-  { key: 'orgs',   label: 'Member Orgs',            color: '#F5B731' }
-];
-
-var STATUS_CONFIG = {
-  open:      { label: 'Open',      bg: 'rgba(34,197,94,0.15)',   border: 'rgba(34,197,94,0.4)',   text: '#22C55E' },
-  pending:   { label: 'Pending',   bg: 'rgba(245,183,49,0.15)',  border: 'rgba(245,183,49,0.4)',  text: '#F5B731' },
-  completed: { label: 'Completed', bg: 'rgba(100,116,139,0.15)', border: 'rgba(100,116,139,0.4)', text: '#94A3B8' }
-};
-
-// ─── Icons ─────────────────────────────────────────────────────────────────────
-
-function IconShield(p) {
-  return (
-    <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-  );
-}
-function IconLock(p) {
-  return (
-    <svg width={p.size||24} height={p.size||24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <rect x="3" y="11" width="18" height="11" rx="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
-function IconPlus(p) {
-  return (
-    <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  );
-}
-function IconX(p) {
-  return (
-    <svg width={p.size||12} height={p.size||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
-}
-function IconMessage(p) {
-  return (
-    <svg width={p.size||28} height={p.size||28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-  );
-}
-function IconEdit(p) {
-  return (
-    <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-    </svg>
-  );
-}
-function IconTrash(p) {
-  return (
-    <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/><path d="M14 11v6"/>
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-    </svg>
-  );
-}
-function IconBuilding(p) {
-  return (
-    <svg width={p.size||28} height={p.size||28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <path d="M3 21h18M9 21V7l6-4v18M9 7H3v14M15 11h.01M15 15h.01M9 11h.01M9 15h.01"/>
-    </svg>
-  );
-}
-function IconChevronDown(p) {
-  return (
-    <svg width={p.size||12} height={p.size||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  );
-}
-function IconArrowLeft(p) {
-  return (
-    <svg width={p.size||16} height={p.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
-    </svg>
-  );
+function usePatrickHand() {
+  useEffect(function() {
+    if (document.getElementById('patrick-hand-font')) return;
+    var link = document.createElement('link');
+    link.id = 'patrick-hand-font';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap';
+    document.head.appendChild(link);
+  }, []);
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Light theme tokens ────────────────────────────────────────────────────────
 
-function timeAgo(dateStr) {
-  var now = new Date();
-  var then = new Date(dateStr);
-  var s = Math.floor((now - then) / 1000);
-  if (s < 60) return 'just now';
-  var m = Math.floor(s / 60);
-  if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
-  var h = Math.floor(m / 60);
-  if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
-  var d = Math.floor(h / 24);
-  if (d < 7) return d + (d === 1 ? ' day ago' : ' days ago');
-  var w = Math.floor(d / 7);
-  return w + (w === 1 ? ' week ago' : ' weeks ago');
+var BG     = '#F8FAFC';
+var CARD   = '#FFFFFF';
+var BDR    = '#E2E8F0';
+var ELEV   = '#F1F5F9';
+var TEXT   = '#0E1523';
+var TEXT2  = '#475569';
+var MUTED  = '#64748B';
+var YELLOW = '#F5B731';
+var BLUE   = '#3B82F6';
+var GREEN  = '#22C55E';
+var RED    = '#EF4444';
+var PURPLE = '#8B5CF6';
+
+// ─── Avatar helpers ────────────────────────────────────────────────────────────
+
+var AVATAR_COLORS = ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444','#14B8A6','#EC4899','#6366F1'];
+function getAvatarColor(name) {
+  var char = (name || 'A').charCodeAt(0);
+  return AVATAR_COLORS[char % AVATAR_COLORS.length];
 }
-
-function formatDateTime(dateStr) {
-  var d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-    ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
 function getInitials(name) {
   if (!name) return '??';
   var words = name.trim().split(/\s+/);
@@ -177,18 +53,133 @@ function getInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// ─── Tack ──────────────────────────────────────────────────────────────────────
+// ─── Board config ──────────────────────────────────────────────────────────────
 
-function Tack(props) {
-  return (
-    <div aria-hidden="true" style={{ display: 'flex', justifyContent: 'center', height: '14px', marginBottom: '-3px' }}>
-      <div style={{
-        width: '13px', height: '13px', borderRadius: '50%',
-        background: 'radial-gradient(circle at 38% 32%, rgba(255,255,255,0.5) 0%, ' + props.color + ' 52%, rgba(0,0,0,0.2) 100%)',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.35)', flexShrink: 0
-      }} />
-    </div>
-  );
+var BOARD_CONFIG = {
+  ask: {
+    label: 'Ask Board',
+    tabColor: '#A78BFA',
+    description: 'Post what your org needs — supplies, volunteers, skills, or anything a fellow member might have.',
+    buttonLabel: 'Post an Ask',
+    cardBg: '#E1BEE7',
+    tagBg: '#9C27B0',
+    tagText: '#F3E5F5',
+    emptyTitle: 'No asks posted yet',
+    emptyDesc: 'Be the first to post something your org needs.',
+    categories: ['Supplies','Volunteers','Skills','Space','Equipment','Funding','Other'],
+    primaryAction: 'Offer Help'
+  },
+  offer: {
+    label: 'Offer Board',
+    tabColor: '#22C55E',
+    description: 'Share what your org has to give — surplus donations, unused equipment, available expertise.',
+    buttonLabel: 'Post an Offer',
+    cardBg: '#C8E6C9',
+    tagBg: '#66BB6A',
+    tagText: '#1B5E20',
+    emptyTitle: 'No offers posted yet',
+    emptyDesc: 'Share surplus supplies, skills, or equipment with fellow board members.',
+    categories: ['Supplies','Volunteers','Skills','Space','Equipment','Other'],
+    primaryAction: 'Claim This'
+  },
+  collab: {
+    label: 'Collaboration',
+    tabColor: '#3B82F6',
+    description: 'Find partner orgs to co-host events, run joint programs, or pool resources.',
+    buttonLabel: 'Post a Request',
+    cardBg: '#BBDEFB',
+    tagBg: '#42A5F5',
+    tagText: '#0D47A1',
+    emptyTitle: 'No collaboration requests yet',
+    emptyDesc: 'Invite board members to co-host events or build programs together.',
+    categories: ['Co-Host','Program','Campaign','Fundraiser','Advocacy','Other'],
+    primaryAction: "I'm Interested"
+  },
+  recommendations: {
+    label: 'Recommendations',
+    tabColor: '#F59E0B',
+    description: 'Share trusted vendors, sponsors, and service providers your org has worked with.',
+    buttonLabel: 'Add a Recommendation',
+    cardBg: '#FFF3E0',
+    tagBg: '#FB8C00',
+    tagText: '#FFF8E1',
+    emptyTitle: 'No recommendations yet',
+    emptyDesc: 'Share vendors, sponsors, or services your org trusts.',
+    categories: ['Vendor','Sponsor','Contractor','Tech & Software','Legal','Financial','Printing','Catering','Other'],
+    primaryAction: 'Endorse'
+  }
+};
+
+var TABS = [
+  { key: 'ask',             label: 'Ask Board',      color: '#A78BFA' },
+  { key: 'offer',           label: 'Offer Board',     color: '#22C55E' },
+  { key: 'collab',          label: 'Collaboration',   color: '#3B82F6' },
+  { key: 'recommendations', label: 'Recommendations', color: '#F59E0B' }
+];
+
+var STATUS_CONFIG = {
+  open:      { label: 'Open',      bg: 'rgba(34,197,94,0.15)',   border: 'rgba(34,197,94,0.4)',   text: '#16A34A' },
+  pending:   { label: 'Pending',   bg: 'rgba(245,183,49,0.15)',  border: 'rgba(245,183,49,0.4)',  text: '#B45309' },
+  completed: { label: 'Completed', bg: 'rgba(100,116,139,0.15)', border: 'rgba(100,116,139,0.4)', text: '#64748B' }
+};
+
+var THEMES = [
+  { value: 'general',    label: 'General' },
+  { value: 'latino',     label: 'Latino' },
+  { value: 'black',      label: 'Black-led' },
+  { value: 'lgbtq',      label: 'LGBTQ+' },
+  { value: 'faith',      label: 'Faith-based' },
+  { value: 'immigrant',  label: 'Immigrant' },
+  { value: 'women',      label: 'Women-led' },
+  { value: 'disability', label: 'Disability' },
+  { value: 'asian',      label: 'Asian & AAPI' },
+  { value: 'indigenous', label: 'Indigenous' },
+  { value: 'youth',      label: 'Youth' },
+  { value: 'other',      label: 'Other' }
+];
+
+var US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
+
+// ─── Icons ─────────────────────────────────────────────────────────────────────
+
+function IconArrowLeft(p) { return <svg width={p.size||16} height={p.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>; }
+function IconPlus(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+function IconX(p) { return <svg width={p.size||12} height={p.size||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+function IconSettings(p) { return <svg width={p.size||15} height={p.size||15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>; }
+function IconUsers(p) { return <svg width={p.size||15} height={p.size||15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
+function IconBell(p) { return <svg width={p.size||20} height={p.size||20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>; }
+function IconEdit(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
+function IconTrash(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>; }
+function IconChevronDown(p) { return <svg width={p.size||12} height={p.size||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>; }
+function IconCheck(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>; }
+function IconLock(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>; }
+function IconGlobe(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>; }
+function IconMapPin(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>; }
+function IconMessage(p) { return <svg width={p.size||24} height={p.size||24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
+function IconShield(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>; }
+function IconClock(p) { return <svg width={p.size||26} height={p.size||26} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>; }
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr) {
+  var now = new Date(), then = new Date(dateStr);
+  var s = Math.floor((now - then) / 1000);
+  if (s < 60) return 'just now';
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + (m === 1 ? ' min ago' : ' mins ago');
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+  var d = Math.floor(h / 24);
+  if (d < 7) return d + (d === 1 ? ' day ago' : ' days ago');
+  return Math.floor(d / 7) + (Math.floor(d / 7) === 1 ? ' week ago' : ' weeks ago');
+}
+function formatDateTime(dateStr) {
+  var d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+function getThemeLabel(value) {
+  var t = THEMES.find(function(t) { return t.value === value; });
+  return t ? t.label : 'General';
 }
 
 // ─── Status Badge ──────────────────────────────────────────────────────────────
@@ -196,57 +187,21 @@ function Tack(props) {
 function StatusBadge(props) {
   var s = STATUS_CONFIG[props.status] || STATUS_CONFIG.open;
   var [open, setOpen] = useState(false);
-
   if (!props.isOwn) {
-    return (
-      <span style={{
-        display: 'inline-block', padding: '2px 8px', borderRadius: '99px',
-        fontSize: '10px', fontWeight: 700,
-        background: s.bg, border: '1px solid ' + s.border, color: s.text
-      }}>
-        {s.label}
-      </span>
-    );
+    return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 700, background: s.bg, border: '1px solid ' + s.border, color: s.text }}>{s.label}</span>;
   }
-
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        onClick={function(e) { e.stopPropagation(); setOpen(!open); }}
-        aria-label={'Change status, currently ' + s.label}
-        aria-expanded={open}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '4px',
-          padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 700,
-          background: s.bg, border: '1px solid ' + s.border, color: s.text, cursor: 'pointer'
-        }}
-      >
-        {s.label}
-        <IconChevronDown size={9} />
+      <button onClick={function(e) { e.stopPropagation(); setOpen(!open); }} aria-label={'Change status, currently ' + s.label} aria-expanded={open}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 700, background: s.bg, border: '1px solid ' + s.border, color: s.text, cursor: 'pointer', outline: 'none' }}>
+        {s.label}<IconChevronDown size={9} />
       </button>
       {open && (
-        <div role="menu" style={{
-          position: 'absolute', top: '24px', left: 0, zIndex: 20,
-          background: '#1A2035', border: '1px solid #2A3550', borderRadius: '8px',
-          padding: '4px', minWidth: '120px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
-        }}>
+        <div role="menu" style={{ position: 'absolute', top: '26px', left: 0, zIndex: 20, background: CARD, border: '1px solid ' + BDR, borderRadius: '8px', padding: '4px', minWidth: '120px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
           {Object.keys(STATUS_CONFIG).map(function(key) {
             var sc = STATUS_CONFIG[key];
-            return (
-              <button
-                key={key}
-                role="menuitem"
-                onClick={function(e) { e.stopPropagation(); setOpen(false); props.onChange(key); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  width: '100%', padding: '7px 10px', background: 'none', border: 'none',
-                  color: sc.text, fontSize: '12px', fontWeight: 600,
-                  cursor: 'pointer', borderRadius: '6px', textAlign: 'left'
-                }}
-              >
-                {sc.label}
-              </button>
-            );
+            return <button key={key} role="menuitem" onClick={function(e) { e.stopPropagation(); setOpen(false); props.onChange(key); }}
+              style={{ display: 'flex', width: '100%', padding: '7px 10px', background: 'none', border: 'none', color: sc.text, fontSize: '12px', fontWeight: 600, cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}>{sc.label}</button>;
           })}
         </div>
       )}
@@ -254,151 +209,52 @@ function StatusBadge(props) {
   );
 }
 
-// ─── Post Card ─────────────────────────────────────────────────────────────────
+// ─── Post Card (V3) ────────────────────────────────────────────────────────────
 
 function PostCard(props) {
-  var post = props.post;
-  var cfg = props.config;
-  var isOwn = props.isOwn;
-
+  var post = props.post, cfg = props.config, isOwn = props.isOwn;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <Tack color={cfg.tackColor} />
-      <article
-        role="listitem"
-        aria-label={post.org_name + ' ' + post.category + ' post'}
-        style={{
-          background: cfg.cardBg, borderRadius: '6px', padding: '14px',
-          position: 'relative', width: '100%', boxSizing: 'border-box',
-          backgroundImage: 'repeating-linear-gradient(transparent, transparent 23px, rgba(0,0,0,0.06) 24px)',
-          backgroundPositionY: '32px',
-          display: 'flex', flexDirection: 'column', minHeight: '240px'
-        }}
-      >
-        {/* Edit / Delete controls */}
-        {isOwn && (
-          <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', zIndex: 2 }}>
-            <button
-              onClick={function() { props.onEdit(post); }}
-              aria-label="Edit post"
-              style={{
-                width: '22px', height: '22px', borderRadius: '50%',
-                background: 'rgba(0,0,0,0.12)', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151'
-              }}
-            >
-              <IconEdit size={11} />
-            </button>
-            <button
-              onClick={function() { props.onDelete(post); }}
-              aria-label="Delete post"
-              style={{
-                width: '22px', height: '22px', borderRadius: '50%',
-                background: 'rgba(239,68,68,0.15)', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444'
-              }}
-            >
-              <IconTrash size={11} />
-            </button>
-          </div>
-        )}
-
-        {/* Category + Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-          <span style={{
-            display: 'inline-block', padding: '2px 8px', borderRadius: '3px',
-            fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-            background: cfg.tagBg, color: cfg.tagText
-          }}>
-            {post.category}
-          </span>
-          <StatusBadge
-            status={post.status || 'open'}
-            isOwn={isOwn}
-            onChange={function(newStatus) { props.onStatusChange(post.id, newStatus); }}
-          />
+    <article role="listitem" aria-label={post.org_name + ' ' + post.category + ' post'}
+      style={{ background: cfg.cardBg, borderRadius: '12px', padding: '16px', position: 'relative', boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', minHeight: '240px' }}>
+      {isOwn && (
+        <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', zIndex: 2 }}>
+          <button onClick={function() { props.onEdit(post); }} aria-label="Edit post" className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(0,0,0,0.10)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151' }}><IconEdit size={11} /></button>
+          <button onClick={function() { props.onDelete(post); }} aria-label="Delete post" className="focus:outline-none focus:ring-2 focus:ring-red-500"
+            style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(239,68,68,0.12)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: RED }}><IconTrash size={11} /></button>
         </div>
-
-        {/* Org row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <div style={{
-            width: '22px', height: '22px', borderRadius: '50%',
-            background: cfg.tagBg, color: cfg.tagText,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '9px', fontWeight: 700, flexShrink: 0
-          }}>
-            {getInitials(post.org_name)}
-          </div>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {post.org_name}
-          </span>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '3px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', background: cfg.tagBg, color: cfg.tagText }}>{post.category}</span>
+        <StatusBadge status={post.status || 'open'} isOwn={isOwn} onChange={function(s) { props.onStatusChange(post.id, s); }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+        <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: cfg.tagBg, color: cfg.tagText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, flexShrink: 0 }}>{getInitials(post.org_name)}</div>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{post.org_name}</span>
+      </div>
+      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', lineHeight: 1.4, marginBottom: '8px', fontFamily: 'Georgia, serif', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        "{post.title}"
+      </div>
+      <div style={{ fontSize: '17px', fontWeight: 400, color: '#374151', lineHeight: 1.5, flex: 1, marginBottom: '10px', fontFamily: "'Patrick Hand', sans-serif", display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        {post.body}
+      </div>
+      <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '8px' }}>
+        {formatDateTime(post.created_at)}
+        {post.response_count > 0 && <span style={{ marginLeft: '8px' }}>· {post.response_count} {post.response_count === 1 ? 'response' : 'responses'}</span>}
+      </div>
+      {!isOwn && post.status !== 'completed' && (
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          <button onClick={function() { props.onAction(post, 'primary'); }} aria-label={cfg.primaryAction + ' for ' + post.org_name}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer', background: cfg.tagBg, color: cfg.tagText }}>{cfg.primaryAction}</button>
+          <button onClick={function() { props.onAction(post, 'info'); }} aria-label={'Get more info from ' + post.org_name}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.10)', color: '#374151' }}>Get More Info</button>
         </div>
-
-        {/* Title */}
-        <div style={{
-          fontSize: '13px', fontWeight: 700, color: '#111827', lineHeight: 1.4,
-          marginBottom: '8px', fontFamily: 'Georgia, serif',
-          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-        }}>
-          "{post.title}"
-        </div>
-
-        {/* Body */}
-        <div style={{
-          fontSize: '12px', color: '#374151', lineHeight: 1.65, flex: 1, marginBottom: '10px',
-          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-        }}>
-          {post.body}
-        </div>
-
-        {/* Posted date + response count */}
-        <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '8px' }}>
-          Posted {formatDateTime(post.created_at)}
-          {post.response_count > 0 && (
-            <span style={{ marginLeft: '8px' }}>
-              · {post.response_count} {post.response_count === 1 ? 'response' : 'responses'}
-            </span>
-          )}
-        </div>
-
-        {/* Action buttons */}
-        {!isOwn && post.status !== 'completed' && (
-          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {[
-              { key: 'offer',   label: 'Offer Help',    primary: true },
-              { key: 'info',    label: 'Get More Info',  primary: false },
-              { key: 'message', label: 'Message Admin',  primary: false }
-            ].map(function(action) {
-              return (
-                <button
-                  key={action.key}
-                  onClick={function() { props.onAction(post, action.key); }}
-                  aria-label={action.label + ' for ' + post.org_name}
-                  style={{
-                    padding: '4px 9px', borderRadius: '4px', fontSize: '10px', fontWeight: 700,
-                    border: 'none', cursor: 'pointer',
-                    background: action.primary ? cfg.tagBg : 'rgba(0,0,0,0.12)',
-                    color: action.primary ? cfg.tagText : '#374151'
-                  }}
-                >
-                  {action.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {post.status === 'completed' && (
-          <div style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic' }}>This request has been fulfilled.</div>
-        )}
-
-        {isOwn && (
-          <div style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic', marginTop: '4px' }}>
-            Your post · {timeAgo(post.created_at)}
-          </div>
-        )}
-      </article>
-    </div>
+      )}
+      {post.status === 'completed' && <div style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic' }}>This has been fulfilled.</div>}
+      {isOwn && <div style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic', marginTop: '4px' }}>Your post · {timeAgo(post.created_at)}</div>}
+    </article>
   );
 }
 
@@ -406,24 +262,18 @@ function PostCard(props) {
 
 function SkeletonCard(props) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ height: '14px', display: 'flex', justifyContent: 'center', marginBottom: '-3px' }}>
-        <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: 'rgba(0,0,0,0.12)' }} />
+    <div aria-hidden="true" style={{ background: props.cardBg, borderRadius: '12px', padding: '16px', minHeight: '240px', boxShadow: '3px 4px 14px rgba(0,0,0,0.08)', opacity: 0.5 }}>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+        <div style={{ width: '56px', height: '18px', background: 'rgba(0,0,0,0.12)', borderRadius: '3px' }} />
+        <div style={{ width: '48px', height: '18px', background: 'rgba(0,0,0,0.08)', borderRadius: '99px' }} />
       </div>
-      <div style={{ background: props.cardBg, borderRadius: '6px', padding: '14px', width: '100%', minHeight: '240px', opacity: 0.45 }}>
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-          <div style={{ width: '56px', height: '18px', background: 'rgba(0,0,0,0.15)', borderRadius: '3px' }} />
-          <div style={{ width: '48px', height: '18px', background: 'rgba(0,0,0,0.1)', borderRadius: '99px' }} />
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }} />
-          <div style={{ width: '110px', height: '11px', background: 'rgba(0,0,0,0.1)', borderRadius: '3px' }} />
-        </div>
-        <div style={{ width: '92%', height: '13px', background: 'rgba(0,0,0,0.1)', borderRadius: '3px', marginBottom: '6px' }} />
-        <div style={{ width: '78%', height: '13px', background: 'rgba(0,0,0,0.08)', borderRadius: '3px', marginBottom: '6px' }} />
-        <div style={{ width: '85%', height: '11px', background: 'rgba(0,0,0,0.07)', borderRadius: '3px', marginBottom: '6px' }} />
-        <div style={{ width: '50%', height: '11px', background: 'rgba(0,0,0,0.06)', borderRadius: '3px' }} />
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(0,0,0,0.12)', flexShrink: 0 }} />
+        <div style={{ width: '110px', height: '11px', background: 'rgba(0,0,0,0.08)', borderRadius: '3px' }} />
       </div>
+      <div style={{ width: '92%', height: '13px', background: 'rgba(0,0,0,0.08)', borderRadius: '3px', marginBottom: '6px' }} />
+      <div style={{ width: '78%', height: '13px', background: 'rgba(0,0,0,0.06)', borderRadius: '3px', marginBottom: '6px' }} />
+      <div style={{ width: '85%', height: '11px', background: 'rgba(0,0,0,0.05)', borderRadius: '3px' }} />
     </div>
   );
 }
@@ -431,50 +281,24 @@ function SkeletonCard(props) {
 // ─── Delete Confirm Modal ──────────────────────────────────────────────────────
 
 function DeleteConfirmModal(props) {
-  var post = props.post;
-  var { isDark } = useTheme();
-  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
-  var border = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF' : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
   var [deleting, setDeleting] = useState(false);
-
-  async function handleConfirm() {
-    setDeleting(true);
-    await props.onConfirm(post.id);
-    setDeleting(false);
-  }
-
+  async function handleConfirm() { setDeleting(true); await props.onConfirm(props.post.id); setDeleting(false); }
   return (
-    <div
-      role="dialog" aria-modal="true" aria-label="Confirm delete post"
+    <div role="dialog" aria-modal="true" aria-label="Confirm delete post"
       onClick={function(e) { if (e.target === e.currentTarget) props.onCancel(); }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}
-    >
-      <div style={{ background: cardBg, border: '1px solid ' + border, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '400px' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}>
+      <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '400px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', flexShrink: 0 }}>
-            <IconTrash size={16} />
-          </div>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, margin: 0 }}>Remove this post?</h2>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: RED, flexShrink: 0 }}><IconTrash size={16} /></div>
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>Remove this post?</h2>
         </div>
-        <p style={{ fontSize: '13px', color: textSecondary, lineHeight: 1.6, marginBottom: '6px' }}>"{post.title}"</p>
-        <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '20px' }}>
-          Posted {formatDateTime(post.created_at)}. This cannot be undone.
-        </p>
+        <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, marginBottom: '6px' }}>"{props.post.title}"</p>
+        <p style={{ fontSize: '12px', color: MUTED, marginBottom: '20px' }}>{formatDateTime(props.post.created_at)}. This cannot be undone.</p>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={props.onCancel}
-            style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + border, borderRadius: '8px', color: textSecondary, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Keep Post
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={deleting}
-            aria-busy={deleting}
-            style={{ flex: 1, padding: '10px', background: '#EF4444', border: 'none', borderRadius: '8px', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.7 : 1 }}
-          >
+          <button onClick={props.onCancel} className="focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT2, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Keep Post</button>
+          <button onClick={handleConfirm} disabled={deleting} aria-busy={deleting} className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            style={{ flex: 1, padding: '10px', background: RED, border: 'none', borderRadius: '8px', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.7 : 1 }}>
             {deleting ? 'Removing...' : 'Remove Post'}
           </button>
         </div>
@@ -486,97 +310,65 @@ function DeleteConfirmModal(props) {
 // ─── Action Modal ──────────────────────────────────────────────────────────────
 
 function ActionModal(props) {
-  var post = props.post;
-  var actionType = props.actionType;
-  var cfg = props.config;
-  var userOrgs = props.userOrgs;
-  var { isDark } = useTheme();
-  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
-  var border = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF' : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
-  var inputBg = isDark ? '#151B2D' : '#F8FAFC';
-
-  var titles = { offer: 'Offer Help', info: 'Request More Information', message: 'Message Org Admin' };
-  var placeholders = {
-    offer:   'Describe how your org can help — what you can provide, timeline, any conditions...',
-    info:    'What would you like to know more about? Be specific so they can respond usefully...',
-    message: 'Introduce your org and write your message...'
-  };
-
-  var defaultOrg = userOrgs.length === 1 ? userOrgs[0].id : '';
-  var [orgId, setOrgId] = useState(defaultOrg);
+  var post = props.post, cfg = props.config, userOrgs = props.userOrgs, actionType = props.actionType;
+  var titles = { primary: cfg.primaryAction, info: 'Request More Information' };
+  var [orgId, setOrgId] = useState(userOrgs.length === 1 ? userOrgs[0].id : '');
   var [message, setMessage] = useState('');
   var [sending, setSending] = useState(false);
-
-  var inputStyle = {
-    width: '100%', padding: '10px 12px', background: inputBg, border: '1px solid ' + border,
-    borderRadius: '8px', color: textPrimary, fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit'
-  };
+  var inputStyle = { width: '100%', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' };
 
   async function handleSend() {
     if (!orgId) { toast.error('Select which org is sending this.'); return; }
     if (!message.trim()) { toast.error('Write a message first.'); return; }
     setSending(true);
     try {
-      var { data: { user } } = await supabase.auth.getUser();
+      var { data: authData } = await supabase.auth.getUser();
       var { error } = await supabase.from('community_board_responses').insert({
-        post_id: post.id, from_org_id: orgId, from_member_id: user.id,
+        post_id: post.id, from_org_id: orgId, from_member_id: authData.user.id,
         message: '[' + titles[actionType] + '] ' + message.trim()
       });
       if (error) throw error;
-      await supabase.rpc('increment_post_response_count', { post_id_input: post.id });
       await supabase.from('community_board_posts').update({ status: 'pending' }).eq('id', post.id).eq('status', 'open');
-      toast.success('Message sent to ' + post.org_name + '.');
-      props.onSuccess();
-      props.onClose();
+      mascotSuccessToast('Message sent to ' + post.org_name + '.');
+      props.onSuccess(); props.onClose();
     } catch (err) {
-      toast.error('Could not send message. Please try again.');
-    } finally {
-      setSending(false);
-    }
+      mascotErrorToast('Could not send message.', 'Please try again.');
+    } finally { setSending(false); }
   }
 
   return (
-    <div
-      role="dialog" aria-modal="true" aria-label={titles[actionType] + ' — ' + post.org_name}
+    <div role="dialog" aria-modal="true" aria-label={titles[actionType] + ' — ' + post.org_name}
       onClick={function(e) { if (e.target === e.currentTarget) props.onClose(); }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}
-    >
-      <div style={{ background: cardBg, border: '1px solid ' + border, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}>
+      <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, margin: 0 }}>{titles[actionType]}</h2>
-          <button onClick={props.onClose} aria-label="Close" style={{ width: '28px', height: '28px', borderRadius: '50%', background: border, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textSecondary }}>
-            <IconX size={12} />
-          </button>
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>{titles[actionType]}</h2>
+          <button onClick={props.onClose} aria-label="Close" className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+            style={{ width: '28px', height: '28px', borderRadius: '50%', background: BDR, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT2 }}><IconX size={12} /></button>
         </div>
-
-        {/* Post preview */}
-        <div style={{ background: cfg.cardBg, borderRadius: '6px', padding: '10px', marginBottom: '16px' }}>
+        <div style={{ background: cfg.cardBg, borderRadius: '8px', padding: '10px', marginBottom: '16px' }}>
           <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '5px', background: cfg.tagBg, color: cfg.tagText }}>{post.category}</span>
           <div style={{ fontSize: '12px', fontWeight: 700, color: '#111827', fontFamily: 'Georgia, serif' }}>"{post.title}"</div>
           <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>{post.org_name} · {timeAgo(post.created_at)}</div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {userOrgs.length > 1 && (
             <div>
-              <label htmlFor="am-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>From</label>
+              <label htmlFor="am-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>From</label>
               <select id="am-org" value={orgId} onChange={function(e) { setOrgId(e.target.value); }} style={inputStyle}>
                 <option value="">Select organization...</option>
-                {userOrgs.map(function(org) { return <option key={org.id} value={org.id}>{org.name}</option>; })}
+                {userOrgs.map(function(o) { return <option key={o.id} value={o.id}>{o.name}</option>; })}
               </select>
             </div>
           )}
           <div>
-            <label htmlFor="am-msg" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>Message</label>
-            <textarea id="am-msg" value={message} onChange={function(e) { setMessage(e.target.value); }} rows={4} maxLength={500} aria-required="true" placeholder={placeholders[actionType]} style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
-            <p style={{ fontSize: '11px', color: '#64748B', margin: '4px 0 0', textAlign: 'right' }}>{message.length}/500</p>
+            <label htmlFor="am-msg" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Message</label>
+            <textarea id="am-msg" value={message} onChange={function(e) { setMessage(e.target.value); }} rows={4} maxLength={500} aria-required="true"
+              placeholder="Write your message..." style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{message.length}/500</p>
           </div>
-          <button
-            onClick={handleSend} disabled={sending} aria-busy={sending}
-            style={{ padding: '12px', background: cfg.tagBg, color: cfg.tagText, border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1 }}
-          >
+          <button onClick={handleSend} disabled={sending} aria-busy={sending} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ padding: '12px', background: cfg.tagBg, color: cfg.tagText, border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1 }}>
             {sending ? 'Sending...' : 'Send Message'}
           </button>
         </div>
@@ -585,109 +377,86 @@ function ActionModal(props) {
   );
 }
 
-// ─── Post Modal (Create + Edit) ────────────────────────────────────────────────
+// ─── Post Modal ────────────────────────────────────────────────────────────────
 
 function PostModal(props) {
-  var boardType = props.boardType;
-  var cfg = props.config;
-  var userOrgs = props.userOrgs;
-  var editingPost = props.editingPost;
-  var { isDark } = useTheme();
-  var cardBg = isDark ? '#1A2035' : '#FFFFFF';
-  var border = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary = isDark ? '#FFFFFF' : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1' : '#475569';
-  var inputBg = isDark ? '#151B2D' : '#F8FAFC';
-
+  var cfg = props.config, userOrgs = props.userOrgs, editingPost = props.editingPost;
   var isEditing = !!editingPost;
-  var defaultOrg = editingPost ? editingPost.org_id : (userOrgs.length === 1 ? userOrgs[0].id : '');
-  var [orgId, setOrgId] = useState(defaultOrg);
+  var [orgId, setOrgId] = useState(editingPost ? editingPost.org_id : (userOrgs.length === 1 ? userOrgs[0].id : ''));
   var [category, setCategory] = useState(editingPost ? editingPost.category : cfg.categories[0]);
   var [title, setTitle] = useState(editingPost ? editingPost.title : '');
   var [body, setBody] = useState(editingPost ? editingPost.body : '');
   var [saving, setSaving] = useState(false);
-
-  var inputStyle = {
-    width: '100%', padding: '10px 12px', background: inputBg, border: '1px solid ' + border,
-    borderRadius: '8px', color: textPrimary, fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit'
-  };
+  var inputStyle = { width: '100%', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' };
 
   async function handleSubmit() {
     if (!orgId) { toast.error('Select which org is posting.'); return; }
-    if (!title.trim()) { toast.error('Add a headline for your post.'); return; }
+    if (!title.trim()) { toast.error('Add a headline.'); return; }
     if (!body.trim()) { toast.error('Add some details.'); return; }
     setSaving(true);
     try {
       if (isEditing) {
         var { error } = await supabase.from('community_board_posts').update({ category: category, title: title.trim(), body: body.trim() }).eq('id', editingPost.id);
         if (error) throw error;
-        toast.success('Post updated.');
+        mascotSuccessToast('Post updated.');
       } else {
-        var { data: { user } } = await supabase.auth.getUser();
+        var { data: authData } = await supabase.auth.getUser();
         var { error: ie } = await supabase.from('community_board_posts').insert({
-          board_type: boardType, category: category, title: title.trim(), body: body.trim(),
-          org_id: orgId, created_by: user.id, status: 'open'
+          board_id: props.boardId, board_type: props.boardType, category: category,
+          title: title.trim(), body: body.trim(), org_id: orgId,
+          created_by: authData.user.id, status: 'open', is_active: true, response_count: 0
         });
         if (ie) throw ie;
-        toast.success('Post published to the board.');
+        mascotSuccessToast('Post published to the board.');
       }
-      props.onSuccess();
-      props.onClose();
+      props.onSuccess(); props.onClose();
     } catch (err) {
-      toast.error('Could not save post. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+      mascotErrorToast('Could not save post.', 'Please try again.');
+    } finally { setSaving(false); }
   }
 
   return (
-    <div
-      role="dialog" aria-modal="true" aria-label={(isEditing ? 'Edit post on ' : 'Create post on ') + cfg.label}
+    <div role="dialog" aria-modal="true" aria-label={(isEditing ? 'Edit post on ' : 'Post to ') + cfg.label}
       onClick={function(e) { if (e.target === e.currentTarget) props.onClose(); }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}
-    >
-      <div style={{ background: cardBg, border: '1px solid ' + border, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}>
+      <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, color: textPrimary, margin: 0 }}>{isEditing ? 'Edit Post' : cfg.buttonLabel}</h2>
-          <button onClick={props.onClose} aria-label="Close" style={{ width: '28px', height: '28px', borderRadius: '50%', background: border, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textSecondary }}>
-            <IconX size={12} />
-          </button>
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>{isEditing ? 'Edit Post' : cfg.buttonLabel}</h2>
+          <button onClick={props.onClose} aria-label="Close" className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+            style={{ width: '28px', height: '28px', borderRadius: '50%', background: BDR, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT2 }}><IconX size={12} /></button>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {!isEditing && userOrgs.length > 1 && (
             <div>
-              <label htmlFor="pm-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>Posting as</label>
+              <label htmlFor="pm-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Posting as</label>
               <select id="pm-org" value={orgId} onChange={function(e) { setOrgId(e.target.value); }} style={inputStyle}>
                 <option value="">Select organization...</option>
-                {userOrgs.map(function(org) { return <option key={org.id} value={org.id}>{org.name}</option>; })}
+                {userOrgs.map(function(o) { return <option key={o.id} value={o.id}>{o.name}</option>; })}
               </select>
             </div>
           )}
           <div>
-            <label htmlFor="pm-cat" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>Category</label>
+            <label htmlFor="pm-cat" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Category</label>
             <select id="pm-cat" value={category} onChange={function(e) { setCategory(e.target.value); }} style={inputStyle}>
               {cfg.categories.map(function(c) { return <option key={c} value={c}>{c}</option>; })}
             </select>
           </div>
           <div>
-            <label htmlFor="pm-title" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>
-              Headline <span style={{ fontWeight: 400, color: '#64748B' }}>(shown as a quote on the card)</span>
+            <label htmlFor="pm-title" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>
+              Headline <span style={{ fontWeight: 400, color: MUTED }}>(shown as quote on card)</span>
             </label>
             <input id="pm-title" type="text" value={title} onChange={function(e) { setTitle(e.target.value); }} maxLength={120} aria-required="true"
-              placeholder={boardType === 'ask' ? 'e.g. Need 10 volunteers for our spring food drive' : boardType === 'offer' ? 'e.g. 20 surplus winter coats available, free to any org' : 'e.g. Looking for a partner org to co-host our summer gala'}
-              style={inputStyle} />
-            <p style={{ fontSize: '11px', color: '#64748B', margin: '4px 0 0', textAlign: 'right' }}>{title.length}/120</p>
+              placeholder="e.g. Looking for a printing vendor under $500" style={inputStyle} />
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{title.length}/120</p>
           </div>
           <div>
-            <label htmlFor="pm-body" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: textSecondary, marginBottom: '6px' }}>Details</label>
-            <textarea id="pm-body" value={body} onChange={function(e) { setBody(e.target.value); }} rows={4} maxLength={500} aria-required="true" placeholder="Provide context — timeline, logistics, contact preferences, quantities, etc." style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
-            <p style={{ fontSize: '11px', color: '#64748B', margin: '4px 0 0', textAlign: 'right' }}>{body.length}/500</p>
+            <label htmlFor="pm-body" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Details</label>
+            <textarea id="pm-body" value={body} onChange={function(e) { setBody(e.target.value); }} rows={4} maxLength={500} aria-required="true"
+              placeholder="Provide context — timeline, quantities, contact preferences..." style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{body.length}/500</p>
           </div>
-          <button
-            onClick={handleSubmit} disabled={saving} aria-busy={saving}
-            style={{ padding: '12px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
-          >
+          <button onClick={handleSubmit} disabled={saving} aria-busy={saving} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ padding: '12px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
             {saving ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save Changes' : 'Publish to Board')}
           </button>
         </div>
@@ -696,243 +465,681 @@ function PostModal(props) {
   );
 }
 
-// ─── Member Orgs Tab ───────────────────────────────────────────────────────────
+// ─── Admin Panel ───────────────────────────────────────────────────────────────
 
-function MemberOrgsTab(props) {
-  var userOrgs = props.userOrgs;
-  var userOrgIds = props.userOrgIds;
-  var { isDark } = useTheme();
-  var cardBg        = isDark ? '#1A2035' : '#FFFFFF';
-  var border        = isDark ? '#2A3550' : '#E2E8F0';
-  var sectionBg     = isDark ? '#151B2D' : '#F8FAFC';
-  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
-  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
+function AdminPanel(props) {
+  var board = props.board, boardId = props.boardId;
+  var [adminTab, setAdminTab] = useState('requests');
+  var [memberships, setMemberships] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [processing, setProcessing] = useState({});
+  var [editName, setEditName] = useState(board.name || '');
+  var [editDesc, setEditDesc] = useState(board.description || '');
+  var [editCity, setEditCity] = useState(board.city || '');
+  var [editState, setEditState] = useState(board.state || '');
+  var [editCounty, setEditCounty] = useState(board.county || '');
+  var [editZip, setEditZip] = useState(board.zip_code || '');
+  var [editVisibility, setEditVisibility] = useState(board.visibility || 'public');
+  var [editTheme, setEditTheme] = useState(board.theme || 'general');
+  var [savingSettings, setSavingSettings] = useState(false);
 
-  var [orgs, setOrgs]               = useState([]);
-  var [loading, setLoading]         = useState(true);
-  var [toggling, setToggling]       = useState({});
-  var [userOrgOptIns, setUserOrgOptIns] = useState({});
+  // Invites state
+  var [inviteExpiry, setInviteExpiry]         = useState('30');
+  var [customExpiry, setCustomExpiry]         = useState('');
+  var [generatingLink, setGeneratingLink]     = useState(false);
+  var [generalInvites, setGeneralInvites]     = useState([]);
+  var [directInvites, setDirectInvites]       = useState([]);
+  var [loadingInvites, setLoadingInvites]     = useState(false);
+  var [orgSearch, setOrgSearch]               = useState('');
+  var [orgResults, setOrgResults]             = useState([]);
+  var [selectedInviteOrg, setSelectedInviteOrg] = useState(null);
+  var [sendingOrgInvite, setSendingOrgInvite] = useState(false);
+  var [copiedId, setCopiedId]                 = useState(null);
 
-  useEffect(function() { loadData(); }, []);
+  useEffect(function() { loadMemberships(); }, []);
+  useEffect(function() { if (adminTab === 'invites') loadInvites(); }, [adminTab]);
 
-  async function loadData() {
+  async function loadMemberships() {
     setLoading(true);
     try {
-      var { data, error } = await supabase
-        .from('organizations')
-        .select('id, name, type, county, community_board_opt_in')
-        .eq('community_board_opt_in', true)
-        .order('name');
+      var { data, error } = await supabase.rpc('get_board_memberships', { p_board_id: boardId });
       if (error) throw error;
-      setOrgs(data || []);
-
-      if (userOrgIds.length > 0) {
-        var { data: myOrgs } = await supabase.from('organizations').select('id, community_board_opt_in').in('id', userOrgIds);
-        var map = {};
-        (myOrgs || []).forEach(function(o) { map[o.id] = o.community_board_opt_in; });
-        setUserOrgOptIns(map);
-      }
-    } catch (err) {
-      toast.error('Could not load organizations.');
-    } finally {
-      setLoading(false);
-    }
+      setMemberships(data || []);
+    } catch (err) { toast.error('Could not load members.'); } finally { setLoading(false); }
   }
 
-  async function handleToggle(orgId, current) {
-    setToggling(function(prev) { return Object.assign({}, prev, { [orgId]: true }); });
+async function handleApprove(membershipId, orgName) {
+  setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
+  try {
+    var { data: authData } = await supabase.auth.getUser();
+    var { data, error } = await supabase.rpc('approve_board_membership', {
+      p_membership_id: membershipId,
+      p_reviewer_id: authData.user.id
+    });
+    if (error) throw error;
+    if (!data) { toast.error('Could not approve — permission denied.'); return; }
+    mascotSuccessToast(orgName + ' approved.');
+    loadMemberships(); props.onMembershipChange();
+  } catch (err) { mascotErrorToast('Could not approve request.'); }
+  finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
+}
+
+async function handleDeny(membershipId, orgName) {
+  setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
+  try {
+    var { data: authData } = await supabase.auth.getUser();
+    var { data, error } = await supabase.rpc('deny_board_membership', {
+      p_membership_id: membershipId,
+      p_reviewer_id: authData.user.id
+    });
+    if (error) throw error;
+    if (!data) { toast.error('Could not deny — permission denied.'); return; }
+    toast.error(orgName + ' request denied.');
+    loadMemberships();
+  } catch (err) { mascotErrorToast('Could not deny request.'); }
+  finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
+}
+
+  async function handlePromote(membershipId, orgName, currentRole) {
+    var newRole = currentRole === 'admin' ? 'member' : 'admin';
+    setProcessing(function(p) { return Object.assign({}, p, { [membershipId + 'r']: true }); });
     try {
-      var { error } = await supabase.from('organizations').update({ community_board_opt_in: !current }).eq('id', orgId);
+      var { error } = await supabase.from('community_board_memberships').update({ role: newRole }).eq('id', membershipId);
       if (error) throw error;
-      toast.success(!current ? 'Your org is now on the Community Board.' : 'Your org has been removed from the Community Board.');
-      setUserOrgOptIns(function(prev) { return Object.assign({}, prev, { [orgId]: !current }); });
-      loadData();
-    } catch (err) {
-      toast.error('Could not update opt-in status.');
-    } finally {
-      setToggling(function(prev) { return Object.assign({}, prev, { [orgId]: false }); });
-    }
+      mascotSuccessToast(orgName + ' is now a board ' + newRole + '.');
+      loadMemberships();
+    } catch (err) { mascotErrorToast('Could not update role.'); }
+    finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId + 'r']: false }); }); }
   }
+
+  async function handleRemove(membershipId, orgName) {
+    setProcessing(function(p) { return Object.assign({}, p, { [membershipId + 'x']: true }); });
+    try {
+      var { error } = await supabase.from('community_board_memberships').delete().eq('id', membershipId);
+      if (error) throw error;
+      mascotSuccessToast(orgName + ' removed from board.');
+      loadMemberships(); props.onMembershipChange();
+    } catch (err) { mascotErrorToast('Could not remove org.'); }
+    finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId + 'x']: false }); }); }
+  }
+
+  async function handleSaveSettings() {
+    if (!editName.trim()) { toast.error('Board name is required.'); return; }
+    setSavingSettings(true);
+    try {
+      var { error } = await supabase.from('community_boards').update({
+        name: editName.trim(), description: editDesc.trim() || null,
+        city: editCity.trim() || null, state: editState || null,
+        county: editCounty.trim() || null, zip_code: editZip.trim() || null,
+        visibility: editVisibility, theme: editTheme, updated_at: new Date().toISOString()
+      }).eq('id', boardId);
+      if (error) throw error;
+      mascotSuccessToast('Board settings saved.');
+      props.onSettingsChange();
+    } catch (err) { mascotErrorToast('Could not save settings.', 'Please try again.'); }
+    finally { setSavingSettings(false); }
+  }
+
+  async function loadInvites() {
+    setLoadingInvites(true);
+    try {
+      var { data, error } = await supabase.from('community_board_invites').select('*').eq('board_id', boardId).order('created_at', { ascending: false });
+      if (error) throw error;
+      var generals = (data || []).filter(function(i) { return !i.invited_org_id; });
+      var directs  = (data || []).filter(function(i) { return !!i.invited_org_id; });
+      if (directs.length > 0) {
+        var orgIds = directs.map(function(i) { return i.invited_org_id; });
+        var { data: orgs } = await supabase.from('organizations').select('id, name').in('id', orgIds);
+        var orgMap = {};
+        (orgs || []).forEach(function(o) { orgMap[o.id] = o.name; });
+        directs = directs.map(function(i) { return Object.assign({}, i, { org_name: orgMap[i.invited_org_id] || 'Unknown Org' }); });
+      }
+      setGeneralInvites(generals);
+      setDirectInvites(directs);
+    } catch (err) { toast.error('Could not load invites.'); }
+    finally { setLoadingInvites(false); }
+  }
+
+async function generateInviteLink() {
+  setGeneratingLink(true);
+  try {
+    var { data: authData } = await supabase.auth.getUser();
+    var expiresAt = null;
+    if (inviteExpiry === 'custom' && customExpiry) {
+      expiresAt = new Date(customExpiry).toISOString();
+    } else if (inviteExpiry !== 'none') {
+      var d = new Date();
+      d.setDate(d.getDate() + parseInt(inviteExpiry));
+      expiresAt = d.toISOString();
+    }
+    var { data: inv, error } = await supabase.from('community_board_invites').insert({
+      board_id: boardId, created_by_user_id: authData.user.id,
+      invited_org_id: null, expires_at: expiresAt
+    }).select().single();
+    if (error) throw error;
+    var link = window.location.origin + '/community-board/join?token=' + inv.token;
+    // Clipboard copy is best-effort — don't let it fail the whole operation
+try {
+  await navigator.clipboard.writeText(link);
+  setCopiedId(inv.id);
+  setTimeout(function() { setCopiedId(null); }, 3000);
+  mascotSuccessToast('Invite link generated and copied.');
+} catch (clipErr) {
+  mascotSuccessToast('Invite link generated.', 'Use the Copy button to copy it.');
+}
+loadInvites();
+  } catch (err) { mascotErrorToast('Could not generate link.', 'Please try again.'); }
+  finally { setGeneratingLink(false); }
+}
+
+  async function searchOrgs(query) {
+    if (!query || query.length < 2) { setOrgResults([]); return; }
+    try {
+      var { data } = await supabase.from('organizations').select('id, name, type').ilike('name', '%' + query + '%').limit(8);
+      setOrgResults(data || []);
+    } catch (err) { /* silent */ }
+  }
+
+  async function sendOrgInvite() {
+    if (!selectedInviteOrg) return;
+    setSendingOrgInvite(true);
+    try {
+      var { data: authData } = await supabase.auth.getUser();
+      var { error } = await supabase.from('community_board_invites').insert({
+        board_id: boardId, created_by_user_id: authData.user.id,
+        invited_org_id: selectedInviteOrg.id, expires_at: null
+      });
+      if (error) throw error;
+      mascotSuccessToast('Invite sent to ' + selectedInviteOrg.name + '.');
+      setSelectedInviteOrg(null); setOrgSearch(''); setOrgResults([]);
+      loadInvites();
+    } catch (err) {
+      if (err.code === '23505') { toast.error('This org has already been invited.'); }
+      else { mascotErrorToast('Could not send invite.', 'Please try again.'); }
+    } finally { setSendingOrgInvite(false); }
+  }
+
+  async function deleteInvite(inviteId) {
+    try {
+      var { error } = await supabase.from('community_board_invites').delete().eq('id', inviteId);
+      if (error) throw error;
+      mascotSuccessToast('Invite removed.');
+      loadInvites();
+    } catch (err) { mascotErrorToast('Could not remove invite.'); }
+  }
+
+  function copyInviteLink(token, id) {
+    var link = window.location.origin + '/community-board/join?token=' + token;
+    navigator.clipboard.writeText(link).then(function() {
+      setCopiedId(id);
+      setTimeout(function() { setCopiedId(null); }, 3000);
+      mascotSuccessToast('Link copied to clipboard.');
+    });
+  }
+
+  function formatExpiry(dateStr) {
+    if (!dateStr) return 'No expiry';
+    var d = new Date(dateStr);
+    if (d < new Date()) return 'Expired';
+    return 'Expires ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  var pending  = memberships.filter(function(m) { return m.status === 'pending'; });
+  var approved = memberships.filter(function(m) { return m.status === 'approved'; });
+  var inputStyle = { width: '100%', padding: '9px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, fontSize: '13px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' };
+  var labelStyle = { display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, marginBottom: '4px' };
+  var adminTabs = [
+    { key: 'requests', label: 'Requests', badge: pending.length },
+    { key: 'members',  label: 'Members',  badge: 0 },
+    { key: 'invites',  label: 'Invites',  badge: 0 },
+    { key: 'settings', label: 'Settings', badge: 0 }
+  ];
 
   return (
-    <div>
-      {/* Your orgs section */}
-      {userOrgs.length > 0 && (
-        <div style={{ background: sectionBg, border: '1px solid ' + border, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-          <h3 style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 12px' }}>
-            Your Organizations
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {userOrgs.map(function(org) {
-              var isOptedIn = userOrgOptIns[org.id] || false;
-              var isBusy = toggling[org.id];
+    <>
+      <div onClick={props.onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 39 }} aria-hidden="true" />
+      <div role="dialog" aria-modal="true" aria-label="Board Admin Panel"
+        style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '420px', maxWidth: '100vw', background: CARD, borderLeft: '1px solid ' + BDR, zIndex: 40, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)' }}>
+
+        <div style={{ padding: '20px 20px 0', borderBottom: '1px solid ' + BDR }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(139,92,246,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: PURPLE }}><IconSettings size={14} /></div>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, margin: 0 }}>Manage Board</h2>
+            </div>
+            <button onClick={props.onClose} aria-label="Close admin panel" className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+              style={{ width: '28px', height: '28px', borderRadius: '50%', background: ELEV, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED }}><IconX size={12} /></button>
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {adminTabs.map(function(t) {
+              var isActive = adminTab === t.key;
               return (
-                <div key={org.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 12px', background: cardBg, border: '1px solid ' + (isOptedIn ? 'rgba(245,183,49,0.3)' : border), borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0, background: isOptedIn ? 'rgba(245,183,49,0.15)' : (isDark ? '#1E2845' : '#F1F5F9'), border: '1px solid ' + (isOptedIn ? 'rgba(245,183,49,0.4)' : border), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: isOptedIn ? '#F5B731' : textMuted }}>
-                      {getInitials(org.name)}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.name}</div>
-                      <div style={{ fontSize: '11px', color: textMuted }}>{isOptedIn ? 'Participating in Community Board' : 'Not on the Community Board'}</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={function() { handleToggle(org.id, isOptedIn); }}
-                    disabled={isBusy}
-                    aria-label={(isOptedIn ? 'Remove ' : 'Add ') + org.name + ' to Community Board'}
-                    aria-pressed={isOptedIn}
-                    style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, border: isOptedIn ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(245,183,49,0.4)', background: isOptedIn ? 'rgba(239,68,68,0.1)' : 'rgba(245,183,49,0.1)', color: isOptedIn ? '#EF4444' : '#F5B731', cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1, whiteSpace: 'nowrap', flexShrink: 0 }}
-                  >
-                    {isBusy ? '...' : (isOptedIn ? 'Leave Board' : 'Join Board')}
-                  </button>
-                </div>
+                <button key={t.key} onClick={function() { setAdminTab(t.key); }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                  style={{ padding: '8px 14px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? BLUE : MUTED, borderBottom: isActive ? '2px solid ' + BLUE : '2px solid transparent', marginBottom: '-1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {t.label}
+                  {t.badge > 0 && <span style={{ background: RED, color: '#FFFFFF', borderRadius: '99px', padding: '1px 6px', fontSize: '10px', fontWeight: 700 }}>{t.badge}</span>}
+                </button>
               );
             })}
           </div>
         </div>
-      )}
 
-      {/* All opted-in orgs */}
-      <h3 style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 14px' }}>
-        Organizations on the Board
-      </h3>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          {adminTab === 'requests' && (
+            loading ? (
+              <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[1,2,3].map(function(i) { return <div key={i} style={{ height: '72px', background: ELEV, borderRadius: '10px' }} />; })}
+              </div>
+            ) : pending.length === 0 ? (
+              <div role="status" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: ELEV, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, margin: '0 auto 12px' }}><IconBell size={20} /></div>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>No pending requests</p>
+                <p style={{ fontSize: '13px', color: TEXT2 }}>New join requests will appear here.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {pending.map(function(m) {
+                  var busy = processing[m.id];
+                  return (
+                    <div key={m.id} style={{ background: ELEV, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: getAvatarColor(m.org_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>{getInitials(m.org_name)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: TEXT }}>{m.org_name}</span>
+                            {m.is_verified_nonprofit && (
+                              <svg style={{ width: '13px', height: '13px', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="#22C55E" strokeWidth={2} aria-label="Verified nonprofit">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: MUTED }}>{m.org_type || 'Organization'} · requested {timeAgo(m.created_at)}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={function() { handleApprove(m.id, m.org_name); }} disabled={busy}
+                          className="focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
+                          style={{ flex: 1, padding: '7px', background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '6px', color: '#16A34A', fontSize: '12px', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <IconCheck size={12} />{busy ? '...' : 'Approve'}
+                        </button>
+                        <button onClick={function() { handleDeny(m.id, m.org_name); }} disabled={busy}
+                          className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                          style={{ flex: 1, padding: '7px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', color: RED, fontSize: '12px', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <IconX size={11} />{busy ? '...' : 'Deny'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
 
-      {loading ? (
-        <div aria-busy="true" aria-label="Loading organizations" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {[1,2,3,4].map(function(i) {
-            return <div key={i} style={{ height: '60px', background: cardBg, border: '1px solid ' + border, borderRadius: '10px', opacity: 0.5 }} />;
-          })}
-        </div>
-      ) : orgs.length === 0 ? (
-        <div role="status" style={{ textAlign: 'center', padding: '48px 32px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: cardBg, border: '1px solid ' + border, display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMuted, margin: '0 auto 12px' }}>
-            <IconBuilding size={22} />
-          </div>
-          <h4 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, margin: '0 0 6px' }}>No organizations yet</h4>
-          <p style={{ fontSize: '13px', color: textSecondary, maxWidth: '300px', margin: '0 auto', lineHeight: 1.65 }}>
-            Be the first to join the Community Board using the toggle above.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {orgs.map(function(org) {
-            var isYours = userOrgIds.indexOf(org.id) !== -1;
-            return (
-              <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: cardBg, border: '1px solid ' + (isYours ? 'rgba(245,183,49,0.3)' : border), borderRadius: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: isYours ? 'rgba(245,183,49,0.12)' : (isDark ? '#1E2845' : '#F1F5F9'), border: '1px solid ' + (isYours ? 'rgba(245,183,49,0.3)' : border), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: isYours ? '#F5B731' : textMuted }}>
-                  {getInitials(org.name)}
+          {adminTab === 'members' && (
+            loading ? (
+              <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[1,2,3,4].map(function(i) { return <div key={i} style={{ height: '64px', background: ELEV, borderRadius: '10px' }} />; })}
+              </div>
+            ) : approved.length === 0 ? (
+              <div role="status" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                <p style={{ fontSize: '14px', color: TEXT2 }}>No approved members yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {approved.map(function(m) {
+                  var busyR = processing[m.id + 'r'];
+                  var busyX = processing[m.id + 'x'];
+                  return (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '10px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: getAvatarColor(m.org_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>{getInitials(m.org_name)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.org_name}</div>
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: m.role === 'admin' ? 'rgba(139,92,246,0.12)' : CARD, border: '1px solid ' + (m.role === 'admin' ? 'rgba(139,92,246,0.3)' : BDR), color: m.role === 'admin' ? PURPLE : MUTED }}>
+                          {m.role === 'admin' ? 'Admin' : 'Member'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button onClick={function() { handlePromote(m.id, m.org_name, m.role); }} disabled={busyR}
+                          aria-label={(m.role === 'admin' ? 'Demote ' : 'Make admin: ') + m.org_name}
+                          className="focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          style={{ padding: '5px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, border: '1px solid ' + BDR, background: CARD, color: MUTED, cursor: busyR ? 'not-allowed' : 'pointer', opacity: busyR ? 0.6 : 1 }}>
+                          {busyR ? '...' : (m.role === 'admin' ? 'Demote' : 'Make Admin')}
+                        </button>
+                        <button onClick={function() { handleRemove(m.id, m.org_name); }} disabled={busyX}
+                          aria-label={'Remove ' + m.org_name + ' from board'}
+                          className="focus:outline-none focus:ring-2 focus:ring-red-500"
+                          style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: RED, cursor: busyX ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: busyX ? 0.6 : 1 }}>
+                          <IconTrash size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {adminTab === 'invites' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+              {/* ── Shareable Link ── */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 8px' }}>Shareable Link</p>
+                <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 14px' }}>
+                  Anyone with this link can request to join the board. Board admins still approve each request.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+                  <div>
+                    <label htmlFor="inv-expiry" style={labelStyle}>Link expires</label>
+                    <select id="inv-expiry" value={inviteExpiry} onChange={function(e) { setInviteExpiry(e.target.value); }} style={inputStyle}>
+                      <option value="none">Never</option>
+                      <option value="7">In 7 days</option>
+                      <option value="30">In 30 days</option>
+                      <option value="60">In 60 days</option>
+                      <option value="custom">Custom date</option>
+                    </select>
+                  </div>
+                  {inviteExpiry === 'custom' && (
+                    <div>
+                      <label htmlFor="inv-date" style={labelStyle}>Expiry date</label>
+                      <input id="inv-date" type="date" value={customExpiry} onChange={function(e) { setCustomExpiry(e.target.value); }}
+                        min={new Date().toISOString().split('T')[0]} style={inputStyle} />
+                    </div>
+                  )}
+                  <button onClick={generateInviteLink} disabled={generatingLink} aria-busy={generatingLink}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    style={{ padding: '9px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: generatingLink ? 'not-allowed' : 'pointer', opacity: generatingLink ? 0.7 : 1 }}>
+                    {generatingLink ? 'Generating...' : 'Generate & Copy Link'}
+                  </button>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: textPrimary }}>{org.name}</span>
-                    {isYours && (
-                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', color: '#F5B731' }}>
-                        Your Org
-                      </span>
-                    )}
+
+                {loadingInvites ? (
+                  <div style={{ height: '40px', background: ELEV, borderRadius: '8px' }} aria-hidden="true" />
+                ) : generalInvites.length > 0 && (
+                  <div>
+                    <p style={Object.assign({}, labelStyle, { marginBottom: '8px' })}>Active Links</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {generalInvites.map(function(inv) {
+                        var isCopied = copiedId === inv.id;
+                        var isExpired = inv.expires_at && new Date(inv.expires_at) < new Date();
+                        return (
+                          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', opacity: isExpired ? 0.5 : 1 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                ...{inv.token.slice(-12)}
+                              </div>
+                              <div style={{ fontSize: '11px', color: isExpired ? RED : MUTED }}>{formatExpiry(inv.expires_at)}</div>
+                            </div>
+                            <button onClick={function() { copyInviteLink(inv.token, inv.id); }}
+                              aria-label="Copy invite link" className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, border: '1px solid ' + BDR, background: isCopied ? 'rgba(34,197,94,0.10)' : CARD, color: isCopied ? GREEN : TEXT2, cursor: 'pointer', flexShrink: 0 }}>
+                              {isCopied ? 'Copied!' : 'Copy'}
+                            </button>
+                            <button onClick={function() { deleteInvite(inv.id); }}
+                              aria-label="Delete invite link" className="focus:outline-none focus:ring-2 focus:ring-red-500"
+                              style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: RED, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <IconTrash size={11} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: textMuted, marginTop: '1px' }}>
-                    {org.type || 'Organization'}{org.county ? ' · ' + org.county + ' County' : ''}
+                )}
+              </div>
+
+              <div style={{ height: '1px', background: BDR }} />
+
+              {/* ── Direct Org Invite ── */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 8px' }}>Invite an Organization</p>
+                <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 14px' }}>
+                  Send a direct invite to a specific org. They will be auto-approved when they accept.
+                </p>
+                <div style={{ position: 'relative' }}>
+                  <input type="text" value={orgSearch}
+                    onChange={function(e) { setOrgSearch(e.target.value); searchOrgs(e.target.value); }}
+                    placeholder="Search organizations by name..."
+                    aria-label="Search organizations to invite"
+                    style={inputStyle} />
+                  {orgResults.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: CARD, border: '1px solid ' + BDR, borderRadius: '8px', zIndex: 10, maxHeight: '180px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginTop: '4px' }}>
+                      {orgResults.map(function(org) {
+                        return (
+                          <button key={org.id} onClick={function() { setSelectedInviteOrg(org); setOrgSearch(org.name); setOrgResults([]); }}
+                            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                            style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                            onMouseEnter={function(e) { e.currentTarget.style.background = ELEV; }}
+                            onMouseLeave={function(e) { e.currentTarget.style.background = 'none'; }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: getAvatarColor(org.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
+                              {getInitials(org.name)}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: TEXT }}>{org.name}</div>
+                              <div style={{ fontSize: '11px', color: MUTED }}>{org.type || 'Organization'}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {selectedInviteOrg && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '8px', marginTop: '8px' }}>
+                    <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: getAvatarColor(selectedInviteOrg.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
+                      {getInitials(selectedInviteOrg.name)}
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: TEXT, flex: 1 }}>{selectedInviteOrg.name}</span>
+                    <button onClick={function() { setSelectedInviteOrg(null); setOrgSearch(''); }} aria-label="Clear selection"
+                      style={{ width: '22px', height: '22px', borderRadius: '50%', background: BDR, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED }}>
+                      <IconX size={10} />
+                    </button>
                   </div>
+                )}
+
+                <button onClick={sendOrgInvite} disabled={!selectedInviteOrg || sendingOrgInvite} aria-busy={sendingOrgInvite}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  style={{ width: '100%', padding: '9px', background: selectedInviteOrg ? BLUE : ELEV, color: selectedInviteOrg ? '#FFFFFF' : MUTED, border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: (selectedInviteOrg && !sendingOrgInvite) ? 'pointer' : 'not-allowed', marginTop: '10px', opacity: sendingOrgInvite ? 0.7 : 1 }}>
+                  {sendingOrgInvite ? 'Sending...' : 'Send Direct Invite'}
+                </button>
+
+                {directInvites.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    <p style={Object.assign({}, labelStyle, { marginBottom: '8px' })}>Sent Invites</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {directInvites.map(function(inv) {
+                        var isUsed = !!inv.used_at;
+                        return (
+                          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: getAvatarColor(inv.org_name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
+                              {getInitials(inv.org_name)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.org_name}</div>
+                              <div style={{ fontSize: '11px', color: isUsed ? GREEN : MUTED }}>{isUsed ? 'Accepted' : 'Pending'}</div>
+                            </div>
+                            {!isUsed && (
+                              <button onClick={function() { deleteInvite(inv.id); }} aria-label={'Cancel invite to ' + inv.org_name}
+                                className="focus:outline-none focus:ring-2 focus:ring-red-500"
+                                style={{ width: '26px', height: '26px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: RED, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <IconX size={10} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {adminTab === 'settings' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label htmlFor="s-name" style={labelStyle}>Board Name</label>
+                <input id="s-name" type="text" value={editName} onChange={function(e) { setEditName(e.target.value); }} maxLength={80} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="s-desc" style={labelStyle}>Description</label>
+                <textarea id="s-desc" value={editDesc} onChange={function(e) { setEditDesc(e.target.value); }} rows={3} maxLength={300}
+                  style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.5 })} />
+              </div>
+              <div>
+                <label htmlFor="s-theme" style={labelStyle}>Theme</label>
+                <select id="s-theme" value={editTheme} onChange={function(e) { setEditTheme(e.target.value); }} style={inputStyle}>
+                  {THEMES.map(function(t) { return <option key={t.value} value={t.value}>{t.label}</option>; })}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label htmlFor="s-city" style={labelStyle}>City</label>
+                  <input id="s-city" type="text" value={editCity} onChange={function(e) { setEditCity(e.target.value); }} style={inputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="s-state" style={labelStyle}>State</label>
+                  <select id="s-state" value={editState} onChange={function(e) { setEditState(e.target.value); }} style={inputStyle}>
+                    <option value="">Select...</option>
+                    {US_STATES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="s-county" style={labelStyle}>County</label>
+                  <input id="s-county" type="text" value={editCounty} onChange={function(e) { setEditCounty(e.target.value); }} style={inputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="s-zip" style={labelStyle}>ZIP</label>
+                  <input id="s-zip" type="text" value={editZip} onChange={function(e) { setEditZip(e.target.value); }} maxLength={10} style={inputStyle} />
                 </div>
               </div>
-            );
-          })}
+              <div>
+                <p style={Object.assign({}, labelStyle, { marginBottom: '8px' })}>Visibility</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[{ value: 'public', label: 'Public', desc: 'Appears in search', icon: IconGlobe }, { value: 'hidden', label: 'Private', desc: 'Invite only', icon: IconLock }].map(function(opt) {
+                    var isSelected = editVisibility === opt.value;
+                    var Ic = opt.icon;
+                    return (
+                      <button key={opt.value} onClick={function() { setEditVisibility(opt.value); }} aria-pressed={isSelected}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: isSelected ? 'rgba(59,130,246,0.06)' : ELEV, border: '1px solid ' + (isSelected ? 'rgba(59,130,246,0.35)' : BDR), borderRadius: '8px', cursor: 'pointer', textAlign: 'left' }}>
+                        <Ic size={13} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? BLUE : TEXT }}>{opt.label}</div>
+                          <div style={{ fontSize: '11px', color: MUTED }}>{opt.desc}</div>
+                        </div>
+                        {isSelected && <IconCheck size={13} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <button onClick={handleSaveSettings} disabled={savingSettings} aria-busy={savingSettings}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                style={{ padding: '11px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: savingSettings ? 'not-allowed' : 'pointer', opacity: savingSettings ? 0.7 : 1 }}>
+                {savingSettings ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CommunityBoard() {
-  var { isDark } = useTheme();
-  var pageBg        = isDark ? '#0E1523' : '#F8FAFC';
-  var sectionBg     = isDark ? '#151B2D' : '#FFFFFF';
-  var borderColor   = isDark ? '#2A3550' : '#E2E8F0';
-  var textPrimary   = isDark ? '#FFFFFF'  : '#0E1523';
-  var textSecondary = isDark ? '#CBD5E1'  : '#475569';
-  var textMuted     = isDark ? '#94A3B8'  : '#64748B';
-  var cardBg        = isDark ? '#1A2035'  : '#FFFFFF';
+  usePatrickHand();
+  var { boardId } = useParams();
+  var navigate = useNavigate();
 
-  var [activeTab, setActiveTab]       = useState('ask');
-  var [posts, setPosts]               = useState([]);
-  var [loading, setLoading]           = useState(true);
-  var [hasAccess, setHasAccess]       = useState(null);
-  var [userOrgs, setUserOrgs]         = useState([]);
-  var [userOrgIds, setUserOrgIds]     = useState([]);
-  var [showCreate, setShowCreate]     = useState(false);
-  var [editingPost, setEditingPost]   = useState(null);
-  var [deletingPost, setDeletingPost] = useState(null);
-  var [actionModal, setActionModal]   = useState(null);
-  var [tabCounts, setTabCounts]       = useState({ ask: 0, offer: 0, collab: 0 });
+  var [board, setBoard]                   = useState(null);
+  var [pageLoading, setPageLoading]       = useState(true);
+  var [userOrgs, setUserOrgs]             = useState([]);
+  var [userOrgIds, setUserOrgIds]         = useState([]);
+  var [membership, setMembership]         = useState(null);
+  var [isBoardAdmin, setIsBoardAdmin]     = useState(false);
+  var [activeTab, setActiveTab]           = useState('ask');
+  var [posts, setPosts]                   = useState([]);
+  var [postsLoading, setPostsLoading]     = useState(false);
+  var [tabCounts, setTabCounts]           = useState({});
+  var [showAdminPanel, setShowAdminPanel] = useState(false);
+  var [showCreate, setShowCreate]         = useState(false);
+  var [editingPost, setEditingPost]       = useState(null);
+  var [deletingPost, setDeletingPost]     = useState(null);
+  var [actionModal, setActionModal]       = useState(null);
 
   var cfg = BOARD_CONFIG[activeTab] || BOARD_CONFIG.ask;
 
-  useEffect(function() { checkAccess(); }, []);
+  useEffect(function() { loadPage(); }, [boardId]);
 
-  async function checkAccess() {
+  async function loadPage() {
+    setPageLoading(true);
     try {
-      var { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setHasAccess(false); return; }
-      var { data, error } = await supabase
+      var { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) { navigate('/login'); return; }
+
+      var { data: memberData } = await supabase
         .from('memberships')
-        .select('organization_id, organizations(id, name)')
-        .eq('member_id', user.id)
+        .select('organization_id, organizations(id, name, logo_url)')
+        .eq('member_id', authData.user.id)
         .eq('role', 'admin')
         .eq('status', 'active');
-      if (error) throw error;
-      if (!data || data.length === 0) { setHasAccess(false); return; }
-      var orgs = data.map(function(m) { return { id: m.organizations.id, name: m.organizations.name }; });
+      var orgs = (memberData || []).map(function(m) { return m.organizations; });
+      var ids = orgs.map(function(o) { return o.id; });
       setUserOrgs(orgs);
-      setUserOrgIds(orgs.map(function(o) { return o.id; }));
-      setHasAccess(true);
-      loadTabCounts();
-    } catch (err) {
-      setHasAccess(false);
-    }
+      setUserOrgIds(ids);
+
+      var { data: boardData, error: be } = await supabase.from('community_boards').select('*').eq('id', boardId).single();
+      if (be || !boardData) { setBoard(null); setPageLoading(false); return; }
+      setBoard(boardData);
+
+      if (ids.length > 0) {
+        var { data: mems } = await supabase.from('community_board_memberships').select('id, org_id, role, status').eq('board_id', boardId).in('org_id', ids);
+        var best = null;
+        var rank = { approved: 3, pending: 2, invited: 2, denied: 1 };
+        (mems || []).forEach(function(m) {
+          if (!best || (rank[m.status] || 0) > (rank[best.status] || 0)) best = m;
+        });
+        setMembership(best);
+        setIsBoardAdmin(!!best && best.status === 'approved' && best.role === 'admin');
+      }
+    } catch (err) { /* silent */ }
+    finally { setPageLoading(false); }
   }
 
   useEffect(function() {
-    if (hasAccess && activeTab !== 'orgs') loadPosts(activeTab);
-  }, [activeTab, hasAccess]);
+    if (membership && membership.status === 'approved') { loadPosts(activeTab); loadTabCounts(); }
+  }, [activeTab, membership]);
 
   async function loadPosts(boardType) {
-    setLoading(true);
+    setPostsLoading(true);
     try {
-      var { data, error } = await supabase
-        .from('community_board_posts')
-        .select('*')
-        .eq('board_type', boardType)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+      var { data, error } = await supabase.from('community_board_posts').select('*').eq('board_id', boardId).eq('board_type', boardType).eq('is_active', true).order('created_at', { ascending: false });
       if (error) throw error;
-      var orgIds = [...new Set((data || []).map(function(p) { return p.org_id; }).filter(Boolean))];
+      var orgIds = [];
+      (data || []).forEach(function(p) { if (p.org_id && orgIds.indexOf(p.org_id) === -1) orgIds.push(p.org_id); });
       var orgMap = {};
       if (orgIds.length > 0) {
         var { data: orgs } = await supabase.from('organizations').select('id, name').in('id', orgIds);
         (orgs || []).forEach(function(o) { orgMap[o.id] = o.name; });
       }
       setPosts((data || []).map(function(p) { return Object.assign({}, p, { org_name: orgMap[p.org_id] || 'Unknown Org' }); }));
-    } catch (err) {
-      toast.error('Could not load posts.');
-      setPosts([]);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { mascotErrorToast('Could not load posts.'); setPosts([]); }
+    finally { setPostsLoading(false); }
   }
 
   async function loadTabCounts() {
     try {
-      var results = await Promise.all([
-        supabase.from('community_board_posts').select('id', { count: 'exact', head: true }).eq('board_type', 'ask').eq('is_active', true),
-        supabase.from('community_board_posts').select('id', { count: 'exact', head: true }).eq('board_type', 'offer').eq('is_active', true),
-        supabase.from('community_board_posts').select('id', { count: 'exact', head: true }).eq('board_type', 'collab').eq('is_active', true)
-      ]);
-      setTabCounts({ ask: results[0].count || 0, offer: results[1].count || 0, collab: results[2].count || 0 });
+      var results = await Promise.all(TABS.map(function(t) {
+        return supabase.from('community_board_posts').select('id', { count: 'exact', head: true }).eq('board_id', boardId).eq('board_type', t.key).eq('is_active', true);
+      }));
+      var counts = {};
+      TABS.forEach(function(t, i) { counts[t.key] = results[i].count || 0; });
+      setTabCounts(counts);
     } catch (err) { /* silent */ }
   }
 
@@ -941,91 +1148,144 @@ export default function CommunityBoard() {
       var { error } = await supabase.from('community_board_posts').update({ status: newStatus }).eq('id', postId);
       if (error) throw error;
       setPosts(function(prev) { return prev.map(function(p) { return p.id === postId ? Object.assign({}, p, { status: newStatus }) : p; }); });
-      toast.success('Status updated to ' + newStatus + '.');
-    } catch (err) {
-      toast.error('Could not update status.');
-    }
+      mascotSuccessToast('Status updated.');
+    } catch (err) { mascotErrorToast('Could not update status.'); }
   }
 
   async function handleDeleteConfirm(postId) {
     try {
       var { error } = await supabase.from('community_board_posts').update({ is_active: false }).eq('id', postId);
       if (error) throw error;
-      toast.success('Post removed from the board.');
+      mascotSuccessToast('Post removed.');
       setPosts(function(prev) { return prev.filter(function(p) { return p.id !== postId; }); });
       setDeletingPost(null);
       loadTabCounts();
-    } catch (err) {
-      toast.error('Could not remove post.');
-    }
+    } catch (err) { mascotErrorToast('Could not remove post.', 'Please try again.'); }
   }
 
+  var locationStr = [board && board.city, board && board.state].filter(Boolean).join(', ');
+  if (board && board.county && !board.city) locationStr = board.county + ' County' + (board.state ? ', ' + board.state : '');
+
   // ── Loading ──
-  if (hasAccess === null) {
+  if (pageLoading) {
     return (
-      <div style={{ background: pageBg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div aria-busy="true" aria-label="Checking access" style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-          {[280, 220, 160].map(function(w, i) { return <div key={i} style={{ width: w + 'px', height: '12px', background: isDark ? '#1A2035' : '#E2E8F0', borderRadius: '6px', opacity: 0.6 }} />; })}
+      <div style={{ background: BG, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div aria-busy="true" aria-label="Loading board" style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+          {[280,220,160].map(function(w,i) { return <div key={i} style={{ width: w+'px', height: '12px', background: BDR, borderRadius: '6px' }} />; })}
         </div>
       </div>
     );
   }
 
-  // ── Access denied ──
-  if (!hasAccess) {
+  // ── Not found ──
+  if (!board) {
     return (
-      <main style={{ background: pageBg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <main style={{ background: BG, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', padding: '32px', maxWidth: '440px' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: cardBg, border: '1px solid ' + borderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: textMuted }}>
-            <IconLock size={26} />
-          </div>
-          <h1 style={{ fontSize: '20px', fontWeight: 800, color: textPrimary, marginBottom: '8px' }}>Admin Access Required</h1>
-          <p style={{ fontSize: '14px', color: textSecondary, lineHeight: 1.65, margin: '0 0 24px' }}>
-            The Community Board is available to verified org admins only.
-          </p>
-          <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', borderRadius: '8px', fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>
-            <IconArrowLeft size={14} />Back to Dashboard
-          </a>
+          <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '140px', mixBlendMode: 'multiply', margin: '0 auto 16px', display: 'block' }} />
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: TEXT, marginBottom: '8px' }}>Board Not Found</h1>
+          <p style={{ fontSize: '14px', color: TEXT2, marginBottom: '24px' }}>This board may have been removed or the link has expired.</p>
+          <button onClick={function() { navigate('/community-board/hub'); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: BLUE, color: '#FFFFFF', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+            <IconArrowLeft size={14} />Back to Boards
+          </button>
         </div>
       </main>
     );
   }
 
-  // ── Main ──
-  return (
-    <main style={{ background: pageBg, minHeight: '100vh', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }} aria-label="Community Board">
-
-      <header style={{ background: sectionBg, padding: '24px 24px 0', borderBottom: '1px solid ' + borderColor }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: textPrimary, margin: 0 }}>The Community Board</h1>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '99px', fontSize: '11px', fontWeight: 700, color: '#A78BFA' }}>
-              <IconShield size={11} />Verified Org Admins Only
-            </span>
+  // ── Pending ──
+  if (membership && membership.status === 'pending') {
+    return (
+      <main style={{ background: BG, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', padding: '32px', maxWidth: '440px' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: YELLOW }}>
+            <IconClock size={26} />
           </div>
-          <p style={{ fontSize: '13px', color: textMuted, margin: '0 0 16px' }}>
-            A space for verified nonprofits to share needs, offer resources, and find collaboration partners.
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: TEXT, marginBottom: '8px' }}>Request Pending</h1>
+          <p style={{ fontSize: '14px', color: TEXT2, lineHeight: 1.65, marginBottom: '8px' }}>Your request to join <strong>{board.name}</strong> is waiting for board admin approval.</p>
+          <p style={{ fontSize: '13px', color: MUTED, marginBottom: '24px' }}>You will be able to participate once approved.</p>
+          <button onClick={function() { navigate('/community-board/hub'); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: BLUE, color: '#FFFFFF', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+            <IconArrowLeft size={14} />Back to Boards
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ── No access ──
+  if (!membership || membership.status === 'denied') {
+    return (
+      <main style={{ background: BG, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', padding: '32px', maxWidth: '440px' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: CARD, border: '1px solid ' + BDR, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: MUTED }}>
+            <IconLock size={26} />
+          </div>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: TEXT, marginBottom: '8px' }}>{board.name}</h1>
+          <p style={{ fontSize: '14px', color: TEXT2, lineHeight: 1.65, marginBottom: '24px' }}>
+            {membership && membership.status === 'denied' ? 'Your request to join this board was not approved.' : board.visibility === 'hidden' ? 'This is a private board. You need an invite to join.' : 'You are not a member of this board yet.'}
           </p>
-          <nav role="tablist" aria-label="Community board sections" style={{ display: 'flex', overflowX: 'auto' }}>
+          <button onClick={function() { navigate('/community-board/hub'); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: BLUE, color: '#FFFFFF', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+            <IconArrowLeft size={14} />Back to Boards
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Main board ──
+  return (
+    <main style={{ background: BG, minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }} aria-label={board.name + ' community board'}>
+
+      <header style={{ background: CARD, borderBottom: '1px solid ' + BDR, padding: '20px 24px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <button onClick={function() { navigate('/community-board/hub'); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <IconArrowLeft size={14} />All Boards
+            </button>
+            {isBoardAdmin && (
+              <button onClick={function() { setShowAdminPanel(true); }} className="focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '8px', color: PURPLE, fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                <IconSettings size={14} />Manage Board
+              </button>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: TEXT, margin: 0 }}>{board.name}</h1>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: board.visibility === 'hidden' ? MUTED : GREEN }}>
+                {board.visibility === 'hidden' ? <IconLock size={11} /> : <IconGlobe size={11} />}
+                {board.visibility === 'hidden' ? 'Private' : 'Public'}
+              </span>
+              {isBoardAdmin && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '99px', fontSize: '10px', fontWeight: 700, color: PURPLE }}>
+                  <IconShield size={10} />Board Admin
+                </span>
+              )}
+            </div>
+            {board.description && <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 8px' }}>{board.description}</p>}
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              {locationStr && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: MUTED }}><IconMapPin size={12} />{locationStr}</span>}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: MUTED }}><IconUsers size={12} />{board.member_count || 1} {(board.member_count || 1) === 1 ? 'org' : 'orgs'}</span>
+              <span style={{ fontSize: '12px', color: MUTED }}>{getThemeLabel(board.theme)}</span>
+            </div>
+          </div>
+
+          <nav role="tablist" aria-label="Board sections" style={{ display: 'flex', overflowX: 'auto', marginTop: '4px' }}>
             {TABS.map(function(tab) {
               var isActive = activeTab === tab.key;
               var count = tabCounts[tab.key] || 0;
               return (
-                <button
-                  key={tab.key}
-                  role="tab"
-                  aria-selected={isActive}
-                  id={'tab-' + tab.key}
+                <button key={tab.key} role="tab" aria-selected={isActive} id={'tab-' + tab.key}
                   onClick={function() { setActiveTab(tab.key); }}
-                  className={'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset'}
-                  style={{ padding: '12px 20px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? tab.color : textMuted, borderBottom: isActive ? ('2px solid ' + tab.color) : '2px solid transparent', marginBottom: '-1px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                  style={{ padding: '10px 18px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? tab.color : MUTED, borderBottom: isActive ? '2px solid ' + tab.color : '2px solid transparent', marginBottom: '-1px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {tab.label}
-                  {tab.key !== 'orgs' && count > 0 && (
-                    <span style={{ borderRadius: '99px', padding: '1px 7px', fontSize: '10px', background: isActive ? 'rgba(167,139,250,0.15)' : (isDark ? '#1A2035' : '#F1F5F9'), color: isActive ? tab.color : textMuted }}>
-                      {count}
-                    </span>
-                  )}
+                  {count > 0 && <span style={{ borderRadius: '99px', padding: '1px 7px', fontSize: '10px', background: isActive ? 'rgba(0,0,0,0.08)' : ELEV, color: isActive ? tab.color : MUTED }}>{count}</span>}
                 </button>
               );
             })}
@@ -1034,86 +1294,61 @@ export default function CommunityBoard() {
       </header>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 24px' }}>
-        {activeTab === 'orgs' ? (
-          <MemberOrgsTab userOrgs={userOrgs} userOrgIds={userOrgIds} />
-        ) : (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
-              <p style={{ fontSize: '13px', color: textMuted, flex: 1, margin: 0 }}>{cfg.description}</p>
-              <button
-                onClick={function() { setShowCreate(true); }}
-                aria-label={cfg.buttonLabel}
-                className={'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 16px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', color: textSecondary, fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                <IconPlus size={13} />{cfg.buttonLabel}
-              </button>
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <p style={{ fontSize: '13px', color: MUTED, flex: 1, margin: 0 }}>{cfg.description}</p>
+          <button onClick={function() { setShowCreate(true); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 16px', background: CARD, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT2, fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <IconPlus size={13} />{cfg.buttonLabel}
+          </button>
+        </div>
 
-            {loading ? (
-              <div aria-busy="true" aria-label="Loading posts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                {[1,2,3,4,5,6].map(function(i) { return <SkeletonCard key={i} cardBg={cfg.cardBg} />; })}
-              </div>
-            ) : posts.length === 0 ? (
-              <div role="status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '64px 32px', gap: '12px' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: cardBg, border: '1px solid ' + borderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMuted }}>
-                  <IconMessage size={28} />
-                </div>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: textPrimary, margin: 0 }}>{cfg.emptyTitle}</h2>
-                <p style={{ fontSize: '13px', color: textSecondary, maxWidth: '360px', lineHeight: 1.65, margin: 0 }}>{cfg.emptyDesc}</p>
-                <button onClick={function() { setShowCreate(true); }} className={'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'} style={{ marginTop: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                  {cfg.buttonLabel}
-                </button>
-              </div>
-            ) : (
-              <div role="list" aria-label={cfg.label + ' posts'} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                {posts.map(function(post) {
-                  var isOwn = userOrgIds.indexOf(post.org_id) !== -1;
-                  return (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      config={cfg}
-                      isOwn={isOwn}
-                      onAction={function(p, type) { setActionModal({ post: p, type: type }); }}
-                      onEdit={function(p) { setEditingPost(p); }}
-                      onDelete={function(p) { setDeletingPost(p); }}
-                      onStatusChange={handleStatusChange}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </>
+        {postsLoading ? (
+          <div aria-busy="true" aria-label="Loading posts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            {[1,2,3,4,5,6].map(function(i) { return <SkeletonCard key={i} cardBg={cfg.cardBg} />; })}
+          </div>
+        ) : posts.length === 0 ? (
+          <div role="status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '64px 32px', gap: '12px' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: CARD, border: '1px solid ' + BDR, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED }}><IconMessage size={28} /></div>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: TEXT, margin: 0 }}>{cfg.emptyTitle}</h2>
+            <p style={{ fontSize: '13px', color: TEXT2, maxWidth: '360px', lineHeight: 1.65, margin: 0 }}>{cfg.emptyDesc}</p>
+            <button onClick={function() { setShowCreate(true); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              style={{ marginTop: '8px', padding: '10px 20px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <IconPlus size={13} />{cfg.buttonLabel}
+            </button>
+          </div>
+        ) : (
+          <div role="list" aria-label={cfg.label + ' posts'} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            {posts.map(function(post) {
+              var isOwn = userOrgIds.indexOf(post.org_id) !== -1;
+              return (
+                <PostCard key={post.id} post={post} config={cfg} isOwn={isOwn}
+                  onAction={function(p, type) { setActionModal({ post: p, type: type }); }}
+                  onEdit={function(p) { setEditingPost(p); }}
+                  onDelete={function(p) { setDeletingPost(p); }}
+                  onStatusChange={handleStatusChange}
+                />
+              );
+            })}
+          </div>
         )}
       </div>
 
       {(showCreate || editingPost) && (
-        <PostModal
-          boardType={activeTab}
-          config={cfg}
-          userOrgs={userOrgs}
-          editingPost={editingPost || null}
+        <PostModal boardId={boardId} boardType={activeTab} config={cfg} userOrgs={userOrgs} editingPost={editingPost || null}
           onClose={function() { setShowCreate(false); setEditingPost(null); }}
-          onSuccess={function() { loadPosts(activeTab); loadTabCounts(); }}
-        />
+          onSuccess={function() { loadPosts(activeTab); loadTabCounts(); }} />
       )}
-      {deletingPost && (
-        <DeleteConfirmModal
-          post={deletingPost}
-          onConfirm={handleDeleteConfirm}
-          onCancel={function() { setDeletingPost(null); }}
-        />
-      )}
+      {deletingPost && <DeleteConfirmModal post={deletingPost} onConfirm={handleDeleteConfirm} onCancel={function() { setDeletingPost(null); }} />}
       {actionModal && (
-        <ActionModal
-          post={actionModal.post}
-          actionType={actionModal.type}
-          config={cfg}
-          userOrgs={userOrgs}
+        <ActionModal post={actionModal.post} actionType={actionModal.type} config={cfg} userOrgs={userOrgs}
           onClose={function() { setActionModal(null); }}
-          onSuccess={function() { loadPosts(activeTab); }}
-        />
+          onSuccess={function() { loadPosts(activeTab); }} />
+      )}
+      {showAdminPanel && (
+        <AdminPanel board={board} boardId={boardId}
+          onClose={function() { setShowAdminPanel(false); }}
+          onMembershipChange={function() { loadPage(); }}
+          onSettingsChange={function() { loadPage(); setShowAdminPanel(false); }} />
       )}
     </main>
   );

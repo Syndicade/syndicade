@@ -45,7 +45,9 @@ import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
 import { ThemeProvider } from './context/ThemeContext';
+import CommunityBoardHub from './pages/CommunityBoardHub';
 import CommunityBoard from './pages/CommunityBoard';
+import CommunityBoardJoin from './pages/CommunityBoardJoin';
 import PricingPage from './pages/PricingPage';
 import FeaturesPage from './pages/FeaturesPage';
 import BillingPage from './pages/BillingPage';
@@ -166,7 +168,9 @@ var hideChrome = (
 
             {/* ── Account / profile ──────────────────────────────── */}
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
-            <Route path="/community-board" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
+            <Route path="/community-board/hub" element={session ? <CommunityBoardHub /> : <Navigate to="/login" replace />} />
+            <Route path="/community-board/:boardId" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
+            <Route path="/community-board/join" element={<CommunityBoardJoin />} />
 
             {/* ── Organization list ──────────────────────────────── */}
             <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
@@ -199,7 +203,6 @@ var hideChrome = (
               <Route path="contacts" element={<AdminContacts />} />
               <Route path="page-editor" element={<OrgPageEditor />} />
               <Route path="billing" element={<BillingPage />} />
-              <Route path="community-board" element={<CommunityBoard />} />
             </Route>
 
             {/* ── 404 ────────────────────────────────────────────── */}

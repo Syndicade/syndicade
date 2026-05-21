@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext';
 import { mascotErrorToast } from './MascotToast';
 import toast from 'react-hot-toast';
 import {
@@ -14,40 +13,14 @@ import {
   Loader2
 } from 'lucide-react';
 
-/**
- * DocumentPreviewModal
- *
- * Props:
- * - isOpen: boolean
- * - onClose: function
- * - document: object (file_url, file_type, file_name, title, file_size_bytes)
- *
- * Supports PDF iframe preview and image preview with zoom controls.
- * ADA compliant: role="dialog", aria-modal, aria-labelledby, focus trap via Escape.
- */
+var zoomBtnBase = 'px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+
 function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
-  var { isDark } = useTheme();
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
   var [signedUrl, setSignedUrl] = useState(null);
   var [zoomLevel, setZoomLevel] = useState(100);
 
-  // Theme tokens
-  var modalBg = isDark ? 'bg-[#1A2035]' : 'bg-white';
-  var headerBorder = isDark ? 'border-[#2A3550]' : 'border-gray-200';
-  var footerBg = isDark ? 'bg-[#151B2D] border-[#2A3550]' : 'bg-gray-50 border-gray-200';
-  var previewBg = isDark ? 'bg-[#0E1523]' : 'bg-gray-100';
-  var textPrimary = isDark ? 'text-white' : 'text-gray-900';
-  var textMuted = isDark ? 'text-[#94A3B8]' : 'text-[#64748B]';
-  var kbdStyle = isDark
-    ? 'bg-[#0E1523] border-[#2A3550] text-[#CBD5E1]'
-    : 'bg-white border-gray-300 text-gray-700';
-  var zoomBtnBase = 'px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
-  var zoomBtnSecondary = isDark
-    ? 'bg-[#0E1523] text-[#CBD5E1] hover:bg-[#2A3550]'
-    : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
-
-  // Fetch signed URL
   useEffect(function() {
     if (!doc || !isOpen) return;
     setLoading(true);
@@ -59,11 +32,7 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
       try {
         var filePath = doc.storage_path || (doc.file_url.split('/documents/')[1] || null);
         if (!filePath) throw new Error('Could not determine file path.');
-
-        var result = await supabase.storage
-          .from('documents')
-          .createSignedUrl(filePath, 3600);
-
+        var result = await supabase.storage.from('documents').createSignedUrl(filePath, 3600);
         if (result.error) throw result.error;
         setSignedUrl(result.data.signedUrl);
       } catch (err) {
@@ -76,12 +45,9 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
     getSignedUrl();
   }, [doc, isOpen]);
 
-  // Escape key to close
   useEffect(function() {
     if (!isOpen) return;
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
-    }
+    function handleKeyDown(e) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', handleKeyDown);
     return function() { window.removeEventListener('keydown', handleKeyDown); };
   }, [isOpen, onClose]);
@@ -103,37 +69,34 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
     }
   }
 
-  function zoomIn() { setZoomLevel(function(prev) { return Math.min(prev + 25, 200); }); }
-  function zoomOut() { setZoomLevel(function(prev) { return Math.max(prev - 25, 50); }); }
+  function zoomIn()    { setZoomLevel(function(prev) { return Math.min(prev + 25, 200); }); }
+  function zoomOut()   { setZoomLevel(function(prev) { return Math.max(prev - 25, 50); }); }
   function resetZoom() { setZoomLevel(100); }
 
   if (!isOpen || !doc) return null;
 
-  var isPDF = doc.file_type === 'application/pdf';
-  var isImage = doc.file_type && doc.file_type.startsWith('image/');
+  var isPDF    = doc.file_type === 'application/pdf';
+  var isImage  = doc.file_type && doc.file_type.startsWith('image/');
   var fileSizeKB = doc.file_size_bytes ? (doc.file_size_bytes / 1024).toFixed(1) + ' KB' : '';
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"
       aria-labelledby="preview-modal-title"
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={'rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden ' + modalBg}>
+      <div className="rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden bg-white">
 
         {/* Header */}
-        <div className={'border-b px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0 ' + headerBorder}>
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0">
           <div className="flex-1 min-w-0">
-            <h2
-              id="preview-modal-title"
-              className={'text-lg font-bold truncate ' + textPrimary}
-            >
+            <h2 id="preview-modal-title" className="text-lg font-bold truncate text-gray-900">
               {doc.title}
             </h2>
             {(doc.file_name || fileSizeKB) && (
-              <p className={'text-xs mt-0.5 truncate ' + textMuted}>
+              <p className="text-xs mt-0.5 truncate text-[#64748B]">
                 {doc.file_name}{fileSizeKB ? ' \u2022 ' + fileSizeKB : ''}
               </p>
             )}
@@ -151,8 +114,7 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
             </button>
             <button
               onClick={onClose}
-              className={'p-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 '
-                + (isDark ? 'text-[#94A3B8] hover:text-white hover:bg-[#2A3550]' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}
+              className="p-2 rounded-lg transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
               aria-label="Close preview"
             >
               <X className="w-5 h-5" aria-hidden="true" />
@@ -161,22 +123,22 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
         </div>
 
         {/* Preview Area */}
-        <div className={'flex-1 overflow-auto p-6 flex flex-col items-center justify-center ' + previewBg}>
+        <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center bg-gray-100">
 
           {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center gap-4" role="status" aria-label="Loading preview">
               <Loader2 className="w-12 h-12 text-blue-400 animate-spin" aria-hidden="true" />
-              <p className={textMuted}>Loading preview...</p>
+              <p className="text-[#64748B]">Loading preview...</p>
             </div>
           )}
 
           {/* Error */}
           {!loading && error && (
-            <div className={'rounded-xl border p-8 max-w-sm text-center ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')} role="alert">
+            <div className="rounded-xl border border-gray-200 bg-white p-8 max-w-sm text-center" role="alert">
               <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" aria-hidden="true" />
-              <h3 className={'font-semibold mb-1 ' + textPrimary}>Preview Unavailable</h3>
-              <p className={'text-sm mb-4 ' + textMuted}>{error}</p>
+              <h3 className="font-semibold mb-1 text-gray-900">Preview Unavailable</h3>
+              <p className="text-sm mb-4 text-[#64748B]">{error}</p>
               <button
                 onClick={handleDownload}
                 disabled={!signedUrl}
@@ -199,7 +161,7 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
                     style={{ height: '68vh' }}
                     title={'Preview of ' + doc.title}
                   />
-                  <p className={'text-xs ' + textMuted}>
+                  <p className="text-xs text-[#64748B]">
                     Use the PDF viewer controls to navigate pages and zoom.
                   </p>
                 </div>
@@ -218,36 +180,36 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
                   </div>
 
                   {/* Zoom Controls */}
-                  <div className={'flex items-center gap-3 rounded-xl border px-5 py-3 shadow-sm ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')}>
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-sm">
                     <button
                       onClick={zoomOut}
                       disabled={zoomLevel <= 50}
-                      className={zoomBtnBase + ' ' + zoomBtnSecondary}
+                      className={zoomBtnBase + ' bg-gray-100 text-gray-700 hover:bg-gray-200'}
                       aria-label="Zoom out"
                     >
                       <ZoomOut className="w-4 h-4" aria-hidden="true" />
                       Zoom Out
                     </button>
 
-                    <span className={'text-sm font-semibold min-w-[52px] text-center ' + textPrimary}>
+                    <span className="text-sm font-semibold min-w-[52px] text-center text-gray-900">
                       {zoomLevel}%
                     </span>
 
                     <button
                       onClick={zoomIn}
                       disabled={zoomLevel >= 200}
-                      className={zoomBtnBase + ' ' + zoomBtnSecondary}
+                      className={zoomBtnBase + ' bg-gray-100 text-gray-700 hover:bg-gray-200'}
                       aria-label="Zoom in"
                     >
                       <ZoomIn className="w-4 h-4" aria-hidden="true" />
                       Zoom In
                     </button>
 
-                    <div className={'w-px h-5 ' + (isDark ? 'bg-[#2A3550]' : 'bg-gray-200')} aria-hidden="true" />
+                    <div className="w-px h-5 bg-gray-200" aria-hidden="true" />
 
                     <button
                       onClick={resetZoom}
-                      className={zoomBtnBase + ' text-blue-400 ' + (isDark ? 'hover:bg-[#2A3550]' : 'hover:bg-blue-50')}
+                      className={zoomBtnBase + ' text-blue-500 hover:bg-blue-50'}
                       aria-label="Reset zoom to 100%"
                     >
                       <RotateCcw className="w-4 h-4" aria-hidden="true" />
@@ -259,10 +221,10 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
 
               {/* Unsupported */}
               {!isPDF && !isImage && (
-                <div className={'rounded-xl border p-10 max-w-sm text-center ' + (isDark ? 'bg-[#1A2035] border-[#2A3550]' : 'bg-white border-gray-200')}>
-                  <FileQuestion className={'w-12 h-12 mx-auto mb-3 ' + textMuted} aria-hidden="true" />
-                  <h3 className={'font-semibold mb-1 ' + textPrimary}>Preview Not Available</h3>
-                  <p className={'text-sm mb-5 ' + textMuted}>
+                <div className="rounded-xl border border-gray-200 bg-white p-10 max-w-sm text-center">
+                  <FileQuestion className="w-12 h-12 mx-auto mb-3 text-[#64748B]" aria-hidden="true" />
+                  <h3 className="font-semibold mb-1 text-gray-900">Preview Not Available</h3>
+                  <p className="text-sm mb-5 text-[#64748B]">
                     This file type cannot be previewed in the browser.
                   </p>
                   <button
@@ -279,10 +241,10 @@ function DocumentPreviewModal({ isOpen, onClose, document: doc }) {
         </div>
 
         {/* Footer */}
-        <div className={'border-t px-6 py-3 flex-shrink-0 ' + footerBg}>
-          <p className={'text-xs text-center ' + textMuted}>
+        <div className="border-t border-gray-200 bg-gray-50 px-6 py-3 flex-shrink-0">
+          <p className="text-xs text-center text-[#64748B]">
             Press{' '}
-            <kbd className={'px-1.5 py-0.5 rounded border text-xs font-mono ' + kbdStyle}>Esc</kbd>
+            <kbd className="px-1.5 py-0.5 rounded border border-gray-300 bg-white text-xs font-mono text-gray-700">Esc</kbd>
             {' '}to close
           </p>
         </div>
