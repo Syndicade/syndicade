@@ -101,8 +101,9 @@ return (
     <Router>
       <AppShell session={session} />
     </Router>
-  </>
-);
+</>
+  );
+}
 
 // AppShell lives inside Router so useLocation updates reactively on every navigation
 function AppShell({ session }) {
