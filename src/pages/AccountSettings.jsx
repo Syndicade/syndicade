@@ -805,7 +805,7 @@ function AccountSettings() {
                       <label htmlFor="confirmPassword" className={labelCls}>Confirm Password</label>
                       <input id="confirmPassword" type="password" value={passwordForm.confirmPassword} onChange={function(e) { setPasswordForm(function(p) { return { newPassword: p.newPassword, confirmPassword: e.target.value }; }); }} className={inputCls} placeholder="Repeat new password" autoComplete="new-password" />
                     </div>
-                    <button type="submit" disabled={changingPassword || !passwordForm.newPassword} className="px-6 py-2 bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50 text-sm">
+                    <button type="submit" disabled={changingPassword || !passwordForm.newPassword} className="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 text-sm">
                       {changingPassword ? 'Updating...' : 'Update Password'}
                     </button>
                   </form>

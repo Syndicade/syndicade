@@ -81,7 +81,7 @@ export function OrgNav({ org, navLinks, themeVars }) {
 // ─── OrgFooter ─────────────────────────────────────────────────────
 export function OrgFooter({ org, navLinks }) {
   return (
-    <footer className="bg-gray-900 text-white py-10 px-6" role="contentinfo">
+    <footer className="bg-slate-100 text-slate-700 py-10 px-6 border-t border-slate-200" role="contentinfo">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start justify-between gap-6">
         <div>
           <p className="font-bold text-white text-lg">{org.name}</p>

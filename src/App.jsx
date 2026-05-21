@@ -44,7 +44,6 @@ import GroupDetail from './pages/GroupDetail';
 import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
-import { ThemeProvider } from './context/ThemeContext';
 import CommunityBoardHub from './pages/CommunityBoardHub';
 import CommunityBoard from './pages/CommunityBoard';
 import CommunityBoardJoin from './pages/CommunityBoardJoin';
@@ -89,7 +88,6 @@ function App() {
   }
 
   return (
-    <ThemeProvider>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -102,7 +100,6 @@ function App() {
       <Router>
         <AppShell session={session} />
       </Router>
-    </ThemeProvider>
   );
 }
 
