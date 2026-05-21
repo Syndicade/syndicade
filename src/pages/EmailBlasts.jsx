@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
@@ -469,6 +469,7 @@ export default function EmailBlasts() {
   var organizationId = organization ? organization.id : null;
   var isAdmin = context ? context.isAdmin : false;
   var navigate = useNavigate();
+  var location = useLocation();
 
   var [tab, setTab] = useState('compose');
   var [loading, setLoading] = useState(true);
@@ -553,6 +554,16 @@ export default function EmailBlasts() {
           .eq('organization_id', organizationId)
           .order('name');
         setOrgGroups(groups || []);
+
+        var params = new URLSearchParams(location.search);
+        var preselectedGroupId = params.get('group');
+        if (preselectedGroupId) {
+          var matchedGroup = (groups || []).find(function(g) { return g.id === preselectedGroupId; });
+          if (matchedGroup) {
+            setAudiences([{ type: 'group', group_id: matchedGroup.id, label: matchedGroup.name }]);
+            setTab('compose');
+          }
+        }
       } catch (_) { setOrgGroups([]); }
 
       // Load recent events for recipient builder

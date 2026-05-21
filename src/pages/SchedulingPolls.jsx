@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
+  var d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
@@ -14,177 +15,190 @@ function formatTime(isoStr) {
   return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function heatmapColor(count, max) {
-  if (max === 0 || count === 0) return 'bg-gray-100 hover:bg-gray-200';
-  const ratio = count / max;
-  if (ratio >= 0.75) return 'bg-blue-600 hover:bg-blue-700 text-white';
-  if (ratio >= 0.5)  return 'bg-blue-400 hover:bg-blue-500 text-white';
-  if (ratio >= 0.25) return 'bg-blue-200 hover:bg-blue-300';
-  return 'bg-blue-100 hover:bg-blue-200';
+function heatmapBg(count, max) {
+  if (max === 0 || count === 0) return '#F1F5F9';
+  var ratio = count / max;
+  if (ratio >= 0.75) return '#1D4ED8';
+  if (ratio >= 0.5)  return '#3B82F6';
+  if (ratio >= 0.25) return '#93C5FD';
+  return '#DBEAFE';
+}
+
+function heatmapText(count, max) {
+  if (max === 0 || count === 0) return '#94A3B8';
+  var ratio = count / max;
+  return ratio >= 0.5 ? '#FFFFFF' : '#1E3A8A';
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function PollSkeleton() {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-6" aria-hidden="true">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <div className="h-5 w-48 bg-slate-100 rounded animate-pulse mb-2" />
+          <div className="h-3 w-32 bg-slate-100 rounded animate-pulse" />
+        </div>
+        <div className="h-6 w-16 bg-slate-100 rounded-full animate-pulse" />
+      </div>
+      <div className="h-3 w-56 bg-slate-100 rounded animate-pulse mb-4" />
+      <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))' }}>
+        {Array.from({ length: 40 }).map(function(_, i) {
+          return (
+            <div
+              key={i}
+              className="h-7 rounded animate-pulse"
+              style={{ background: '#F1F5F9', animationDelay: (i * 20) + 'ms' }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SchedulingPolls() {
-  const { organizationId } = useParams();
-  const [polls, setPolls] = useState([]);
-  const [organization, setOrganization] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  var { organizationId } = useParams();
+  var [polls, setPolls] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [isAdmin, setIsAdmin] = useState(false);
+  var [currentUser, setCurrentUser] = useState(null);
+  var [showCreateForm, setShowCreateForm] = useState(false);
 
-  useEffect(() => {
+  useEffect(function() {
     initPage();
   }, [organizationId]);
 
   async function initPage() {
     setLoading(true);
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    var authResult = await supabase.auth.getUser();
+    var user = authResult.data.user;
+    if (authResult.error || !user) {
       toast.error('Not authenticated');
       setLoading(false);
       return;
     }
     setCurrentUser(user);
 
-    const [orgResult, memberResult] = await Promise.allSettled([
-      supabase.from('organizations').select('id, name').eq('id', organizationId).single(),
-      supabase.from('memberships').select('role').eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').single()
-    ]);
+    var memberResult = await supabase
+      .from('memberships')
+      .select('role')
+      .eq('organization_id', organizationId)
+      .eq('member_id', user.id)
+      .eq('status', 'active')
+      .single();
 
-    if (orgResult.status === 'fulfilled') setOrganization(orgResult.value.data);
-    if (memberResult.status === 'fulfilled') {
-      setIsAdmin(memberResult.value.data?.role === 'admin');
+    if (memberResult.data) {
+      setIsAdmin(memberResult.data.role === 'admin');
     }
 
     await fetchPolls();
     setLoading(false);
   }
 
-async function fetchPolls() {
-    // Step 1: fetch polls
-    const { data: pollsData, error: pollsError } = await supabase
+  async function fetchPolls() {
+    var pollsResult = await supabase
       .from('scheduling_polls')
       .select('id, title, description, status, finalized_slot_id, created_at')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 
-    if (pollsError) {
-      console.error('fetchPolls polls error:', JSON.stringify(pollsError));
-      toast.error('Failed to load scheduling polls');
+    if (pollsResult.error) {
+      mascotErrorToast('Failed to load scheduling polls.');
       return;
     }
 
-    if (!pollsData || pollsData.length === 0) {
+    var pollsData = pollsResult.data || [];
+    if (pollsData.length === 0) {
       setPolls([]);
       return;
     }
 
-    // Step 2: fetch slots for those polls
-    const pollIds = pollsData.map(p => p.id);
-    const { data: slotsData, error: slotsError } = await supabase
+    var pollIds = pollsData.map(function(p) { return p.id; });
+
+    var slotsResult = await supabase
       .from('scheduling_slots')
       .select('id, poll_id, start_time, end_time')
       .in('poll_id', pollIds);
 
-    if (slotsError) {
-      console.error('fetchPolls slots error:', JSON.stringify(slotsError));
-      toast.error('Failed to load time slots');
+    if (slotsResult.error) {
+      mascotErrorToast('Failed to load time slots.');
       return;
     }
 
-    // Step 3: fetch responses for those slots
-    const slotIds = (slotsData || []).map(s => s.id);
-    let responsesData = [];
+    var slotsData = slotsResult.data || [];
+    var slotIds = slotsData.map(function(s) { return s.id; });
+    var responsesData = [];
+
     if (slotIds.length > 0) {
-      const { data: rData, error: rError } = await supabase
+      var rResult = await supabase
         .from('scheduling_responses')
         .select('id, slot_id, member_id, availability')
         .in('slot_id', slotIds);
-
-      if (rError) {
-        console.error('fetchPolls responses error:', JSON.stringify(rError));
-      } else {
-        responsesData = rData || [];
+      if (!rResult.error) {
+        responsesData = rResult.data || [];
       }
     }
 
-    // Step 4: assemble
-    const assembled = pollsData.map(poll => ({
-      ...poll,
-      scheduling_slots: (slotsData || [])
-        .filter(s => s.poll_id === poll.id)
-        .map(slot => ({
-          ...slot,
-          scheduling_responses: responsesData.filter(r => r.slot_id === slot.id)
-        }))
-    }));
+    var assembled = pollsData.map(function(poll) {
+      return Object.assign({}, poll, {
+        scheduling_slots: slotsData
+          .filter(function(s) { return s.poll_id === poll.id; })
+          .map(function(slot) {
+            return Object.assign({}, slot, {
+              scheduling_responses: responsesData.filter(function(r) { return r.slot_id === slot.id; })
+            });
+          })
+      });
+    });
 
     setPolls(assembled);
   }
 
   async function deletePoll(pollId) {
     if (!window.confirm('Delete this scheduling poll? This cannot be undone.')) return;
-    const { error } = await supabase.from('scheduling_polls').delete().eq('id', pollId);
-    if (error) {
-      console.error('deletePoll error:', error);
-      toast.error('Failed to delete poll');
+    var result = await supabase.from('scheduling_polls').delete().eq('id', pollId);
+    if (result.error) {
+      mascotErrorToast('Failed to delete poll.');
     } else {
-      toast.success('Poll deleted');
+      mascotSuccessToast('Poll deleted.');
       fetchPolls();
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600" role="status" aria-label="Loading">
-          <span className="sr-only">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div style={{ background: '#F8FAFC', minHeight: '100%' }}>
+      <div className="px-6 py-6">
 
         {/* Header */}
-        <div className="mb-6">
-          <Link
-            to={'/organizations/' + organizationId}
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded mb-4"
-            aria-label="Back to dashboard"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Dashboard
-          </Link>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Group Scheduling
-              </h1>
-              {organization && <p className="text-gray-500 mt-1">{organization.name}</p>}
-            </div>
-            {isAdmin && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
-                aria-label="Create new scheduling poll"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                New Poll
-              </button>
-            )}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-extrabold flex items-center gap-2" style={{ color: '#0E1523' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="#3B82F6" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Group Scheduling
+            </h1>
+            <p className="text-sm mt-1" style={{ color: '#475569' }}>
+              Find the best meeting time — members mark their availability on the grid.
+            </p>
           </div>
+          {isAdmin && (
+            <button
+              onClick={function() { setShowCreateForm(true); }}
+              className="inline-flex items-center gap-2 px-4 py-2 font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2"
+              style={{ background: '#3B82F6', color: '#FFFFFF' }}
+              aria-label="Create new scheduling poll"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New Poll
+            </button>
+          )}
         </div>
 
         {/* Create Form */}
@@ -192,45 +206,94 @@ async function fetchPolls() {
           <CreatePollForm
             organizationId={organizationId}
             currentUser={currentUser}
-            onCreated={() => { setShowCreateForm(false); fetchPolls(); }}
-            onCancel={() => setShowCreateForm(false)}
+            onCreated={function() { setShowCreateForm(false); fetchPolls(); }}
+            onCancel={function() { setShowCreateForm(false); }}
           />
         )}
 
-        {/* Legend */}
+        {/* Availability legend */}
         {polls.length > 0 && (
-          <div className="flex items-center gap-3 mb-4 text-xs text-gray-500" aria-label="Heatmap legend">
-            <span className="font-medium">Availability:</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-gray-100 border border-gray-200" aria-hidden="true"></span>None</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-blue-100" aria-hidden="true"></span>Some</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-blue-400" aria-hidden="true"></span>Most</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-blue-600" aria-hidden="true"></span>All</span>
+          <div className="flex items-center gap-4 mb-5" aria-label="Heatmap legend">
+            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#F5B731', letterSpacing: '4px' }}>
+              Availability
+            </span>
+            {[
+              { bg: '#F1F5F9', label: 'None' },
+              { bg: '#DBEAFE', label: 'Low' },
+              { bg: '#93C5FD', label: 'Some' },
+              { bg: '#3B82F6', label: 'Most' },
+              { bg: '#1D4ED8', label: 'All' },
+            ].map(function(item) {
+              return (
+                <span key={item.label} className="flex items-center gap-1.5 text-xs" style={{ color: '#64748B' }}>
+                  <span
+                    className="inline-block w-4 h-4 rounded"
+                    style={{ background: item.bg, border: '1px solid #E2E8F0' }}
+                    aria-hidden="true"
+                  />
+                  {item.label}
+                </span>
+              );
+            })}
           </div>
         )}
 
-        {/* Polls List */}
-        {polls.length === 0 && !showCreateForm ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <h2 className="text-lg font-semibold text-gray-700 mb-1">No scheduling polls yet</h2>
-            <p className="text-gray-500 text-sm">
-              {isAdmin ? 'Create a poll to find the best meeting time for your group.' : 'No scheduling polls have been created yet.'}
-            </p>
+        {/* Loading skeletons */}
+        {loading && (
+          <div className="space-y-6" aria-label="Loading polls" aria-busy="true">
+            <PollSkeleton />
+            <PollSkeleton />
           </div>
-        ) : (
+        )}
+
+        {/* Empty state */}
+        {!loading && polls.length === 0 && !showCreateForm && (
+          <div
+            className="text-center py-16 bg-white border border-slate-200 rounded-xl"
+            role="region"
+            aria-label="No scheduling polls"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="#CBD5E1" strokeWidth={1.5} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h2 className="text-base font-semibold mb-1" style={{ color: '#0E1523' }}>
+              No scheduling polls yet
+            </h2>
+            <p className="text-sm mb-5" style={{ color: '#64748B' }}>
+              {isAdmin
+                ? 'Create a poll so your group can vote on the best meeting time.'
+                : 'No scheduling polls have been created yet.'}
+            </p>
+            {isAdmin && (
+              <button
+                onClick={function() { setShowCreateForm(true); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                style={{ background: '#3B82F6', color: '#FFFFFF' }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Create First Poll
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Poll cards */}
+        {!loading && polls.length > 0 && (
           <div className="space-y-6">
-            {polls.map(poll => (
-              <HeatmapPollCard
-                key={poll.id}
-                poll={poll}
-                currentUser={currentUser}
-                isAdmin={isAdmin}
-                onDelete={() => deletePoll(poll.id)}
-                onUpdated={fetchPolls}
-              />
-            ))}
+            {polls.map(function(poll) {
+              return (
+                <HeatmapPollCard
+                  key={poll.id}
+                  poll={poll}
+                  currentUser={currentUser}
+                  isAdmin={isAdmin}
+                  onDelete={function() { deletePoll(poll.id); }}
+                  onUpdated={fetchPolls}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -242,60 +305,65 @@ async function fetchPolls() {
 // ─── Create Poll Form ─────────────────────────────────────────────────────────
 
 function CreatePollForm({ organizationId, currentUser, onCreated, onCancel }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [startHour, setStartHour] = useState('09');
-  const [endHour, setEndHour] = useState('17');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [preview, setPreview] = useState([]);
+  var [title, setTitle] = useState('');
+  var [description, setDescription] = useState('');
+  var [startDate, setStartDate] = useState('');
+  var [endDate, setEndDate] = useState('');
+  var [startHour, setStartHour] = useState('09');
+  var [endHour, setEndHour] = useState('17');
+  var [saving, setSaving] = useState(false);
+  var [formError, setFormError] = useState(null);
+  var [preview, setPreview] = useState([]);
 
-  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  var hours = Array.from({ length: 24 }, function(_, i) { return String(i).padStart(2, '0'); });
+
+  function hourLabel(h) {
+    var n = parseInt(h);
+    if (n === 0) return '12:00 AM';
+    if (n < 12) return n + ':00 AM';
+    if (n === 12) return '12:00 PM';
+    return (n - 12) + ':00 PM';
+  }
 
   function generateSlots(sDate, eDate, sHour, eHour) {
     if (!sDate || !eDate || !sHour || !eHour) return [];
-    const slots = [];
-    const start = new Date(sDate + 'T00:00:00');
-    const end = new Date(eDate + 'T00:00:00');
+    var slots = [];
+    var start = new Date(sDate + 'T00:00:00');
+    var end = new Date(eDate + 'T00:00:00');
     if (end < start) return [];
-    const diffDays = Math.round((end - start) / 86400000);
-    if (diffDays > 13) return []; // cap at 14 days
-    for (let d = 0; d <= diffDays; d++) {
-      const day = new Date(start);
+    var diffDays = Math.round((end - start) / 86400000);
+    if (diffDays > 13) return [];
+    for (var d = 0; d <= diffDays; d++) {
+      var day = new Date(start);
       day.setDate(day.getDate() + d);
-      const dateStr = day.toISOString().split('T')[0];
-      for (let h = parseInt(sHour); h < parseInt(eHour); h++) {
+      var dateStr = day.toISOString().split('T')[0];
+      for (var hh = parseInt(sHour); hh < parseInt(eHour); hh++) {
         slots.push({
           date: dateStr,
-          hour: h,
-          start_time: dateStr + 'T' + String(h).padStart(2, '0') + ':00:00',
-          end_time: dateStr + 'T' + String(h + 1).padStart(2, '0') + ':00:00',
+          hour: hh,
+          start_time: dateStr + 'T' + String(hh).padStart(2, '0') + ':00:00',
+          end_time: dateStr + 'T' + String(hh + 1).padStart(2, '0') + ':00:00',
         });
       }
     }
     return slots;
   }
 
-  useEffect(() => {
+  useEffect(function() {
     setPreview(generateSlots(startDate, endDate, startHour, endHour));
   }, [startDate, endDate, startHour, endHour]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError(null);
-
-    if (!title.trim()) { setError('Title is required.'); return; }
-    if (!startDate || !endDate) { setError('Select a date range.'); return; }
-    if (parseInt(startHour) >= parseInt(endHour)) { setError('End hour must be after start hour.'); return; }
-    if (preview.length === 0) { setError('No time slots generated. Check your date range (max 14 days).'); return; }
+    setFormError(null);
+    if (!title.trim()) { setFormError('Title is required.'); return; }
+    if (!startDate || !endDate) { setFormError('Select a date range.'); return; }
+    if (parseInt(startHour) >= parseInt(endHour)) { setFormError('End hour must be after start hour.'); return; }
+    if (preview.length === 0) { setFormError('No time slots generated. Check your date range (max 14 days).'); return; }
 
     setSaving(true);
     try {
-      console.log('Inserting poll for org:', organizationId, 'by user:', currentUser.id);
-
-      const { data: poll, error: pollError } = await supabase
+      var pollResult = await supabase
         .from('scheduling_polls')
         .insert([{
           organization_id: organizationId,
@@ -307,175 +375,181 @@ function CreatePollForm({ organizationId, currentUser, onCreated, onCancel }) {
         .select()
         .single();
 
-      if (pollError) {
-        console.error('Poll insert error:', pollError);
-        throw pollError;
-      }
-      console.log('Poll created:', poll.id);
+      if (pollResult.error) throw pollResult.error;
 
-      const slotRows = preview.map(s => ({
-        poll_id: poll.id,
-        start_time: s.start_time,
-        end_time: s.end_time,
-      }));
+      var slotRows = preview.map(function(s) {
+        return { poll_id: pollResult.data.id, start_time: s.start_time, end_time: s.end_time };
+      });
 
-      const { error: slotsError } = await supabase.from('scheduling_slots').insert(slotRows);
-      if (slotsError) {
-        console.error('Slots insert error:', slotsError);
-        throw slotsError;
-      }
-      console.log('Slots created:', slotRows.length);
+      var slotsResult = await supabase.from('scheduling_slots').insert(slotRows);
+      if (slotsResult.error) throw slotsResult.error;
 
-      toast.success('Poll created! Members can now mark their availability.');
+      mascotSuccessToast('Poll created!', 'Members can now mark their availability.');
       onCreated();
     } catch (err) {
-      console.error('Full error:', err);
-      setError('Failed to create poll: ' + (err.message || 'Unknown error. Check console.'));
+      mascotErrorToast('Failed to create poll.', err.message || 'Please try again.');
+      setFormError('Failed to create poll: ' + (err.message || 'Unknown error.'));
     } finally {
       setSaving(false);
     }
   }
 
-  const uniqueDates = [...new Set(preview.map(s => s.date))];
+  var uniqueDates = Array.from(new Set(preview.map(function(s) { return s.date; })));
 
   return (
-    <div className="bg-white border border-blue-200 rounded-xl p-6 mb-6 shadow-sm">
-      <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    <div
+      className="bg-white border rounded-xl p-6 mb-6"
+      style={{ borderColor: '#BFDBFE', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+      role="region"
+      aria-label="Create scheduling poll"
+    >
+      <h2 className="text-base font-bold mb-1 flex items-center gap-2" style={{ color: '#0E1523' }}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="#3B82F6" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
         </svg>
         Create Scheduling Poll
       </h2>
-      <p className="text-sm text-gray-500 mb-4">Members will click a grid to mark when they are available.</p>
+      <p className="text-sm mb-5" style={{ color: '#64748B' }}>
+        Members will click the grid to mark when they are free.
+      </p>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4" role="alert">
-          <p className="text-red-700 text-sm">{error}</p>
+      {formError && (
+        <div className="border rounded-lg p-3 mb-4" style={{ background: '#FEF2F2', borderColor: '#FECACA' }} role="alert">
+          <p className="text-sm" style={{ color: '#B91C1C' }}>{formError}</p>
         </div>
       )}
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div className="sm:col-span-2">
-            <label htmlFor="poll-title" className="block text-sm font-semibold text-gray-900 mb-1">
-              Poll Title <span aria-hidden="true">*</span>
+            <label htmlFor="poll-title" className="block text-sm font-semibold mb-1" style={{ color: '#0E1523' }}>
+              Poll Title <span aria-hidden="true" style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               id="poll-title"
               type="text"
               required
               value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Monthly Board Meeting — March"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={function(e) { setTitle(e.target.value); }}
+              placeholder="e.g. Monthly Board Meeting — June"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ borderColor: '#E2E8F0', color: '#0E1523', fontSize: '15px' }}
               maxLength={150}
               aria-required="true"
             />
           </div>
           <div className="sm:col-span-2">
-            <label htmlFor="poll-description" className="block text-sm font-semibold text-gray-900 mb-1">
-              Description (optional)
+            <label htmlFor="poll-description" className="block text-sm font-semibold mb-1" style={{ color: '#0E1523' }}>
+              Description <span style={{ color: '#94A3B8', fontWeight: 400 }}>(optional)</span>
             </label>
             <textarea
               id="poll-description"
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={function(e) { setDescription(e.target.value); }}
               placeholder="Add any notes for members..."
               rows={2}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              style={{ borderColor: '#E2E8F0', color: '#0E1523', fontSize: '15px' }}
               maxLength={500}
             />
           </div>
         </div>
 
-        <fieldset className="border border-gray-200 rounded-lg p-4 mb-4">
-          <legend className="text-sm font-semibold text-gray-900 px-1">Date Range <span aria-hidden="true">*</span></legend>
+        <fieldset className="border rounded-lg p-4 mb-4" style={{ borderColor: '#E2E8F0' }}>
+          <legend className="text-sm font-semibold px-1" style={{ color: '#0E1523' }}>
+            Date Range <span aria-hidden="true" style={{ color: '#EF4444' }}>*</span>
+          </legend>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="start-date" className="block text-xs text-gray-600 mb-1">From</label>
+              <label htmlFor="start-date" className="block text-xs mb-1" style={{ color: '#475569' }}>From</label>
               <input
                 id="start-date"
                 type="date"
                 value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={function(e) { setStartDate(e.target.value); }}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ borderColor: '#E2E8F0', color: '#0E1523' }}
                 aria-required="true"
               />
             </div>
             <div>
-              <label htmlFor="end-date" className="block text-xs text-gray-600 mb-1">To (max 14 days)</label>
+              <label htmlFor="end-date" className="block text-xs mb-1" style={{ color: '#475569' }}>To <span style={{ color: '#94A3B8' }}>(max 14 days)</span></label>
               <input
                 id="end-date"
                 type="date"
                 value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={function(e) { setEndDate(e.target.value); }}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ borderColor: '#E2E8F0', color: '#0E1523' }}
                 aria-required="true"
               />
             </div>
           </div>
         </fieldset>
 
-        <fieldset className="border border-gray-200 rounded-lg p-4 mb-4">
-          <legend className="text-sm font-semibold text-gray-900 px-1">Time Range <span aria-hidden="true">*</span></legend>
+        <fieldset className="border rounded-lg p-4 mb-4" style={{ borderColor: '#E2E8F0' }}>
+          <legend className="text-sm font-semibold px-1" style={{ color: '#0E1523' }}>
+            Time Window <span aria-hidden="true" style={{ color: '#EF4444' }}>*</span>
+          </legend>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="start-hour" className="block text-xs text-gray-600 mb-1">From hour</label>
+              <label htmlFor="start-hour" className="block text-xs mb-1" style={{ color: '#475569' }}>From hour</label>
               <select
                 id="start-hour"
                 value={startHour}
-                onChange={e => setStartHour(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={function(e) { setStartHour(e.target.value); }}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ borderColor: '#E2E8F0', color: '#0E1523' }}
               >
-                {hours.map(h => (
-                  <option key={h} value={h}>
-                    {parseInt(h) === 0 ? '12:00 AM' : parseInt(h) < 12 ? parseInt(h) + ':00 AM' : parseInt(h) === 12 ? '12:00 PM' : (parseInt(h) - 12) + ':00 PM'}
-                  </option>
-                ))}
+                {hours.map(function(h) {
+                  return <option key={h} value={h}>{hourLabel(h)}</option>;
+                })}
               </select>
             </div>
             <div>
-              <label htmlFor="end-hour" className="block text-xs text-gray-600 mb-1">To hour</label>
+              <label htmlFor="end-hour" className="block text-xs mb-1" style={{ color: '#475569' }}>To hour</label>
               <select
                 id="end-hour"
                 value={endHour}
-                onChange={e => setEndHour(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={function(e) { setEndHour(e.target.value); }}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ borderColor: '#E2E8F0', color: '#0E1523' }}
               >
-                {hours.map(h => (
-                  <option key={h} value={h}>
-                    {parseInt(h) === 0 ? '12:00 AM' : parseInt(h) < 12 ? parseInt(h) + ':00 AM' : parseInt(h) === 12 ? '12:00 PM' : (parseInt(h) - 12) + ':00 PM'}
-                  </option>
-                ))}
+                {hours.map(function(h) {
+                  return <option key={h} value={h}>{hourLabel(h)}</option>;
+                })}
               </select>
             </div>
           </div>
         </fieldset>
 
-        {/* Preview */}
         {preview.length > 0 && (
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4" role="status" aria-live="polite">
-            <p className="text-sm text-blue-700 font-medium">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              This will create <strong>{preview.length} time slots</strong> across <strong>{uniqueDates.length} day{uniqueDates.length !== 1 ? 's' : ''}</strong>
+          <div
+            className="border rounded-lg p-3 mb-4"
+            style={{ background: '#EFF6FF', borderColor: '#BFDBFE' }}
+            role="status"
+            aria-live="polite"
+          >
+            <p className="text-sm font-medium" style={{ color: '#1D4ED8' }}>
+              This will create <strong>{preview.length} time slots</strong> across <strong>{uniqueDates.length} day{uniqueDates.length !== 1 ? 's' : ''}</strong>.
             </p>
           </div>
         )}
 
-        <div className="flex gap-3 mt-4">
+        <div className="flex gap-3 mt-2">
           <button
             type="submit"
             disabled={saving || !title.trim() || preview.length === 0}
-            className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="px-5 py-2.5 font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: '#3B82F6', color: '#FFFFFF' }}
           >
             {saving ? 'Creating...' : 'Create Poll'}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all"
+            className="px-5 py-2.5 border font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2"
+            style={{ background: '#FFFFFF', borderColor: '#E2E8F0', color: '#475569' }}
           >
             Cancel
           </button>
@@ -488,47 +562,48 @@ function CreatePollForm({ organizationId, currentUser, onCreated, onCancel }) {
 // ─── Heatmap Poll Card ────────────────────────────────────────────────────────
 
 function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
-  const [saving, setSaving] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragValue, setDragValue] = useState(null); // true = marking available, false = clearing
+  var [saving, setSaving] = useState(false);
+  var [isDragging, setIsDragging] = useState(false);
+  var [dragValue, setDragValue] = useState(null);
+  var [finalizeTarget, setFinalizeTarget] = useState(null); // slot being considered for finalization
 
-  // Build grid structure: unique dates (columns) x unique hours (rows)
-  const slots = poll.scheduling_slots || [];
+  var slots = poll.scheduling_slots || [];
+  var uniqueDates = Array.from(new Set(slots.map(function(s) { return s.start_time.slice(0, 10); }))).sort();
+  var uniqueHours = Array.from(new Set(slots.map(function(s) { return parseInt(s.start_time.slice(11, 13)); }))).sort(function(a, b) { return a - b; });
 
-  const uniqueDates = [...new Set(slots.map(s => s.start_time.slice(0, 10)))].sort();
-  const uniqueHours = [...new Set(slots.map(s => parseInt(s.start_time.slice(11, 13))))].sort((a, b) => a - b);
-
-  // Map: "date|hour" -> slot
-  const slotMap = {};
-  slots.forEach(slot => {
-    const date = slot.start_time.slice(0, 10);
-    const hour = parseInt(slot.start_time.slice(11, 13));
+  var slotMap = {};
+  slots.forEach(function(slot) {
+    var date = slot.start_time.slice(0, 10);
+    var hour = parseInt(slot.start_time.slice(11, 13));
     slotMap[date + '|' + hour] = slot;
   });
 
-  // My availability: slotId -> true/false
-  const myAvailability = {};
-  slots.forEach(slot => {
-    const mine = (slot.scheduling_responses || []).find(r => r.member_id === currentUser.id);
+  var myAvailability = {};
+  slots.forEach(function(slot) {
+    var mine = (slot.scheduling_responses || []).find(function(r) { return r.member_id === currentUser.id; });
     if (mine) myAvailability[slot.id] = mine.availability === 'yes';
   });
 
-  // Max respondents for any single slot (for heatmap scaling)
-  const maxCount = Math.max(...slots.map(s => (s.scheduling_responses || []).filter(r => r.availability === 'yes').length), 1);
+  var maxCount = Math.max.apply(null, slots.map(function(s) {
+    return (s.scheduling_responses || []).filter(function(r) { return r.availability === 'yes'; }).length;
+  }).concat([1]));
+
+  var totalResponders = new Set(
+    slots.flatMap(function(s) { return (s.scheduling_responses || []).map(function(r) { return r.member_id; }); })
+  ).size;
 
   async function toggleSlot(slot, forceValue) {
     if (poll.status !== 'open') return;
-    const newVal = forceValue !== undefined ? forceValue : !myAvailability[slot.id];
+    var newVal = forceValue !== undefined ? forceValue : !myAvailability[slot.id];
     setSaving(true);
-    const { error } = await supabase
+    var result = await supabase
       .from('scheduling_responses')
       .upsert(
         [{ slot_id: slot.id, member_id: currentUser.id, availability: newVal ? 'yes' : 'no' }],
         { onConflict: 'slot_id,member_id' }
       );
-    if (error) {
-      console.error('toggleSlot error:', error);
-      toast.error('Failed to save: ' + error.message);
+    if (result.error) {
+      toast.error('Could not save — try again.');
     } else {
       onUpdated();
     }
@@ -536,24 +611,22 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
   }
 
   async function finalizeSlot(slot) {
-    const { error } = await supabase
+    var result = await supabase
       .from('scheduling_polls')
       .update({ finalized_slot_id: slot.id, status: 'finalized' })
       .eq('id', poll.id);
-    if (error) {
-      console.error('finalizeSlot error:', error);
-      toast.error('Failed to finalize: ' + error.message);
+    if (result.error) {
+      mascotErrorToast('Failed to finalize time slot.');
     } else {
-      const date = formatDate(slot.start_time.slice(0, 10));
-      const time = formatTime(slot.start_time);
-      toast.success('Meeting set for ' + date + ' at ' + time);
+      mascotSuccessToast('Meeting scheduled!', formatDate(slot.start_time.slice(0, 10)) + ' at ' + formatTime(slot.start_time));
       onUpdated();
     }
+    setFinalizeTarget(null);
   }
 
   function handleMouseDown(slot) {
     if (poll.status !== 'open' || saving) return;
-    const newVal = !myAvailability[slot.id];
+    var newVal = !myAvailability[slot.id];
     setIsDragging(true);
     setDragValue(newVal);
     toggleSlot(slot, newVal);
@@ -569,41 +642,52 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
     setDragValue(null);
   }
 
-  const statusColors = {
-    open: 'bg-green-100 text-green-700',
-    closed: 'bg-gray-100 text-gray-600',
-    finalized: 'bg-blue-100 text-blue-700',
+  var statusStyle = {
+    open:      { background: '#DCFCE7', color: '#15803D' },
+    closed:    { background: '#F1F5F9', color: '#475569' },
+    finalized: { background: '#DBEAFE', color: '#1D4ED8' },
   };
 
-  const totalResponders = new Set(
-    slots.flatMap(s => (s.scheduling_responses || []).map(r => r.member_id))
-  ).size;
+  var finalSlot = poll.finalized_slot_id
+    ? slots.find(function(s) { return s.id === poll.finalized_slot_id; })
+    : null;
 
   return (
     <article
-      className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
+      className="bg-white border rounded-xl p-6"
+      style={{ borderColor: '#E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}
       aria-labelledby={'poll-title-' + poll.id}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Poll Header */}
+      {/* Poll header */}
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h2 id={'poll-title-' + poll.id} className="text-lg font-bold text-gray-900">{poll.title}</h2>
-            <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + (statusColors[poll.status] || 'bg-gray-100 text-gray-600')}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h2 id={'poll-title-' + poll.id} className="text-base font-bold" style={{ color: '#0E1523' }}>
+              {poll.title}
+            </h2>
+            <span
+              className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+              style={statusStyle[poll.status] || statusStyle.closed}
+            >
               {poll.status.charAt(0).toUpperCase() + poll.status.slice(1)}
             </span>
           </div>
-          {poll.description && <p className="text-gray-600 text-sm">{poll.description}</p>}
+          {poll.description && (
+            <p className="text-sm" style={{ color: '#475569' }}>{poll.description}</p>
+          )}
           {totalResponders > 0 && (
-            <p className="text-xs text-gray-400 mt-1">{totalResponders} member{totalResponders !== 1 ? 's' : ''} responded</p>
+            <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+              {totalResponders} member{totalResponders !== 1 ? 's' : ''} responded
+            </p>
           )}
         </div>
         {isAdmin && (
           <button
             onClick={onDelete}
-            className="text-xs px-3 py-1 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all flex-shrink-0"
+            className="text-xs px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0 ml-4"
+            style={{ borderColor: '#FECACA', color: '#EF4444', background: '#FFFFFF' }}
             aria-label={'Delete poll: ' + poll.title}
           >
             Delete
@@ -612,41 +696,62 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
       </div>
 
       {/* Finalized banner */}
-      {poll.status === 'finalized' && poll.finalized_slot_id && (() => {
-        const finalSlot = slots.find(s => s.id === poll.finalized_slot_id);
-        if (!finalSlot) return null;
-        return (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center gap-2" role="status">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <div>
-              <p className="text-sm font-semibold text-blue-800">Meeting Scheduled</p>
-              <p className="text-sm text-blue-700">
-                {formatDate(finalSlot.start_time.slice(0, 10))} &middot; {formatTime(finalSlot.start_time)} &ndash; {formatTime(finalSlot.end_time)}
-              </p>
-            </div>
+      {poll.status === 'finalized' && finalSlot && (
+        <div
+          className="border rounded-lg p-3 mb-4 flex items-center gap-3"
+          style={{ background: '#EFF6FF', borderColor: '#BFDBFE' }}
+          role="status"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="#3B82F6" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: '#1E3A8A' }}>Meeting Scheduled</p>
+            <p className="text-sm" style={{ color: '#1D4ED8' }}>
+              {formatDate(finalSlot.start_time.slice(0, 10))} &middot; {formatTime(finalSlot.start_time)} &ndash; {formatTime(finalSlot.end_time)}
+            </p>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Instructions */}
       {poll.status === 'open' && (
-        <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: '#64748B' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Click or drag to mark when you are available. Darker blue = more members available.
+          Click or drag to mark when you are available. Darker blue = more members free.
         </p>
       )}
-      {isAdmin && poll.status === 'open' && (
-        <p className="text-xs text-blue-600 mb-3 flex items-center gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          Admin: right-click any cell to finalize that time slot.
-        </p>
+
+      {/* Finalize confirm banner */}
+      {finalizeTarget && (
+        <div
+          className="border rounded-lg p-3 mb-4 flex items-center justify-between gap-3"
+          style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}
+          role="alertdialog"
+          aria-label="Confirm meeting time"
+        >
+          <p className="text-sm font-medium" style={{ color: '#92400E' }}>
+            Set meeting time to {formatDate(finalizeTarget.start_time.slice(0, 10))} at {formatTime(finalizeTarget.start_time)}?
+          </p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={function() { finalizeSlot(finalizeTarget); }}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ background: '#3B82F6', color: '#FFFFFF' }}
+            >
+              Confirm
+            </button>
+            <button
+              onClick={function() { setFinalizeTarget(null); }}
+              className="px-3 py-1.5 text-xs font-semibold border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
+              style={{ background: '#FFFFFF', borderColor: '#E2E8F0', color: '#475569' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Heatmap Grid */}
@@ -655,35 +760,57 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
           <table className="border-collapse text-xs select-none" role="grid">
             <thead>
               <tr>
-                <th scope="col" className="w-16 pr-2 text-right text-gray-400 font-normal pb-1" aria-label="Time">
-                  Time
-                </th>
-                {uniqueDates.map(date => (
-                  <th key={date} scope="col" className="text-center text-gray-600 font-semibold pb-1 px-0.5 min-w-12">
-                    <div>{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                    <div className="font-normal text-gray-400">{new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                  </th>
-                ))}
+                <th
+                  scope="col"
+                  className="pr-3 text-right font-normal pb-2"
+                  style={{ color: '#94A3B8', minWidth: '52px' }}
+                  aria-label="Time"
+                />
+                {uniqueDates.map(function(date) {
+                  return (
+                    <th key={date} scope="col" className="text-center pb-2 px-0.5" style={{ minWidth: '48px' }}>
+                      <div className="font-semibold" style={{ color: '#0E1523' }}>
+                        {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
+                      </div>
+                      <div className="font-normal" style={{ color: '#94A3B8' }}>
+                        {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
-              {uniqueHours.map(hour => {
-                const timeLabel = hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM';
+              {uniqueHours.map(function(hour) {
+                var timeLabel = hour === 0 ? '12 AM' : hour < 12 ? hour + ' AM' : hour === 12 ? '12 PM' : (hour - 12) + ' PM';
                 return (
                   <tr key={hour}>
-                    <td className="pr-2 text-right text-gray-400 font-normal py-0.5 whitespace-nowrap" aria-label={timeLabel}>
+                    <td className="pr-3 text-right py-0.5 whitespace-nowrap" style={{ color: '#94A3B8' }}>
                       {timeLabel}
                     </td>
-                    {uniqueDates.map(date => {
-                      const slot = slotMap[date + '|' + hour];
+                    {uniqueDates.map(function(date) {
+                      var slot = slotMap[date + '|' + hour];
                       if (!slot) {
-                        return <td key={date} className="px-0.5 py-0.5"><div className="w-11 h-7 rounded bg-gray-50 border border-gray-100" /></td>;
+                        return (
+                          <td key={date} className="px-0.5 py-0.5">
+                            <div className="w-11 h-7 rounded" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }} />
+                          </td>
+                        );
                       }
-                      const yesCount = (slot.scheduling_responses || []).filter(r => r.availability === 'yes').length;
-                      const isMine = myAvailability[slot.id] === true;
-                      const isFinalized = poll.finalized_slot_id === slot.id;
-                      const colorClass = heatmapColor(yesCount, maxCount);
-                      const isOpen = poll.status === 'open';
+                      var yesCount = (slot.scheduling_responses || []).filter(function(r) { return r.availability === 'yes'; }).length;
+                      var isMine = myAvailability[slot.id] === true;
+                      var isFinalized = poll.finalized_slot_id === slot.id;
+                      var isOpen = poll.status === 'open';
+                      var isTarget = finalizeTarget && finalizeTarget.id === slot.id;
+                      var bg = isFinalized ? '#1D4ED8' : heatmapBg(yesCount, maxCount);
+                      var txtColor = isFinalized ? '#FFFFFF' : heatmapText(yesCount, maxCount);
+                      var borderStyle = isFinalized
+                        ? '2px solid #3B82F6'
+                        : isMine
+                          ? '2px solid #60A5FA'
+                          : isTarget
+                            ? '2px solid #F5B731'
+                            : '1px solid #E2E8F0';
 
                       return (
                         <td key={date} className="px-0.5 py-0.5">
@@ -691,27 +818,26 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
                             role={isOpen ? 'button' : 'cell'}
                             tabIndex={isOpen ? 0 : -1}
                             aria-pressed={isOpen ? isMine : undefined}
-                            aria-label={timeLabel + ' on ' + formatDate(date) + (isMine ? ', marked available' : '') + ', ' + yesCount + ' available'}
-                            className={
-                              'w-11 h-7 rounded border transition-all duration-100 flex items-center justify-center cursor-pointer ' +
-                              (isFinalized
-                                ? 'border-blue-500 bg-blue-600 ring-2 ring-blue-400 ring-offset-1'
-                                : isMine
-                                  ? 'border-blue-400 ring-1 ring-blue-300 ' + colorClass
-                                  : 'border-gray-200 ' + colorClass) +
-                              (isOpen ? ' cursor-pointer' : ' cursor-default')
+                            aria-label={
+                              timeLabel + ' on ' + formatDate(date) +
+                              (isMine ? ', you are available' : '') +
+                              ', ' + yesCount + ' available'
                             }
-                            onMouseDown={() => handleMouseDown(slot)}
-                            onMouseEnter={() => handleMouseEnter(slot)}
-                            onContextMenu={e => {
-                              if (isAdmin && isOpen) {
-                                e.preventDefault();
-                                if (window.confirm('Set meeting time to ' + timeLabel + ' on ' + formatDate(date) + '?')) {
-                                  finalizeSlot(slot);
-                                }
+                            className="w-11 h-7 rounded flex items-center justify-center transition-opacity duration-75"
+                            style={{
+                              background: bg,
+                              border: borderStyle,
+                              cursor: isOpen ? 'pointer' : 'default',
+                              outline: isTarget ? '2px solid #F5B731' : undefined,
+                            }}
+                            onMouseDown={function() { handleMouseDown(slot); }}
+                            onMouseEnter={function() { handleMouseEnter(slot); }}
+                            onClick={function() {
+                              if (isAdmin && isOpen && !isDragging) {
+                                setFinalizeTarget(slot);
                               }
                             }}
-                            onKeyDown={e => {
+                            onKeyDown={function(e) {
                               if (isOpen && (e.key === 'Enter' || e.key === ' ')) {
                                 e.preventDefault();
                                 toggleSlot(slot);
@@ -719,19 +845,19 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
                             }}
                           >
                             {isFinalized && (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                            {!isFinalized && isMine && yesCount === 0 && (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="#FFFFFF" strokeWidth={3} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             )}
                             {!isFinalized && yesCount > 0 && (
-                              <span className={'text-xs font-bold leading-none ' + (yesCount / maxCount >= 0.5 ? 'text-white' : 'text-blue-700')}>
+                              <span className="text-xs font-bold leading-none" style={{ color: txtColor }}>
                                 {yesCount}
                               </span>
+                            )}
+                            {!isFinalized && isMine && yesCount === 0 && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="#60A5FA" strokeWidth={3} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
                             )}
                           </div>
                         </td>
@@ -744,15 +870,16 @@ function HeatmapPollCard({ poll, currentUser, isAdmin, onDelete, onUpdated }) {
           </table>
         </div>
       ) : (
-        <p className="text-sm text-gray-400 italic">No time slots found for this poll.</p>
+        <p className="text-sm italic" style={{ color: '#94A3B8' }}>No time slots found for this poll.</p>
       )}
 
-      {/* Admin finalize hint */}
-      {isAdmin && poll.status === 'open' && totalResponders > 0 && (
-        <p className="text-xs text-gray-400 mt-3">
-          Right-click a cell to finalize that time slot as the meeting time.
+      {/* Admin hint */}
+      {isAdmin && poll.status === 'open' && (
+        <p className="text-xs mt-3" style={{ color: '#94A3B8' }}>
+          Click any cell to select it as the meeting time, then confirm.
         </p>
       )}
+
     </article>
   );
 }
