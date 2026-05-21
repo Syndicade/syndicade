@@ -72,35 +72,37 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center"
-        style={{ background: '#0E1523' }} role="status" aria-label="Loading Syndicade">
-        <div className="text-center">
-          <img src="/mascot-loading.png" alt="" aria-hidden="true"
-            style={{ width: '180px', display: 'block', margin: '0 auto 16px' }} />
-          <p style={{ color: '#64748B', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>
-            Loading Syndicade...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+if (loading) {
   return (
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: { background: '#363636', color: '#fff' },
-          success: { duration: 3000, iconTheme: { primary: '#10b981', secondary: '#fff' } },
-          error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
-        }}
-      />
-      <Router>
-        <AppShell session={session} />
-      </Router>
+    <div className="min-h-screen flex items-center justify-center"
+      style={{ background: '#F8FAFC' }} role="status" aria-label="Loading Syndicade">
+      <div className="text-center">
+        <img src="/mascot-loading.png" alt="" aria-hidden="true"
+          style={{ width: '180px', display: 'block', margin: '0 auto 16px', mixBlendMode: 'multiply' }} />
+        <p style={{ color: '#64748B', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>
+          Loading Syndicade...
+        </p>
+      </div>
+    </div>
   );
+}
+
+return (
+  <>
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 4000,
+        style: { background: '#363636', color: '#fff' },
+        success: { duration: 3000, iconTheme: { primary: '#10b981', secondary: '#fff' } },
+        error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+      }}
+    />
+    <Router>
+      <AppShell session={session} />
+    </Router>
+  </>
+);
 }
 
 // AppShell lives inside Router so useLocation updates reactively on every navigation
