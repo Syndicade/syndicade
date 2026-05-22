@@ -297,8 +297,19 @@ export default function PricingPage() {
               Have a promo code? Apply it at checkout for an extended free trial.
             </p>
           </div>
-        </section>
-
+        <div style={{ textAlign: 'center', marginTop: '32px' }}>
+  <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '8px' }}>
+    Need to make the case to your board?
+  </p>
+  <a
+    href="/compare"
+    style={{ fontSize: '14px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
+    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+  >
+    Compare your current tool costs vs Syndicade →
+  </a>
+</div>
+       </section>
         {/* ── Student plan ── */}
         <section className="px-6 pb-16 max-w-6xl mx-auto" aria-labelledby="student-heading">
           <div className="bg-white border border-slate-200 rounded-2xl p-8">
