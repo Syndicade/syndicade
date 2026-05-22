@@ -3,9 +3,10 @@
  * Individual board page. Scoped to a single community board by boardId.
  * Tabs: Ask · Offer · Collaboration · Recommendations
  * Board admin panel: approve/deny requests, manage members, edit settings.
+ * Step 8: Post Chat — private per-org threads per post with realtime.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -151,13 +152,16 @@ function IconBell(p) { return <svg width={p.size||20} height={p.size||20} viewBo
 function IconEdit(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
 function IconTrash(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>; }
 function IconChevronDown(p) { return <svg width={p.size||12} height={p.size||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>; }
+function IconChevronLeft(p) { return <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>; }
 function IconCheck(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>; }
 function IconLock(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>; }
 function IconGlobe(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>; }
 function IconMapPin(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>; }
 function IconMessage(p) { return <svg width={p.size||24} height={p.size||24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
+function IconMessageCircle(p) { return <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>; }
 function IconShield(p) { return <svg width={p.size||13} height={p.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>; }
 function IconClock(p) { return <svg width={p.size||26} height={p.size||26} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>; }
+function IconSend(p) { return <svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>; }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -213,6 +217,7 @@ function StatusBadge(props) {
 
 function PostCard(props) {
   var post = props.post, cfg = props.config, isOwn = props.isOwn;
+  var unreadCount = props.unreadCount || 0;
   return (
     <article role="listitem" aria-label={post.org_name + ' ' + post.category + ' post'}
       style={{ background: cfg.cardBg, borderRadius: '12px', padding: '16px', position: 'relative', boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', minHeight: '240px' }}>
@@ -233,17 +238,17 @@ function PostCard(props) {
         <span style={{ fontSize: '11px', fontWeight: 700, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{post.org_name}</span>
       </div>
       <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', lineHeight: 1.4, marginBottom: '8px', fontFamily: 'Georgia, serif', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-        "{post.title}"
+        {'"' + post.title + '"'}
       </div>
       <div style={{ fontSize: '17px', fontWeight: 400, color: '#374151', lineHeight: 1.5, flex: 1, marginBottom: '10px', fontFamily: "'Patrick Hand', sans-serif", display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
         {post.body}
       </div>
       <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '8px' }}>
         {formatDateTime(post.created_at)}
-        {post.response_count > 0 && <span style={{ marginLeft: '8px' }}>· {post.response_count} {post.response_count === 1 ? 'response' : 'responses'}</span>}
+        {post.response_count > 0 && <span style={{ marginLeft: '8px' }}>{'· ' + post.response_count + ' ' + (post.response_count === 1 ? 'response' : 'responses')}</span>}
       </div>
       {!isOwn && post.status !== 'completed' && (
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <button onClick={function() { props.onAction(post, 'primary'); }} aria-label={cfg.primaryAction + ' for ' + post.org_name}
             className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             style={{ padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer', background: cfg.tagBg, color: cfg.tagText }}>{cfg.primaryAction}</button>
@@ -252,8 +257,26 @@ function PostCard(props) {
             style={{ padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.10)', color: '#374151' }}>Get More Info</button>
         </div>
       )}
-      {post.status === 'completed' && <div style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic' }}>This has been fulfilled.</div>}
-      {isOwn && <div style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic', marginTop: '4px' }}>Your post · {timeAgo(post.created_at)}</div>}
+      {post.status === 'completed' && <div style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic', marginBottom: '8px' }}>This has been fulfilled.</div>}
+
+      {/* ── Card footer: own label + chat button ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+        {isOwn
+          ? <div style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic' }}>{'Your post · ' + timeAgo(post.created_at)}</div>
+          : <div />
+        }
+        <button onClick={function(e) { e.stopPropagation(); props.onOpenChat(post); }}
+          aria-label={'Open chat for this post' + (unreadCount > 0 ? ', ' + unreadCount + ' unread' : '')}
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={{ position: 'relative', width: '30px', height: '30px', borderRadius: '50%', background: unreadCount > 0 ? 'rgba(59,130,246,0.15)' : 'rgba(0,0,0,0.07)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: unreadCount > 0 ? BLUE : '#6B7280', flexShrink: 0 }}>
+          <IconMessageCircle size={14} />
+          {unreadCount > 0 && (
+            <span aria-hidden="true" style={{ position: 'absolute', top: '-2px', right: '-2px', background: BLUE, color: '#FFFFFF', borderRadius: '99px', padding: '0 4px', fontSize: '9px', fontWeight: 700, minWidth: '14px', textAlign: 'center', lineHeight: '14px' }}>
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
     </article>
   );
 }
@@ -293,7 +316,7 @@ function DeleteConfirmModal(props) {
           <h2 style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>Remove this post?</h2>
         </div>
         <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, marginBottom: '6px' }}>"{props.post.title}"</p>
-        <p style={{ fontSize: '12px', color: MUTED, marginBottom: '20px' }}>{formatDateTime(props.post.created_at)}. This cannot be undone.</p>
+        <p style={{ fontSize: '12px', color: MUTED, marginBottom: '20px' }}>{formatDateTime(props.post.created_at) + '. This cannot be undone.'}</p>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={props.onCancel} className="focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
             style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT2, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Keep Post</button>
@@ -323,9 +346,13 @@ function ActionModal(props) {
     setSending(true);
     try {
       var { data: authData } = await supabase.auth.getUser();
-      var { error } = await supabase.from('community_board_responses').insert({
-        post_id: post.id, from_org_id: orgId, from_member_id: authData.user.id,
-        message: '[' + titles[actionType] + '] ' + message.trim()
+      var { error } = await supabase.from('cb_post_messages').insert({
+        post_id: post.id,
+        from_org_id: orgId,
+        to_org_id: post.org_id,
+        sender_user_id: authData.user.id,
+        message: '[' + titles[actionType] + '] ' + message.trim(),
+        is_read: false
       });
       if (error) throw error;
       await supabase.from('community_board_posts').update({ status: 'pending' }).eq('id', post.id).eq('status', 'open');
@@ -349,7 +376,7 @@ function ActionModal(props) {
         <div style={{ background: cfg.cardBg, borderRadius: '8px', padding: '10px', marginBottom: '16px' }}>
           <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '5px', background: cfg.tagBg, color: cfg.tagText }}>{post.category}</span>
           <div style={{ fontSize: '12px', fontWeight: 700, color: '#111827', fontFamily: 'Georgia, serif' }}>"{post.title}"</div>
-          <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>{post.org_name} · {timeAgo(post.created_at)}</div>
+          <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>{post.org_name + ' · ' + timeAgo(post.created_at)}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {userOrgs.length > 1 && (
@@ -365,7 +392,7 @@ function ActionModal(props) {
             <label htmlFor="am-msg" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Message</label>
             <textarea id="am-msg" value={message} onChange={function(e) { setMessage(e.target.value); }} rows={4} maxLength={500} aria-required="true"
               placeholder="Write your message..." style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
-            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{message.length}/500</p>
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{message.length + '/500'}</p>
           </div>
           <button onClick={handleSend} disabled={sending} aria-busy={sending} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             style={{ padding: '12px', background: cfg.tagBg, color: cfg.tagText, border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1 }}>
@@ -447,13 +474,13 @@ function PostModal(props) {
             </label>
             <input id="pm-title" type="text" value={title} onChange={function(e) { setTitle(e.target.value); }} maxLength={120} aria-required="true"
               placeholder="e.g. Looking for a printing vendor under $500" style={inputStyle} />
-            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{title.length}/120</p>
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{title.length + '/120'}</p>
           </div>
           <div>
             <label htmlFor="pm-body" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Details</label>
             <textarea id="pm-body" value={body} onChange={function(e) { setBody(e.target.value); }} rows={4} maxLength={500} aria-required="true"
               placeholder="Provide context — timeline, quantities, contact preferences..." style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} />
-            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{body.length}/500</p>
+            <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{body.length + '/500'}</p>
           </div>
           <button onClick={handleSubmit} disabled={saving} aria-busy={saving} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             style={{ padding: '12px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
@@ -462,6 +489,345 @@ function PostModal(props) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Post Chat Panel ───────────────────────────────────────────────────────────
+
+function PostChatPanel(props) {
+  var post       = props.post;
+  var isOwn      = props.isOwn;
+  var userOrgs   = props.userOrgs;
+  var onClose    = props.onClose;
+  var onMarkRead = props.onMarkRead;
+
+  var defaultMyOrgId = isOwn
+    ? post.org_id
+    : (userOrgs.length === 1 ? userOrgs[0].id : null);
+
+  var [myOrgId, setMyOrgId]               = useState(defaultMyOrgId);
+  var [view, setView]                     = useState(isOwn ? 'list' : 'thread');
+  var [partnerOrgId, setPartnerOrgId]     = useState(isOwn ? null : post.org_id);
+  var [partnerOrgName, setPartnerOrgName] = useState(isOwn ? null : post.org_name);
+  var [messages, setMessages]             = useState([]);
+  var [conversations, setConversations]   = useState([]);
+  var [loading, setLoading]               = useState(true);
+  var [newMsg, setNewMsg]                 = useState('');
+  var [sending, setSending]               = useState(false);
+  var messagesEndRef = useRef(null);
+  var channelRef     = useRef(null);
+
+  useEffect(function() {
+    if (!myOrgId) { setLoading(false); return; }
+    if (view === 'thread' && partnerOrgId) {
+      loadThread();
+      subscribeToThread();
+    } else if (view === 'list') {
+      loadConversations();
+    }
+    return function() {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [view, myOrgId, partnerOrgId]);
+
+  useEffect(function() {
+    if (view === 'thread' && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  async function loadThread() {
+    setLoading(true);
+    try {
+      var { data, error } = await supabase
+        .from('cb_post_messages')
+        .select('*')
+        .eq('post_id', post.id)
+        .or(
+          'and(from_org_id.eq.' + myOrgId + ',to_org_id.eq.' + partnerOrgId + '),' +
+          'and(from_org_id.eq.' + partnerOrgId + ',to_org_id.eq.' + myOrgId + ')'
+        )
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setMessages(data || []);
+      var unreadIds = (data || [])
+        .filter(function(m) { return !m.is_read && m.to_org_id === myOrgId; })
+        .map(function(m) { return m.id; });
+      if (unreadIds.length > 0) {
+        await supabase.from('cb_post_messages').update({ is_read: true }).in('id', unreadIds);
+        if (onMarkRead) onMarkRead(post.id, unreadIds.length);
+      }
+    } catch (err) {
+      toast.error('Could not load messages.');
+    } finally { setLoading(false); }
+  }
+
+  async function loadConversations() {
+    setLoading(true);
+    try {
+      var { data, error } = await supabase
+        .from('cb_post_messages')
+        .select('*')
+        .eq('post_id', post.id)
+        .or('from_org_id.eq.' + myOrgId + ',to_org_id.eq.' + myOrgId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      var convMap = {};
+      (data || []).forEach(function(m) {
+        var partnerId = m.from_org_id === myOrgId ? m.to_org_id : m.from_org_id;
+        if (!convMap[partnerId]) {
+          convMap[partnerId] = { orgId: partnerId, orgName: '', messages: [], unread: 0 };
+        }
+        convMap[partnerId].messages.push(m);
+        if (!m.is_read && m.to_org_id === myOrgId) convMap[partnerId].unread++;
+      });
+      var partnerIds = Object.keys(convMap);
+      if (partnerIds.length > 0) {
+        var { data: orgs } = await supabase.from('organizations').select('id, name').in('id', partnerIds);
+        (orgs || []).forEach(function(o) { if (convMap[o.id]) convMap[o.id].orgName = o.name; });
+      }
+      setConversations(Object.values(convMap).map(function(c) {
+        return Object.assign({}, c, { lastMessage: c.messages[0] });
+      }));
+    } catch (err) {
+      toast.error('Could not load conversations.');
+    } finally { setLoading(false); }
+  }
+
+  function subscribeToThread() {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+    channelRef.current = supabase
+      .channel('cb-thread-' + post.id + '-' + myOrgId + '-' + (partnerOrgId || ''))
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'cb_post_messages',
+        filter: 'post_id=eq.' + post.id
+      }, function(payload) {
+        var msg = payload.new;
+        var isRelevant =
+          (msg.from_org_id === myOrgId && msg.to_org_id === partnerOrgId) ||
+          (msg.from_org_id === partnerOrgId && msg.to_org_id === myOrgId);
+        if (!isRelevant) return;
+        setMessages(function(prev) { return prev.concat([msg]); });
+        if (msg.to_org_id === myOrgId) {
+          supabase.from('cb_post_messages').update({ is_read: true }).eq('id', msg.id);
+          if (onMarkRead) onMarkRead(post.id, 1);
+        }
+      })
+      .subscribe();
+  }
+
+  async function handleSend() {
+    if (!newMsg.trim()) return;
+    if (!myOrgId) { toast.error('Select which org you are chatting as.'); return; }
+    setSending(true);
+    try {
+      var { data: authData } = await supabase.auth.getUser();
+      var { error } = await supabase.from('cb_post_messages').insert({
+        post_id: post.id,
+        from_org_id: myOrgId,
+        to_org_id: partnerOrgId,
+        sender_user_id: authData.user.id,
+        message: newMsg.trim(),
+        is_read: false
+      });
+      if (error) throw error;
+      setNewMsg('');
+    } catch (err) {
+      mascotErrorToast('Could not send message.', 'Please try again.');
+    } finally { setSending(false); }
+  }
+
+  function openThread(conv) {
+    setPartnerOrgId(conv.orgId);
+    setPartnerOrgName(conv.orgName);
+    setView('thread');
+  }
+
+  function goBackToList() {
+    setView('list');
+    setPartnerOrgId(null);
+    setPartnerOrgName(null);
+    setMessages([]);
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    loadConversations();
+  }
+
+  var inputStyle = {
+    width: '100%', padding: '9px 12px', background: ELEV,
+    border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT,
+    fontSize: '13px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit'
+  };
+
+  return (
+    <>
+      <div onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.20)', zIndex: 35 }}
+        aria-hidden="true" />
+
+      <div role="dialog" aria-modal="true" aria-label={'Chat: ' + post.title}
+        style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '380px', maxWidth: '100vw', background: CARD, borderLeft: '1px solid ' + BDR, zIndex: 36, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)' }}>
+
+        {/* ── Panel header ── */}
+        <div style={{ padding: '16px 16px 0', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            {view === 'thread' && isOwn && (
+              <button onClick={goBackToList} aria-label="Back to all conversations"
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ width: '28px', height: '28px', borderRadius: '50%', background: ELEV, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT2, flexShrink: 0 }}>
+                <IconChevronLeft size={14} />
+              </button>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {view === 'thread' ? (partnerOrgName || 'Chat') : 'Messages'}
+              </h2>
+              <p style={{ fontSize: '11px', color: MUTED, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {'"' + post.title + '"'}
+              </p>
+            </div>
+            <button onClick={onClose} aria-label="Close chat"
+              className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+              style={{ width: '28px', height: '28px', borderRadius: '50%', background: ELEV, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, flexShrink: 0 }}>
+              <IconX size={12} />
+            </button>
+          </div>
+
+          {/* Multi-org selector for non-owners with multiple orgs */}
+          {!isOwn && userOrgs.length > 1 && (
+            <div style={{ marginBottom: '12px' }}>
+              <label htmlFor="cp-org" style={{ fontSize: '10px', fontWeight: 600, color: MUTED, display: 'block', marginBottom: '4px' }}>Chatting as</label>
+              <select id="cp-org" value={myOrgId || ''} onChange={function(e) { setMyOrgId(e.target.value); setMessages([]); }}
+                style={Object.assign({}, inputStyle, { fontSize: '12px', padding: '6px 10px' })}>
+                <option value="">Select organization...</option>
+                {userOrgs.map(function(o) { return <option key={o.id} value={o.id}>{o.name}</option>; })}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* ── Body ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {loading ? (
+            <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[1,2,3].map(function(i) { return <div key={i} style={{ height: '52px', background: ELEV, borderRadius: '10px' }} />; })}
+            </div>
+
+          ) : view === 'list' ? (
+            conversations.length === 0 ? (
+              <div role="status" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: ELEV, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, margin: '0 auto 12px' }}>
+                  <IconMessageCircle size={22} />
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>No messages yet</p>
+                <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: 0 }}>When other orgs respond to this post, their messages will appear here.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {conversations.map(function(conv) {
+                  return (
+                    <button key={conv.orgId} onClick={function() { openThread(conv); }}
+                      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '10px', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: getAvatarColor(conv.orgName), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
+                        {getInitials(conv.orgName)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.orgName}</div>
+                        <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {conv.lastMessage ? conv.lastMessage.message : ''}
+                        </div>
+                      </div>
+                      {conv.unread > 0 && (
+                        <span style={{ background: BLUE, color: '#FFFFFF', borderRadius: '99px', padding: '1px 7px', fontSize: '10px', fontWeight: 700, flexShrink: 0 }}>
+                          {conv.unread}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )
+
+          ) : (
+            /* Thread view */
+            messages.length === 0 ? (
+              <div role="status" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: ELEV, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, margin: '0 auto 12px' }}>
+                  <IconMessageCircle size={22} />
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>Start the conversation</p>
+                <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: 0 }}>
+                  {'Send a message to ' + (partnerOrgName || 'this org') + ' about this post.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {messages.map(function(msg) {
+                  var isMine = msg.from_org_id === myOrgId;
+                  return (
+                    <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: '6px' }}>
+                      {!isMine && (
+                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: getAvatarColor(partnerOrgName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
+                          {getInitials(partnerOrgName || '')}
+                        </div>
+                      )}
+                      <div style={{ maxWidth: '75%' }}>
+                        <div style={{ padding: '8px 12px', borderRadius: isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px', background: isMine ? BLUE : ELEV, color: isMine ? '#FFFFFF' : TEXT, fontSize: '13px', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                          {msg.message}
+                        </div>
+                        <div style={{ fontSize: '10px', color: MUTED, marginTop: '3px', textAlign: isMine ? 'right' : 'left' }}>
+                          {timeAgo(msg.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            )
+          )}
+        </div>
+
+        {/* ── Input (thread view only) ── */}
+        {view === 'thread' && myOrgId && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid ' + BDR, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <textarea
+                value={newMsg}
+                onChange={function(e) { setNewMsg(e.target.value); }}
+                onKeyDown={function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Type a message..."
+                rows={2}
+                maxLength={500}
+                aria-label="Message input"
+                style={{ flex: 1, padding: '8px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, fontSize: '13px', resize: 'none', lineHeight: 1.5, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              />
+              <button onClick={handleSend} disabled={sending || !newMsg.trim()} aria-label="Send message"
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ width: '36px', height: '36px', borderRadius: '8px', background: (newMsg.trim() && !sending) ? BLUE : ELEV, border: 'none', color: (newMsg.trim() && !sending) ? '#FFFFFF' : MUTED, cursor: (newMsg.trim() && !sending) ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}>
+                <IconSend size={14} />
+              </button>
+            </div>
+            <p style={{ fontSize: '10px', color: MUTED, margin: '4px 0 0' }}>Enter to send · Shift+Enter for new line</p>
+          </div>
+        )}
+        {view === 'thread' && !myOrgId && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid ' + BDR, flexShrink: 0 }}>
+            <p style={{ fontSize: '12px', color: MUTED, margin: 0, textAlign: 'center' }}>Select an organization above to chat.</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -483,18 +849,17 @@ function AdminPanel(props) {
   var [editTheme, setEditTheme] = useState(board.theme || 'general');
   var [savingSettings, setSavingSettings] = useState(false);
 
-  // Invites state
-  var [inviteExpiry, setInviteExpiry]         = useState('30');
-  var [customExpiry, setCustomExpiry]         = useState('');
-  var [generatingLink, setGeneratingLink]     = useState(false);
-  var [generalInvites, setGeneralInvites]     = useState([]);
-  var [directInvites, setDirectInvites]       = useState([]);
-  var [loadingInvites, setLoadingInvites]     = useState(false);
-  var [orgSearch, setOrgSearch]               = useState('');
-  var [orgResults, setOrgResults]             = useState([]);
+  var [inviteExpiry, setInviteExpiry]           = useState('30');
+  var [customExpiry, setCustomExpiry]           = useState('');
+  var [generatingLink, setGeneratingLink]       = useState(false);
+  var [generalInvites, setGeneralInvites]       = useState([]);
+  var [directInvites, setDirectInvites]         = useState([]);
+  var [loadingInvites, setLoadingInvites]       = useState(false);
+  var [orgSearch, setOrgSearch]                 = useState('');
+  var [orgResults, setOrgResults]               = useState([]);
   var [selectedInviteOrg, setSelectedInviteOrg] = useState(null);
-  var [sendingOrgInvite, setSendingOrgInvite] = useState(false);
-  var [copiedId, setCopiedId]                 = useState(null);
+  var [sendingOrgInvite, setSendingOrgInvite]   = useState(false);
+  var [copiedId, setCopiedId]                   = useState(null);
 
   useEffect(function() { loadMemberships(); }, []);
   useEffect(function() { if (adminTab === 'invites') loadInvites(); }, [adminTab]);
@@ -508,37 +873,37 @@ function AdminPanel(props) {
     } catch (err) { toast.error('Could not load members.'); } finally { setLoading(false); }
   }
 
-async function handleApprove(membershipId, orgName) {
-  setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
-  try {
-    var { data: authData } = await supabase.auth.getUser();
-    var { data, error } = await supabase.rpc('approve_board_membership', {
-      p_membership_id: membershipId,
-      p_reviewer_id: authData.user.id
-    });
-    if (error) throw error;
-    if (!data) { toast.error('Could not approve — permission denied.'); return; }
-    mascotSuccessToast(orgName + ' approved.');
-    loadMemberships(); props.onMembershipChange();
-  } catch (err) { mascotErrorToast('Could not approve request.'); }
-  finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
-}
+  async function handleApprove(membershipId, orgName) {
+    setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
+    try {
+      var { data: authData } = await supabase.auth.getUser();
+      var { data, error } = await supabase.rpc('approve_board_membership', {
+        p_membership_id: membershipId,
+        p_reviewer_id: authData.user.id
+      });
+      if (error) throw error;
+      if (!data) { toast.error('Could not approve — permission denied.'); return; }
+      mascotSuccessToast(orgName + ' approved.');
+      loadMemberships(); props.onMembershipChange();
+    } catch (err) { mascotErrorToast('Could not approve request.'); }
+    finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
+  }
 
-async function handleDeny(membershipId, orgName) {
-  setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
-  try {
-    var { data: authData } = await supabase.auth.getUser();
-    var { data, error } = await supabase.rpc('deny_board_membership', {
-      p_membership_id: membershipId,
-      p_reviewer_id: authData.user.id
-    });
-    if (error) throw error;
-    if (!data) { toast.error('Could not deny — permission denied.'); return; }
-    toast.error(orgName + ' request denied.');
-    loadMemberships();
-  } catch (err) { mascotErrorToast('Could not deny request.'); }
-  finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
-}
+  async function handleDeny(membershipId, orgName) {
+    setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: true }); });
+    try {
+      var { data: authData } = await supabase.auth.getUser();
+      var { data, error } = await supabase.rpc('deny_board_membership', {
+        p_membership_id: membershipId,
+        p_reviewer_id: authData.user.id
+      });
+      if (error) throw error;
+      if (!data) { toast.error('Could not deny — permission denied.'); return; }
+      toast.error(orgName + ' request denied.');
+      loadMemberships();
+    } catch (err) { mascotErrorToast('Could not deny request.'); }
+    finally { setProcessing(function(p) { return Object.assign({}, p, { [membershipId]: false }); }); }
+  }
 
   async function handlePromote(membershipId, orgName, currentRole) {
     var newRole = currentRole === 'admin' ? 'member' : 'admin';
@@ -600,37 +965,36 @@ async function handleDeny(membershipId, orgName) {
     finally { setLoadingInvites(false); }
   }
 
-async function generateInviteLink() {
-  setGeneratingLink(true);
-  try {
-    var { data: authData } = await supabase.auth.getUser();
-    var expiresAt = null;
-    if (inviteExpiry === 'custom' && customExpiry) {
-      expiresAt = new Date(customExpiry).toISOString();
-    } else if (inviteExpiry !== 'none') {
-      var d = new Date();
-      d.setDate(d.getDate() + parseInt(inviteExpiry));
-      expiresAt = d.toISOString();
-    }
-    var { data: inv, error } = await supabase.from('community_board_invites').insert({
-      board_id: boardId, created_by_user_id: authData.user.id,
-      invited_org_id: null, expires_at: expiresAt
-    }).select().single();
-    if (error) throw error;
-    var link = window.location.origin + '/community-board/join?token=' + inv.token;
-    // Clipboard copy is best-effort — don't let it fail the whole operation
-try {
-  await navigator.clipboard.writeText(link);
-  setCopiedId(inv.id);
-  setTimeout(function() { setCopiedId(null); }, 3000);
-  mascotSuccessToast('Invite link generated and copied.');
-} catch (clipErr) {
-  mascotSuccessToast('Invite link generated.', 'Use the Copy button to copy it.');
-}
-loadInvites();
-  } catch (err) { mascotErrorToast('Could not generate link.', 'Please try again.'); }
-  finally { setGeneratingLink(false); }
-}
+  async function generateInviteLink() {
+    setGeneratingLink(true);
+    try {
+      var { data: authData } = await supabase.auth.getUser();
+      var expiresAt = null;
+      if (inviteExpiry === 'custom' && customExpiry) {
+        expiresAt = new Date(customExpiry).toISOString();
+      } else if (inviteExpiry !== 'none') {
+        var d = new Date();
+        d.setDate(d.getDate() + parseInt(inviteExpiry));
+        expiresAt = d.toISOString();
+      }
+      var { data: inv, error } = await supabase.from('community_board_invites').insert({
+        board_id: boardId, created_by_user_id: authData.user.id,
+        invited_org_id: null, expires_at: expiresAt
+      }).select().single();
+      if (error) throw error;
+      var link = window.location.origin + '/community-board/join?token=' + inv.token;
+      try {
+        await navigator.clipboard.writeText(link);
+        setCopiedId(inv.id);
+        setTimeout(function() { setCopiedId(null); }, 3000);
+        mascotSuccessToast('Invite link generated and copied.');
+      } catch (clipErr) {
+        mascotSuccessToast('Invite link generated.', 'Use the Copy button to copy it.');
+      }
+      loadInvites();
+    } catch (err) { mascotErrorToast('Could not generate link.', 'Please try again.'); }
+    finally { setGeneratingLink(false); }
+  }
 
   async function searchOrgs(query) {
     if (!query || query.length < 2) { setOrgResults([]); return; }
@@ -754,7 +1118,7 @@ loadInvites();
                               </svg>
                             )}
                           </div>
-                          <div style={{ fontSize: '11px', color: MUTED }}>{m.org_type || 'Organization'} · requested {timeAgo(m.created_at)}</div>
+                          <div style={{ fontSize: '11px', color: MUTED }}>{(m.org_type || 'Organization') + ' · requested ' + timeAgo(m.created_at)}</div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -822,8 +1186,6 @@ loadInvites();
 
           {adminTab === 'invites' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-              {/* ── Shareable Link ── */}
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 8px' }}>Shareable Link</p>
                 <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 14px' }}>
@@ -853,7 +1215,6 @@ loadInvites();
                     {generatingLink ? 'Generating...' : 'Generate & Copy Link'}
                   </button>
                 </div>
-
                 {loadingInvites ? (
                   <div style={{ height: '40px', background: ELEV, borderRadius: '8px' }} aria-hidden="true" />
                 ) : generalInvites.length > 0 && (
@@ -867,7 +1228,7 @@ loadInvites();
                           <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', opacity: isExpired ? 0.5 : 1 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: '11px', fontFamily: 'monospace', color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                ...{inv.token.slice(-12)}
+                                {'...' + inv.token.slice(-12)}
                               </div>
                               <div style={{ fontSize: '11px', color: isExpired ? RED : MUTED }}>{formatExpiry(inv.expires_at)}</div>
                             </div>
@@ -891,7 +1252,6 @@ loadInvites();
 
               <div style={{ height: '1px', background: BDR }} />
 
-              {/* ── Direct Org Invite ── */}
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 8px' }}>Invite an Organization</p>
                 <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 14px' }}>
@@ -925,7 +1285,6 @@ loadInvites();
                     </div>
                   )}
                 </div>
-
                 {selectedInviteOrg && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '8px', marginTop: '8px' }}>
                     <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: getAvatarColor(selectedInviteOrg.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0 }}>
@@ -938,13 +1297,11 @@ loadInvites();
                     </button>
                   </div>
                 )}
-
                 <button onClick={sendOrgInvite} disabled={!selectedInviteOrg || sendingOrgInvite} aria-busy={sendingOrgInvite}
                   className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   style={{ width: '100%', padding: '9px', background: selectedInviteOrg ? BLUE : ELEV, color: selectedInviteOrg ? '#FFFFFF' : MUTED, border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: (selectedInviteOrg && !sendingOrgInvite) ? 'pointer' : 'not-allowed', marginTop: '10px', opacity: sendingOrgInvite ? 0.7 : 1 }}>
                   {sendingOrgInvite ? 'Sending...' : 'Send Direct Invite'}
                 </button>
-
                 {directInvites.length > 0 && (
                   <div style={{ marginTop: '16px' }}>
                     <p style={Object.assign({}, labelStyle, { marginBottom: '8px' })}>Sent Invites</p>
@@ -1071,6 +1428,8 @@ export default function CommunityBoard() {
   var [editingPost, setEditingPost]       = useState(null);
   var [deletingPost, setDeletingPost]     = useState(null);
   var [actionModal, setActionModal]       = useState(null);
+  var [chatState, setChatState]           = useState({ post: null, isOwn: false });
+  var [unreadCounts, setUnreadCounts]     = useState({});
 
   var cfg = BOARD_CONFIG[activeTab] || BOARD_CONFIG.ask;
 
@@ -1112,7 +1471,11 @@ export default function CommunityBoard() {
   }
 
   useEffect(function() {
-    if (membership && membership.status === 'approved') { loadPosts(activeTab); loadTabCounts(); }
+    if (membership && membership.status === 'approved') {
+      loadPosts(activeTab);
+      loadTabCounts();
+      loadUnreadCounts();
+    }
   }, [activeTab, membership]);
 
   async function loadPosts(boardType) {
@@ -1143,6 +1506,22 @@ export default function CommunityBoard() {
     } catch (err) { /* silent */ }
   }
 
+  async function loadUnreadCounts() {
+    if (!userOrgIds || userOrgIds.length === 0) return;
+    try {
+      var { data } = await supabase
+        .from('cb_post_messages')
+        .select('post_id')
+        .in('to_org_id', userOrgIds)
+        .eq('is_read', false);
+      var counts = {};
+      (data || []).forEach(function(m) {
+        counts[m.post_id] = (counts[m.post_id] || 0) + 1;
+      });
+      setUnreadCounts(counts);
+    } catch (err) { /* silent */ }
+  }
+
   async function handleStatusChange(postId, newStatus) {
     try {
       var { error } = await supabase.from('community_board_posts').update({ status: newStatus }).eq('id', postId);
@@ -1161,6 +1540,19 @@ export default function CommunityBoard() {
       setDeletingPost(null);
       loadTabCounts();
     } catch (err) { mascotErrorToast('Could not remove post.', 'Please try again.'); }
+  }
+
+  function handleOpenChat(post) {
+    var isOwn = userOrgIds.indexOf(post.org_id) !== -1;
+    setChatState({ post: post, isOwn: isOwn });
+  }
+
+  function handleMarkRead(postId, count) {
+    setUnreadCounts(function(prev) {
+      var next = Object.assign({}, prev);
+      next[postId] = Math.max(0, (next[postId] || 0) - count);
+      return next;
+    });
   }
 
   var locationStr = [board && board.city, board && board.state].filter(Boolean).join(', ');
@@ -1224,7 +1616,11 @@ export default function CommunityBoard() {
           </div>
           <h1 style={{ fontSize: '20px', fontWeight: 800, color: TEXT, marginBottom: '8px' }}>{board.name}</h1>
           <p style={{ fontSize: '14px', color: TEXT2, lineHeight: 1.65, marginBottom: '24px' }}>
-            {membership && membership.status === 'denied' ? 'Your request to join this board was not approved.' : board.visibility === 'hidden' ? 'This is a private board. You need an invite to join.' : 'You are not a member of this board yet.'}
+            {membership && membership.status === 'denied'
+              ? 'Your request to join this board was not approved.'
+              : board.visibility === 'hidden'
+                ? 'This is a private board. You need an invite to join.'
+                : 'You are not a member of this board yet.'}
           </p>
           <button onClick={function() { navigate('/community-board/hub'); }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: BLUE, color: '#FFFFFF', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
@@ -1270,7 +1666,7 @@ export default function CommunityBoard() {
             {board.description && <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: '0 0 8px' }}>{board.description}</p>}
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               {locationStr && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: MUTED }}><IconMapPin size={12} />{locationStr}</span>}
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: MUTED }}><IconUsers size={12} />{board.member_count || 1} {(board.member_count || 1) === 1 ? 'org' : 'orgs'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: MUTED }}><IconUsers size={12} />{(board.member_count || 1) + ' ' + ((board.member_count || 1) === 1 ? 'org' : 'orgs')}</span>
               <span style={{ fontSize: '12px', color: MUTED }}>{getThemeLabel(board.theme)}</span>
             </div>
           </div>
@@ -1322,10 +1718,12 @@ export default function CommunityBoard() {
               var isOwn = userOrgIds.indexOf(post.org_id) !== -1;
               return (
                 <PostCard key={post.id} post={post} config={cfg} isOwn={isOwn}
+                  unreadCount={unreadCounts[post.id] || 0}
                   onAction={function(p, type) { setActionModal({ post: p, type: type }); }}
                   onEdit={function(p) { setEditingPost(p); }}
                   onDelete={function(p) { setDeletingPost(p); }}
                   onStatusChange={handleStatusChange}
+                  onOpenChat={handleOpenChat}
                 />
               );
             })}
@@ -1338,7 +1736,9 @@ export default function CommunityBoard() {
           onClose={function() { setShowCreate(false); setEditingPost(null); }}
           onSuccess={function() { loadPosts(activeTab); loadTabCounts(); }} />
       )}
-      {deletingPost && <DeleteConfirmModal post={deletingPost} onConfirm={handleDeleteConfirm} onCancel={function() { setDeletingPost(null); }} />}
+      {deletingPost && (
+        <DeleteConfirmModal post={deletingPost} onConfirm={handleDeleteConfirm} onCancel={function() { setDeletingPost(null); }} />
+      )}
       {actionModal && (
         <ActionModal post={actionModal.post} actionType={actionModal.type} config={cfg} userOrgs={userOrgs}
           onClose={function() { setActionModal(null); }}
@@ -1349,6 +1749,15 @@ export default function CommunityBoard() {
           onClose={function() { setShowAdminPanel(false); }}
           onMembershipChange={function() { loadPage(); }}
           onSettingsChange={function() { loadPage(); setShowAdminPanel(false); }} />
+      )}
+      {chatState.post && (
+        <PostChatPanel
+          post={chatState.post}
+          isOwn={chatState.isOwn}
+          userOrgs={userOrgs}
+          onClose={function() { setChatState({ post: null, isOwn: false }); }}
+          onMarkRead={handleMarkRead}
+        />
       )}
     </main>
   );
