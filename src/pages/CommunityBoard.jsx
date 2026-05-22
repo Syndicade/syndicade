@@ -186,6 +186,52 @@ function getThemeLabel(value) {
   return t ? t.label : 'General';
 }
 
+async function insertCBNotifications(fromOrgId, toOrgId, boardName, boardId, userOrgs) {
+  try {
+    var sendingOrg = (userOrgs || []).find(function(o) { return o.id === fromOrgId; });
+    var sendingOrgName = sendingOrg ? sendingOrg.name : 'An organization';
+
+    var { data: adminIds, error } = await supabase.rpc('get_org_admin_user_ids', { p_org_id: toOrgId });
+    if (error || !adminIds || adminIds.length === 0) return;
+
+    var rows = adminIds.map(function(r) {
+      return {
+        user_id: r.user_id,
+        type: 'community_board_message',
+        title: sendingOrgName + ' sent you a message',
+        message: 'New message on ' + boardName + ' Community Board.',
+        link: '/community-board/' + boardId,
+        read: false
+      };
+    });
+
+    await supabase.from('notifications').insert(rows);
+
+    // Instant delivery: same-browser window event
+    window.dispatchEvent(new Event('notificationCreated'));
+
+    // Instant delivery: broadcast to each recipient's personal channel
+    for (var i = 0; i < adminIds.length; i++) {
+      (function(userId) {
+        var bc = supabase.channel('user-notif-' + userId);
+        bc.subscribe(function(status) {
+          if (status === 'SUBSCRIBED') {
+            bc.send({
+              type: 'broadcast',
+              event: 'new_notification',
+              payload: {}
+            }).then(function() {
+              supabase.removeChannel(bc);
+            });
+          }
+        });
+      })(adminIds[i].user_id);
+    }
+  } catch (err) {
+    console.error('Could not insert CB notifications:', err);
+  }
+}
+
 // ─── Status Badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge(props) {
@@ -338,30 +384,33 @@ function ActionModal(props) {
   var [orgId, setOrgId] = useState(userOrgs.length === 1 ? userOrgs[0].id : '');
   var [message, setMessage] = useState('');
   var [sending, setSending] = useState(false);
+  var boardName = props.boardName;
+  var approvedOrgIds = props.approvedOrgIds || [];
   var inputStyle = { width: '100%', padding: '10px 12px', background: ELEV, border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' };
 
-  async function handleSend() {
-    if (!orgId) { toast.error('Select which org is sending this.'); return; }
-    if (!message.trim()) { toast.error('Write a message first.'); return; }
-    setSending(true);
-    try {
-      var { data: authData } = await supabase.auth.getUser();
-      var { error } = await supabase.from('cb_post_messages').insert({
-        post_id: post.id,
-        from_org_id: orgId,
-        to_org_id: post.org_id,
-        sender_user_id: authData.user.id,
-        message: '[' + titles[actionType] + '] ' + message.trim(),
-        is_read: false
-      });
-      if (error) throw error;
-      await supabase.from('community_board_posts').update({ status: 'pending' }).eq('id', post.id).eq('status', 'open');
-      mascotSuccessToast('Message sent to ' + post.org_name + '.');
-      props.onSuccess(); props.onClose();
-    } catch (err) {
-      mascotErrorToast('Could not send message.', 'Please try again.');
-    } finally { setSending(false); }
-  }
+async function handleSend() {
+  if (!orgId) { toast.error('Select which org is sending this.'); return; }
+  if (!message.trim()) { toast.error('Write a message first.'); return; }
+  setSending(true);
+  try {
+    var { data: authData } = await supabase.auth.getUser();
+    var { error } = await supabase.from('cb_post_messages').insert({
+      post_id: post.id,
+      from_org_id: orgId,
+      to_org_id: post.org_id,
+      sender_user_id: authData.user.id,
+      message: '[' + titles[actionType] + '] ' + message.trim(),
+      is_read: false
+    });
+    if (error) throw error;
+    await supabase.from('community_board_posts').update({ status: 'pending' }).eq('id', post.id).eq('status', 'open');
+    await insertCBNotifications(orgId, post.org_id, boardName, post.board_id, userOrgs);
+    mascotSuccessToast('Message sent to ' + post.org_name + '.');
+    props.onSuccess(); props.onClose();
+  } catch (err) {
+    mascotErrorToast('Could not send message.', 'Please try again.');
+  } finally { setSending(false); }
+}
 
   return (
     <div role="dialog" aria-modal="true" aria-label={titles[actionType] + ' — ' + post.org_name}
@@ -379,15 +428,27 @@ function ActionModal(props) {
           <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>{post.org_name + ' · ' + timeAgo(post.created_at)}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {userOrgs.length > 1 && (
-            <div>
-              <label htmlFor="am-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>From</label>
-              <select id="am-org" value={orgId} onChange={function(e) { setOrgId(e.target.value); }} style={inputStyle}>
-                <option value="">Select organization...</option>
-                {userOrgs.map(function(o) { return <option key={o.id} value={o.id}>{o.name}</option>; })}
-              </select>
-            </div>
-          )}
+{userOrgs.length > 1 && (
+  <div>
+    <label htmlFor="am-org" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>From</label>
+    <select id="am-org" value={orgId} onChange={function(e) { setOrgId(e.target.value); }} style={inputStyle}>
+      <option value="">Select organization...</option>
+      {userOrgs.map(function(o) {
+        var isMember = approvedOrgIds.indexOf(o.id) !== -1;
+        return (
+          <option key={o.id} value={o.id} disabled={!isMember}>
+            {o.name + (!isMember ? ' (not on this board)' : '')}
+          </option>
+        );
+      })}
+    </select>
+    {orgId && approvedOrgIds.indexOf(orgId) === -1 && (
+      <p style={{ fontSize: '11px', color: RED, margin: '4px 0 0' }}>
+        This org is not a member of this board.
+      </p>
+    )}
+  </div>
+)}
           <div>
             <label htmlFor="am-msg" style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT2, marginBottom: '6px' }}>Message</label>
             <textarea id="am-msg" value={message} onChange={function(e) { setMessage(e.target.value); }} rows={4} maxLength={500} aria-required="true"
@@ -495,17 +556,21 @@ function PostModal(props) {
 // ─── Post Chat Panel ───────────────────────────────────────────────────────────
 
 function PostChatPanel(props) {
+var boardName = props.boardName;
   var post       = props.post;
   var isOwn      = props.isOwn;
   var userOrgs   = props.userOrgs;
   var onClose    = props.onClose;
   var onMarkRead = props.onMarkRead;
+  var approvedOrgIds = props.approvedOrgIds || [];
 
-  var defaultMyOrgId = isOwn
-    ? post.org_id
-    : (userOrgs.length === 1 ? userOrgs[0].id : null);
+  // Orgs the user admins that are NOT the post owner
+  var otherOrgs = userOrgs.filter(function(o) { return o.id !== post.org_id; });
+  // Can the user also reply as a non-owner org?
+  var canReply = otherOrgs.length > 0;
 
-  var [myOrgId, setMyOrgId]               = useState(defaultMyOrgId);
+  var [replyMode, setReplyMode]           = useState(false);
+  var [myOrgId, setMyOrgId]               = useState(isOwn ? post.org_id : (userOrgs.length === 1 ? userOrgs[0].id : null));
   var [view, setView]                     = useState(isOwn ? 'list' : 'thread');
   var [partnerOrgId, setPartnerOrgId]     = useState(isOwn ? null : post.org_id);
   var [partnerOrgName, setPartnerOrgName] = useState(isOwn ? null : post.org_name);
@@ -516,6 +581,30 @@ function PostChatPanel(props) {
   var [sending, setSending]               = useState(false);
   var messagesEndRef = useRef(null);
   var channelRef     = useRef(null);
+
+function enterReplyMode() {
+  var eligibleOrgs = otherOrgs.filter(function(o) { return approvedOrgIds.indexOf(o.id) !== -1; });
+  var replyOrgId = eligibleOrgs.length === 1 ? eligibleOrgs[0].id : null;
+  setReplyMode(true);
+  setMyOrgId(replyOrgId);
+  setPartnerOrgId(post.org_id);
+  setPartnerOrgName(post.org_name);
+  setView('thread');
+  setMessages([]);
+}
+
+  function exitReplyMode() {
+    setReplyMode(false);
+    setMyOrgId(post.org_id);
+    setPartnerOrgId(null);
+    setPartnerOrgName(null);
+    setView('list');
+    setMessages([]);
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  }
 
   useEffect(function() {
     if (!myOrgId) { setLoading(false); return; }
@@ -598,15 +687,11 @@ function PostChatPanel(props) {
   }
 
   function subscribeToThread() {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
     channelRef.current = supabase
       .channel('cb-thread-' + post.id + '-' + myOrgId + '-' + (partnerOrgId || ''))
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'cb_post_messages',
+        event: 'INSERT', schema: 'public', table: 'cb_post_messages',
         filter: 'post_id=eq.' + post.id
       }, function(payload) {
         var msg = payload.new;
@@ -668,6 +753,16 @@ function PostChatPanel(props) {
     fontSize: '13px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit'
   };
 
+  // Header title logic
+  var headerTitle = 'Messages';
+  if (replyMode) {
+    headerTitle = view === 'thread' ? (partnerOrgName || 'Chat') : 'Reply as your org';
+  } else if (!isOwn) {
+    headerTitle = view === 'thread' ? (partnerOrgName || 'Chat') : 'Messages';
+  }
+
+  var showBackButton = (view === 'thread' && isOwn && !replyMode) || (view === 'thread' && replyMode && otherOrgs.length > 1);
+
   return (
     <>
       <div onClick={onClose}
@@ -680,8 +775,10 @@ function PostChatPanel(props) {
         {/* ── Panel header ── */}
         <div style={{ padding: '16px 16px 0', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            {view === 'thread' && isOwn && (
-              <button onClick={goBackToList} aria-label="Back to all conversations"
+            {showBackButton && (
+              <button
+                onClick={replyMode ? exitReplyMode : goBackToList}
+                aria-label="Back"
                 className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                 style={{ width: '28px', height: '28px', borderRadius: '50%', background: ELEV, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT2, flexShrink: 0 }}>
                 <IconChevronLeft size={14} />
@@ -689,7 +786,7 @@ function PostChatPanel(props) {
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {view === 'thread' ? (partnerOrgName || 'Chat') : 'Messages'}
+                {headerTitle}
               </h2>
               <p style={{ fontSize: '11px', color: MUTED, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {'"' + post.title + '"'}
@@ -702,8 +799,52 @@ function PostChatPanel(props) {
             </button>
           </div>
 
-          {/* Multi-org selector for non-owners with multiple orgs */}
-          {!isOwn && userOrgs.length > 1 && (
+          {/* Mode toggle — shown when user is owner but also admins other orgs */}
+          {isOwn && canReply && (
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: ELEV, borderRadius: '8px', padding: '3px' }}>
+              <button
+                onClick={exitReplyMode}
+                aria-pressed={!replyMode}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ flex: 1, padding: '6px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: !replyMode ? CARD : 'transparent', color: !replyMode ? TEXT : MUTED, boxShadow: !replyMode ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+                Received
+              </button>
+              <button
+                onClick={enterReplyMode}
+                aria-pressed={replyMode}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ flex: 1, padding: '6px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: replyMode ? CARD : 'transparent', color: replyMode ? TEXT : MUTED, boxShadow: replyMode ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+                Reply as Org
+              </button>
+            </div>
+          )}
+
+          {/* Org picker for reply mode with multiple non-owner orgs */}
+          {replyMode && otherOrgs.length > 1 && (
+<div style={{ marginBottom: '12px' }}>
+  <label htmlFor="cp-reply-org" style={{ fontSize: '10px', fontWeight: 600, color: MUTED, display: 'block', marginBottom: '4px' }}>Replying as</label>
+  <select id="cp-reply-org" value={myOrgId || ''} onChange={function(e) { setMyOrgId(e.target.value); setMessages([]); }}
+    style={Object.assign({}, inputStyle, { fontSize: '12px', padding: '6px 10px' })}>
+    <option value="">Select organization...</option>
+    {otherOrgs.map(function(o) {
+      var isMember = approvedOrgIds.indexOf(o.id) !== -1;
+      return (
+        <option key={o.id} value={o.id} disabled={!isMember}>
+          {o.name + (!isMember ? ' (not on this board)' : '')}
+        </option>
+      );
+    })}
+  </select>
+  {myOrgId && approvedOrgIds.indexOf(myOrgId) === -1 && (
+    <p style={{ fontSize: '11px', color: RED, margin: '4px 0 0' }}>
+      This org is not a member of this board and cannot send messages.
+    </p>
+  )}
+</div>
+          )}
+
+          {/* Org picker for non-owners with multiple orgs */}
+          {!isOwn && !replyMode && userOrgs.length > 1 && (
             <div style={{ marginBottom: '12px' }}>
               <label htmlFor="cp-org" style={{ fontSize: '10px', fontWeight: 600, color: MUTED, display: 'block', marginBottom: '4px' }}>Chatting as</label>
               <select id="cp-org" value={myOrgId || ''} onChange={function(e) { setMyOrgId(e.target.value); setMessages([]); }}
@@ -759,7 +900,6 @@ function PostChatPanel(props) {
             )
 
           ) : (
-            /* Thread view */
             messages.length === 0 ? (
               <div role="status" style={{ textAlign: 'center', padding: '40px 16px' }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: ELEV, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, margin: '0 auto 12px' }}>
@@ -1430,6 +1570,7 @@ export default function CommunityBoard() {
   var [actionModal, setActionModal]       = useState(null);
   var [chatState, setChatState]           = useState({ post: null, isOwn: false });
   var [unreadCounts, setUnreadCounts]     = useState({});
+  var [approvedOrgIds, setApprovedOrgIds] = useState([]);
 
   var cfg = BOARD_CONFIG[activeTab] || BOARD_CONFIG.ask;
 
@@ -1465,6 +1606,8 @@ export default function CommunityBoard() {
         });
         setMembership(best);
         setIsBoardAdmin(!!best && best.status === 'approved' && best.role === 'admin');
+        var approved = (mems || []).filter(function(m) { return m.status === 'approved'; }).map(function(m) { return m.org_id; });
+setApprovedOrgIds(approved);
       }
     } catch (err) { /* silent */ }
     finally { setPageLoading(false); }
@@ -1740,7 +1883,7 @@ export default function CommunityBoard() {
         <DeleteConfirmModal post={deletingPost} onConfirm={handleDeleteConfirm} onCancel={function() { setDeletingPost(null); }} />
       )}
       {actionModal && (
-        <ActionModal post={actionModal.post} actionType={actionModal.type} config={cfg} userOrgs={userOrgs}
+        <ActionModal post={actionModal.post} actionType={actionModal.type} config={cfg} userOrgs={userOrgs} boardName={board.name} approvedOrgIds={approvedOrgIds} s
           onClose={function() { setActionModal(null); }}
           onSuccess={function() { loadPosts(activeTab); }} />
       )}
@@ -1755,8 +1898,10 @@ export default function CommunityBoard() {
           post={chatState.post}
           isOwn={chatState.isOwn}
           userOrgs={userOrgs}
+          boardName={board.name}
           onClose={function() { setChatState({ post: null, isOwn: false }); }}
           onMarkRead={handleMarkRead}
+          approvedOrgIds={approvedOrgIds}
         />
       )}
     </main>
