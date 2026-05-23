@@ -38,6 +38,7 @@ import OrgPrograms from './pages/OrgPrograms';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
+import NotificationsPage from './pages/NotificationsPage';
 import SchedulingPolls from './pages/SchedulingPolls';
 import GroupsList from './pages/GroupsList';
 import GroupDetail from './pages/GroupDetail';
@@ -167,6 +168,7 @@ var hideChrome = (
 
             {/* ── Account / profile ──────────────────────────────── */}
             <Route path="/account-settings" element={session ? <AccountSettings /> : <Navigate to="/login" replace />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/community-board/hub" element={session ? <CommunityBoardHub /> : <Navigate to="/login" replace />} />
             <Route path="/community-board/:boardId" element={session ? <CommunityBoard /> : <Navigate to="/login" replace />} />
             <Route path="/community-board/join" element={<CommunityBoardJoin />} />
