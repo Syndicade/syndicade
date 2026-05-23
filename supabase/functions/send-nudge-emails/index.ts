@@ -18,11 +18,8 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// While Resend is in test mode, all emails go to this address only.
-// Once you verify syndicade.com at resend.com/domains, update FROM_ADDRESS
-// and remove the TEST_MODE override.
 const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>';
-const TEST_MODE = false; // set to false after domain verification
+const TEST_MODE = false;
 const TEST_RECIPIENT = 'grades_path9i@icloud.com';
 
 const NUDGE_DAYS = [7, 14, 30];
@@ -54,7 +51,7 @@ function getEmailContent(orgName: string, adminFirstName: string, nudgeDay: numb
             <p style="font-size:15px;line-height:1.7;margin:0 0 28px;color:#94A3B8;">
               Most organizations are fully set up in under 10 minutes. If you have any questions, just reply to this email.
             </p>
-            ${ctaButton('Continue setting up', 'https://syndicade-git-main-syndicades-projects.vercel.app/dashboard')}
+            ${ctaButton('Continue setting up', 'https://syndicade.org/dashboard')}
             <p style="font-size:12px;color:#64748B;margin-top:28px;">
               You're receiving this because you signed up for Syndicade. Your free trial runs for 30 days from signup.
             </p>
@@ -78,13 +75,13 @@ function getEmailContent(orgName: string, adminFirstName: string, nudgeDay: numb
               <strong style="color:#FFFFFF;">${orgName}</strong> is two weeks into your free trial — you're halfway through. We wanted to check in and make sure you're getting the most out of it.
             </p>
             <p style="font-size:15px;line-height:1.7;margin:0 0 20px;">
-              When you're ready to invite your members and go fully live, our <strong style="color:#FFFFFF;">Starter plan is $14.99/mo</strong> — less than a tank of gas. Annual billing drops it to <strong style="color:#FFFFFF;">$12.49/mo</strong> (2 months free).
+              When you're ready to invite your members and go fully live, our <strong style="color:#FFFFFF;">Starter plan is $29.99/mo</strong> — less than a tank of gas. Annual billing drops it to <strong style="color:#FFFFFF;">$24.99/mo</strong> (2 months free).
             </p>
             <div style="background:rgba(245,183,49,0.08);border:1px solid rgba(245,183,49,0.2);border-radius:12px;padding:16px 20px;margin:0 0 24px;">
               <p style="font-size:13px;font-weight:700;color:#F5B731;margin:0 0 4px;">Verified 501(c)(3)?</p>
               <p style="font-size:13px;color:#94A3B8;margin:0;">You get an extra free month on top of your trial — just submit your EIN at checkout. That's up to 2 months free before you pay a cent.</p>
             </div>
-            ${ctaButton('Choose a plan', 'https://syndicade-git-main-syndicades-projects.vercel.app/pricing')}
+            ${ctaButton('Choose a plan', 'https://syndicade.org/pricing')}
             <p style="font-size:12px;color:#64748B;margin-top:28px;">
               No pressure — your trial runs through day 30. Reply anytime if you have questions.
             </p>
@@ -116,7 +113,7 @@ function getEmailContent(orgName: string, adminFirstName: string, nudgeDay: numb
           <p style="font-size:14px;line-height:1.7;color:#94A3B8;margin:0 0 24px;">
             We never take a cut of your dues, ticket sales, or donations. Stripe fees only. Cancel anytime.
           </p>
-          ${ctaButton('Choose a plan now', 'https://syndicade-git-main-syndicades-projects.vercel.app/pricing')}
+          ${ctaButton('Choose a plan now', 'https://syndicade.org/pricing')}
           <p style="font-size:12px;color:#64748B;margin-top:28px;">
             If you have questions or need more time, just reply to this email. We're happy to help.
           </p>
@@ -147,12 +144,13 @@ function featureList() {
 
 function pricingList() {
   const plans = [
-    { name: 'Starter', price: '$14.99/mo', members: '50 members · 5 GB' },
-    { name: 'Growth',  price: '$29/mo',    members: '150 members · 15 GB' },
-    { name: 'Pro',     price: '$59/mo',    members: '300 members · 50 GB' },
+    { name: 'Listed',  price: '$10/mo',    members: 'Discovery only — no platform tools' },
+    { name: 'Starter', price: '$29.99/mo', members: '50 members · 2 GB storage' },
+    { name: 'Growth',  price: '$49.99/mo', members: '150 members · 10 GB storage' },
+    { name: 'Pro',     price: '$69.99/mo', members: '300 members · 30 GB storage' },
   ];
-  return plans.map(p =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #2A3550;">
+  return plans.map((p, i) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${i < plans.length - 1 ? 'border-bottom:1px solid #2A3550;' : ''}">
       <div>
         <span style="font-size:13px;font-weight:700;color:#FFFFFF;">${p.name}</span>
         <span style="font-size:12px;color:#64748B;margin-left:8px;">${p.members}</span>
