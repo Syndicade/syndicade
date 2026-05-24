@@ -7,7 +7,7 @@ import { PLAN_LIMITS } from '../lib/planLimits';
  *
  * Returns:
  *   loading         — bool
- *   plan            — 'starter' | 'growth' | 'pro' | 'student'
+ *   plan            — 'listed' | 'starter' | 'growth' | 'pro' | 'student'
  *   limits          — PLAN_LIMITS[plan] object
  *   usage           — { members, storage_bytes, pages, admins, editors, email_sends }
  *   isAllowed(key)  — bool (e.g. isAllowed('can_sell_tickets'))
@@ -49,7 +49,7 @@ export default function usePlanLimits(organizationId) {
           .maybeSingle();
 
         var currentPlan = (sub && sub.plan) ? sub.plan.toLowerCase() : 'starter';
-        // Student plan uses starter limits — fall back to starter if unrecognized
+        // student maps to starter limits; listed stays as listed; unrecognized falls back to starter
         var limitsKey = currentPlan === 'student' ? 'starter' : currentPlan;
         if (!PLAN_LIMITS[limitsKey]) limitsKey = 'starter';
         var currentLimits = PLAN_LIMITS[limitsKey];

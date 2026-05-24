@@ -1,4 +1,25 @@
 export var PLAN_LIMITS = {
+  listed: {
+    members: 0,
+    storage_gb: 0,
+    pages: 0,
+    admin_limit: 1,
+    editor_limit: 0,
+    email_sends_per_month: 0,
+    ticket_limit_per_event: 0,
+    can_blast_email: false,
+    can_use_newsletter: false,
+    can_collect_dues: false,
+    can_sell_tickets: false,
+    can_connect_custom_domain: false,
+    can_remove_branding: false,
+    has_ai_assistant: false,
+    has_priority_support: false,
+    has_full_analytics: false,
+    featured_placements_per_year: 0,
+    storage_addon_available: false,
+    can_pause: false,
+  },
   starter: {
     members: 50,
     storage_gb: 2,
@@ -87,6 +108,10 @@ export var PLAN_LIMITS = {
 };
 
 export var STRIPE_PRICE_IDS = {
+  listed: {
+    month: 'price_LISTED_MONTHLY_TBD',
+    year: 'price_LISTED_ANNUAL_TBD',
+  },
   starter: {
     month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
     year: 'price_1TMnuAKMpHjSZayWbYHYUoS8',
@@ -105,6 +130,7 @@ export var STRIPE_PRICE_IDS = {
 };
 
 export var PLAN_DISPLAY = {
+  listed: { label: 'Listed', monthly: 10.00, annual: 100.00, effectiveMonthly: 8.33 },
   starter: { label: 'Starter', monthly: 29.99, annual: 299.90, effectiveMonthly: 24.99 },
   growth: { label: 'Growth', monthly: 49.99, annual: 499.90, effectiveMonthly: 41.66 },
   pro: { label: 'Pro', monthly: 69.99, annual: 699.90, effectiveMonthly: 58.32 },

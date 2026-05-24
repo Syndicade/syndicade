@@ -118,7 +118,6 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       label: 'Platform',
       adminOnly: true,
       items: [
-        // ↓ path goes to the top-level hub route — NOT a nested org route
         { id:'community-board', label:'Community Board', iconKey:'pinboard', route:'community-board', path: '/community-board/hub', activePath: '/community-board', isPurple: true, lock:'verified' },
         { id:'settings',        label:'Settings',        iconKey:'settings', route:'settings',        path: base + '/settings' },
         { id:'billing',         label:'Billing',         iconKey:'billing',  route:'billing',         path: base + '/billing', isSub: true, adminOnly: true },
@@ -149,6 +148,7 @@ function OrgLayout() {
   var accessDaysLeft = access.daysLeft;
 
   var planData = usePlanLimits(organizationId);
+  var currentPlan = planData ? planData.plan : null;
   var isAllowed = planData ? planData.isAllowed : function() { return false; };
 
   var isAdmin = !!(membership && membership.role === 'admin' && viewMode === 'admin');
@@ -196,11 +196,9 @@ function OrgLayout() {
     }
   }
 
-  // ── isActive: supports items with a custom activePath (e.g. top-level routes) ──
   function isActive(item) {
     var base = '/organizations/' + organizationId;
     var pathname = location.pathname.replace(/\/$/, '');
-    // Items like Community Board navigate to a top-level path outside the org base
     if (item.activePath) {
       return pathname === item.activePath || pathname.startsWith(item.activePath + '/');
     }
@@ -314,7 +312,7 @@ function OrgLayout() {
   }
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
-  if (loading) {
+  if (loading || planData.loading) {
     return (
       <div style={{ background:pageBg, minHeight:'100vh' }} aria-busy="true" aria-label="Loading organization">
         <div style={{ padding:'20px 8px' }}>
@@ -373,6 +371,15 @@ function OrgLayout() {
   }
   if (!access.loading && (accessStatus === 'expired' || accessStatus === 'iced') && !isAdmin) {
     return <OrgUnavailable orgName={organization && organization.name} />;
+  }
+
+  // ── Listed plan gate — redirect to listing management page ────────────────
+  if (!planData.loading && currentPlan === 'listed') {
+    var listingPath = '/organizations/' + organizationId + '/listing';
+    if (location.pathname !== listingPath) {
+      navigate(listingPath, { replace: true });
+      return null;
+    }
   }
 
   // ── Email verification gate ───────────────────────────────────────────────

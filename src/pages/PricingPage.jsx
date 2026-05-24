@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Lock, Pause } from 'lucide-react';
+import { Check, Lock, Pause, MapPin } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
@@ -143,15 +143,32 @@ var COMPARE = [
   },
   {
     category: 'Syndicade',
-    price: 'From $29.99/mo',
+    price: 'From $10/mo',
     weakness: 'Purpose-built for nonprofits. Flat fees. No revenue cut.',
     isSelf: true,
   },
 ];
 
+var LISTED_INCLUDES = [
+  'Org profile card on /explore discovery',
+  'Events listed publicly on /discover',
+  'Website link on your profile',
+  'Location + discovery tags',
+  'Submit unlimited events',
+];
+
+var LISTED_NOT_INCLUDES = [
+  'Member management tools',
+  'Email blasts or newsletters',
+  'Community Board access',
+  'Analytics or RSVP tracking',
+  'Org dashboard or chat',
+];
+
 export default function PricingPage() {
   var [billingInterval, setBillingInterval] = useState('monthly');
   var [showStudent, setShowStudent] = useState(false);
+  var [showListedDetails, setShowListedDetails] = useState(false);
 
   function getPrice(plan) {
     if (billingInterval === 'annual') {
@@ -201,7 +218,7 @@ export default function PricingPage() {
         </section>
 
         {/* ── Pricing cards ── */}
-        <section className="bg-[#F8FAFC] px-6 py-12 max-w-6xl mx-auto" aria-label="Pricing plans">
+        <section id="pricing-plans" className="bg-[#F8FAFC] px-6 py-12 max-w-6xl mx-auto" aria-label="Pricing plans">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {PLANS.map(function(plan) {
               return (
@@ -297,19 +314,21 @@ export default function PricingPage() {
               Have a promo code? Apply it at checkout for an extended free trial.
             </p>
           </div>
-        <div style={{ textAlign: 'center', marginTop: '32px' }}>
-  <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '8px' }}>
-    Need to make the case to your board?
-  </p>
-  <a
-    href="/compare"
-    style={{ fontSize: '14px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
-    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
-  >
-    Compare your current tool costs vs Syndicade →
-  </a>
-</div>
-       </section>
+
+          <div style={{ textAlign:'center', marginTop:'32px' }}>
+            <p style={{ fontSize:'14px', color:'#64748B', marginBottom:'8px' }}>
+              Need to make the case to your board?
+            </p>
+            <a
+              href="/compare"
+              style={{ fontSize:'14px', fontWeight:700, color:'#3B82F6', textDecoration:'none' }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+            >
+              Compare your current tool costs vs Syndicade →
+            </a>
+          </div>
+        </section>
+
         {/* ── Student plan ── */}
         <section className="px-6 pb-16 max-w-6xl mx-auto" aria-labelledby="student-heading">
           <div className="bg-white border border-slate-200 rounded-2xl p-8">
@@ -403,6 +422,118 @@ export default function PricingPage() {
             <div className="mt-4 pt-4 border-t border-slate-200">
               <p className="text-xs text-slate-400">
                 Requires a valid .edu email address for verification. One student subscription per organization. Cannot be combined with annual billing.
+              </p>
+            </div>
+          </div>
+        </section>
+
+         {/* ── Listed plan ── */}
+        <section className="px-6 pb-6 max-w-6xl mx-auto" aria-labelledby="listed-heading">
+          <div className="bg-white border border-slate-200 rounded-2xl p-8">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731]" aria-hidden="true">LISTED PLAN</p>
+                  <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-semibold">Discovery only</span>
+                </div>
+                <h2 id="listed-heading" className="text-2xl font-extrabold text-[#0E1523] mb-2">
+                  Just want to be found?
+                </h2>
+<p className="text-slate-500 text-sm mb-4 max-w-xl">
+  Perfect for orgs that are still growing and aren't ready for full member management tools yet. Get your name and events in front of your community — show up in the directory, post events publicly, and upgrade whenever you're ready.
+</p>
+
+                <div className="flex items-end gap-1 mb-1">
+                  <span className="text-4xl font-extrabold text-[#0E1523]">
+                    {billingInterval === 'annual' ? '$8.33' : '$10'}
+                  </span>
+                  <span className="text-slate-400 text-sm mb-1">/mo</span>
+                </div>
+                {billingInterval === 'annual' && (
+                  <p className="text-xs text-green-600 font-semibold mb-4">Billed as $100/yr — 2 months free</p>
+                )}
+                {billingInterval === 'monthly' && <div className="mb-4" />}
+
+                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                  <Link
+                    to="/signup"
+                    className="inline-block text-center px-6 py-3 bg-[#F1F5F9] hover:bg-slate-200 text-[#0E1523] border border-slate-200 font-bold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    aria-label="Get started with the Listed plan"
+                  >
+                    Get listed — 14 days free
+                  </Link>
+                  <button
+                    onClick={function() { setShowListedDetails(!showListedDetails); }}
+                    className="inline-block text-center px-6 py-3 border border-slate-200 text-slate-500 hover:text-[#0E1523] hover:border-blue-400 font-semibold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    aria-expanded={showListedDetails}
+                  >
+                    {showListedDetails ? 'Hide details' : "What's included"}
+                  </button>
+                </div>
+
+                {showListedDetails && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Included</p>
+                      <ul className="space-y-2" role="list" aria-label="Listed plan included features">
+                        {LISTED_INCLUDES.map(function(f, i) {
+                          return (
+                            <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                              <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" aria-hidden="true" />
+                              {f}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Not included</p>
+                      <ul className="space-y-2" role="list" aria-label="Listed plan features not included">
+                        {LISTED_NOT_INCLUDES.map(function(f, i) {
+                          return (
+                            <li key={i} className="flex items-start gap-2 text-sm text-slate-400">
+                              <Lock className="w-4 h-4 shrink-0 mt-0.5 text-slate-300" aria-hidden="true" />
+                              {f}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Discovery callout */}
+              <div className="md:w-64 bg-[#EFF6FF] border border-blue-200 rounded-xl p-5 shrink-0">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="w-4 h-4 text-[#3B82F6]" aria-hidden="true" />
+                  <p className="text-blue-700 text-xs font-bold uppercase tracking-wider">Get discovered</p>
+                </div>
+                <p className="text-[#0E1523] text-sm font-semibold mb-2">Show up where your community is looking.</p>
+                <p className="text-slate-500 text-xs leading-relaxed mb-3">
+                  Your org profile appears on the Syndicade /explore directory. Your events appear on /discover. People find you — no dashboard required.
+                </p>
+                <div className="space-y-2">
+                  {[
+                    'Profile on /explore',
+                    'Events on /discover',
+                    'Website + location listed',
+                    'Upgrade anytime',
+                  ].map(function(item, i) {
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <Check className="w-3 h-3 text-blue-500 shrink-0" aria-hidden="true" />
+                        <span className="text-xs text-slate-600">{item}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-xs text-slate-400">
+                No member management or org tools included. Upgrade to Starter anytime to unlock the full platform.
               </p>
             </div>
           </div>
@@ -514,20 +645,21 @@ export default function PricingPage() {
                 </p>
               </div>
             </div>
+            <div style={{ textAlign:'center', marginTop:'32px' }}>
+              <p style={{ fontSize:'14px', color:'#64748B', marginBottom:'8px' }}>
+                Need to make the case to your board?
+              </p>
+              <a
+                href="/compare"
+                style={{ fontSize:'14px', fontWeight:700, color:'#3B82F6', textDecoration:'none' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+              >
+                Compare your current tool costs vs Syndicade →
+              </a>
+            </div>
           </div>
-<div style={{ textAlign: 'center', marginTop: '32px' }}>
-  <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '8px' }}>
-    Need to make the case to your board?
-  </p>
-  <a
-    href="/compare"
-    style={{ fontSize: '14px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
-    className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
-  >
-    Compare your current tool costs vs Syndicade →
-  </a>
-</div>
-</section>
+        </section>
+
         {/* ── Final CTA ── */}
         <section className="bg-white border-t border-slate-200 py-20 px-6 text-center" aria-labelledby="cta-heading">
           <img
@@ -535,7 +667,7 @@ export default function PricingPage() {
             alt=""
             aria-hidden="true"
             className="mx-auto mb-8"
-            style={{ maxWidth: '200px', mixBlendMode: 'multiply' }}
+            style={{ maxWidth:'200px', mixBlendMode:'multiply' }}
             onError={function(e) { e.currentTarget.style.display = 'none'; }}
           />
           <h2 id="cta-heading" className="text-3xl font-extrabold text-[#0E1523] mb-4">Ready to replace your fragmented stack?</h2>

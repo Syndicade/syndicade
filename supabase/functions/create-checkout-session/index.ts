@@ -4,6 +4,8 @@ var corsHeaders = {
 }
 
 var PRICE_IDS = {
+  listed_month:  'price_LISTED_MONTHLY_TBD',
+  listed_year:   'price_LISTED_ANNUAL_TBD',
   starter_month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
   starter_year:  'price_1TMnuAKMpHjSZayWbYHYUoS8',
   growth_month:  'price_1TOKEKKMpHjSZayWoryYepSM',
@@ -109,7 +111,6 @@ async function validatePromoCode(code, plan, serviceKey, supabaseUrl) {
 
 // ── Record promo code use and increment counter ───────────────────────────────
 async function recordPromoCodeUse(codeId, orgId, plan, interval, serviceKey, supabaseUrl) {
-  // Insert into discount_code_uses
   await sbPost('/discount_code_uses', {
     code_id: codeId,
     org_id: orgId,
@@ -118,8 +119,6 @@ async function recordPromoCodeUse(codeId, orgId, plan, interval, serviceKey, sup
     used_at: new Date().toISOString(),
   }, serviceKey, supabaseUrl)
 
-  // Increment uses_count via RPC (avoids race condition vs read-modify-write)
-  // Falls back to a direct update if the RPC doesn't exist yet
   try {
     await fetch(supabaseUrl + '/rest/v1/rpc/increment_discount_code_uses', {
       method: 'POST',
@@ -131,7 +130,6 @@ async function recordPromoCodeUse(codeId, orgId, plan, interval, serviceKey, sup
       body: JSON.stringify({ code_id: codeId }),
     })
   } catch (_) {
-    // Fallback: direct increment via PATCH
     await fetch(supabaseUrl + '/rest/v1/discount_codes?id=eq.' + codeId, {
       method: 'PATCH',
       headers: {
@@ -166,7 +164,7 @@ Deno.serve(async function(req) {
     var org_id = body.organization_id
     var plan = body.plan
     var interval = body.interval
-    var promo_code = body.promo_code || null  // optional
+    var promo_code = body.promo_code || null
 
     if (!org_id || !plan || !interval) throw new Error('Missing fields')
 
@@ -207,17 +205,27 @@ Deno.serve(async function(req) {
       customerId = customer.id
     }
 
-if (plan === 'student' && interval === 'year') throw new Error('Student plan is monthly only')
-var priceId = PRICE_IDS[plan + '_' + interval]
-if (!priceId) throw new Error('Invalid plan')
+    // ── Plan guards ───────────────────────────────────────────────────────────
+    if (plan === 'student' && interval === 'year') throw new Error('Student plan is monthly only')
+    // Listed plan supports both monthly and annual — no guard needed
 
-    var successUrl = body.success_url || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
-var cancelUrl  = body.cancel_url  || 'https://syndicade.org/organizations/' + org_id + '/billing?billing=cancelled'
+    var priceId = PRICE_IDS[plan + '_' + interval]
+    if (!priceId) throw new Error('Invalid plan or interval')
+
+    // ── Success/cancel URLs — Listed orgs go to /listing, others go to /billing
+    var defaultSuccess = plan === 'listed'
+      ? 'https://syndicade.org/organizations/' + org_id + '/listing?billing=success'
+      : 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
+    var defaultCancel = plan === 'listed'
+      ? 'https://syndicade.org/organizations/' + org_id + '/listing?billing=cancelled'
+      : 'https://syndicade.org/organizations/' + org_id + '/billing?billing=cancelled'
+
+    var successUrl = body.success_url || defaultSuccess
+    var cancelUrl  = body.cancel_url  || defaultCancel
 
     // ── Calculate trial days (promo code can extend trial) ───────────────────
     var trialDays = TRIAL_DAYS
     if (validatedCode && validatedCode.type === 'months_free') {
-      // months_free codes extend the trial — convert months to days
       trialDays = Math.max(TRIAL_DAYS, Math.round(validatedCode.value * 30))
     }
 
@@ -235,7 +243,6 @@ var cancelUrl  = body.cancel_url  || 'https://syndicade.org/organizations/' + or
       'metadata[organization_id]': org_id,
     }
 
-    // Add promo code metadata to Stripe session for reference
     if (validatedCode) {
       sessionParams['metadata[promo_code]'] = validatedCode.code
       sessionParams['metadata[promo_code_id]'] = validatedCode.id
@@ -260,7 +267,6 @@ var cancelUrl  = body.cancel_url  || 'https://syndicade.org/organizations/' + or
       try {
         await recordPromoCodeUse(validatedCode.id, org_id, plan, interval, SB_KEY, SB_URL)
       } catch (codeErr) {
-        // Don't fail the checkout if code tracking fails — just log it
         console.error('Failed to record promo code use:', codeErr.message)
       }
     }

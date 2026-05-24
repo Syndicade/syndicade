@@ -15,7 +15,6 @@ serve(async (req) => {
     // Parse event (skip signature verification if no secret set)
     var event
     if (webhookSecret && signature) {
-      // Simple manual signature check
       var parts = signature.split(',')
       var tPart = parts.find(function(p) { return p.startsWith('t='); })
       if (!tPart) throw new Error('Invalid signature')
@@ -41,7 +40,6 @@ serve(async (req) => {
       var sessionType = metadata.type
 
       if (sessionType === 'event_ticket' && eventId && memberId) {
-        // Fetch line items from Stripe to get quantities + amounts
         var lineItemsRes = await fetch(
           'https://api.stripe.com/v1/checkout/sessions/' + session.id + '/line_items?limit=100',
           { headers: { 'Authorization': 'Bearer ' + stripeKey } }
@@ -49,11 +47,10 @@ serve(async (req) => {
         var lineItemsData = await lineItemsRes.json()
         var lineItems = lineItemsData.data || []
 
-        // Parse ticket type IDs from metadata (tt_0, tt_1, etc.)
         var ttMap = {}
         Object.keys(metadata).forEach(function(key) {
           if (key.startsWith('tt_')) {
-            var val = metadata[key] // format: "ticket_type_id:quantity"
+            var val = metadata[key]
             var parts = val.split(':')
             var ttId = parts[0]
             var qty = parseInt(parts[1]) || 1
@@ -61,7 +58,6 @@ serve(async (req) => {
           }
         })
 
-        // Fetch ticket types for this event
         var { data: ticketTypes } = await supabase
           .from('event_ticket_types')
           .select('*')
@@ -72,7 +68,6 @@ serve(async (req) => {
           ticketTypes.forEach(function(tt) { ttById[tt.id] = tt })
         }
 
-        // Build purchase records from metadata map
         var purchaseRows = []
         var ttKeys = Object.keys(ttMap).sort(function(a, b) { return parseInt(a) - parseInt(b) })
 
@@ -81,7 +76,6 @@ serve(async (req) => {
           var tt = ttById[entry.ticket_type_id]
           if (!tt) continue
 
-          // Determine price used (early bird or regular)
           var now = new Date()
           var useEarlyBird = tt.early_bird_price != null &&
             tt.early_bird_ends_at != null &&
@@ -99,7 +93,6 @@ serve(async (req) => {
             stripe_session_id: session.id,
           })
 
-          // Increment quantity_sold on ticket type
           await supabase
             .from('event_ticket_types')
             .update({ quantity_sold: (tt.quantity_sold || 0) + entry.quantity })
@@ -110,32 +103,30 @@ serve(async (req) => {
           await supabase.from('ticket_purchases').insert(purchaseRows)
         }
       }
+
       // DUES PAYMENT
-if (session.metadata?.type === 'dues') {
-  var duesMemberId = session.metadata.member_id;
-  var duesOrgId = session.metadata.organization_id;
-  var duesTierId = session.metadata.tier_id || null;
-  var duesAmount = parseFloat(session.metadata.amount || '0');
-  var paymentIntentId = typeof session.payment_intent === 'string'
-    ? session.payment_intent
-    : session.payment_intent?.id || null;
+      if (session.metadata?.type === 'dues') {
+        var duesMemberId = session.metadata.member_id;
+        var duesOrgId = session.metadata.organization_id;
+        var duesTierId = session.metadata.tier_id || null;
+        var duesAmount = parseFloat(session.metadata.amount || '0');
+        var paymentIntentId = typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id || null;
 
-  // Insert dues_payment record
-  await supabase.from('dues_payments').insert({
-    member_id: duesMemberId,
-    organization_id: duesOrgId,
-    tier_id: duesTierId || null,
-    amount: duesAmount,
-    stripe_payment_intent_id: paymentIntentId,
-    paid_at: new Date().toISOString(),
-  });
+        await supabase.from('dues_payments').insert({
+          member_id: duesMemberId,
+          organization_id: duesOrgId,
+          tier_id: duesTierId || null,
+          amount: duesAmount,
+          stripe_payment_intent_id: paymentIntentId,
+          paid_at: new Date().toISOString(),
+        });
 
-  // Mark membership dues as paid
-  // dues_paid_until = 1 year from today
-  var duesPaidUntil = new Date();
-  duesPaidUntil.setFullYear(duesPaidUntil.getFullYear() + 1);
+        var duesPaidUntil = new Date();
+        duesPaidUntil.setFullYear(duesPaidUntil.getFullYear() + 1);
 
-await supabase
+        await supabase
           .from('memberships')
           .update({
             dues_paid: true,
@@ -144,7 +135,6 @@ await supabase
           .eq('member_id', duesMemberId)
           .eq('organization_id', duesOrgId);
 
-        // Send dues confirmation email
         try {
           var { data: duesMember } = await supabase
             .from('members')
@@ -185,7 +175,7 @@ await supabase
               }),
             });
           }
-} catch (emailErr) {
+        } catch (emailErr) {
           console.error('Dues confirmation email error:', emailErr);
         }
       }
@@ -199,7 +189,6 @@ await supabase
       var subscription = event.data.object
       var customerId = subscription.customer
 
-      // Find org by Stripe customer ID
       var { data: subRecord } = await supabase
         .from('subscriptions')
         .select('organization_id')
@@ -207,40 +196,44 @@ await supabase
         .single()
 
       if (subRecord) {
-var status = subscription.status
-var priceId = subscription.items?.data?.[0]?.price?.id
-var stripeSubId = subscription.id
+        var status = subscription.status
+        var priceId = subscription.items?.data?.[0]?.price?.id
+        var stripeSubId = subscription.id
 
-var PRICE_TO_PLAN: Record<string, string> = {
-  'price_1TMnuAKMpHjSZayWhfMtS8AB': 'starter',
-  'price_1TMnuAKMpHjSZayWbYHYUoS8': 'starter',
-  'price_1TOKEKKMpHjSZayWoryYepSM': 'growth',
-  'price_1TMnu9KMpHjSZayW67fBSDzC': 'growth',
-  'price_1TMnu8KMpHjSZayWRcSF5Qez': 'pro',
-  'price_1TMnu7KMpHjSZayW34qmec4T': 'pro',
-  'price_1TOKB2KMpHjSZayWoq7QSqOA': 'student',
-}
-var planName = (priceId && PRICE_TO_PLAN[priceId]) || 'starter'
+        // ── Price ID → plan name mapping (update placeholders when Listed IDs are created in Stripe)
+        var PRICE_TO_PLAN: Record<string, string> = {
+          'price_LISTED_MONTHLY_TBD':          'listed',
+          'price_LISTED_ANNUAL_TBD':            'listed',
+          'price_1TMnuAKMpHjSZayWhfMtS8AB':    'starter',
+          'price_1TMnuAKMpHjSZayWbYHYUoS8':    'starter',
+          'price_1TOKEKKMpHjSZayWoryYepSM':    'growth',
+          'price_1TMnu9KMpHjSZayW67fBSDzC':    'growth',
+          'price_1TMnu8KMpHjSZayWRcSF5Qez':    'pro',
+          'price_1TMnu7KMpHjSZayW34qmec4T':    'pro',
+          'price_1TOKB2KMpHjSZayWoq7QSqOA':    'student',
+        }
+        var planName = (priceId && PRICE_TO_PLAN[priceId]) || 'starter'
 
-var billingInterval = 'month'
-var yearlyPrices = [
-  'price_1TMnuAKMpHjSZayWbYHYUoS8',
-  'price_1TMnu9KMpHjSZayW67fBSDzC',
-  'price_1TMnu7KMpHjSZayW34qmec4T',
-]
-if (priceId && yearlyPrices.includes(priceId)) billingInterval = 'year'
+        // ── Annual price IDs (used to set billing_interval = 'year')
+        var yearlyPrices = [
+          'price_LISTED_ANNUAL_TBD',
+          'price_1TMnuAKMpHjSZayWbYHYUoS8',
+          'price_1TMnu9KMpHjSZayW67fBSDzC',
+          'price_1TMnu7KMpHjSZayW34qmec4T',
+        ]
+        var billingInterval = (priceId && yearlyPrices.includes(priceId)) ? 'year' : 'month'
 
-await supabase.from('subscriptions').update({
-  status: status,
-  plan: planName,
-  billing_interval: billingInterval,
-  stripe_subscription_id: stripeSubId,
-  stripe_price_id: priceId || null,
-  current_period_end: subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
-    : null,
-  updated_at: new Date().toISOString(),
-}).eq('stripe_customer_id', customerId)
+        await supabase.from('subscriptions').update({
+          status: status,
+          plan: planName,
+          billing_interval: billingInterval,
+          stripe_subscription_id: stripeSubId,
+          stripe_price_id: priceId || null,
+          current_period_end: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : null,
+          updated_at: new Date().toISOString(),
+        }).eq('stripe_customer_id', customerId)
       }
     }
 

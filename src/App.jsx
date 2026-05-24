@@ -20,6 +20,7 @@ import EventDetails from './pages/EventDetails';
 import EventCalendar from './pages/EventCalendar';
 import AnnouncementFeed from './pages/AnnouncementFeed';
 import EmailBlasts from './pages/EmailBlasts';
+import ListedOrgDashboard from './pages/ListedOrgDashboard';
 import OrganizationList from './pages/OrganizationList';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrgLayout from './pages/OrgLayout';
@@ -175,6 +176,7 @@ var hideChrome = (
 
             {/* ── Organization list ──────────────────────────────── */}
             <Route path="/organizations" element={session ? <OrganizationList /> : <Navigate to="/login" replace />} />
+            <Route path="/organizations/:organizationId/listing" element={session ? <ListedOrgDashboard /> : <Navigate to="/login" replace />} />
 
             {/* ── Organization pages ─────────────────────────────── */}
             <Route path="/organizations/:organizationId"
