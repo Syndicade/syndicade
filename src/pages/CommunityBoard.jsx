@@ -708,7 +708,7 @@ function enterReplyMode() {
       .subscribe();
   }
 
-  async function handleSend() {
+async function handleSend() {
     if (!newMsg.trim()) return;
     if (!myOrgId) { toast.error('Select which org you are chatting as.'); return; }
     setSending(true);
@@ -722,9 +722,10 @@ function enterReplyMode() {
         message: newMsg.trim(),
         is_read: false
       });
-      if (error) throw error;
+if (error) throw error;
       setNewMsg('');
-    } catch (err) {
+      insertCBNotifications(myOrgId, partnerOrgId, boardName, post.board_id, userOrgs);
+} catch (err) {
       mascotErrorToast('Could not send message.', 'Please try again.');
     } finally { setSending(false); }
   }
