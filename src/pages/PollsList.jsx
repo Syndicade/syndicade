@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
@@ -63,7 +63,7 @@ function PollsList() {
   var [statusFilter, setStatusFilter] = useState('all');
   var [typeFilter, setTypeFilter] = useState('all');
   var [sortBy, setSortBy] = useState('pinned_recent');
-  var [isAdmin, setIsAdmin] = useState(false);
+  var { isAdmin } = useOutletContext();
   var [showCreateModal, setShowCreateModal] = useState(false);
   var [orgName, setOrgName] = useState('');
   var [memberCount, setMemberCount] = useState(0);
@@ -131,14 +131,6 @@ function PollsList() {
       var orgResult = await supabase.from('organizations').select('name').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
       setOrgName(orgResult.data.name);
-
-      var memberResult = await supabase
-        .from('memberships').select('role')
-        .eq('organization_id', organizationId)
-        .eq('member_id', user.id)
-        .eq('status', 'active')
-        .single();
-      setIsAdmin(memberResult.data && memberResult.data.role === 'admin');
 
       var countResult = await supabase
         .from('memberships').select('*', { count: 'exact', head: true })
@@ -365,7 +357,7 @@ function PollsList() {
             )}
           </div>
         ) : (
-          <div className="space-y-4" role="list" aria-label="Polls">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="list" aria-label="Polls">
             {filteredPolls.map(function(poll) {
               return (
                 <div key={poll.id} role="listitem">
