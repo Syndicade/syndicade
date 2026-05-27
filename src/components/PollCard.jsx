@@ -35,6 +35,7 @@ var ICONS = {
   alert:     ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
   template:  ['M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm12-1a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z'],
   bell:      'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+  edit:      'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
 };
 
 var CHART_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16'];
@@ -45,7 +46,6 @@ var POLL_TYPE_LABELS = {
   yes_no_abstain:  'Yes / No / Abstain',
 };
 
-// ── Donut chart ───────────────────────────────────────────────────────────────
 function DonutChart({ options, results, totalVotes }) {
   var CX = 60; var CY = 60; var R = 45; var IR = 28;
   var segments = [];
@@ -90,8 +90,8 @@ function DonutChart({ options, results, totalVotes }) {
   );
 }
 
-// ── PollCard ──────────────────────────────────────────────────────────────────
-function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin, showOrganization, memberCount }) {
+// onEdit: optional — called with the poll object when the Edit button is clicked
+function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, onEdit, isAdmin, showOrganization, memberCount }) {
   var [options, setOptions] = useState([]);
   var [userVotes, setUserVotes] = useState([]);
   var [results, setResults] = useState([]);
@@ -154,9 +154,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
       }
     } catch (err) {
       console.error('Error loading poll:', err);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   function handleOptionSelect(optionId) {
@@ -195,9 +193,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
     } catch (err) {
       toast.dismiss(loadingToast);
       mascotErrorToast('Failed to submit vote.', err.message);
-    } finally {
-      setVoting(false);
-    }
+    } finally { setVoting(false); }
   }
 
   async function handlePin() {
@@ -239,10 +235,8 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         closes_at: null,
         retention_days: poll.retention_days,
         result_visibility: poll.result_visibility || 'full',
-        status: 'active',
-        is_pinned: false,
-        created_by: user.id,
-        approval_status: 'approved',
+        status: 'active', is_pinned: false,
+        created_by: user.id, approval_status: 'approved',
       }).select().single();
       if (newPoll.error) throw newPoll.error;
       var optInserts = options.map(function(opt, i) {
@@ -334,8 +328,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
       if (onDelete) onDelete(poll.id);
     } catch (err) {
       mascotErrorToast('Failed to delete poll.', 'Please try again.');
-      setDeleting(false);
-      setConfirmDelete(false);
+      setDeleting(false); setConfirmDelete(false);
     }
   }
 
@@ -375,7 +368,6 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
     );
   }
 
-  // Article border: pinned = yellow, urgent = red, closing soon = orange, default = slate
   var articleBorder = poll.is_pinned
     ? 'border-[#F5B731] border-2'
     : urgentClose
@@ -392,8 +384,6 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-
-          {/* Badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {poll.is_pinned && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200">
@@ -419,18 +409,15 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
             )}
             {urgentClose && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200">
-                <Icon path={ICONS.clock} className="h-3 w-3" />
-                {'Closes in ' + hoursLeft + 'h'}
+                <Icon path={ICONS.clock} className="h-3 w-3" />{'Closes in ' + hoursLeft + 'h'}
               </span>
             )}
             {soonClose && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200">
-                <Icon path={ICONS.clock} className="h-3 w-3" />
-                {'Closes in ' + daysLeft + 'd'}
+                <Icon path={ICONS.clock} className="h-3 w-3" />{'Closes in ' + daysLeft + 'd'}
               </span>
             )}
           </div>
-
           <h3 className="text-sm font-bold text-[#0E1523] leading-snug">{poll.title}</h3>
           {poll.description && <p className="text-xs mt-0.5 text-[#475569] line-clamp-2">{poll.description}</p>}
           {showOrganization && poll.organization_name && (
@@ -438,7 +425,6 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
           )}
         </div>
 
-        {/* Admin delete controls */}
         {isAdmin && !confirmDelete && (
           <button onClick={handleDelete}
             className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors flex-shrink-0"
@@ -463,6 +449,14 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
       {/* Admin action bar */}
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-1.5 mb-3 pb-3 border-b border-slate-100">
+
+          {/* Edit — primary action, slightly highlighted */}
+          <button onClick={function() { if (onEdit) onEdit(poll); }}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400"
+            aria-label={'Edit poll: ' + poll.title}>
+            <Icon path={ICONS.edit} className="h-3 w-3" />Edit
+          </button>
+
           <button onClick={handlePin}
             className={'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 ' + (poll.is_pinned ? 'bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}
             aria-label={poll.is_pinned ? 'Unpin poll' : 'Pin poll'}>
@@ -507,7 +501,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         </div>
       )}
 
-      {/* Results — full visibility */}
+      {/* Results — full */}
       {canSeeResults && effectiveVisibility === 'full' && (
         <div className="mb-3">
           {totalVotes > 0 && (
@@ -558,7 +552,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         </div>
       )}
 
-      {/* Results — summary visibility */}
+      {/* Results — summary */}
       {canSeeResults && effectiveVisibility === 'summary' && (
         <div className="mb-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
           <p className="text-sm font-semibold text-[#0E1523] mb-0.5">{totalVotes} vote{totalVotes !== 1 ? 's' : ''} cast</p>
@@ -569,7 +563,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         </div>
       )}
 
-      {/* Results — none visibility (non-admin) */}
+      {/* Results — hidden */}
       {canSeeResults && effectiveVisibility === 'none' && !isAdmin && (
         <div className="mb-3 p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-2">
           <Icon path={ICONS.eyeOff} className="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -617,7 +611,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         </div>
       )}
 
-      {/* Display options only (no vote, no results) */}
+      {/* Display options only */}
       {!canVote && !canSeeResults && (
         <div className="space-y-1.5 mb-3">
           {options.map(function(option) {
@@ -644,7 +638,7 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, isAdmin,
         </div>
       )}
 
-      {/* Participation bar — shown when there are votes and memberCount available */}
+      {/* Participation bar */}
       {memberCount > 0 && totalVotes > 0 && (
         <div className="mb-2 mt-1">
           <div className="flex items-center justify-between mb-1">

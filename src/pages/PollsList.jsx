@@ -54,6 +54,7 @@ function PollCardSkeleton() {
 function PollsList() {
   var params = useParams();
   var organizationId = params.organizationId;
+  var { isAdmin } = useOutletContext();
 
   var [polls, setPolls] = useState([]);
   var [filteredPolls, setFilteredPolls] = useState([]);
@@ -63,8 +64,8 @@ function PollsList() {
   var [statusFilter, setStatusFilter] = useState('all');
   var [typeFilter, setTypeFilter] = useState('all');
   var [sortBy, setSortBy] = useState('pinned_recent');
-  var { isAdmin } = useOutletContext();
   var [showCreateModal, setShowCreateModal] = useState(false);
+  var [editingPoll, setEditingPoll] = useState(null);
   var [orgName, setOrgName] = useState('');
   var [memberCount, setMemberCount] = useState(0);
 
@@ -97,7 +98,6 @@ function PollsList() {
     if (typeFilter !== 'all') filtered = filtered.filter(function(p) { return p.poll_type === typeFilter; });
 
     filtered.sort(function(a, b) {
-      // Pinned always first
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
 
@@ -108,7 +108,6 @@ function PollsList() {
         return new Date(a.closes_at) - new Date(b.closes_at);
       }
 
-      // Default: active before closed, then newest first
       var aClosed = isPollClosed(a);
       var bClosed = isPollClosed(b);
       if (!aClosed && bClosed) return -1;
@@ -121,12 +120,7 @@ function PollsList() {
 
   async function loadData() {
     try {
-      setLoading(true);
-      setError(null);
-
-      var authResult = await supabase.auth.getUser();
-      if (!authResult.data.user) throw new Error('Not authenticated');
-      var user = authResult.data.user;
+      setLoading(true); setError(null);
 
       var orgResult = await supabase.from('organizations').select('name').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
@@ -137,10 +131,8 @@ function PollsList() {
         .eq('organization_id', organizationId).eq('status', 'active');
       setMemberCount(countResult.count || 0);
 
-      var pollsResult = await supabase
-        .from('polls').select('*')
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false });
+      var pollsResult = await supabase.from('polls').select('*')
+        .eq('organization_id', organizationId).order('created_at', { ascending: false });
       if (pollsResult.error) throw pollsResult.error;
       setPolls(pollsResult.data || []);
 
@@ -148,9 +140,7 @@ function PollsList() {
       console.error('Error loading polls:', err);
       setError(err.message);
       mascotErrorToast('Failed to load polls.', 'Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   function handlePollDelete(pollId) {
@@ -171,10 +161,25 @@ function PollsList() {
     setPolls(function(prev) { return [newPoll].concat(prev); });
   }
 
-  var activeCount = polls.filter(function(p) { return !isPollClosed(p); }).length;
-  var closedCount = polls.filter(function(p) { return isPollClosed(p); }).length;
-  var pinnedCount = polls.filter(function(p) { return p.is_pinned; }).length;
-  var hasFilters  = searchTerm || statusFilter !== 'all' || typeFilter !== 'all';
+  function openCreate() {
+    setEditingPoll(null);
+    setShowCreateModal(true);
+  }
+
+  function openEdit(poll) {
+    setEditingPoll(poll);
+    setShowCreateModal(true);
+  }
+
+  function closeModal() {
+    setShowCreateModal(false);
+    setEditingPoll(null);
+  }
+
+  var activeCount  = polls.filter(function(p) { return !isPollClosed(p); }).length;
+  var closedCount  = polls.filter(function(p) { return isPollClosed(p); }).length;
+  var pinnedCount  = polls.filter(function(p) { return p.is_pinned; }).length;
+  var hasFilters   = searchTerm || statusFilter !== 'all' || typeFilter !== 'all';
 
   if (loading) {
     return (
@@ -195,8 +200,8 @@ function PollsList() {
           <div className="rounded-xl border p-4 animate-pulse bg-white border-slate-200">
             <div className="h-10 rounded-lg bg-gray-100" />
           </div>
-          <div className="space-y-4">
-            {[1,2,3].map(function(i) { return <PollCardSkeleton key={i} />; })}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1,2,3,4].map(function(i) { return <PollCardSkeleton key={i} />; })}
           </div>
         </div>
       </div>
@@ -234,11 +239,13 @@ function PollsList() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-[#0E1523]">Polls</h1>
-                <p className="text-sm text-[#64748B]">Create and manage organization polls</p>
+                <p className="text-sm text-[#64748B]">
+                  {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' · ' + activeCount + ' active'}
+                </p>
               </div>
             </div>
             {isAdmin && (
-              <button onClick={function() { setShowCreateModal(true); }}
+              <button onClick={openCreate}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
                 <Icon path={ICONS.plus} className="h-4 w-4" />
                 Create Poll
@@ -284,7 +291,6 @@ function PollsList() {
                 value={searchTerm} onChange={function(e) { setSearchTerm(e.target.value); }}
                 className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
             </div>
-
             <div className="flex items-center gap-2">
               <label htmlFor="status-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Status:</label>
               <select id="status-filter" value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value); }}
@@ -294,7 +300,6 @@ function PollsList() {
                 <option value="closed">{'Closed (' + closedCount + ')'}</option>
               </select>
             </div>
-
             <div className="flex items-center gap-2">
               <label htmlFor="type-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Type:</label>
               <select id="type-filter" value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }}
@@ -305,7 +310,6 @@ function PollsList() {
                 <option value="yes_no_abstain">Yes / No / Abstain</option>
               </select>
             </div>
-
             <div className="flex items-center gap-2">
               <label htmlFor="sort-polls" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
               <select id="sort-polls" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
@@ -315,13 +319,11 @@ function PollsList() {
                 <option value="closing">Closing Soon</option>
               </select>
             </div>
-
             {hasFilters && (
               <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
                 className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
                 aria-label="Clear all filters">
-                <Icon path={ICONS.x} className="h-3.5 w-3.5" />
-                Clear
+                <Icon path={ICONS.x} className="h-3.5 w-3.5" />Clear
               </button>
             )}
           </div>
@@ -342,17 +344,15 @@ function PollsList() {
                 : 'Check back later for polls from your organization.'}
             </p>
             {isAdmin && !hasFilters && (
-              <button onClick={function() { setShowCreateModal(true); }}
+              <button onClick={openCreate}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />
-                Create Poll
+                <Icon path={ICONS.plus} className="h-4 w-4" />Create Poll
               </button>
             )}
             {hasFilters && (
               <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.x} className="h-4 w-4" />
-                Clear Filters
+                <Icon path={ICONS.x} className="h-4 w-4" />Clear Filters
               </button>
             )}
           </div>
@@ -367,6 +367,7 @@ function PollsList() {
                     onDelete={handlePollDelete}
                     onPollUpdated={handlePollUpdated}
                     onDuplicate={handleDuplicate}
+                    onEdit={openEdit}
                     isAdmin={isAdmin}
                     showOrganization={false}
                     memberCount={memberCount}
@@ -387,8 +388,9 @@ function PollsList() {
 
       <CreatePoll
         isOpen={showCreateModal}
-        onClose={function() { setShowCreateModal(false); }}
-        onSuccess={handlePollCreated}
+        onClose={closeModal}
+        onSuccess={editingPoll ? handlePollUpdated : handlePollCreated}
+        editPoll={editingPoll}
         organizationId={organizationId}
         organizationName={orgName}
       />
