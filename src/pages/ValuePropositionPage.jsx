@@ -4,11 +4,12 @@ import {
   Plus, Trash2, Users, Mail, Globe, FileText, Folder, Tag,
   ArrowRight, Info, RotateCcw,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 var PLANS = [
   { id:'starter', name:'Starter', monthlyPrice:29.99, annualPrice:299.90, annualMonthlyRate:24.99, color:'#3B82F6', highlight:false, memberLimit:'50 members', features:['Up to 50 members','1 public page','2 GB document storage','Events & RSVPs','Polls, surveys & forms','Announcements'] },
   { id:'growth',  name:'Growth',  monthlyPrice:49.99, annualPrice:499.90, annualMonthlyRate:41.66, color:'#22C55E', highlight:true,  memberLimit:'150 members', features:['Up to 150 members','7 public pages','10 GB document storage','Email blasts (500/mo)','Newsletter builder','Paid ticketing & dues'] },
-  { id:'pro',     name:'Pro',     monthlyPrice:69.99, annualPrice:699.90, annualMonthlyRate:58.32, color:'#8B5CF6', highlight:false, memberLimit:'300 members', features:['Up to 300 members','Unlimited pages','30 GB document storage','Unlimited email blasts','AI assistant','Priority support'] },
+  { id:'pro',     name:'Pro',     monthlyPrice:69.99, annualPrice:699.90, annualMonthlyRate:58.32, color:'#8B5CF6', highlight:false, memberLimit:'300 members', features:['Up to 300 members','Unlimited pages','30 GB document storage','Unlimited email blasts','Priority support'] },
 ];
 
 var CATEGORIES = [
@@ -21,7 +22,7 @@ var CATEGORIES = [
 
 var STARTER_FEATURES = ['Member directory + profiles','Multi-org unified dashboard','Events, RSVPs, recurring events','QR codes + attendance check-in','Public events (no login required)','Announcements + document library','Polls, surveys, sign-up forms','Programs','Chat','Donation pages (no revenue cut)','Basic analytics + CSV exports','orgname.syndicade.com subdomain','Up to 3 admins, 2 editors','Community Board (verified nonprofits)','Email support'];
 var GROWTH_FEATURES  = ['Paid event tickets ($1/ticket flat fee)','200 ticket max per paid event','Membership dues collection','Membership tiers','Email blasts + newsletter builder','500 emails/month','Email analytics (open/click/bounce)','Full analytics dashboard','Attendance + revenue reports','Admin inbox','Up to 5 admins, unlimited editors','Add-on: Custom domain +$50/yr','Add-on: Remove branding +$10/mo','Add-on: Extra storage +$10/mo per 10 GB'];
-var PRO_FEATURES     = ['500 ticket max per paid event','Custom checkout fields per event','Unlimited email blasts + newsletter','Unlimited pages','Custom domain — included','Remove Syndicade branding — included','1 free featured event placement/yr','Unlimited admins and editors','AI assistant','Priority support','Add-on: Extra storage +$15/mo per 20 GB'];
+var PRO_FEATURES     = ['500 ticket max per paid event','Custom checkout fields per event','Unlimited email blasts + newsletter','Unlimited pages','Custom domain — included','Remove Syndicade branding — included','1 free featured event placement/yr','Unlimited admins and editors','Priority support','Add-on: Extra storage +$15/mo per 20 GB'];
 
 function fmt(v)    { return '$'+Math.round(v).toLocaleString('en-US'); }
 function fmtDec(v) { return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -78,25 +79,18 @@ export default function ValuePropositionPage() {
   return (
     <main style={{background:'#F8FAFC',minHeight:'100vh',fontFamily:"'Inter','Segoe UI',system-ui,-apple-system,sans-serif"}} aria-label="Syndicade cost comparison tool">
 
-      <style>{`
-        /*
-          Print strategy:
-          - #vp-screen gets display:none — truly removed from layout, zero height, no blank pages
-          - #syndicade-print gets display:block — renders in normal flow, position:static
-          - position:static means page-break-after works correctly
-          - main min-height zeroed so it doesn't add extra pages
-        */
-        @media print {
-          #vp-screen        { display: none !important; }
-          #syndicade-print  { display: block !important; width: 100% !important; }
-          html, body, main  { min-height: 0 !important; height: auto !important; background: white !important; padding: 0 !important; margin: 0 !important; }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          @page { margin: 0.6in; size: letter; }
-        }
-        @media screen { #syndicade-print { display: none; } }
-        .vp-focus:focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; border-radius: 4px; }
-        .vp-input:focus { border-color: #3B82F6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
-      `}</style>
+<style>{`
+  @media screen { #syndicade-print { display: none; } }
+  @media print {
+    #root            { display: none !important; }
+    #syndicade-print { display: block !important; width: 100% !important; }
+    html, body       { background: white !important; margin: 0 !important; padding: 0 !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { margin: 0.6in; size: letter; }
+  }
+  .vp-focus:focus-visible { outline: 2px solid #3B82F6; outline-offset: 2px; border-radius: 4px; }
+  .vp-input:focus { border-color: #3B82F6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+`}</style>
 
       {/* ══ SCREEN CONTENT ══════════════════════════════════════════════════ */}
       <div id="vp-screen">
@@ -229,7 +223,7 @@ export default function ValuePropositionPage() {
           This div renders in normal flow (position:static) so page-break-after works.
           main min-height is zeroed in print CSS so no blank pages.
       ══════════════════════════════════════════════════════════════════════ */}
-      <div id="syndicade-print" style={{fontFamily:"'Inter','Segoe UI',system-ui,sans-serif",color:'#0E1523',background:'#FFFFFF',width:'100%'}}>
+      {createPortal(<div id="syndicade-print" style={{fontFamily:"'Inter','Segoe UI',system-ui,sans-serif",color:'#0E1523',background:'#FFFFFF',width:'100%'}}>
 
         {/* ── PAGE 1 — page-break-after forces a hard break after this div ── */}
         <div style={{pageBreakAfter:'always',breakAfter:'page'}}>
@@ -296,12 +290,12 @@ export default function ValuePropositionPage() {
         <div>
           <PrintHeader subtitle="Plan Overview"/>
 
-          <SectionLabel>Simple Pricing for Every Org — 14-Day Free Trial · Verified 501(c)(3) Nonprofits Get 30 Days Free</SectionLabel>
+          <SectionLabel>3 plans to meet your organization's needs</SectionLabel>
 
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
+          <div style={{display:'flex',flexDirection:'row',gap:'12px',marginBottom:'16px',width:'100%',marginTop:'20px'}}>
 
             {/* Starter */}
-            <div style={{border:'1px solid #E2E8F0',borderRadius:'8px',padding:'14px',backgroundColor:'#FFFFFF'}}>
+            <div style={{border:'1px solid #E2E8F0',borderRadius:'8px',padding:'14px',backgroundColor:'#FFFFFF', width:'calc(33.33% - 8px)', flexShrink:0}}>
               <div style={{fontSize:'13px',fontWeight:700,color:'#0E1523',marginBottom:'4px'}}>Starter</div>
               <div style={{fontSize:'20px',fontWeight:800,color:'#3B82F6',lineHeight:1}}>{billingCycle==='annual'?'$24.99':'$29.99'}<span style={{fontSize:'10px',fontWeight:400,color:'#64748B'}}>/mo</span></div>
               <div style={{fontSize:'9px',color:'#22C55E',fontWeight:600,marginBottom:'8px',marginTop:'2px'}}>{billingCycle==='annual'?'$299.90/yr — 2 months free':'Billed monthly'}</div>
@@ -312,7 +306,7 @@ export default function ValuePropositionPage() {
             </div>
 
             {/* Growth */}
-            <div style={{border:'2px solid #22C55E',borderRadius:'8px',padding:'14px',backgroundColor:'#F0FDF4',position:'relative'}}>
+            <div style={{border:'2px solid #22C55E',borderRadius:'8px',padding:'14px',backgroundColor:'#F0FDF4',position:'relative',width:'calc(33.33% - 8px)',flexShrink:0}}>
               <div style={{position:'absolute',top:'-9px',left:'12px',background:'#22C55E',color:'#FFFFFF',fontSize:'8px',fontWeight:700,padding:'2px 7px',borderRadius:'99px',textTransform:'uppercase'}}>Most Popular</div>
               <div style={{fontSize:'13px',fontWeight:700,color:'#0E1523',marginBottom:'4px'}}>Growth</div>
               <div style={{fontSize:'20px',fontWeight:800,color:'#22C55E',lineHeight:1}}>{billingCycle==='annual'?'$41.66':'$49.99'}<span style={{fontSize:'10px',fontWeight:400,color:'#64748B'}}>/mo</span></div>
@@ -325,7 +319,7 @@ export default function ValuePropositionPage() {
             </div>
 
             {/* Pro */}
-            <div style={{border:'1px solid #E2E8F0',borderRadius:'8px',padding:'14px',backgroundColor:'#FFFFFF'}}>
+            <div style={{border:'1px solid #E2E8F0',borderRadius:'8px',padding:'14px',backgroundColor:'#FFFFFF', width:'calc(33.33% - 8px)', flexShrink:0}}>
               <div style={{fontSize:'13px',fontWeight:700,color:'#0E1523',marginBottom:'4px'}}>Pro</div>
               <div style={{fontSize:'20px',fontWeight:800,color:'#8B5CF6',lineHeight:1}}>{billingCycle==='annual'?'$58.32':'$69.99'}<span style={{fontSize:'10px',fontWeight:400,color:'#64748B'}}>/mo</span></div>
               <div style={{fontSize:'9px',color:'#22C55E',fontWeight:600,marginBottom:'8px',marginTop:'2px'}}>{billingCycle==='annual'?'$699.90/yr — 2 months free':'Billed monthly'}</div>
@@ -349,7 +343,7 @@ export default function ValuePropositionPage() {
           <div style={{textAlign:'center',fontSize:'10px',color:'#94A3B8'}}>syndicade.org · syndicade.org/signup</div>
         </div>{/* end page 2 */}
 
-      </div>{/* end #syndicade-print */}
+      </div>, document.body)}{/* end #syndicade-print portal */}
 
     </main>
   );
