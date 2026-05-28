@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
-// Light theme tokens — no dark theme
+/*
+ * DB MIGRATION REQUIRED — run once in Supabase SQL editor before deploying:
+ * ALTER TABLE chat_channels ADD COLUMN IF NOT EXISTS is_pinned boolean DEFAULT false;
+ */
+
 var BG         = '#F8FAFC';
 var SIDEBAR_BG = '#F1F5F9';
 var CARD_BG    = '#FFFFFF';
@@ -19,11 +23,52 @@ function getAvatarColor(name) {
   var char = (name || 'A').charCodeAt(0);
   return AVATAR_COLORS[char % AVATAR_COLORS.length];
 }
+function getInitials(name) {
+  if (!name) return '?';
+  var parts = name.trim().split(' ');
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function formatTime(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  var now = new Date();
+  var isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+function formatDateDivider(ts) {
+  var d = new Date(ts);
+  var now = new Date();
+  var isToday = d.toDateString() === now.toDateString();
+  var yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  var isYesterday = d.toDateString() === yesterday.toDateString();
+  if (isToday) return 'Today';
+  if (isYesterday) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function shouldShowDivider(messages, index) {
+  if (index === 0) return true;
+  var curr = new Date(messages[index].created_at);
+  var prev = new Date(messages[index - 1].created_at);
+  return curr.toDateString() !== prev.toDateString();
+}
+function getAudienceLabel(ch) {
+  if (!ch || !ch.visibility || ch.visibility === 'all') return null;
+  if (ch.visibility === 'admins') return 'Admins Only';
+  if (ch.audience_label) return ch.audience_label;
+  if (ch.visibility === 'group') return 'Group';
+  if (ch.visibility === 'tier') return 'Tier';
+  return null;
+}
 
-function Icon({ path, size }) {
+function Icon({ path, size, filled }) {
   return (
-    <svg width={size || 18} height={size || 18} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width={size || 18} height={size || 18} viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke={filled ? 'none' : 'currentColor'}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {Array.isArray(path)
         ? path.map(function(d, i) { return <path key={i} d={d} />; })
         : <path d={path} />}
@@ -40,8 +85,9 @@ var ICONS = {
   chat:    ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
   lock:    ['M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z', 'M7 11V7a5 5 0 0110 0v4'],
   shield:  ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
-  globe:   'M12 2a10 10 0 100 20A10 10 0 0012 2z',
   tag:     ['M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z', 'M7 7h.01'],
+  search:  'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0',
+  pin:     'M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z',
 };
 
 function SkeletonMessages() {
@@ -58,6 +104,16 @@ function SkeletonMessages() {
             </div>
           </div>
         );
+      })}
+    </div>
+  );
+}
+
+function SkeletonSidebar() {
+  return (
+    <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      {[1,2,3].map(function(i) {
+        return <div key={i} style={{ height: '32px', background: BORDER, borderRadius: '6px' }} />;
       })}
     </div>
   );
@@ -89,7 +145,7 @@ function EmptyState({ icon, title, description, action, onAction }) {
       {action && (
         <button onClick={onAction}
           style={{ padding: '8px 20px', background: '#3B82F6', border: 'none', borderRadius: '8px', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-          className={'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600 transition-colors'}>
+          className={'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}>
           {action}
         </button>
       )}
@@ -120,58 +176,14 @@ function MemberRow({ membership }) {
   );
 }
 
-function getInitials(name) {
-  if (!name) return '?';
-  var parts = name.trim().split(' ');
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function formatTime(ts) {
-  if (!ts) return '';
-  var d = new Date(ts);
-  var now = new Date();
-  var isToday = d.toDateString() === now.toDateString();
-  if (isToday) return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatDateDivider(ts) {
-  var d = new Date(ts);
-  var now = new Date();
-  var isToday = d.toDateString() === now.toDateString();
-  var yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  var isYesterday = d.toDateString() === yesterday.toDateString();
-  if (isToday) return 'Today';
-  if (isYesterday) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
-function shouldShowDivider(messages, index) {
-  if (index === 0) return true;
-  var curr = new Date(messages[index].created_at);
-  var prev = new Date(messages[index - 1].created_at);
-  return curr.toDateString() !== prev.toDateString();
-}
-
-function getAudienceLabel(ch) {
-  if (!ch || !ch.visibility || ch.visibility === 'all') return null;
-  if (ch.visibility === 'admins') return 'Admins Only';
-  if (ch.audience_label) return ch.audience_label;
-  if (ch.visibility === 'group') return 'Group';
-  if (ch.visibility === 'tier') return 'Tier';
-  return null;
-}
-
 export default function OrgChat() {
   var { organizationId } = useParams();
   var navigate = useNavigate();
+  var outlet = useOutletContext();
+  var isAdmin = !!(outlet && outlet.isAdmin);
 
   var [currentUser,       setCurrentUser]       = useState(null);
   var [currentMember,     setCurrentMember]     = useState(null);
-  var [isAdmin,           setIsAdmin]           = useState(false);
-  var [organization,      setOrganization]      = useState(null);
   var [channels,          setChannels]          = useState([]);
   var [selectedChannel,   setSelectedChannel]   = useState(null);
   var [messages,          setMessages]          = useState([]);
@@ -181,8 +193,8 @@ export default function OrgChat() {
   var [messageInput,      setMessageInput]      = useState('');
   var [sending,           setSending]           = useState(false);
   var [unreadCounts,      setUnreadCounts]      = useState({});
+  var [channelSearch,     setChannelSearch]     = useState('');
 
-  // New channel modal
   var [showNewChannel,        setShowNewChannel]        = useState(false);
   var [newChannelName,        setNewChannelName]        = useState('');
   var [newChannelDesc,        setNewChannelDesc]        = useState('');
@@ -190,14 +202,12 @@ export default function OrgChat() {
   var [newChannelAudienceId,  setNewChannelAudienceId]  = useState('');
   var [creatingChannel,       setCreatingChannel]       = useState(false);
 
-  // Members panel
   var [showMembersPanel,  setShowMembersPanel]  = useState(false);
   var [orgMembers,        setOrgMembers]        = useState([]);
   var [loadingMembers,    setLoadingMembers]    = useState(false);
 
-  // Audience options for channel creation
-  var [orgGroups,         setOrgGroups]         = useState([]);
-  var [membershipTiers,   setMembershipTiers]   = useState([]);
+  var [orgGroups,       setOrgGroups]       = useState([]);
+  var [membershipTiers, setMembershipTiers] = useState([]);
 
   var messagesEndRef = useRef(null);
   var inputRef       = useRef(null);
@@ -233,9 +243,6 @@ export default function OrgChat() {
       if (!authResult.data.user) { navigate('/login'); return; }
       setCurrentUser(authResult.data.user);
 
-      var orgResult = await supabase.from('organizations').select('id, name, logo_url').eq('id', organizationId).single();
-      if (orgResult.data) setOrganization(orgResult.data);
-
       var memberResult = await supabase
         .from('memberships')
         .select('id, role, member_id')
@@ -243,9 +250,7 @@ export default function OrgChat() {
         .eq('member_id', authResult.data.user.id)
         .eq('status', 'active')
         .maybeSingle();
-
       if (!memberResult.data) { navigate('/organizations'); return; }
-      setIsAdmin(memberResult.data.role === 'admin');
 
       var profileResult = await supabase
         .from('members')
@@ -254,17 +259,15 @@ export default function OrgChat() {
         .maybeSingle();
       if (profileResult.data) setCurrentMember(profileResult.data);
 
-      // Load groups for channel audience picker
       try {
         var groupsResult = await supabase.from('org_groups').select('id, name').eq('organization_id', organizationId).order('name');
         if (groupsResult.data) setOrgGroups(groupsResult.data);
-      } catch(e) { /* table may not exist */ }
+      } catch(e) {}
 
-      // Load membership tiers
       try {
         var tiersResult = await supabase.from('membership_tiers').select('id, name').eq('organization_id', organizationId).order('name');
         if (tiersResult.data) setMembershipTiers(tiersResult.data);
-      } catch(e) { /* ignore */ }
+      } catch(e) {}
 
       await fetchChannels(authResult.data.user.id);
     } catch (err) {
@@ -279,8 +282,8 @@ export default function OrgChat() {
         .from('chat_channels')
         .select('*')
         .eq('organization_id', organizationId)
+        .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: true });
-
       if (result.error) throw result.error;
       var channelList = result.data || [];
       setChannels(channelList);
@@ -328,7 +331,6 @@ export default function OrgChat() {
         .eq('is_deleted', false)
         .order('created_at', { ascending: true })
         .limit(100);
-
       if (result.error) throw result.error;
       var msgs = result.data || [];
       setMessages(msgs);
@@ -338,7 +340,6 @@ export default function OrgChat() {
       msgs.forEach(function(m) {
         if (m.sender_id && !seen[m.sender_id]) { senderIds.push(m.sender_id); seen[m.sender_id] = true; }
       });
-
       if (senderIds.length > 0) {
         var profilesResult = await supabase
           .from('members')
@@ -456,11 +457,31 @@ export default function OrgChat() {
     }
   }
 
+  async function handleTogglePin(channel, e) {
+    e.stopPropagation();
+    var newPinned = !channel.is_pinned;
+    var result = await supabase.from('chat_channels').update({ is_pinned: newPinned }).eq('id', channel.id);
+    if (result.error) {
+      mascotErrorToast('Failed to update pin');
+      return;
+    }
+    setChannels(function(prev) {
+      var updated = prev.map(function(ch) {
+        return ch.id === channel.id ? Object.assign({}, ch, { is_pinned: newPinned }) : ch;
+      });
+      return updated.sort(function(a, b) {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        return 0;
+      });
+    });
+    mascotSuccessToast(newPinned ? 'Channel pinned' : 'Channel unpinned');
+  }
+
   async function handleCreateChannel() {
     if (!newChannelName.trim()) { toast.error('Channel name is required'); return; }
     setCreatingChannel(true);
     try {
-      // Build audience_label for display
       var audienceLabel = null;
       if (newChannelVisibility === 'admins') audienceLabel = 'Admins Only';
       if (newChannelVisibility === 'group' && newChannelAudienceId) {
@@ -471,7 +492,6 @@ export default function OrgChat() {
         var tier = membershipTiers.find(function(t) { return t.id === newChannelAudienceId; });
         audienceLabel = tier ? tier.name : 'Tier';
       }
-
       var insertData = {
         organization_id: organizationId,
         name: newChannelName.trim().toLowerCase().replace(/\s+/g, '-'),
@@ -480,11 +500,10 @@ export default function OrgChat() {
         visibility: newChannelVisibility,
         audience_id: newChannelAudienceId || null,
         audience_label: audienceLabel,
+        is_pinned: false,
       };
-
       var result = await supabase.from('chat_channels').insert(insertData).select().single();
       if (result.error) throw result.error;
-
       mascotSuccessToast('Chat created', result.data.name + ' is ready to use.');
       setShowNewChannel(false);
       setNewChannelName('');
@@ -501,7 +520,7 @@ export default function OrgChat() {
   }
 
   async function handleDeleteChannel(channel) {
-    if (!window.confirm('Delete ' + channel.name + '? All messages will be lost.')) return;
+    if (!window.confirm('Delete "' + channel.name + '"? All messages will be permanently lost.')) return;
     var result = await supabase.from('chat_channels').delete().eq('id', channel.id);
     if (result.error) {
       mascotErrorToast('Failed to delete chat');
@@ -519,39 +538,95 @@ export default function OrgChat() {
     if (!m) return 'Unknown';
     return (((m.first_name || '') + ' ' + (m.last_name || '')).trim()) || 'Unknown';
   }
-
   function getSenderAvatar(senderId) {
     var m = memberProfiles[senderId];
     return m ? (m.avatar_url || m.profile_photo_url || null) : null;
   }
+  function isMe(senderId) { return !!(currentUser && senderId === currentUser.id); }
 
-  var isMe = function(senderId) { return currentUser && senderId === currentUser.id; };
+  // Derived
+  var totalUnread = Object.values(unreadCounts).reduce(function(sum, n) { return sum + n; }, 0);
+  var filteredChannels = channels.filter(function(ch) {
+    if (!channelSearch.trim()) return true;
+    return ch.name.toLowerCase().indexOf(channelSearch.toLowerCase()) !== -1;
+  });
+  var pinnedChannels   = filteredChannels.filter(function(ch) { return ch.is_pinned; });
+  var unpinnedChannels = filteredChannels.filter(function(ch) { return !ch.is_pinned; });
+  var adminMembers     = orgMembers.filter(function(m) { return m.role === 'admin'; });
+  var regularMembers   = orgMembers.filter(function(m) { return m.role !== 'admin'; });
 
-  var adminMembers   = orgMembers.filter(function(m) { return m.role === 'admin'; });
-  var regularMembers = orgMembers.filter(function(m) { return m.role !== 'admin'; });
+  function renderChannelItem(ch) {
+    var isSelected = !!(selectedChannel && selectedChannel.id === ch.id);
+    var unread = unreadCounts[ch.id] || 0;
+    var restricted = !!(ch.visibility && ch.visibility !== 'all');
+    return (
+      <div key={ch.id} role="listitem" style={{ position: 'relative' }} className="group">
+        <button
+          onClick={function() { setSelectedChannel(ch); }}
+          aria-label={ch.name + (unread > 0 ? ', ' + unread + ' unread' : '') + (restricted ? ', restricted' : '') + (ch.is_pinned ? ', pinned' : '')}
+          aria-current={isSelected ? 'true' : undefined}
+          style={{
+            width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+            padding: '7px 32px 7px 10px', borderRadius: '6px', marginBottom: '2px',
+            background: isSelected ? '#E2E8F0' : 'transparent',
+            display: 'flex', alignItems: 'center', gap: '6px',
+            color: isSelected ? TEXT : (unread > 0 ? TEXT : MUTED),
+            fontWeight: unread > 0 ? 700 : 500, fontSize: '13px',
+          }}
+          className={'hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors'}>
+          {restricted && (
+            <span style={{ color: isSelected ? '#F5B731' : MUTED, flexShrink: 0 }}>
+              <Icon path={ICONS.lock} size={13} />
+            </span>
+          )}
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
+          {unread > 0 && (
+            <span style={{ background: '#3B82F6', color: '#FFFFFF', fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '99px', flexShrink: 0 }}>
+              {unread}
+            </span>
+          )}
+        </button>
+        {isAdmin && (
+          <button
+            onClick={function(e) { handleTogglePin(ch, e); }}
+            aria-label={(ch.is_pinned ? 'Unpin ' : 'Pin ') + ch.name}
+            title={ch.is_pinned ? 'Unpin from top' : 'Pin to top'}
+            style={{
+              position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
+              padding: '4px', borderRadius: '4px', border: 'none', background: 'transparent',
+              color: ch.is_pinned ? '#F5B731' : MUTED, cursor: 'pointer',
+              display: 'flex', alignItems: 'center',
+              opacity: ch.is_pinned ? 1 : 0,
+            }}
+            className={'group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-opacity'}>
+            <Icon path={ICONS.pin} size={12} filled={ch.is_pinned} />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: BG, height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
       {/* Page header */}
-      <div style={{ background: CARD_BG, borderBottom: '1px solid ' + BORDER, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ color: '#F5B731' }}><Icon path={ICONS.chat} size={20} /></div>
-        <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 800, color: TEXT, margin: 0 }}>
-            {organization ? organization.name + ' \u2014 Chat' : 'Chat'}
-          </h1>
-          <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>
-            {channels.length} chat{channels.length !== 1 ? 's' : ''}
+      <div style={{ background: CARD_BG, borderBottom: '1px solid ' + BORDER, padding: '24px', flexShrink: 0 }}>
+        <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, margin: 0 }}>Chats</h1>
+        {!loadingChannels && channels.length > 0 && (
+          <p style={{ fontSize: '14px', color: MUTED, margin: '4px 0 0' }}>
+            {channels.length + ' chat' + (channels.length !== 1 ? 's' : '') + (totalUnread > 0 ? ' \u00b7 ' + totalUnread + ' unread' : '')}
           </p>
-        </div>
+        )}
       </div>
 
       {/* Body */}
-      <div style={{ display: 'flex', flex: 1, height: 'calc(100vh - 69px)', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-        {/* Left sidebar — channel list */}
+        {/* Left sidebar */}
         <div style={{ width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
+          {/* Sidebar header */}
+          <div style={{ padding: '16px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <span style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px' }}>Chats</span>
             {isAdmin && (
               <button
@@ -564,52 +639,61 @@ export default function OrgChat() {
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }} role="list" aria-label="Chats">
-            {loadingChannels ? (
-              <div style={{ padding: '8px' }}>
-                {[1,2,3].map(function(i) {
-                  return <div key={i} style={{ height: '32px', background: BORDER, borderRadius: '6px', marginBottom: '4px' }} />;
-                })}
+          {/* Search — shown when 4+ channels */}
+          {channels.length >= 4 && (
+            <div style={{ padding: '0 8px 8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: CARD_BG, border: '1px solid ' + BORDER, borderRadius: '6px', padding: '5px 8px' }}>
+                <span style={{ color: MUTED, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                  <Icon path={ICONS.search} size={12} />
+                </span>
+                <input
+                  type="text"
+                  value={channelSearch}
+                  onChange={function(e) { setChannelSearch(e.target.value); }}
+                  placeholder="Search chats..."
+                  aria-label="Search chats"
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: TEXT, fontSize: '12px', fontFamily: 'inherit' }}
+                />
+                {channelSearch && (
+                  <button onClick={function() { setChannelSearch(''); }}
+                    aria-label="Clear search"
+                    style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                    className={'hover:text-slate-600 focus:outline-none'}>
+                    <Icon path={ICONS.x} size={11} />
+                  </button>
+                )}
               </div>
-            ) : channels.length === 0 ? (
+            </div>
+          )}
+
+          {/* Channel list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }} role="list" aria-label="Chats">
+            {loadingChannels ? (
+              <SkeletonSidebar />
+            ) : filteredChannels.length === 0 ? (
               <div style={{ padding: '16px', textAlign: 'center', color: MUTED, fontSize: '12px' }}>
-                {isAdmin ? 'Create your first chat' : 'No chats yet'}
+                {channelSearch.trim()
+                  ? 'No chats match "' + channelSearch + '"'
+                  : (isAdmin ? 'Create your first chat' : 'No chats yet')}
               </div>
             ) : (
-              channels.map(function(ch) {
-                var isSelected = selectedChannel && selectedChannel.id === ch.id;
-                var unread = unreadCounts[ch.id] || 0;
-                var restricted = !!(ch.visibility && ch.visibility !== 'all');
-                return (
-                  <button
-                    key={ch.id}
-                    role="listitem"
-                    onClick={function() { setSelectedChannel(ch); }}
-                    aria-label={ch.name + (unread > 0 ? ', ' + unread + ' unread' : '') + (restricted ? ', restricted' : '')}
-                    aria-current={isSelected ? 'true' : undefined}
-                    style={{
-                      width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-                      padding: '7px 10px', borderRadius: '6px', marginBottom: '2px',
-                      background: isSelected ? '#E2E8F0' : 'transparent',
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      color: isSelected ? TEXT : (unread > 0 ? TEXT : MUTED),
-                      fontWeight: unread > 0 ? 700 : 500, fontSize: '13px',
-                    }}
-                    className={'hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors'}>
-                    {restricted && (
-                      <span style={{ color: isSelected ? '#F5B731' : MUTED, flexShrink: 0 }}>
-                        <Icon path={ICONS.lock} size={13} />
-                      </span>
-                    )}
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
-                    {unread > 0 && (
-                      <span style={{ background: '#3B82F6', color: '#FFFFFF', fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '99px', flexShrink: 0 }}>
-                        {unread}
-                      </span>
-                    )}
-                  </button>
-                );
-              })
+              <div>
+                {pinnedChannels.length > 0 && (
+                  <div style={{ marginBottom: '4px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '1px', padding: '4px 10px 4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ color: '#F5B731' }}><Icon path={ICONS.pin} size={9} filled /></span>
+                      Pinned
+                    </div>
+                    {pinnedChannels.map(renderChannelItem)}
+                  </div>
+                )}
+                {pinnedChannels.length > 0 && unpinnedChannels.length > 0 && (
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '1px', padding: '8px 10px 4px' }}>
+                    All Chats
+                  </div>
+                )}
+                {unpinnedChannels.map(renderChannelItem)}
+              </div>
             )}
           </div>
         </div>
@@ -630,14 +714,21 @@ export default function OrgChat() {
             ) : (
               <>
                 {/* Channel header */}
-                <div style={{ padding: '14px 20px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', gap: '10px', background: CARD_BG, flexShrink: 0 }}>
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', gap: '10px', background: CARD_BG, flexShrink: 0 }}>
                   {getAudienceLabel(selectedChannel) && (
                     <span style={{ color: '#F5B731', flexShrink: 0 }}>
                       <Icon path={ICONS.lock} size={16} />
                     </span>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: TEXT }}>{selectedChannel.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: TEXT }}>{selectedChannel.name}</span>
+                      {selectedChannel.is_pinned && (
+                        <span style={{ color: '#F5B731' }} title="Pinned">
+                          <Icon path={ICONS.pin} size={13} filled />
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       {selectedChannel.description && (
                         <span style={{ fontSize: '12px', color: MUTED }}>{selectedChannel.description}</span>
@@ -650,7 +741,6 @@ export default function OrgChat() {
                     </div>
                   </div>
 
-                  {/* Members toggle */}
                   <button
                     onClick={handleToggleMembersPanel}
                     aria-label={showMembersPanel ? 'Hide members' : 'Show members'}
@@ -685,7 +775,7 @@ export default function OrgChat() {
                     <EmptyState
                       icon={<Icon path={ICONS.chat} size={24} />}
                       title={'Welcome to ' + selectedChannel.name}
-                      description={selectedChannel.description || 'This is the beginning of this channel. Say hello!'}
+                      description={selectedChannel.description || 'This is the start of this channel. Say hello!'}
                     />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -708,7 +798,6 @@ export default function OrgChat() {
                                 <div style={{ flex: 1, height: '1px', background: BORDER }} />
                               </div>
                             )}
-
                             <div style={{ display: 'flex', gap: '10px', padding: '3px 0', alignItems: 'flex-start' }} className="group">
                               <div style={{ width: '36px', flexShrink: 0 }}>
                                 {showHeader ? (
@@ -724,7 +813,6 @@ export default function OrgChat() {
                                   <div style={{ width: '36px' }} />
                                 )}
                               </div>
-
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 {showHeader && (
                                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '3px', flexWrap: 'wrap' }}>
@@ -776,37 +864,36 @@ export default function OrgChat() {
                       onClick={sendMessage}
                       disabled={sending || !messageInput.trim()}
                       aria-label="Send message"
-                      style={{ padding: '6px 14px', borderRadius: '7px', border: 'none', background: messageInput.trim() ? '#3B82F6' : BORDER, color: messageInput.trim() ? '#FFFFFF' : MUTED, cursor: messageInput.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, flexShrink: 0, transition: 'all 0.15s' }}
+                      style={{ padding: '6px 14px', borderRadius: '7px', border: 'none', background: messageInput.trim() ? '#3B82F6' : BORDER, color: messageInput.trim() ? '#FFFFFF' : MUTED, cursor: messageInput.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, flexShrink: 0, transition: 'background 0.15s' }}
                       className={'focus:outline-none focus:ring-2 focus:ring-blue-500'}>
                       <Icon path={ICONS.send} size={14} />
                       Send
                     </button>
                   </div>
-                  <p style={{ fontSize: '11px', color: MUTED, marginTop: '6px', paddingLeft: '2px' }}>
-                    Press Enter to send &middot; Shift+Enter for new line
+                  <p style={{ fontSize: '11px', color: MUTED, margin: '6px 0 0 2px' }}>
+                    Enter to send &middot; Shift+Enter for new line
                   </p>
                 </div>
               </>
             )}
           </div>
 
-          {/* Right — Members panel */}
+          {/* Members panel */}
           {showMembersPanel && (
             <div style={{ width: '220px', flexShrink: 0, background: CARD_BG, borderLeft: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
               role="complementary" aria-label="Members panel">
-              <div style={{ padding: '14px 16px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px' }}>
-                  Members {(!loadingMembers && orgMembers.length > 0) ? '(' + orgMembers.length + ')' : ''}
+                  Members{(!loadingMembers && orgMembers.length > 0) ? ' (' + orgMembers.length + ')' : ''}
                 </span>
                 <button
                   onClick={function() { setShowMembersPanel(false); }}
                   aria-label="Close members panel"
-                  style={{ padding: '3px', borderRadius: '4px', border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer' }}
+                  style={{ padding: '3px', borderRadius: '4px', border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   className={'hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500'}>
                   <Icon path={ICONS.x} size={15} />
                 </button>
               </div>
-
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {loadingMembers ? (
                   <SkeletonMembers />
@@ -819,9 +906,7 @@ export default function OrgChat() {
                         <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '1px', padding: '4px 8px 6px' }}>
                           Admins &mdash; {adminMembers.length}
                         </div>
-                        {adminMembers.map(function(m) {
-                          return <MemberRow key={m.member_id} membership={m} />;
-                        })}
+                        {adminMembers.map(function(m) { return <MemberRow key={m.member_id} membership={m} />; })}
                       </div>
                     )}
                     {regularMembers.length > 0 && (
@@ -829,9 +914,7 @@ export default function OrgChat() {
                         <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '1px', padding: '4px 8px 6px' }}>
                           Members &mdash; {regularMembers.length}
                         </div>
-                        {regularMembers.map(function(m) {
-                          return <MemberRow key={m.member_id} membership={m} />;
-                        })}
+                        {regularMembers.map(function(m) { return <MemberRow key={m.member_id} membership={m} />; })}
                       </div>
                     )}
                   </div>
@@ -849,32 +932,31 @@ export default function OrgChat() {
           <div style={{ background: CARD_BG, borderRadius: '16px', width: '100%', maxWidth: '500px', border: '1px solid ' + BORDER, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: CARD_BG, zIndex: 1 }}>
               <h2 id="new-channel-title" style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>Create Chat</h2>
-              <button onClick={function() { setShowNewChannel(false); }} aria-label="Close"
-                style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer' }}
+              <button onClick={function() { setShowNewChannel(false); }} aria-label="Close dialog"
+                style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 className={'hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500'}>
                 <Icon path={ICONS.x} size={18} />
               </button>
             </div>
-
             <div style={{ padding: '24px' }}>
+
               {/* Name */}
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="chat-name" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
                   Chat Name <span aria-hidden="true" style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: INPUT_BG, border: '1px solid ' + BORDER, borderRadius: '8px', padding: '8px 12px' }}>
-                  <input
-                    id="chat-name"
-                    type="text"
-                    value={newChannelName}
-                    onChange={function(e) { setNewChannelName(e.target.value); }}
-                    placeholder="e.g. general, board, volunteers"
-                    aria-required="true"
-                    style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: TEXT, fontSize: '14px', fontFamily: 'inherit' }}
-                    onKeyDown={function(e) { if (e.key === 'Enter') handleCreateChannel(); }}
-                    autoFocus
-                  />
-                </div>
+                <input
+                  id="chat-name"
+                  type="text"
+                  value={newChannelName}
+                  onChange={function(e) { setNewChannelName(e.target.value); }}
+                  placeholder="e.g. general, board, volunteers"
+                  aria-required="true"
+                  autoFocus
+                  onKeyDown={function(e) { if (e.key === 'Enter') handleCreateChannel(); }}
+                  style={{ width: '100%', background: INPUT_BG, border: '1px solid ' + BORDER, borderRadius: '8px', padding: '8px 12px', color: TEXT, fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  className={'focus:ring-2 focus:ring-blue-500 focus:border-blue-400'}
+                />
               </div>
 
               {/* Description */}
@@ -887,20 +969,17 @@ export default function OrgChat() {
                   type="text"
                   value={newChannelDesc}
                   onChange={function(e) { setNewChannelDesc(e.target.value); }}
-                  placeholder="What's this chat for?"
+                  placeholder="What is this chat for?"
                   style={{ width: '100%', background: INPUT_BG, border: '1px solid ' + BORDER, borderRadius: '8px', padding: '8px 12px', color: TEXT, fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                  className={'focus:ring-2 focus:ring-blue-500'}
+                  className={'focus:ring-2 focus:ring-blue-500 focus:border-blue-400'}
                 />
               </div>
 
               {/* Audience */}
               <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '10px' }}>
-                  Audience
-                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '10px' }}>Audience</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} role="radiogroup" aria-label="Channel audience">
 
-                  {/* All Members */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', border: '1px solid ' + (newChannelVisibility === 'all' ? '#3B82F6' : BORDER), background: newChannelVisibility === 'all' ? 'rgba(59,130,246,0.05)' : CARD_BG, cursor: 'pointer' }}>
                     <input type="radio" name="channel-visibility" value="all"
                       checked={newChannelVisibility === 'all'}
@@ -914,7 +993,6 @@ export default function OrgChat() {
                     </div>
                   </label>
 
-                  {/* Admins Only */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', border: '1px solid ' + (newChannelVisibility === 'admins' ? '#3B82F6' : BORDER), background: newChannelVisibility === 'admins' ? 'rgba(59,130,246,0.05)' : CARD_BG, cursor: 'pointer' }}>
                     <input type="radio" name="channel-visibility" value="admins"
                       checked={newChannelVisibility === 'admins'}
@@ -928,7 +1006,6 @@ export default function OrgChat() {
                     </div>
                   </label>
 
-                  {/* Specific Group */}
                   {orgGroups.length > 0 && (
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', borderRadius: '8px', border: '1px solid ' + (newChannelVisibility === 'group' ? '#3B82F6' : BORDER), background: newChannelVisibility === 'group' ? 'rgba(59,130,246,0.05)' : CARD_BG, cursor: 'pointer' }}>
                       <input type="radio" name="channel-visibility" value="group"
@@ -937,29 +1014,25 @@ export default function OrgChat() {
                         style={{ accentColor: '#3B82F6', marginTop: '3px' }} />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: TEXT, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: newChannelVisibility === 'group' ? '8px' : '0' }}>
-                          <Icon path={ICONS.lock} size={13} /> Specific Group or Committee
+                          <Icon path={ICONS.lock} size={13} /> Specific Group
                         </div>
                         {newChannelVisibility !== 'group' && (
                           <div style={{ fontSize: '11px', color: MUTED }}>Restrict to a group or committee</div>
                         )}
                         {newChannelVisibility === 'group' && (
-                          <select
-                            value={newChannelAudienceId}
+                          <select value={newChannelAudienceId}
                             onChange={function(e) { setNewChannelAudienceId(e.target.value); }}
                             aria-label="Select group"
                             style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid ' + BORDER, background: INPUT_BG, color: TEXT, fontSize: '13px', fontFamily: 'inherit', outline: 'none' }}
                             className={'focus:ring-2 focus:ring-blue-500'}>
                             <option value="">Select a group...</option>
-                            {orgGroups.map(function(g) {
-                              return <option key={g.id} value={g.id}>{g.name}</option>;
-                            })}
+                            {orgGroups.map(function(g) { return <option key={g.id} value={g.id}>{g.name}</option>; })}
                           </select>
                         )}
                       </div>
                     </label>
                   )}
 
-                  {/* Membership Tier */}
                   {membershipTiers.length > 0 && (
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', borderRadius: '8px', border: '1px solid ' + (newChannelVisibility === 'tier' ? '#3B82F6' : BORDER), background: newChannelVisibility === 'tier' ? 'rgba(59,130,246,0.05)' : CARD_BG, cursor: 'pointer' }}>
                       <input type="radio" name="channel-visibility" value="tier"
@@ -974,16 +1047,13 @@ export default function OrgChat() {
                           <div style={{ fontSize: '11px', color: MUTED }}>Restrict to a specific membership tier</div>
                         )}
                         {newChannelVisibility === 'tier' && (
-                          <select
-                            value={newChannelAudienceId}
+                          <select value={newChannelAudienceId}
                             onChange={function(e) { setNewChannelAudienceId(e.target.value); }}
                             aria-label="Select membership tier"
                             style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid ' + BORDER, background: INPUT_BG, color: TEXT, fontSize: '13px', fontFamily: 'inherit', outline: 'none' }}
                             className={'focus:ring-2 focus:ring-blue-500'}>
                             <option value="">Select a tier...</option>
-                            {membershipTiers.map(function(t) {
-                              return <option key={t.id} value={t.id}>{t.name}</option>;
-                            })}
+                            {membershipTiers.map(function(t) { return <option key={t.id} value={t.id}>{t.name}</option>; })}
                           </select>
                         )}
                       </div>
