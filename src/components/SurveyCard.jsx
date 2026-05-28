@@ -37,6 +37,9 @@ var ICONS = {
   barChart:  'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   repeat:    'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
   filter:    'M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z',
+  template:  ['M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2'],
+  pencil:    ['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
+  bell:      'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
 };
 
 var CHART_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16'];
@@ -106,24 +109,67 @@ function shouldShowQuestion(question, answers, allQuestions) {
   return ans === question.condition_answer;
 }
 
+// ── Closing countdown badge ───────────────────────────────────────────────────
+function ClosingBadge({ closesAt }) {
+  if (!closesAt) return null;
+  var now = new Date();
+  var closes = new Date(closesAt);
+  if (closes <= now) return null;
+  var hoursLeft = (closes - now) / (1000 * 60 * 60);
+  var daysLeft  = hoursLeft / 24;
+  if (daysLeft > 3) return null;
+  var label = hoursLeft < 24
+    ? 'Closes in ' + Math.ceil(hoursLeft) + 'h'
+    : 'Closes in ' + Math.ceil(daysLeft) + 'd';
+  var cls = hoursLeft < 24
+    ? 'bg-red-50 text-red-600 border-red-200'
+    : 'bg-orange-50 text-orange-600 border-orange-200';
+  return (
+    <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ' + cls}>
+      <Icon path={ICONS.clock} className="h-3 w-3" />{label}
+    </span>
+  );
+}
+
+// ── Response rate bar ─────────────────────────────────────────────────────────
+function ResponseBar({ count, total }) {
+  if (!total || total === 0) return null;
+  var pct = Math.min(100, Math.round((count / total) * 100));
+  var barCls = pct >= 75 ? 'bg-green-500' : pct >= 40 ? 'bg-blue-500' : 'bg-orange-400';
+  return (
+    <div className="mt-3 mb-1">
+      <div className="flex justify-between text-xs mb-1 text-[#64748B]">
+        <span>{count} of {total} members responded</span>
+        <span className="font-semibold">{pct}%</span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden bg-gray-200" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className={'h-1.5 rounded-full transition-all ' + barCls} style={{ width: pct + '%' }} />
+      </div>
+    </div>
+  );
+}
+
 // ── SurveyCard ────────────────────────────────────────────────────────────────
-function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, memberCount }) {
-  var [loading, setLoading] = useState(false);
-  var [questions, setQuestions] = useState([]);
-  var [answers, setAnswers] = useState({});
-  var [showForm, setShowForm] = useState(false);
+function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, isAdmin, memberCount }) {
+  var [loading, setLoading]         = useState(false);
+  var [questions, setQuestions]     = useState([]);
+  var [answers, setAnswers]         = useState({});
+  var [showForm, setShowForm]       = useState(false);
   var [hasResponded, setHasResponded] = useState(false);
   var [responseCount, setResponseCount] = useState(0);
   var [showResults, setShowResults] = useState(false);
-  var [results, setResults] = useState(null);
+  var [results, setResults]         = useState(null);
   var [confirmDelete, setConfirmDelete] = useState(false);
-  var [deleting, setDeleting] = useState(false);
+  var [deleting, setDeleting]       = useState(false);
   var [duplicating, setDuplicating] = useState(false);
-  var [formError, setFormError] = useState(null);
-  var [chartMode, setChartMode] = useState('bar');
+  var [savingTemplate, setSavingTemplate] = useState(false);
+  var [formError, setFormError]     = useState(null);
+  var [chartMode, setChartMode]     = useState('bar');
+  var [reminding, setReminding]     = useState(false);
 
   var isExpired = survey.closes_at && new Date(survey.closes_at) < new Date();
   var isClosed  = survey.status === 'closed' || isExpired;
+  var isUrgent  = !isClosed && survey.closes_at && ((new Date(survey.closes_at) - new Date()) / (1000*60*60)) <= 72;
   var canSeeResults = isAdmin || isClosed || hasResponded;
   var effectiveVisibility = isAdmin ? 'full' : (survey.result_visibility || 'full');
   var responseRate = memberCount > 0 ? Math.round((responseCount / memberCount) * 100) : null;
@@ -294,34 +340,161 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
         anonymous_responses: survey.anonymous_responses,
         allow_multiple_responses: survey.allow_multiple_responses,
         show_results_after_submission: survey.show_results_after_submission,
-        closes_at: null,
-        retention_days: survey.retention_days,
+        closes_at: null, retention_days: survey.retention_days,
         result_visibility: survey.result_visibility || 'full',
-        visibility: survey.visibility,
-        status: 'active',
-        is_pinned: false,
-        created_by: user.id,
-        approval_status: 'approved',
+        visibility: survey.visibility, status: 'active',
+        is_pinned: false, created_by: user.id, approval_status: 'approved',
       }).select().single();
       if (sR.error) throw sR.error;
-
-      // Copy questions
       var qR = await supabase.from('survey_questions').select('*').eq('survey_id', survey.id).order('order_number');
       if (qR.error) throw qR.error;
       if (qR.data && qR.data.length > 0) {
         var qInserts = qR.data.map(function(q) {
           return { survey_id:sR.data.id, question_text:q.question_text, question_type:q.question_type,
             required:q.required, options:q.options, order_number:q.order_number,
-            condition_question_id:null, condition_answer:null }; // reset conditions on copy
+            condition_question_id:null, condition_answer:null };
         });
         var qiR = await supabase.from('survey_questions').insert(qInserts);
         if (qiR.error) throw qiR.error;
       }
-
       mascotSuccessToast('Survey duplicated!', survey.title + ' (Copy) created.');
       if (onDuplicate) onDuplicate(sR.data);
     } catch (err) { mascotErrorToast('Failed to duplicate survey.', err.message); }
     finally { setDuplicating(false); }
+  }
+
+  async function handleSaveAsTemplate() {
+    setSavingTemplate(true);
+    try {
+      var auth = await supabase.auth.getUser();
+      var user = auth.data.user;
+
+      // Fetch questions fresh
+      var qR = await supabase.from('survey_questions').select('*').eq('survey_id', survey.id).order('order_number');
+      if (qR.error) throw qR.error;
+      var templateQuestions = (qR.data || []).map(function(q) {
+        return { question_text: q.question_text, question_type: q.question_type,
+          required: q.required, options: q.options || [] };
+      });
+      var templateData = {
+        title:                         survey.title,
+        description:                   survey.description || '',
+        anonymous_responses:           survey.anonymous_responses,
+        allow_multiple_responses:      survey.allow_multiple_responses,
+        show_results_after_submission: survey.show_results_after_submission,
+        result_visibility:             survey.result_visibility || 'full',
+        visibility:                    survey.visibility || 'all_members',
+        questions:                     templateQuestions,
+      };
+
+      // Check for an existing template with the same name in this org
+      var dupR = await supabase.from('poll_survey_templates')
+        .select('id, name')
+        .eq('organization_id', survey.organization_id)
+        .eq('type', 'survey')
+        .ilike('name', survey.title)
+        .maybeSingle();
+      if (dupR.error) throw dupR.error;
+
+      if (dupR.data) {
+        // Duplicate found — ask the user what to do
+        var choice = window.confirm(
+          'A template named "' + dupR.data.name + '" already exists.\n\n' +
+          'Click OK to replace it, or Cancel to save as a new copy.'
+        );
+        if (choice) {
+          // Replace existing template
+          var upR = await supabase.from('poll_survey_templates')
+            .update({ name: survey.title, template_data: templateData })
+            .eq('id', dupR.data.id);
+          if (upR.error) throw upR.error;
+          mascotSuccessToast('Template updated!', '"' + survey.title + '" has been replaced.');
+          return;
+        }
+        // Fall through to save as copy with "(2)", "(3)", etc.
+        var copyName = survey.title + ' (2)';
+        var n = 2;
+        // Keep incrementing until the name is free
+        var checkLoop = true;
+        while (checkLoop) {
+          var cR = await supabase.from('poll_survey_templates')
+            .select('id')
+            .eq('organization_id', survey.organization_id)
+            .eq('type', 'survey')
+            .ilike('name', copyName)
+            .maybeSingle();
+          if (cR.error) throw cR.error;
+          if (!cR.data) { checkLoop = false; }
+          else { n++; copyName = survey.title + ' (' + n + ')'; }
+        }
+        templateData.title = copyName;
+        var insR = await supabase.from('poll_survey_templates').insert({
+          organization_id: survey.organization_id,
+          type:            'survey',
+          name:            copyName,
+          template_data:   templateData,
+          created_by:      user.id,
+        });
+        if (insR.error) throw insR.error;
+        mascotSuccessToast('Template saved!', '"' + copyName + '" saved as a new template.');
+        return;
+      }
+
+      // No duplicate — plain insert
+      var r = await supabase.from('poll_survey_templates').insert({
+        organization_id: survey.organization_id,
+        type:            'survey',
+        name:            survey.title,
+        template_data:   templateData,
+        created_by:      user.id,
+      });
+      if (r.error) throw r.error;
+      mascotSuccessToast('Template saved!', '"' + survey.title + '" saved as a template.');
+    } catch (err) {
+      mascotErrorToast('Failed to save template.', err.message);
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function handleRemind() {
+    setReminding(true);
+    try {
+      // Get all active members
+      var memR = await supabase.from('memberships').select('member_id')
+        .eq('organization_id', survey.organization_id).eq('status', 'active');
+      if (memR.error) throw memR.error;
+      var allMemberIds = (memR.data || []).map(function(m) { return m.member_id; });
+
+      // Get members who already responded
+      var respR = await supabase.from('survey_responses').select('member_id').eq('survey_id', survey.id);
+      if (respR.error) throw respR.error;
+      var respondedIds = new Set((respR.data || []).map(function(r) { return r.member_id; }));
+
+      var nonRespondents = allMemberIds.filter(function(id) { return !respondedIds.has(id); });
+      if (nonRespondents.length === 0) {
+        toast.error('All members have already responded.');
+        return;
+      }
+
+      var notifications = nonRespondents.map(function(memberId) {
+        return {
+          member_id:       memberId,
+          organization_id: survey.organization_id,
+          type:            'announcement',
+          title:           'Survey reminder: ' + survey.title,
+          message:         'You have not yet responded to this survey. Your feedback matters!',
+          read:            false,
+        };
+      });
+      var nR = await supabase.from('notifications').insert(notifications);
+      if (nR.error) throw nR.error;
+      mascotSuccessToast('Reminders sent!', nonRespondents.length + ' member' + (nonRespondents.length !== 1 ? 's' : '') + ' notified.');
+    } catch (err) {
+      mascotErrorToast('Failed to send reminders.', err.message);
+    } finally {
+      setReminding(false);
+    }
   }
 
   async function handleDelete() {
@@ -369,9 +542,15 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
   var canTakeSurvey = !isClosed && (!hasResponded || survey.allow_multiple_responses);
   var visibleQuestions = questions.filter(function(q) { return shouldShowQuestion(q, answers, questions); });
 
+  // Urgent card border
+  var borderCls = survey.is_pinned
+    ? 'border-[#F5B731] border-2'
+    : isUrgent
+      ? 'border-orange-300 border-2'
+      : 'border-slate-200';
+
   return (
-    <article className={'rounded-xl border p-5 bg-white ' + (survey.is_pinned ? 'border-[#F5B731] border-2' : 'border-slate-200')}
-      aria-label={survey.title + ' survey'}>
+    <article className={'rounded-xl border p-5 bg-white ' + borderCls} aria-label={survey.title + ' survey'}>
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -391,6 +570,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
                 <Icon path={ICONS.check} className="h-3 w-3" />Active
               </span>
             )}
+            <ClosingBadge closesAt={survey.closes_at} />
             {hasResponded && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700">
                 <Icon path={ICONS.check} className="h-3 w-3" />Responded
@@ -412,7 +592,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
                 {questions.length} {questions.length===1?'Question':'Questions'}
               </span>
             )}
-            {survey.closes_at && (
+            {survey.closes_at && !isUrgent && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
                 <Icon path={ICONS.clock} className="h-3 w-3" />
                 {isClosed?'Closed':'Closes'} {format(new Date(survey.closes_at), 'MMM d, yyyy')}
@@ -421,7 +601,12 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
           </div>
           <h3 className="text-base font-bold text-[#0E1523]">{survey.title}</h3>
           {survey.description && <p className="text-sm mt-1 text-[#475569]">{survey.description}</p>}
+          {/* Response rate bar — admin only, active surveys */}
+          {isAdmin && !isClosed && memberCount > 0 && (
+            <ResponseBar count={responseCount} total={memberCount} />
+          )}
         </div>
+
         {isAdmin && !confirmDelete && (
           <button onClick={handleDelete}
             className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors flex-shrink-0"
@@ -457,11 +642,32 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
             <Icon path={isClosed ? ICONS.unlock : ICONS.lock} className="h-3.5 w-3.5" />
             {isClosed ? 'Reopen' : 'Close Now'}
           </button>
+          {/* Edit button — available on all surveys (title/description/settings can always be updated) */}
+          {onEdit && (
+            <button onClick={function() { onEdit(survey); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <Icon path={ICONS.pencil} className="h-3.5 w-3.5" />Edit
+            </button>
+          )}
           <button onClick={handleDuplicate} disabled={duplicating}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50">
             <Icon path={ICONS.copy} className="h-3.5 w-3.5" />
             {duplicating ? 'Copying...' : 'Duplicate'}
           </button>
+          {/* Save as Template */}
+          <button onClick={handleSaveAsTemplate} disabled={savingTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50">
+            <Icon path={ICONS.template} className="h-3.5 w-3.5" />
+            {savingTemplate ? 'Saving...' : 'Save as Template'}
+          </button>
+          {/* Remind non-respondents — active surveys only */}
+          {!isClosed && (
+            <button onClick={handleRemind} disabled={reminding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50">
+              <Icon path={ICONS.bell} className="h-3.5 w-3.5" />
+              {reminding ? 'Sending...' : 'Remind'}
+            </button>
+          )}
           {results && results.totalResponses > 0 && (
             <button onClick={handleExportCSV}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">
@@ -597,7 +803,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
             <div className="flex items-center gap-2">
               <Icon path={ICONS.chart} className="h-5 w-5 text-blue-500" />
               <h4 className="font-bold text-[#0E1523]">
-                {'Results — ' + (results?results.totalResponses:0) + ' ' + (results&&results.totalResponses===1?'Response':'Responses')}
+                {'Results \u2014 ' + (results?results.totalResponses:0) + ' ' + (results&&results.totalResponses===1?'Response':'Responses')}
               </h4>
             </div>
             {results && results.totalResponses > 0 && (
@@ -630,7 +836,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
             </div>
           ) : loading ? (
             <div className="space-y-3">
-              {[1,2,3].map(function(i){return <div key={i} className="h-16 rounded-lg animate-pulse bg-gray-100" />;}) }
+              {[1,2,3].map(function(i){return <div key={i} className="h-16 rounded-lg animate-pulse bg-gray-100" />;})}
             </div>
           ) : !results || results.totalResponses === 0 ? (
             <div className="text-center py-8 rounded-lg bg-slate-50">
@@ -655,10 +861,8 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
                           <span className="text-sm text-[#64748B]">/ 5 &middot; {result.totalRatings} rating{result.totalRatings!==1?'s':''}</span>
                         </div>
                         {chartMode === 'pie' ? (
-                          <DonutChart
-                            labels={result.distribution.map(function(d){return d.rating+' stars';})}
-                            values={result.distribution.map(function(d){return d.count;})}
-                            total={result.totalRatings} />
+                          <DonutChart labels={result.distribution.map(function(d){return d.rating+' stars';})}
+                            values={result.distribution.map(function(d){return d.count;})} total={result.totalRatings} />
                         ) : (
                           <div className="space-y-1.5">
                             {result.distribution.map(function(d) {
@@ -679,10 +883,8 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, isAdmin, m
                     )}
                     {(result.type==='single_choice'||result.type==='multiple_choice') && (
                       chartMode === 'pie' ? (
-                        <DonutChart
-                          labels={result.options.map(function(o){return o.option;})}
-                          values={result.options.map(function(o){return o.count;})}
-                          total={results.totalResponses} />
+                        <DonutChart labels={result.options.map(function(o){return o.option;})}
+                          values={result.options.map(function(o){return o.count;})} total={results.totalResponses} />
                       ) : (
                         <div className="space-y-2">
                           {result.options.map(function(opt,oi) {

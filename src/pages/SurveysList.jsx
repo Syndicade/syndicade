@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
@@ -23,7 +23,6 @@ var ICONS = {
   check:     'M5 13l4 4L19 7',
   lock:      'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
   pin:       ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
-  list:      'M4 6h16M4 10h16M4 14h16M4 18h16',
   x:         'M6 18L18 6M6 6l12 12',
   alert:     ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
 };
@@ -56,21 +55,23 @@ function SurveyCardSkeleton() {
 }
 
 function SurveysList() {
-  var params = useParams();
+  var params         = useParams();
   var organizationId = params.organizationId;
-  var navigate = useNavigate();
+  var navigate       = useNavigate();
+  var outletContext   = useOutletContext() || {};
+  var isAdmin        = !!(outletContext.isAdmin);
 
-  var [organization, setOrganization] = useState(null);
-  var [surveys, setSurveys] = useState([]);
+  var [organization, setOrganization]   = useState(null);
+  var [surveys, setSurveys]             = useState([]);
   var [filteredSurveys, setFilteredSurveys] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [error, setError] = useState(null);
-  var [isAdmin, setIsAdmin] = useState(false);
+  var [loading, setLoading]             = useState(true);
+  var [error, setError]                 = useState(null);
   var [showCreateModal, setShowCreateModal] = useState(false);
-  var [searchTerm, setSearchTerm] = useState('');
-  var [statusFilter, setStatusFilter] = useState('all');
-  var [sortBy, setSortBy] = useState('pinned_recent');
-  var [memberCount, setMemberCount] = useState(0);
+  var [editingSurvey, setEditingSurvey] = useState(null);
+  var [searchTerm, setSearchTerm]       = useState('');
+  var [statusFilter, setStatusFilter]   = useState('all');
+  var [sortBy, setSortBy]               = useState('pinned_recent');
+  var [memberCount, setMemberCount]     = useState(0);
 
   useEffect(function() { if (organizationId) loadData(); }, [organizationId]);
   useEffect(function() { applyFiltersAndSort(); }, [surveys, searchTerm, statusFilter, sortBy]);
@@ -90,7 +91,7 @@ function SurveysList() {
       });
     }
     if (statusFilter === 'active') filtered = filtered.filter(function(s) { return !isSurveyClosed(s); });
-    if (statusFilter === 'closed') filtered = filtered.filter(function(s) { return isSurveyClosed(s); });
+    if (statusFilter === 'closed') filtered = filtered.filter(function(s) { return  isSurveyClosed(s); });
 
     filtered.sort(function(a, b) {
       if (a.is_pinned && !b.is_pinned) return -1;
@@ -122,7 +123,6 @@ function SurveysList() {
         .eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').maybeSingle();
       if (memberResult.error) throw memberResult.error;
       if (!memberResult.data) { toast.error('You are not a member of this organization.'); navigate('/organizations'); return; }
-      setIsAdmin(['admin','owner'].includes(memberResult.data.role));
 
       var countR = await supabase.from('memberships').select('*', { count:'exact', head:true })
         .eq('organization_id', organizationId).eq('status', 'active');
@@ -138,32 +138,42 @@ function SurveysList() {
     } finally { setLoading(false); }
   }
 
-  function handleSurveyCreated() { loadData(); }
-  function handleSurveyDeleted() { loadData(); }
+  function handleSurveyCreated()       { loadData(); setShowCreateModal(false); setEditingSurvey(null); }
+  function handleSurveyDeleted()       { loadData(); }
   function handleSurveyUpdated(updated) {
     setSurveys(function(prev) { return prev.map(function(s) { return s.id === updated.id ? updated : s; }); });
   }
   function handleDuplicate(newSurvey) {
     setSurveys(function(prev) { return [newSurvey].concat(prev); });
   }
+  function handleEditSurvey(survey) {
+    setEditingSurvey(survey);
+    setShowCreateModal(true);
+  }
+  function handleModalClose() {
+    setShowCreateModal(false);
+    setEditingSurvey(null);
+  }
 
   var activeSurveys = surveys.filter(function(s) { return !isSurveyClosed(s); });
-  var closedSurveys = surveys.filter(function(s) { return isSurveyClosed(s); });
+  var closedSurveys = surveys.filter(function(s) { return  isSurveyClosed(s); });
   var pinnedCount   = surveys.filter(function(s) { return s.is_pinned; }).length;
   var hasFilters    = searchTerm || statusFilter !== 'all';
+
+  // ── Subtitle (dynamic, count-based) ──────────────────────────────────────
+  var subtitleParts = [];
+  if (activeSurveys.length > 0) subtitleParts.push(activeSurveys.length + ' active');
+  if (closedSurveys.length > 0) subtitleParts.push(closedSurveys.length + ' closed');
+  if (pinnedCount > 0)          subtitleParts.push(pinnedCount + ' pinned');
+  var subtitle = subtitleParts.join(' \u00b7 ');
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6 space-y-6">
-          <div className="rounded-xl border p-6 animate-pulse bg-white border-slate-200">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="h-7 w-28 rounded bg-gray-200" />
-                <div className="h-4 w-56 rounded bg-gray-100" />
-              </div>
-              <div className="h-10 w-36 rounded-lg bg-gray-200" />
-            </div>
+          <div className="animate-pulse">
+            <div className="h-8 w-32 rounded bg-gray-200 mb-2" />
+            <div className="h-4 w-48 rounded bg-gray-100" />
           </div>
           <div className="grid grid-cols-3 gap-4"><StatSkeleton /><StatSkeleton /><StatSkeleton /></div>
           <div className="rounded-xl border p-4 animate-pulse bg-white border-slate-200"><div className="h-10 rounded-lg bg-gray-100" /></div>
@@ -193,24 +203,18 @@ function SurveysList() {
     <div className="min-h-screen bg-[#F8FAFC]">
       <div className="px-6 py-6 space-y-6">
 
-        <div className="rounded-xl border p-5 bg-white border-slate-200">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-50">
-                <Icon path={ICONS.clipboard} className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-[#0E1523]">Surveys</h1>
-                <p className="text-sm text-[#64748B]">Create surveys and collect member feedback</p>
-              </div>
-            </div>
-            {isAdmin && (
-              <button onClick={function(){setShowCreateModal(true);}}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />Create Survey
-              </button>
-            )}
+        {/* ── Page header (standardized) ── */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 style={{ fontSize:'30px', fontWeight:800, color:'#0E1523', margin:0, lineHeight:1.2 }}>Surveys</h1>
+            {subtitle && <p className="text-sm text-[#64748B] mt-1">{subtitle}</p>}
           </div>
+          {isAdmin && (
+            <button onClick={function(){setShowCreateModal(true);}}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm flex-shrink-0">
+              <Icon path={ICONS.plus} className="h-4 w-4" />Create Survey
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -318,6 +322,7 @@ function SurveysList() {
                     onDelete={handleSurveyDeleted}
                     onSurveyUpdated={handleSurveyUpdated}
                     onDuplicate={handleDuplicate}
+                    onEdit={handleEditSurvey}
                     isAdmin={isAdmin}
                     memberCount={memberCount}
                   />
@@ -331,10 +336,11 @@ function SurveysList() {
 
       <CreateSurvey
         isOpen={showCreateModal}
-        onClose={function(){setShowCreateModal(false);}}
+        onClose={handleModalClose}
         onSuccess={handleSurveyCreated}
         organizationId={organizationId}
-        organizationName={organization.name}
+        organizationName={organization ? organization.name : ''}
+        editSurvey={editingSurvey}
       />
     </div>
   );
