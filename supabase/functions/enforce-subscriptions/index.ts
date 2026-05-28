@@ -555,6 +555,72 @@ serve(async (req) => {
       }
     }
 
+    // ── Document Pre-Deletion Warning Email (≤3 days before auto-delete) ────────
+    var warnTodayStr = now.toISOString().split('T')[0];
+    var warnDateStr = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    var { data: warnDocs } = await supabase
+      .from('documents')
+      .select('id, organization_id, title, delete_after')
+      .eq('auto_delete_notified', false)
+      .not('delete_after', 'is', null)
+      .gt('delete_after', warnTodayStr)
+      .lte('delete_after', warnDateStr);
+
+    for (var warnDoc of (warnDocs || [])) {
+      // Get org admin emails
+      var { data: adminRows } = await supabase
+        .from('memberships')
+        .select('member_id, members(email, display_name, first_name)')
+        .eq('organization_id', warnDoc.organization_id)
+        .eq('role', 'admin')
+        .eq('status', 'active');
+
+      var deleteDate = new Date(warnDoc.delete_after + 'T00:00:00');
+      var daysUntilDelete = Math.ceil((deleteDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      var deleteDateStr = deleteDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      var libUrl = 'https://syndicade.org/organizations/' + warnDoc.organization_id + '/documents';
+
+      for (var adminRow of (adminRows || [])) {
+        var adminEmail = (adminRow.members as any)?.email;
+        if (!adminEmail) continue;
+
+        await sendEmail(
+          adminEmail,
+          'Document expiring in ' + daysUntilDelete + (daysUntilDelete === 1 ? ' day' : ' days') + ': ' + warnDoc.title,
+          '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+          '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
+          '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
+          '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
+          '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
+          '<span style="font-size:20px;font-weight:800;color:#F5B731;">Syndi</span><span style="font-size:20px;font-weight:800;color:#ffffff;">cade</span>' +
+          '</td></tr>' +
+          '<tr><td style="padding:32px;">' +
+          '<h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#111827;">Document scheduled for deletion</h2>' +
+          '<p style="font-size:15px;color:#374151;margin:0 0 16px;">The following document will be <strong>automatically deleted on ' + deleteDateStr + '</strong> (' + daysUntilDelete + (daysUntilDelete === 1 ? ' day' : ' days') + ' away):</p>' +
+          '<div style="background:#FEF9C3;border:1px solid rgba(245,183,49,0.3);border-radius:8px;padding:16px;margin:0 0 16px;">' +
+          '<p style="font-size:15px;font-weight:700;color:#0E1523;margin:0;">' + warnDoc.title + '</p>' +
+          '</div>' +
+          '<p style="font-size:14px;color:#475569;margin:0 0 24px;">To keep this document, open the Document Library and remove the auto-delete date.</p>' +
+          '<p style="text-align:center;margin:0;">' +
+          '<a href="' + libUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Go to Document Library</a>' +
+          '</p>' +
+          '</td></tr>' +
+          '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
+          '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
+          '</td></tr></table></td></tr></table></body></html>'
+        );
+      }
+
+      // Mark as notified — prevents duplicate emails even if cron runs again
+      await supabase
+        .from('documents')
+        .update({ auto_delete_notified: true })
+        .eq('id', warnDoc.id);
+
+      console.log('Pre-deletion warning sent for: "' + warnDoc.title + '" (' + warnDoc.id + ')');
+    }
+
 // ── Document Auto-Delete ─────────────────────────────────────────────────
     // Deletes any document whose delete_after date is today or in the past
     var todayDateStr = now.toISOString().split('T')[0]; // 'YYYY-MM-DD'

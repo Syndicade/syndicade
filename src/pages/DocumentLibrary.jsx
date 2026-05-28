@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import {
   LayoutGrid, List, FolderPlus, Upload, Search, X, Folder,
-  Trash2, FileText, AlertTriangle, CheckSquare, Calendar
+  Trash2, FileText, AlertTriangle, CheckSquare, Calendar, Tag
 } from 'lucide-react';
 
 function DocumentLibrary() {
@@ -38,8 +38,9 @@ function DocumentLibrary() {
   var [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   var [isEditor, setIsEditor] = useState(false);
 
-  // Expiry filter + sort
+  // Filters + sort
   var [expiryFilter, setExpiryFilter] = useState('all');
+  var [categoryFilter, setCategoryFilter] = useState('');
   var [sortBy, setSortBy] = useState('date_desc');
 
   // Bulk select
@@ -139,15 +140,27 @@ function DocumentLibrary() {
     return days !== null && days <= 0;
   }).length;
 
-  // Filter by expiry tab
+  // Unique categories computed from loaded documents
+  var categories = documents
+    .map(function(d) { return d.category; })
+    .filter(function(c) { return c && c.trim() !== ''; })
+    .filter(function(c, i, arr) { return arr.indexOf(c) === i; })
+    .sort();
+
+  // Filter pipeline: expiry → category
   var filteredDocs = documents.filter(function(d) {
+    // Expiry filter
     if (expiryFilter === 'expiring_soon') {
       var days = getDaysUntilExpiry(d);
-      return days !== null && days > 0 && days <= 7;
+      if (!(days !== null && days > 0 && days <= 7)) return false;
     }
     if (expiryFilter === 'expired') {
-      var days = getDaysUntilExpiry(d);
-      return days !== null && days <= 0;
+      var days2 = getDaysUntilExpiry(d);
+      if (!(days2 !== null && days2 <= 0)) return false;
+    }
+    // Category filter
+    if (categoryFilter) {
+      if ((d.category || '') !== categoryFilter) return false;
     }
     return true;
   });
@@ -182,6 +195,14 @@ function DocumentLibrary() {
   if (expiredCount > 0) subtitleParts.push(expiredCount + ' expired');
   if (storageUsage && !storageUsage.max_bytes) subtitleParts.push(formatFileSize(storageUsage.total_bytes) + ' used');
   var subtitle = subtitleParts.join(' \u00b7 ');
+
+  // Whether any filter is active (for empty state CTA logic)
+  var hasActiveFilter = expiryFilter !== 'all' || categoryFilter !== '';
+
+  function clearAllFilters() {
+    setExpiryFilter('all');
+    setCategoryFilter('');
+  }
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -507,7 +528,7 @@ function DocumentLibrary() {
           </ol>
         </nav>
 
-        {/* ── Search + Sort + Expiry filters ── */}
+        {/* ── Search + Filters + Sort ── */}
         <div className="mb-6 flex flex-col gap-3">
           <form onSubmit={handleSearch} role="search" className="flex items-center gap-3">
             <div className="relative flex-1">
@@ -541,8 +562,9 @@ function DocumentLibrary() {
             )}
           </form>
 
-          {/* Expiry filter tabs + Sort control */}
+          {/* Expiry filter tabs + Category + Sort */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Expiry tabs */}
             <div className="flex items-center gap-2" role="group" aria-label="Filter by expiry status">
               {[
                 { key: 'all', label: 'All' },
@@ -576,23 +598,67 @@ function DocumentLibrary() {
               })}
             </div>
 
-            <div className="flex items-center gap-2">
-              <label htmlFor="doc-sort" className="text-xs font-medium" style={{color:'#64748B'}}>Sort</label>
-              <select
-                id="doc-sort"
-                value={sortBy}
-                onChange={function(e) { setSortBy(e.target.value); }}
-                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Sort documents"
-              >
-                <option value="date_desc">Newest first</option>
-                <option value="date_asc">Oldest first</option>
-                <option value="name_asc">Name A–Z</option>
-                <option value="name_desc">Name Z–A</option>
-                <option value="expiry_asc">Expiry date</option>
-              </select>
+            {/* Category dropdown + Sort */}
+            <div className="flex items-center gap-3 flex-wrap">
+
+              {/* Category filter — only rendered when categories exist */}
+              {categories.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Tag className="w-3.5 h-3.5 text-[#64748B]" aria-hidden="true" />
+                  <label htmlFor="doc-category" className="text-xs font-medium" style={{color:'#64748B'}}>
+                    Category
+                  </label>
+                  <select
+                    id="doc-category"
+                    value={categoryFilter}
+                    onChange={function(e) { setCategoryFilter(e.target.value); }}
+                    className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Filter by category"
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map(function(cat) {
+                      return <option key={cat} value={cat}>{cat}</option>;
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {/* Sort */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="doc-sort" className="text-xs font-medium" style={{color:'#64748B'}}>Sort</label>
+                <select
+                  id="doc-sort"
+                  value={sortBy}
+                  onChange={function(e) { setSortBy(e.target.value); }}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Sort documents"
+                >
+                  <option value="date_desc">Newest first</option>
+                  <option value="date_asc">Oldest first</option>
+                  <option value="name_asc">Name A–Z</option>
+                  <option value="name_desc">Name Z–A</option>
+                  <option value="expiry_asc">Expiry date</option>
+                </select>
+              </div>
+
             </div>
           </div>
+
+          {/* Active filter summary + clear all */}
+          {hasActiveFilter && (
+            <div className="flex items-center gap-2" aria-live="polite">
+              <span className="text-xs" style={{color:'#64748B'}}>
+                Showing {sortedDocs.length} of {documents.length} document{documents.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={clearAllFilters}
+                className="text-xs font-semibold text-blue-500 hover:text-blue-600 flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              >
+                <X className="w-3 h-3" aria-hidden="true" />
+                Clear filters
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Folders ── */}
@@ -656,23 +722,25 @@ function DocumentLibrary() {
               <h3 className="font-bold text-[#0E1523] mb-1">
                 {expiryFilter === 'expiring_soon' ? 'Nothing Expiring Soon'
                   : expiryFilter === 'expired' ? 'No Expired Documents'
+                  : categoryFilter ? 'No Documents in This Category'
                   : searchTerm ? 'No Documents Found'
                   : 'No Documents Yet'}
               </h3>
               <p className="text-sm mb-5" style={{color:'#475569'}}>
                 {expiryFilter === 'expiring_soon' ? 'No documents are expiring in the next 7 days.'
                   : expiryFilter === 'expired' ? 'No documents have passed their auto-delete date.'
+                  : categoryFilter ? ('No documents are tagged as "' + categoryFilter + '".')
                   : searchTerm ? 'Try a different search term or clear the filter.'
                   : canUpload ? 'Upload your first document to get started.'
                   : 'No documents have been added yet.'}
               </p>
-              {expiryFilter !== 'all' ? (
+              {hasActiveFilter ? (
                 <button
-                  onClick={function() { setExpiryFilter('all'); }}
+                  onClick={clearAllFilters}
                   className="px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 mx-auto border border-slate-300 text-[#475569] hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
-                  Show All Documents
+                  Clear Filters
                 </button>
               ) : searchTerm ? (
                 <button
@@ -700,37 +768,36 @@ function DocumentLibrary() {
             >
               {sortedDocs.map(function(doc) {
                 var isSelected = selectedDocIds.indexOf(doc.id) !== -1;
-
-return (
-  <div
-    key={doc.id + '-' + (doc.updated_at || doc.uploaded_at)}
-    role="listitem"
-    className={'relative ' + (isSelected ? 'ring-2 ring-blue-400 rounded-xl' : '')}
-  >
-    {bulkSelectMode && (
-      <button
-        onClick={function() { toggleDocSelection(doc.id); }}
-        className={'absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-slate-300 hover:border-blue-400')}
-        aria-label={(isSelected ? 'Deselect' : 'Select') + ' ' + doc.name}
-        aria-pressed={isSelected}
-      >
-        {isSelected && (
-          <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
-            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
-      </button>
-    )}
-    <DocumentCard
-      document={doc}
-      viewMode={viewMode}
-      userRole={isAdmin ? 'admin' : isEditor ? 'editor' : 'member'}
-      organizationId={organizationId}
-      onDelete={handleDeleteDocument}
-      onUpdate={handleUpdateDocument}
-    />
-  </div>
-);
+                return (
+                  <div
+                    key={doc.id + '-' + (doc.updated_at || doc.uploaded_at)}
+                    role="listitem"
+                    className={'relative ' + (isSelected ? 'ring-2 ring-blue-400 rounded-xl' : '')}
+                  >
+                    {bulkSelectMode && (
+                      <button
+                        onClick={function() { toggleDocSelection(doc.id); }}
+                        className={'absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-slate-300 hover:border-blue-400')}
+                        aria-label={(isSelected ? 'Deselect' : 'Select') + ' ' + doc.name}
+                        aria-pressed={isSelected}
+                      >
+                        {isSelected && (
+                          <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
+                            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                    <DocumentCard
+                      document={doc}
+                      viewMode={viewMode}
+                      userRole={isAdmin ? 'admin' : isEditor ? 'editor' : 'member'}
+                      organizationId={organizationId}
+                      onDelete={handleDeleteDocument}
+                      onUpdate={handleUpdateDocument}
+                    />
+                  </div>
+                );
               })}
             </div>
           )}

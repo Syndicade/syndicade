@@ -8,8 +8,9 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
   var [file, setFile] = useState(null);
   var [title, setTitle] = useState('');
   var [description, setDescription] = useState('');
+  var [category, setCategory] = useState('');
   var [deleteAfter, setDeleteAfter] = useState('');
-  var [visibility, setVisibility] = useState(groupId ? 'groups' : 'all');
+  var [visibility, setVisibility] = useState(groupId ? 'groups' : 'members');
   var [selectedGroupIds, setSelectedGroupIds] = useState(groupId ? [groupId] : []);
   var [groups, setGroups] = useState([]);
   var [groupsLoading, setGroupsLoading] = useState(false);
@@ -19,6 +20,7 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
 
   var TITLE_MAX = 200;
   var DESC_MAX = 500;
+  var CATEGORY_MAX = 50;
   var todayStr = new Date().toISOString().split('T')[0];
 
   // Fetch org groups when visibility switches to 'groups'
@@ -93,14 +95,18 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
 
     var uploadedDoc = uploadResult.data;
 
-    // Save delete_after if set
-    if (deleteAfter && uploadedDoc && uploadedDoc.id) {
+    // Save delete_after and/or category if set
+    var extraFields = {};
+    if (deleteAfter) extraFields.delete_after = deleteAfter;
+    if (category.trim()) extraFields.category = category.trim();
+
+    if (Object.keys(extraFields).length > 0 && uploadedDoc && uploadedDoc.id) {
       var updateResult = await supabase
         .from('documents')
-        .update({ delete_after: deleteAfter })
+        .update(extraFields)
         .eq('id', uploadedDoc.id);
       if (!updateResult.error) {
-        uploadedDoc = Object.assign({}, uploadedDoc, { delete_after: deleteAfter });
+        uploadedDoc = Object.assign({}, uploadedDoc, extraFields);
       }
     }
 
@@ -123,8 +129,9 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
     setFile(null);
     setTitle('');
     setDescription('');
+    setCategory('');
     setDeleteAfter('');
-    setVisibility('all');
+    setVisibility('members');
     setSelectedGroupIds([]);
   }
 
@@ -269,6 +276,37 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
             />
           </div>
 
+          {/* Category */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="upload-doc-category" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+                Category{' '}
+                <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
+              </label>
+              {category.length > 0 && (
+                <span
+                  className={'text-xs ' + (category.length >= CATEGORY_MAX ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')}
+                  aria-live="polite"
+                >
+                  {CATEGORY_MAX - category.length}
+                </span>
+              )}
+            </div>
+            <input
+              id="upload-doc-category"
+              type="text"
+              value={category}
+              onChange={function(e) { if (e.target.value.length <= CATEGORY_MAX) setCategory(e.target.value); }}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              maxLength={CATEGORY_MAX}
+              placeholder="e.g. Minutes, Policies, Forms, Financials"
+              aria-describedby="upload-category-hint"
+            />
+            <p id="upload-category-hint" className="text-xs mt-1" style={{color:'#94A3B8'}}>
+              Used to filter documents in the library.
+            </p>
+          </div>
+
           {/* Visibility */}
           <div>
             <label htmlFor="upload-doc-visibility" className="block text-sm font-semibold mb-1.5" style={{color:'#0E1523'}}>
@@ -280,8 +318,8 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
               onChange={function(e) { setVisibility(e.target.value); if (e.target.value !== 'groups') setSelectedGroupIds([]); }}
               className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">All Members</option>
-              <option value="admins">Admins Only</option>
+              <option value="members">All Members</option>
+              <option value="admin">Admins Only</option>
               <option value="groups">Specific Groups</option>
             </select>
           </div>

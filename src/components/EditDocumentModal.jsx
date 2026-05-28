@@ -7,13 +7,15 @@ import { X, Users } from 'lucide-react';
 
 function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
   var today = new Date().toISOString().split('T')[0];
+  var CATEGORY_MAX = 50;
 
   var [formData, setFormData] = useState({
     title: document?.title || '',
     description: document?.description || '',
     delete_after: document?.delete_after || ''
   });
-  var [visibility, setVisibility] = useState(document?.visibility || 'all');
+  var [category, setCategory] = useState(document?.category || '');
+  var [visibility, setVisibility] = useState(document?.visibility || 'members');
   var [selectedGroupIds, setSelectedGroupIds] = useState(document?.allowed_groups || []);
   var [groups, setGroups] = useState([]);
   var [groupsLoading, setGroupsLoading] = useState(false);
@@ -64,6 +66,7 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
         title: formData.title.trim(),
         description: formData.description.trim(),
         delete_after: formData.delete_after || null,
+        category: category.trim() || null,
         visibility: visibility,
         allowed_groups: visibility === 'groups' ? selectedGroupIds : []
       };
@@ -225,6 +228,37 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
             </p>
           </div>
 
+          {/* Category */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="edit-doc-category" className="block text-sm font-semibold text-slate-900">
+                Category{' '}
+                <span style={{ fontWeight: 400, color: '#64748B' }}>(optional)</span>
+              </label>
+              {category.length > 0 && (
+                <span
+                  style={{ fontSize: '11px', color: category.length >= CATEGORY_MAX ? '#EF4444' : '#94A3B8' }}
+                  aria-live="polite"
+                >
+                  {CATEGORY_MAX - category.length}
+                </span>
+              )}
+            </div>
+            <input
+              id="edit-doc-category"
+              type="text"
+              value={category}
+              onChange={function(e) { if (e.target.value.length <= CATEGORY_MAX) setCategory(e.target.value); }}
+              placeholder="e.g. Minutes, Policies, Forms, Financials"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={CATEGORY_MAX}
+              aria-describedby="edit-category-hint"
+            />
+            <p id="edit-category-hint" style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+              Used to filter documents in the library.
+            </p>
+          </div>
+
           {/* Visibility */}
           <div>
             <label
@@ -243,8 +277,8 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
               className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={{ fontSize: '14px', color: '#0E1523' }}
             >
-              <option value="all">All Members</option>
-              <option value="admins">Admins Only</option>
+              <option value="members">All Members</option>
+              <option value="admin">Admins Only</option>
               <option value="groups">Specific Groups</option>
             </select>
           </div>
