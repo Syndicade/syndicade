@@ -96,8 +96,29 @@ function IconChat({ size }) {
     </svg>
   );
 }
+function IconSearch({ size }) {
+  return (
+    <svg width={size || 16} height={size || 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+function IconArchive({ size }) {
+  return (
+    <svg width={size || 16} height={size || 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+function IconCheckAll({ size }) {
+  return (
+    <svg width={size || 16} height={size || 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" /><polyline points="16 6 12 10" />
+    </svg>
+  );
+}
 
-// Light theme tokens — hardcoded, no useTheme
+// ── Light theme tokens ────────────────────────────────────────────────────────
 var t = {
   bgPage:        '#F8FAFC',
   bgHeader:      '#FFFFFF',
@@ -107,7 +128,7 @@ var t = {
   bgInput:       '#FFFFFF',
   bgChatBox:     '#F8FAFC',
   border:        '#E2E8F0',
-  textPrimary:   '#0F172A',
+  textPrimary:   '#0E1523',
   textSecondary: '#475569',
   textMuted:     '#64748B',
   textTertiary:  '#94A3B8',
@@ -115,6 +136,7 @@ var t = {
   unreadBg:      'rgba(59,130,246,0.04)',
 };
 
+// ── Skeletons ─────────────────────────────────────────────────────────────────
 function SkeletonList() {
   return (
     <div aria-label="Loading messages" aria-busy="true">
@@ -154,6 +176,7 @@ function SkeletonChat() {
   );
 }
 
+// ── Empty State ───────────────────────────────────────────────────────────────
 function EmptyState({ icon, title, description }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '48px 24px', textAlign: 'center' }}>
@@ -166,6 +189,7 @@ function EmptyState({ icon, title, description }) {
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(ts) {
   if (!ts) return '';
   var d = new Date(ts);
@@ -218,6 +242,7 @@ function StatusBadge({ status }) {
   );
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function AdminInbox({ organizationId: propOrgId }) {
   var { organizationId: paramOrgId } = useParams();
   var orgId = propOrgId || paramOrgId;
@@ -225,41 +250,49 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   var [activeTab, setActiveTab] = useState('inquiries');
 
   // Inquiries
-  var [inquiries, setInquiries] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [selected, setSelected] = useState(null);
-  var [markingRead, setMarkingRead] = useState(false);
+  var [inquiries, setInquiries]         = useState([]);
+  var [loading, setLoading]             = useState(true);
+  var [selected, setSelected]           = useState(null);
+  var [markingRead, setMarkingRead]     = useState(false);
+  var [markingAllRead, setMarkingAllRead] = useState(false);
+  var [archivingId, setArchivingId]     = useState(null);
+
+  // Inquiry filters
+  var [searchQuery, setSearchQuery]     = useState('');
+  var [archiveFilter, setArchiveFilter] = useState('active'); // 'active' | 'archived'
 
   // Collaboration
-  var [collabItems, setCollabItems] = useState([]);
-  var [collabLoading, setCollabLoading] = useState(false);
-  var [selectedCollab, setSelectedCollab] = useState(null);
-  var [collabRespondExpanded, setCollabRespondExpanded] = useState(false);
-  var [collabRespondAction, setCollabRespondAction] = useState(null);
-  var [collabRespondMessage, setCollabRespondMessage] = useState('');
-  var [collabActionLoading, setCollabActionLoading] = useState(false);
-  var [currentOrgName, setCurrentOrgName] = useState('');
+  var [collabItems, setCollabItems]                       = useState([]);
+  var [collabLoading, setCollabLoading]                   = useState(false);
+  var [selectedCollab, setSelectedCollab]                 = useState(null);
+  var [collabRespondExpanded, setCollabRespondExpanded]   = useState(false);
+  var [collabRespondAction, setCollabRespondAction]       = useState(null);
+  var [collabRespondMessage, setCollabRespondMessage]     = useState('');
+  var [collabActionLoading, setCollabActionLoading]       = useState(false);
+  var [currentOrgName, setCurrentOrgName]                 = useState('');
 
   // Chat
-  var [chatMessages, setChatMessages] = useState([]);
-  var [chatLoading, setChatLoading] = useState(false);
-  var [chatInput, setChatInput] = useState('');
-  var [chatSending, setChatSending] = useState(false);
-  var chatChannelRef = useRef(null);
+  var [chatMessages, setChatMessages]   = useState([]);
+  var [chatLoading, setChatLoading]     = useState(false);
+  var [chatInput, setChatInput]         = useState('');
+  var [chatSending, setChatSending]     = useState(false);
+  var chatChannelRef                    = useRef(null);
 
   // Unread tracking
-  var [latestMsgMap, setLatestMsgMap] = useState({});
-  var lastVisitedMapRef = useRef({});
-  var prevMsgCountRef = useRef(0);
-  var selectedCollabIdRef = useRef(null);
-  var hasDispatchedRef = useRef(false);
+  var [latestMsgMap, setLatestMsgMap]   = useState({});
+  var lastVisitedMapRef                 = useRef({});
+  var prevMsgCountRef                   = useRef(0);
+  var selectedCollabIdRef               = useRef(null);
+  var hasDispatchedRef                  = useRef(false);
 
   useEffect(function() {
     selectedCollabIdRef.current = selectedCollab ? selectedCollab.id : null;
   }, [selectedCollab]);
 
-  var unreadCount = inquiries.filter(function(i) { return !i.is_read; }).length;
-  var pendingCollabCount = collabItems.filter(function(c) { return c.direction === 'incoming' && c.status === 'pending'; }).length;
+  // ── Derived counts ────────────────────────────────────────────────────────
+  var activeInquiries  = inquiries.filter(function(i) { return !i.is_archived; });
+  var unreadCount      = activeInquiries.filter(function(i) { return !i.is_read; }).length;
+  var pendingCollabCount   = collabItems.filter(function(c) { return c.direction === 'incoming' && c.status === 'pending'; }).length;
 
   function isUnread(item) {
     var latest = latestMsgMap[item.id];
@@ -272,6 +305,22 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   var unreadCollabCount = collabItems.filter(function(c) { return isUnread(c); }).length;
 
+  // ── Filtered inquiry list ─────────────────────────────────────────────────
+  var displayedInquiries = inquiries.filter(function(inq) {
+    var isArchived = inq.is_archived || false;
+    if (archiveFilter === 'active' && isArchived) return false;
+    if (archiveFilter === 'archived' && !isArchived) return false;
+    if (searchQuery.trim()) {
+      var q = searchQuery.toLowerCase();
+      return (
+        (inq.name || '').toLowerCase().indexOf(q) !== -1 ||
+        (inq.email || '').toLowerCase().indexOf(q) !== -1 ||
+        (inq.message || '').toLowerCase().indexOf(q) !== -1
+      );
+    }
+    return true;
+  });
+
   var sortedCollabItems = collabItems.slice().sort(function(a, b) {
     var aU = isUnread(a), bU = isUnread(b);
     if (aU && !bU) return -1;
@@ -283,6 +332,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     return new Date(bTime) - new Date(aTime);
   });
 
+  // ── Chat scroll ───────────────────────────────────────────────────────────
   useEffect(function() {
     if (chatMessages.length > prevMsgCountRef.current) {
       prevMsgCountRef.current = chatMessages.length;
@@ -292,9 +342,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   }, [chatMessages]);
 
   useEffect(function() {
-    var collabId = selectedCollab ? selectedCollab.id : null;
+    var collabId     = selectedCollab ? selectedCollab.id : null;
     var collabStatus = selectedCollab ? selectedCollab.status : null;
-    var chatActive = collabStatus === 'accepted' || collabStatus === 'pending';
+    var chatActive   = collabStatus === 'accepted' || collabStatus === 'pending';
 
     if (chatChannelRef.current) { clearInterval(chatChannelRef.current); chatChannelRef.current = null; }
     if (!collabId) { setChatMessages([]); prevMsgCountRef.current = 0; return; }
@@ -420,13 +470,21 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     }
   }, [unreadCount, unreadCollabCount]);
 
+  // ── Data fetching ─────────────────────────────────────────────────────────
   async function fetchInquiries() {
     setLoading(true);
-    var { data, error } = await supabase.from('contact_inquiries').select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
-    if (error) { toast.error('Failed to load inquiries'); }
-    else {
+    var { data, error } = await supabase
+      .from('contact_inquiries')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      toast.error('Failed to load inquiries');
+    } else {
       setInquiries(data || []);
-      if (data && data.length > 0 && !selected) setSelected(data[0]);
+      // Auto-select first active inquiry
+      var firstActive = (data || []).find(function(i) { return !i.is_archived; });
+      if (firstActive && !selected) setSelected(firstActive);
     }
     setLoading(false);
   }
@@ -495,6 +553,104 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     }
   }
 
+  // ── Inquiry actions ───────────────────────────────────────────────────────
+  async function handleSelect(inquiry) {
+    setSelected(inquiry);
+    if (!inquiry.is_read) {
+      var { error } = await supabase.from('contact_inquiries').update({ is_read: true }).eq('id', inquiry.id);
+      if (!error) {
+        setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiry.id ? Object.assign({}, i, { is_read: true }) : i; }); });
+        setSelected(Object.assign({}, inquiry, { is_read: true }));
+      }
+    }
+  }
+
+  async function handleMarkUnread() {
+    if (!selected) return;
+    setMarkingRead(true);
+    var { error } = await supabase.from('contact_inquiries').update({ is_read: false }).eq('id', selected.id);
+    if (error) { toast.error('Failed to update'); }
+    else {
+      setInquiries(function(prev) { return prev.map(function(i) { return i.id === selected.id ? Object.assign({}, i, { is_read: false }) : i; }); });
+      setSelected(Object.assign({}, selected, { is_read: false }));
+    }
+    setMarkingRead(false);
+  }
+
+  async function handleMarkAllRead() {
+    var unreadIds = activeInquiries.filter(function(i) { return !i.is_read; }).map(function(i) { return i.id; });
+    if (unreadIds.length === 0) return;
+    setMarkingAllRead(true);
+    try {
+      var { error } = await supabase.from('contact_inquiries').update({ is_read: true }).in('id', unreadIds);
+      if (error) throw error;
+      setInquiries(function(prev) {
+        return prev.map(function(i) {
+          return unreadIds.indexOf(i.id) !== -1 ? Object.assign({}, i, { is_read: true }) : i;
+        });
+      });
+      if (selected && unreadIds.indexOf(selected.id) !== -1) {
+        setSelected(Object.assign({}, selected, { is_read: true }));
+      }
+      mascotSuccessToast('All caught up!', unreadIds.length + ' ' + (unreadIds.length === 1 ? 'inquiry' : 'inquiries') + ' marked as read.');
+    } catch (err) {
+      mascotErrorToast('Failed to mark all as read.', err.message);
+    } finally {
+      setMarkingAllRead(false);
+    }
+  }
+
+  async function handleArchive(inquiry) {
+    setArchivingId(inquiry.id);
+    try {
+      var { error } = await supabase.from('contact_inquiries').update({ is_archived: true }).eq('id', inquiry.id);
+      if (error) throw error;
+      setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiry.id ? Object.assign({}, i, { is_archived: true }) : i; }); });
+      // Move selection to next active inquiry
+      var remaining = activeInquiries.filter(function(i) { return i.id !== inquiry.id; });
+      setSelected(remaining.length > 0 ? remaining[0] : null);
+      mascotSuccessToast('Inquiry archived.');
+    } catch (err) {
+      mascotErrorToast('Failed to archive inquiry.', err.message);
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  async function handleUnarchive(inquiry) {
+    setArchivingId(inquiry.id);
+    try {
+      var { error } = await supabase.from('contact_inquiries').update({ is_archived: false }).eq('id', inquiry.id);
+      if (error) throw error;
+      setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiry.id ? Object.assign({}, i, { is_archived: false }) : i; }); });
+      mascotSuccessToast('Inquiry restored to inbox.');
+    } catch (err) {
+      mascotErrorToast('Failed to unarchive inquiry.', err.message);
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!selected) return;
+    if (!window.confirm('Delete this inquiry? This cannot be undone.')) return;
+    var { error } = await supabase.from('contact_inquiries').delete().eq('id', selected.id);
+    if (error) { toast.error('Failed to delete'); }
+    else {
+      mascotSuccessToast('Inquiry deleted.');
+      var remaining = inquiries.filter(function(i) { return i.id !== selected.id; });
+      setInquiries(remaining);
+      var nextActive = remaining.find(function(i) { return !i.is_archived; });
+      setSelected(nextActive || null);
+    }
+  }
+
+  // ── Collab actions ────────────────────────────────────────────────────────
+  function markCollabAsUnread(collabId) {
+    lastVisitedMapRef.current[collabId] = '2000-01-01T00:00:00.000Z';
+    setLatestMsgMap(function(prev) { return Object.assign({}, prev); });
+  }
+
   async function respondToCollab(item, action, message) {
     setCollabActionLoading(true);
     try {
@@ -553,47 +709,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     finally { setCollabActionLoading(false); }
   }
 
-  async function handleSelect(inquiry) {
-    setSelected(inquiry);
-    if (!inquiry.is_read) {
-      var { error } = await supabase.from('contact_inquiries').update({ is_read: true }).eq('id', inquiry.id);
-      if (!error) {
-        setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiry.id ? Object.assign({}, i, { is_read: true }) : i; }); });
-        setSelected(Object.assign({}, inquiry, { is_read: true }));
-      }
-    }
-  }
-
-  async function handleMarkUnread() {
-    if (!selected) return;
-    setMarkingRead(true);
-    var { error } = await supabase.from('contact_inquiries').update({ is_read: false }).eq('id', selected.id);
-    if (error) { toast.error('Failed to update'); }
-    else {
-      setInquiries(function(prev) { return prev.map(function(i) { return i.id === selected.id ? Object.assign({}, i, { is_read: false }) : i; }); });
-      setSelected(Object.assign({}, selected, { is_read: false }));
-    }
-    setMarkingRead(false);
-  }
-
-  async function handleDelete() {
-    if (!selected) return;
-    if (!window.confirm('Delete this inquiry? This cannot be undone.')) return;
-    var { error } = await supabase.from('contact_inquiries').delete().eq('id', selected.id);
-    if (error) { toast.error('Failed to delete'); }
-    else {
-      mascotSuccessToast('Inquiry deleted.');
-      var remaining = inquiries.filter(function(i) { return i.id !== selected.id; });
-      setInquiries(remaining);
-      setSelected(remaining.length > 0 ? remaining[0] : null);
-    }
-  }
-
-  function markCollabAsUnread(collabId) {
-    lastVisitedMapRef.current[collabId] = '2000-01-01T00:00:00.000Z';
-    setLatestMsgMap(function(prev) { return Object.assign({}, prev); });
-  }
-
+  // ── Tab config ────────────────────────────────────────────────────────────
   var tabs = [
     { key: 'inquiries', label: 'Inquiries',       icon: <IconInbox size={15} />,     count: unreadCount },
     { key: 'members',   label: 'Member Messages', icon: <IconMessage size={15} />,   count: 0 },
@@ -602,13 +718,13 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   // ── Collab list item ──────────────────────────────────────────────────────
   function renderCollabListItem(item) {
-    var isSelected = selectedCollab && selectedCollab.id === item.id;
-    var orgName = item.other_org ? item.other_org.name : 'Unknown Organization';
-    var eventTitle = item.event ? item.event.title : 'Unknown Event';
-    var isIncoming = item.direction === 'incoming';
-    var dirColor = isIncoming ? '#A78BFA' : '#60A5FA';
-    var dirBg = isIncoming ? 'rgba(167,139,250,0.1)' : 'rgba(96,165,250,0.1)';
-    var hasUnread = isUnread(item);
+    var isSelected  = selectedCollab && selectedCollab.id === item.id;
+    var orgName     = item.other_org ? item.other_org.name : 'Unknown Organization';
+    var eventTitle  = item.event ? item.event.title : 'Unknown Event';
+    var isIncoming  = item.direction === 'incoming';
+    var dirColor    = isIncoming ? '#A78BFA' : '#60A5FA';
+    var dirBg       = isIncoming ? 'rgba(167,139,250,0.1)' : 'rgba(96,165,250,0.1)';
+    var hasUnread   = isUnread(item);
 
     return (
       <button
@@ -622,15 +738,8 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           setLatestMsgMap(function(prev) { return Object.assign({}, prev); });
         }}
         aria-label={(isIncoming ? 'Incoming' : 'Outgoing') + ' co-host request: ' + eventTitle + (hasUnread ? ', unread messages' : '')}
-        style={{
-          width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-          padding: '14px 16px',
-          background: isSelected ? t.selectedBg : hasUnread ? t.unreadBg : 'transparent',
-          borderBottom: '1px solid ' + t.border,
-          borderLeft: (isSelected || hasUnread) ? '3px solid #3B82F6' : '3px solid transparent',
-          display: 'block',
-        }}
-        className={'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500'}
+        style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: '14px 16px', background: isSelected ? t.selectedBg : hasUnread ? t.unreadBg : 'transparent', borderBottom: '1px solid ' + t.border, borderLeft: (isSelected || hasUnread) ? '3px solid #3B82F6' : '3px solid transparent', display: 'block' }}
+        className="focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: dirBg, border: '1px solid ' + dirColor + '40', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: dirColor }}>
@@ -660,8 +769,8 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   // ── Chat thread ───────────────────────────────────────────────────────────
   function renderChatThread(item, chatActive) {
-    var otherOrgName = item.other_org ? item.other_org.name : 'Co-host';
-    var myOrgInitial = currentOrgName ? currentOrgName.charAt(0).toUpperCase() : '?';
+    var otherOrgName   = item.other_org ? item.other_org.name : 'Co-host';
+    var myOrgInitial   = currentOrgName ? currentOrgName.charAt(0).toUpperCase() : '?';
     var otherOrgInitial = otherOrgName.charAt(0).toUpperCase();
 
     return (
@@ -673,13 +782,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           <span style={{ fontSize: '10px', color: t.textTertiary }}>Only visible to org admins</span>
         </div>
 
-        <div
-          id="chat-scroll-container"
-          role="log"
-          aria-label="Co-host chat messages"
-          aria-live="polite"
-          style={{ background: t.bgChatBox, border: '1px solid ' + t.border, borderRadius: '10px', minHeight: '160px', maxHeight: '280px', overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}
-        >
+        <div id="chat-scroll-container" role="log" aria-label="Co-host chat messages" aria-live="polite" style={{ background: t.bgChatBox, border: '1px solid ' + t.border, borderRadius: '10px', minHeight: '160px', maxHeight: '280px', overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
           {chatLoading ? <SkeletonChat /> : chatMessages.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', textAlign: 'center' }}>
               <div style={{ color: t.border, marginBottom: '8px' }}><IconChat size={22} /></div>
@@ -687,13 +790,13 @@ export default function AdminInbox({ organizationId: propOrgId }) {
             </div>
           ) : (
             chatMessages.map(function(msg) {
-              var isMine = msg.sender_org_id === orgId;
-              var senderLabel = isMine ? currentOrgName || 'You' : otherOrgName;
-              var avatarInitial = isMine ? myOrgInitial : otherOrgInitial;
-              var avatarBg = isMine ? 'rgba(59,130,246,0.15)' : 'rgba(167,139,250,0.12)';
-              var avatarColor = isMine ? '#3B82F6' : '#A78BFA';
-              var bubbleBg = isMine ? '#EFF6FF' : '#F1F5F9';
-              var bubbleBorder = isMine ? '1px solid rgba(59,130,246,0.2)' : '1px solid ' + t.border;
+              var isMine         = msg.sender_org_id === orgId;
+              var senderLabel    = isMine ? currentOrgName || 'You' : otherOrgName;
+              var avatarInitial  = isMine ? myOrgInitial : otherOrgInitial;
+              var avatarBg       = isMine ? 'rgba(59,130,246,0.15)' : 'rgba(167,139,250,0.12)';
+              var avatarColor    = isMine ? '#3B82F6' : '#A78BFA';
+              var bubbleBg       = isMine ? '#EFF6FF' : '#F1F5F9';
+              var bubbleBorder   = isMine ? '1px solid rgba(59,130,246,0.2)' : '1px solid ' + t.border;
 
               return (
                 <div key={msg.id} style={{ display: 'flex', flexDirection: isMine ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: '8px', opacity: msg._optimistic ? 0.65 : 1 }}>
@@ -726,15 +829,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
               disabled={chatSending}
               aria-label={'Chat message to ' + otherOrgName}
               style={{ flex: 1, padding: '9px 12px', background: t.bgInput, border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '13px', color: t.textPrimary, resize: 'none', outline: 'none', lineHeight: 1.5, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", opacity: chatSending ? 0.6 : 1 }}
-              className={'focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}
+              className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <button
-              onClick={sendChatMessage}
-              disabled={!chatInput.trim() || chatSending}
-              aria-label="Send message"
-              style={{ width: '38px', height: '38px', flexShrink: 0, background: chatInput.trim() && !chatSending ? '#3B82F6' : t.bgElevated, border: '1px solid ' + (chatInput.trim() && !chatSending ? '#3B82F6' : t.border), borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: chatInput.trim() && !chatSending ? 'pointer' : 'not-allowed', color: chatInput.trim() && !chatSending ? '#FFFFFF' : t.textTertiary, transition: 'background 0.15s, border-color 0.15s' }}
-              className={'focus:outline-none focus:ring-2 focus:ring-blue-500'}
-            >
+            <button onClick={sendChatMessage} disabled={!chatInput.trim() || chatSending} aria-label="Send message" style={{ width: '38px', height: '38px', flexShrink: 0, background: chatInput.trim() && !chatSending ? '#3B82F6' : t.bgElevated, border: '1px solid ' + (chatInput.trim() && !chatSending ? '#3B82F6' : t.border), borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: chatInput.trim() && !chatSending ? 'pointer' : 'not-allowed', color: chatInput.trim() && !chatSending ? '#FFFFFF' : t.textTertiary, transition: 'background 0.15s, border-color 0.15s' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
               <IconSend size={15} />
             </button>
           </div>
@@ -752,19 +849,18 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   function renderCollabDetail() {
     if (!selectedCollab) return <EmptyState icon={<IconHandshake size={28} />} title="Select a collaboration request" description="Choose a request from the list to view details and take action." />;
 
-    var item = selectedCollab;
+    var item       = selectedCollab;
     var isIncoming = item.direction === 'incoming';
-    var orgName = item.other_org ? item.other_org.name : 'Unknown Organization';
+    var orgName    = item.other_org ? item.other_org.name : 'Unknown Organization';
     var eventTitle = item.event ? item.event.title : 'Unknown Event';
-    var isPending = item.status === 'pending';
+    var isPending  = item.status === 'pending';
     var isAccepted = item.status === 'accepted';
     var chatActive = isPending || isAccepted;
-    var dirColor = isIncoming ? '#A78BFA' : '#60A5FA';
-    var dirBg = isIncoming ? 'rgba(167,139,250,0.1)' : 'rgba(96,165,250,0.1)';
+    var dirColor   = isIncoming ? '#A78BFA' : '#60A5FA';
+    var dirBg      = isIncoming ? 'rgba(167,139,250,0.1)' : 'rgba(96,165,250,0.1)';
 
     return (
       <div style={{ padding: '28px 32px' }}>
-
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '50%', flexShrink: 0, background: dirBg, border: '1px solid ' + dirColor + '50', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: dirColor }}>
@@ -782,15 +878,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           </div>
         </div>
 
-        {/* Mark as unread */}
         {latestMsgMap[item.id] && (
           <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={function() { markCollabAsUnread(item.id); }}
-              style={{ padding: '5px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }}
-              className={'hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500'}
-              aria-label="Mark conversation as unread"
-            >
+            <button onClick={function() { markCollabAsUnread(item.id); }} style={{ padding: '5px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }} className="hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Mark conversation as unread">
               Mark as unread
             </button>
           </div>
@@ -809,7 +899,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           )}
         </div>
 
-        {/* Request Message */}
         {item.message && (
           <div style={{ background: t.bgSecondary, border: '1px solid ' + t.border, borderLeft: '3px solid ' + dirColor, borderRadius: '8px', padding: '14px 16px', marginBottom: '20px' }}>
             <div style={{ fontSize: '11px', fontWeight: 700, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '8px' }}>
@@ -819,10 +908,8 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           </div>
         )}
 
-        {/* Chat Thread */}
         {renderChatThread(item, chatActive)}
 
-        {/* Timestamps */}
         <div style={{ fontSize: '12px', color: t.textTertiary, marginBottom: '24px' }}>
           {isIncoming ? 'Received' : 'Sent'} {new Date(item.created_at).toLocaleString()}
           {item.updated_at && item.updated_at !== item.created_at && <span> · Updated {new Date(item.updated_at).toLocaleString()}</span>}
@@ -830,33 +917,22 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
         <div style={{ borderTop: '1px solid ' + t.border, marginBottom: '20px' }} />
 
-        {/* Incoming Pending — Accept/Decline */}
         {isIncoming && isPending && !collabRespondExpanded && (
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={function() { setCollabRespondExpanded(true); setCollabRespondAction('accepted'); setCollabRespondMessage(''); }} style={{ padding: '9px 20px', background: '#22C55E', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer' }} className={'hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500'} aria-label={'Accept co-host request from ' + orgName}>Accept</button>
-            <button onClick={function() { setCollabRespondExpanded(true); setCollabRespondAction('declined'); setCollabRespondMessage(''); }} style={{ padding: '9px 20px', background: 'transparent', color: '#EF4444', border: '1px solid rgba(239,68,68,0.4)', fontSize: '13px', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }} className={'hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500'} aria-label={'Decline co-host request from ' + orgName}>Decline</button>
+            <button onClick={function() { setCollabRespondExpanded(true); setCollabRespondAction('accepted'); setCollabRespondMessage(''); }} style={{ padding: '9px 20px', background: '#22C55E', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500" aria-label={'Accept co-host request from ' + orgName}>Accept</button>
+            <button onClick={function() { setCollabRespondExpanded(true); setCollabRespondAction('declined'); setCollabRespondMessage(''); }} style={{ padding: '9px 20px', background: 'transparent', color: '#EF4444', border: '1px solid rgba(239,68,68,0.4)', fontSize: '13px', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }} className="hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Decline co-host request from ' + orgName}>Decline</button>
           </div>
         )}
 
-        {/* Inline Response Expand */}
         {isIncoming && isPending && collabRespondExpanded && (
           <div style={{ background: t.bgSecondary, border: '1px solid ' + (collabRespondAction === 'accepted' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'), borderRadius: '10px', padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: collabRespondAction === 'accepted' ? '#22C55E' : '#EF4444', textTransform: 'uppercase', letterSpacing: '2px' }}>
                 {collabRespondAction === 'accepted' ? 'Accept' : 'Decline'} — Optional Note
               </span>
-              <button onClick={function() { setCollabRespondExpanded(false); setCollabRespondMessage(''); setCollabRespondAction(null); }} style={{ background: 'none', border: 'none', color: t.textTertiary, cursor: 'pointer', padding: '2px' }} className={'focus:outline-none focus:ring-2 focus:ring-gray-500 rounded'} aria-label="Cancel"><IconX size={14} /></button>
+              <button onClick={function() { setCollabRespondExpanded(false); setCollabRespondMessage(''); setCollabRespondAction(null); }} style={{ background: 'none', border: 'none', color: t.textTertiary, cursor: 'pointer', padding: '2px' }} className="focus:outline-none focus:ring-2 focus:ring-gray-500 rounded" aria-label="Cancel"><IconX size={14} /></button>
             </div>
-            <textarea
-              id="collab-inbox-msg"
-              value={collabRespondMessage}
-              onChange={function(e) { setCollabRespondMessage(e.target.value); }}
-              maxLength={500} rows={3}
-              placeholder={'Add an optional note for ' + orgName + '...'}
-              style={{ width: '100%', padding: '10px 12px', background: t.bgInput, border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '13px', color: t.textPrimary, resize: 'none', outline: 'none', boxSizing: 'border-box' }}
-              className={'focus:ring-2 focus:ring-blue-500'}
-              aria-label={'Optional note for ' + orgName}
-            />
+            <textarea id="collab-inbox-msg" value={collabRespondMessage} onChange={function(e) { setCollabRespondMessage(e.target.value); }} maxLength={500} rows={3} placeholder={'Add an optional note for ' + orgName + '...'} style={{ width: '100%', padding: '10px 12px', background: t.bgInput, border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '13px', color: t.textPrimary, resize: 'none', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-label={'Optional note for ' + orgName} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
               <span style={{ fontSize: '11px', color: t.textTertiary }}>{collabRespondMessage.length}/500</span>
               <button onClick={function() { respondToCollab(item, collabRespondAction, collabRespondMessage); }} disabled={collabActionLoading} style={{ padding: '8px 20px', background: collabRespondAction === 'accepted' ? '#22C55E' : '#EF4444', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', borderRadius: '7px', cursor: collabActionLoading ? 'not-allowed' : 'pointer', opacity: collabActionLoading ? 0.6 : 1 }} className={'focus:outline-none focus:ring-2 ' + (collabRespondAction === 'accepted' ? 'focus:ring-green-500' : 'focus:ring-red-500')} aria-label={'Confirm ' + (collabRespondAction === 'accepted' ? 'acceptance' : 'decline')}>
@@ -866,7 +942,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           </div>
         )}
 
-        {/* Incoming Non-Pending */}
         {isIncoming && !isPending && (
           <div style={{ padding: '14px 16px', background: t.bgSecondary, borderRadius: '8px', border: '1px solid ' + t.border }}>
             <p style={{ fontSize: '13px', color: t.textMuted, margin: 0 }}>
@@ -877,17 +952,15 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           </div>
         )}
 
-        {/* Outgoing Pending */}
         {!isIncoming && isPending && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ flex: 1, padding: '12px 16px', background: 'rgba(245,183,49,0.06)', border: '1px solid rgba(245,183,49,0.2)', borderRadius: '8px' }}>
               <p style={{ fontSize: '13px', color: t.textMuted, margin: 0 }}>Waiting for <span style={{ color: t.textPrimary, fontWeight: 600 }}>{orgName}</span> to respond.</p>
             </div>
-            <button onClick={function() { withdrawCollab(item); }} disabled={collabActionLoading} style={{ padding: '9px 16px', background: 'transparent', color: t.textTertiary, border: '1px solid ' + t.border, fontSize: '12px', fontWeight: 600, borderRadius: '8px', cursor: collabActionLoading ? 'not-allowed' : 'pointer', opacity: collabActionLoading ? 0.6 : 1, whiteSpace: 'nowrap', flexShrink: 0 }} className={'hover:border-red-500 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500'} aria-label="Withdraw co-host request">Withdraw</button>
+            <button onClick={function() { withdrawCollab(item); }} disabled={collabActionLoading} style={{ padding: '9px 16px', background: 'transparent', color: t.textTertiary, border: '1px solid ' + t.border, fontSize: '12px', fontWeight: 600, borderRadius: '8px', cursor: collabActionLoading ? 'not-allowed' : 'pointer', opacity: collabActionLoading ? 0.6 : 1, whiteSpace: 'nowrap', flexShrink: 0 }} className="hover:border-red-500 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500" aria-label="Withdraw co-host request">Withdraw</button>
           </div>
         )}
 
-        {/* Outgoing Declined/Withdrawn */}
         {!isIncoming && (item.status === 'declined' || item.status === 'withdrawn') && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ flex: 1, padding: '12px 16px', background: t.bgSecondary, border: '1px solid ' + t.border, borderRadius: '8px' }}>
@@ -895,13 +968,12 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                 {item.status === 'declined' ? orgName + ' declined your request.' : 'You withdrew this request.'}
               </p>
             </div>
-            <button onClick={function() { reRequestCollab(item); }} disabled={collabActionLoading} style={{ padding: '9px 16px', background: '#3B82F6', color: '#fff', border: 'none', fontSize: '12px', fontWeight: 700, borderRadius: '8px', cursor: collabActionLoading ? 'not-allowed' : 'pointer', opacity: collabActionLoading ? 0.6 : 1, whiteSpace: 'nowrap', flexShrink: 0 }} className={'hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500'} aria-label="Re-send co-host request">
+            <button onClick={function() { reRequestCollab(item); }} disabled={collabActionLoading} style={{ padding: '9px 16px', background: '#3B82F6', color: '#fff', border: 'none', fontSize: '12px', fontWeight: 700, borderRadius: '8px', cursor: collabActionLoading ? 'not-allowed' : 'pointer', opacity: collabActionLoading ? 0.6 : 1, whiteSpace: 'nowrap', flexShrink: 0 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Re-send co-host request">
               {collabActionLoading ? 'Sending...' : 'Re-send Request'}
             </button>
           </div>
         )}
 
-        {/* Outgoing Accepted */}
         {!isIncoming && isAccepted && (
           <div style={{ padding: '14px 16px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -916,22 +988,39 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: t.bgPage, minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+    <div style={{ background: t.bgPage, height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
-      {/* Page Header */}
-      <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, padding: '20px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ color: '#F5B731' }}><IconInbox size={20} /></div>
+      {/* ── Page Header (standard: 30px / 800 / no icon) ── */}
+      <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, padding: '24px 24px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontSize: '18px', fontWeight: 800, color: t.textPrimary, margin: 0 }}>Inbox</h1>
-            <p style={{ fontSize: '12px', color: t.textTertiary, margin: 0 }}>
-              {(function() { var total = unreadCount + unreadCollabCount; return total > 0 ? total + ' unread message' + (total > 1 ? 's' : '') : 'All caught up'; })()}
+            <h1 style={{ fontSize: '30px', fontWeight: 800, color: t.textPrimary, margin: 0 }}>Inbox</h1>
+            <p style={{ fontSize: '14px', color: t.textMuted, margin: '4px 0 0' }}>
+              {(function() {
+                var total = unreadCount + unreadCollabCount;
+                var totalInquiries = activeInquiries.length;
+                if (total > 0) return total + ' unread · ' + totalInquiries + ' total';
+                return totalInquiries + ' total · all caught up';
+              })()}
             </p>
           </div>
+          {/* Mark all read — only shown on inquiries tab when there are unread */}
+          {activeTab === 'inquiries' && unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              disabled={markingAllRead}
+              aria-label={'Mark all ' + unreadCount + ' inquiries as read'}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'transparent', border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: t.textMuted, cursor: markingAllRead ? 'not-allowed' : 'pointer', opacity: markingAllRead ? 0.6 : 1, flexShrink: 0 }}
+              className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <IconCheckAll size={14} />
+              {markingAllRead ? 'Marking...' : 'Mark all read'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Tab Bar */}
+      {/* ── Tab Bar ── */}
       <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, display: 'flex', padding: '0 24px' }} role="tablist" aria-label="Inbox sections">
         {tabs.map(function(tab) {
           var isActive = activeTab === tab.key;
@@ -943,7 +1032,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
               aria-controls={'panel-' + tab.key}
               onClick={function() { setActiveTab(tab.key); setSelected(null); }}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 16px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? '#3B82F6' : t.textTertiary, borderBottom: isActive ? '2px solid #3B82F6' : '2px solid transparent', marginBottom: '-1px', whiteSpace: 'nowrap', outline: 'none' }}
-              className={'focus:ring-2 focus:ring-blue-500 focus:ring-offset-1'}
+              className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             >
               {tab.icon}
               {tab.label}
@@ -957,28 +1046,87 @@ export default function AdminInbox({ organizationId: propOrgId }) {
         })}
       </div>
 
-      {/* Two-Panel Layout */}
-      <div style={{ display: 'flex', height: 'calc(100vh - 133px)' }}>
+      {/* ── Two-Panel Layout (flex: 1 eliminates magic number) ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* Left Panel */}
-        <div role="tabpanel" id={'panel-' + activeTab} style={{ width: '320px', flexShrink: 0, borderRight: '1px solid ' + t.border, overflowY: 'auto', background: t.bgPage }}>
+        <div role="tabpanel" id={'panel-' + activeTab} style={{ width: '320px', flexShrink: 0, borderRight: '1px solid ' + t.border, overflowY: 'auto', background: t.bgPage, display: 'flex', flexDirection: 'column' }}>
 
           {activeTab === 'inquiries' && (
             <>
-              {loading ? <SkeletonList /> : inquiries.length === 0 ? (
-                <EmptyState icon={<IconMail size={24} />} title="No inquiries yet" description="When someone submits your public Join Us form, their message will appear here." />
+              {/* Search + archive toggle toolbar */}
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid ' + t.border, background: t.bgHeader, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* Search */}
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: t.textTertiary, pointerEvents: 'none' }}>
+                    <IconSearch size={14} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search inquiries..."
+                    value={searchQuery}
+                    onChange={function(e) { setSearchQuery(e.target.value); }}
+                    aria-label="Search inquiries by name, email, or message"
+                    style={{ width: '100%', paddingLeft: '30px', paddingRight: searchQuery ? '28px' : '10px', paddingTop: '7px', paddingBottom: '7px', background: t.bgElevated, border: '1px solid ' + t.border, borderRadius: '7px', fontSize: '12px', color: t.textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                    className="focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={function() { setSearchQuery(''); }}
+                      aria-label="Clear search"
+                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.textTertiary, padding: '2px', display: 'flex', alignItems: 'center' }}
+                      className="focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                    >
+                      <IconX size={12} />
+                    </button>
+                  )}
+                </div>
+                {/* Archive toggle */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {['active', 'archived'].map(function(filter) {
+                    var isActive = archiveFilter === filter;
+                    var label = filter === 'active' ? 'Inbox' : 'Archived';
+                    var count = filter === 'active' ? activeInquiries.length : inquiries.filter(function(i) { return i.is_archived; }).length;
+                    return (
+                      <button
+                        key={filter}
+                        onClick={function() { setArchiveFilter(filter); setSelected(null); }}
+                        aria-pressed={isActive}
+                        style={{ flex: 1, padding: '5px 8px', border: '1px solid ' + (isActive ? '#3B82F6' : t.border), borderRadius: '6px', background: isActive ? '#EFF6FF' : 'transparent', color: isActive ? '#3B82F6' : t.textMuted, fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {filter === 'archived' && <IconArchive size={11} />}
+                        {label}
+                        {count > 0 && (
+                          <span style={{ background: isActive ? '#3B82F6' : t.bgElevated, color: isActive ? '#fff' : t.textMuted, fontSize: '10px', fontWeight: 700, padding: '0 5px', borderRadius: '99px' }}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* List */}
+              {loading ? <SkeletonList /> : displayedInquiries.length === 0 ? (
+                <EmptyState
+                  icon={searchQuery ? <IconSearch size={24} /> : archiveFilter === 'archived' ? <IconArchive size={24} /> : <IconMail size={24} />}
+                  title={searchQuery ? 'No results' : archiveFilter === 'archived' ? 'No archived inquiries' : 'No inquiries yet'}
+                  description={searchQuery ? 'No inquiries match "' + searchQuery + '".' : archiveFilter === 'archived' ? 'Archived inquiries will appear here.' : 'When someone submits your public Join Us form, their message will appear here.'}
+                />
               ) : (
-                <div role="list" aria-label="Contact inquiries">
-                  {inquiries.map(function(inq) {
+                <div role="list" aria-label="Contact inquiries" style={{ flex: 1 }}>
+                  {displayedInquiries.map(function(inq) {
                     var isSelected = selected && selected.id === inq.id;
                     return (
                       <button
                         key={inq.id}
                         role="listitem"
                         onClick={function() { handleSelect(inq); }}
-                        aria-label={'Inquiry from ' + inq.name + (inq.is_read ? '' : ', unread')}
+                        aria-label={'Inquiry from ' + inq.name + (inq.is_read ? '' : ', unread') + (inq.is_archived ? ', archived' : '')}
                         style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: '14px 16px', background: isSelected ? t.selectedBg : 'transparent', borderBottom: '1px solid ' + t.border, borderLeft: isSelected ? '3px solid #3B82F6' : '3px solid transparent', display: 'block' }}
-                        className={'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500'}
+                        className="focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                       >
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                           <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: t.bgElevated, border: '1px solid ' + t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: t.textMuted }}>
@@ -1023,7 +1171,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
         {/* Right Panel */}
         <div style={{ flex: 1, overflowY: 'auto', background: t.bgPage }}>
-          {activeTab === 'inquiries' && !selected && !loading && <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." />}
+          {activeTab === 'inquiries' && !selected && !loading && (
+            <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." />
+          )}
 
           {activeTab === 'inquiries' && selected && (
             <div style={{ padding: '28px 32px', maxWidth: '680px' }}>
@@ -1037,18 +1187,43 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                     <a href={'mailto:' + selected.email} style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}>{selected.email}</a>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {selected.is_read && (
-                    <button onClick={handleMarkUnread} disabled={markingRead} aria-label="Mark as unread" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }} className={'hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500'}>
+                    <button onClick={handleMarkUnread} disabled={markingRead} aria-label="Mark as unread" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }} className="hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
                       Mark unread
+                    </button>
+                  )}
+                  {!selected.is_archived ? (
+                    <button
+                      onClick={function() { handleArchive(selected); }}
+                      disabled={archivingId === selected.id}
+                      aria-label="Archive inquiry"
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
+                      className="hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    >
+                      <IconArchive size={13} />
+                      {archivingId === selected.id ? 'Archiving...' : 'Archive'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={function() { handleUnarchive(selected); }}
+                      disabled={archivingId === selected.id}
+                      aria-label="Restore inquiry to inbox"
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid #3B82F6', color: '#3B82F6', cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
+                      className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <IconArchive size={13} />
+                      {archivingId === selected.id ? 'Restoring...' : 'Restore'}
                     </button>
                   )}
                   <a href={'mailto:' + selected.email} aria-label={'Reply to ' + selected.name + ' by email'} style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#3B82F6', border: '1px solid #3B82F6', color: '#FFFFFF', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                     <IconMail size={13} />Reply via Email
                   </a>
-                  <button onClick={handleDelete} aria-label="Delete inquiry" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: '#EF4444', cursor: 'pointer' }} className={'hover:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500'}>Delete</button>
+                  <button onClick={handleDelete} aria-label="Delete inquiry" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: '#EF4444', cursor: 'pointer' }} className="hover:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500">Delete</button>
                 </div>
               </div>
+
               <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: t.textTertiary }}>
                   <span>Received:</span>
@@ -1057,14 +1232,23 @@ export default function AdminInbox({ organizationId: propOrgId }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {selected.is_read
                     ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#22C55E' }}><IconCheck size={12} />Read</span>
-                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3B82F6' }}><IconCircle size={7} />Unread</span>}
+                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3B82F6' }}><IconCircle size={7} />Unread</span>
+                  }
                 </div>
+                {selected.is_archived && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: t.textTertiary }}>
+                    <IconArchive size={12} />Archived
+                  </div>
+                )}
               </div>
+
               <div style={{ borderTop: '1px solid ' + t.border, marginBottom: '24px' }} />
+
               <div style={{ background: t.bgCard, border: '1px solid ' + t.border, borderRadius: '12px', padding: '20px 24px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Message</div>
                 <p style={{ fontSize: '15px', color: t.textSecondary, lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{selected.message}</p>
               </div>
+
               <div style={{ marginTop: '24px', padding: '16px', background: t.bgSecondary, borderRadius: '8px', border: '1px dashed ' + t.border }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: t.textTertiary, fontSize: '12px' }}>
                   <IconMessage size={14} />
