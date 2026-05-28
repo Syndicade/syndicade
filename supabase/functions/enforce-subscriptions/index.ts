@@ -41,6 +41,15 @@ async function alreadySent(orgId: string, eventType: string): Promise<boolean> {
   return !!data;
 }
 
+function getNextCloseDate(closedAt: Date, interval: string): Date | null {
+  var next = new Date(closedAt);
+  if (interval === 'weekly')    { next.setDate(next.getDate() + 7); return next; }
+  if (interval === 'monthly')   { next.setMonth(next.getMonth() + 1); return next; }
+  if (interval === 'quarterly') { next.setMonth(next.getMonth() + 3); return next; }
+  if (interval === 'yearly')    { next.setFullYear(next.getFullYear() + 1); return next; }
+  return null;
+}
+
 serve(async (req) => {
   try {
     // Fetch all orgs with trial_started_at set and no active subscription
@@ -404,6 +413,198 @@ serve(async (req) => {
       });
     }
 
+    // ── K4: Recurring Polls ──────────────────────────────────────────────────
+    var yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    var { data: recurringPolls } = await supabase
+      .from('polls')
+      .select('id, organization_id, title, description, poll_type, visibility, allow_anonymous, show_results_before_close, allow_vote_changes, closes_at, retention_days, result_visibility, recurring_interval, recurring_ends_at, created_by')
+      .not('recurring_interval', 'is', null)
+      .lt('closes_at', now.toISOString())
+      .gte('closes_at', yesterday.toISOString());
+
+    for (var rp of (recurringPolls || [])) {
+      if (rp.recurring_ends_at && new Date(rp.recurring_ends_at) <= now) continue;
+      var nextClose = getNextCloseDate(new Date(rp.closes_at), rp.recurring_interval);
+      if (!nextClose) continue;
+
+      var rpKey = 'recurring_poll_' + rp.id;
+      var { data: alreadyCreated } = await supabase
+        .from('enforcement_log')
+        .select('id')
+        .eq('event_type', rpKey)
+        .maybeSingle();
+      if (alreadyCreated) continue;
+
+      var { data: newPoll } = await supabase
+        .from('polls')
+        .insert({
+          organization_id: rp.organization_id,
+          title: rp.title,
+          description: rp.description,
+          poll_type: rp.poll_type,
+          visibility: rp.visibility,
+          allow_anonymous: rp.allow_anonymous,
+          show_results_before_close: rp.show_results_before_close,
+          allow_vote_changes: rp.allow_vote_changes,
+          closes_at: nextClose.toISOString(),
+          retention_days: rp.retention_days,
+          result_visibility: rp.result_visibility,
+          recurring_interval: rp.recurring_interval,
+          recurring_ends_at: rp.recurring_ends_at,
+          status: 'active',
+          is_pinned: false,
+          created_by: rp.created_by,
+          approval_status: 'approved',
+        })
+        .select('id')
+        .single();
+
+      if (newPoll) {
+        var { data: srcOptions } = await supabase
+          .from('poll_options')
+          .select('option_text, display_order')
+          .eq('poll_id', rp.id);
+
+        if (srcOptions && srcOptions.length > 0) {
+          await supabase.from('poll_options').insert(
+            srcOptions.map(function(o: any) {
+              return { poll_id: newPoll.id, option_text: o.option_text, display_order: o.display_order };
+            })
+          );
+        }
+        await supabase.from('enforcement_log').insert({
+          org_id: rp.organization_id,
+          event_type: rpKey,
+          notification_sent: 'recurring_poll_created',
+        });
+      }
+    }
+
+    // ── K4: Recurring Surveys ────────────────────────────────────────────────
+    var { data: recurringSurveys } = await supabase
+      .from('surveys')
+      .select('id, organization_id, title, description, anonymous_responses, allow_multiple_responses, show_results_after_submission, closes_at, retention_days, visibility, result_visibility, recurring_interval, recurring_ends_at, created_by')
+      .not('recurring_interval', 'is', null)
+      .lt('closes_at', now.toISOString())
+      .gte('closes_at', yesterday.toISOString());
+
+    for (var rs of (recurringSurveys || [])) {
+      if (rs.recurring_ends_at && new Date(rs.recurring_ends_at) <= now) continue;
+      var nextSurveyClose = getNextCloseDate(new Date(rs.closes_at), rs.recurring_interval);
+      if (!nextSurveyClose) continue;
+
+      var rsKey = 'recurring_survey_' + rs.id;
+      var { data: surveyAlreadyCreated } = await supabase
+        .from('enforcement_log')
+        .select('id')
+        .eq('event_type', rsKey)
+        .maybeSingle();
+      if (surveyAlreadyCreated) continue;
+
+      var { data: newSurvey } = await supabase
+        .from('surveys')
+        .insert({
+          organization_id: rs.organization_id,
+          title: rs.title,
+          description: rs.description,
+          anonymous_responses: rs.anonymous_responses,
+          allow_multiple_responses: rs.allow_multiple_responses,
+          show_results_after_submission: rs.show_results_after_submission,
+          closes_at: nextSurveyClose.toISOString(),
+          retention_days: rs.retention_days,
+          visibility: rs.visibility,
+          result_visibility: rs.result_visibility,
+          recurring_interval: rs.recurring_interval,
+          recurring_ends_at: rs.recurring_ends_at,
+          status: 'active',
+          is_pinned: false,
+          created_by: rs.created_by,
+          approval_status: 'approved',
+        })
+        .select('id')
+        .single();
+
+      if (newSurvey) {
+        var { data: srcQuestions } = await supabase
+          .from('survey_questions')
+          .select('question_text, question_type, required, options, order_number')
+          .eq('survey_id', rs.id)
+          .order('order_number', { ascending: true });
+
+        if (srcQuestions && srcQuestions.length > 0) {
+          await supabase.from('survey_questions').insert(
+            srcQuestions.map(function(q: any) {
+              return {
+                survey_id: newSurvey.id,
+                question_text: q.question_text,
+                question_type: q.question_type,
+                required: q.required,
+                options: q.options,
+                order_number: q.order_number,
+                condition_question_id: null,
+                condition_answer: null,
+              };
+            })
+          );
+        }
+        await supabase.from('enforcement_log').insert({
+          org_id: rs.organization_id,
+          event_type: rsKey,
+          notification_sent: 'recurring_survey_created',
+        });
+      }
+    }
+
+// ── Document Auto-Delete ─────────────────────────────────────────────────
+    // Deletes any document whose delete_after date is today or in the past
+    var todayDateStr = now.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+
+    var { data: expiredDocs } = await supabase
+      .from('documents')
+      .select('id, organization_id, storage_path, title')
+      .not('delete_after', 'is', null)
+      .lte('delete_after', todayDateStr);
+
+    for (var expDoc of (expiredDocs || [])) {
+      var docKey = 'doc_autodelete_' + expDoc.id;
+
+      // Idempotency — skip if already processed
+      var { data: alreadyAutoDeleted } = await supabase
+        .from('enforcement_log')
+        .select('id')
+        .eq('event_type', docKey)
+        .maybeSingle();
+      if (alreadyAutoDeleted) continue;
+
+      // 1. Delete the file from storage bucket
+      if (expDoc.storage_path) {
+        var { error: storageErr } = await supabase.storage
+          .from('documents')
+          .remove([expDoc.storage_path]);
+        if (storageErr) {
+          console.error('Storage delete failed for doc ' + expDoc.id + ':', storageErr.message);
+        }
+      }
+
+      // 2. Delete the DB record
+      var { error: docDbErr } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', expDoc.id);
+
+      if (docDbErr) {
+        console.error('DB delete failed for doc ' + expDoc.id + ':', docDbErr.message);
+        continue;
+      }
+
+      // 3. Log the deletion
+      await supabase.from('enforcement_log').insert({
+        org_id: expDoc.organization_id,
+        event_type: docKey,
+        notification_sent: 'doc_autodelete',
+      });
+      console.log('Auto-deleted document: "' + expDoc.title + '" (' + expDoc.id + ')');
+    }
     return new Response(JSON.stringify({ ok: true, processed: orgs?.length || 0 }), {
       headers: { 'Content-Type': 'application/json' }
     });
