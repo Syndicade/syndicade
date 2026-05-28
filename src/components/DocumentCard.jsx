@@ -65,7 +65,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
   // Expiry + New status — self-contained, no prop needed
   var expiryStatus = getExpiryStatus(localDoc.delete_after);
   var daysLeft = getDaysLeft(localDoc.delete_after);
-  var docIsNew = !expiryStatus && isNewDoc(localDoc.uploaded_at, localDoc.created_at);
+  var docIsNew = isNewDoc(localDoc.uploaded_at, localDoc.created_at);
 
   var expiryBadgeText = '';
   var expiryBadgeClass = '';

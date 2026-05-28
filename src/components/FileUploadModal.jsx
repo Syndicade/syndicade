@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { uploadDocument, validateFile } from '../lib/documentService';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import { supabase } from '../lib/supabase';
-import { Upload, X, FileText, Calendar } from 'lucide-react';
+import { Upload, X, FileText, Calendar, Users } from 'lucide-react';
 
 function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, onSuccess }) {
   var [file, setFile] = useState(null);
   var [title, setTitle] = useState('');
   var [description, setDescription] = useState('');
   var [deleteAfter, setDeleteAfter] = useState('');
+  var [visibility, setVisibility] = useState(groupId ? 'groups' : 'all');
+  var [selectedGroupIds, setSelectedGroupIds] = useState(groupId ? [groupId] : []);
+  var [groups, setGroups] = useState([]);
+  var [groupsLoading, setGroupsLoading] = useState(false);
   var [uploading, setUploading] = useState(false);
   var [error, setError] = useState(null);
   var [dragActive, setDragActive] = useState(false);
@@ -17,12 +21,33 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
   var DESC_MAX = 500;
   var todayStr = new Date().toISOString().split('T')[0];
 
+  // Fetch org groups when visibility switches to 'groups'
+  useEffect(function() {
+    if (visibility !== 'groups') return;
+    if (groups.length > 0) return;
+    setGroupsLoading(true);
+    supabase
+      .from('org_groups')
+      .select('id, name, color')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('name')
+      .then(function(result) {
+        if (!result.error) setGroups(result.data || []);
+        setGroupsLoading(false);
+      });
+  }, [visibility]);
+
+  function toggleGroup(gid) {
+    setSelectedGroupIds(function(prev) {
+      if (prev.indexOf(gid) !== -1) return prev.filter(function(id) { return id !== gid; });
+      return prev.concat([gid]);
+    });
+  }
+
   function handleFileSelect(selectedFile) {
     var validation = validateFile(selectedFile);
-    if (!validation.isValid) {
-      setError(validation.errors.join(', '));
-      return;
-    }
+    if (!validation.isValid) { setError(validation.errors.join(', ')); return; }
     setFile(selectedFile);
     if (!title) setTitle(selectedFile.name.replace(/\.[^/.]+$/, '').slice(0, TITLE_MAX));
     setError(null);
@@ -45,6 +70,12 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
   async function handleSubmit(e) {
     e.preventDefault();
     if (!file) return;
+
+    if (visibility === 'groups' && selectedGroupIds.length === 0) {
+      setError('Select at least one group.');
+      return;
+    }
+
     setUploading(true);
     setError(null);
 
@@ -53,18 +84,12 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
       folderId: folderId,
       title: title,
       description: description,
+      visibility: visibility,
+      allowedGroups: visibility === 'groups' ? selectedGroupIds : [],
     };
-    if (groupId) {
-      uploadOptions.allowedGroups = [groupId];
-      uploadOptions.visibility = 'groups';
-    }
 
     var uploadResult = await uploadDocument(file, uploadOptions);
-    if (uploadResult.error) {
-      setError(uploadResult.error);
-      setUploading(false);
-      return;
-    }
+    if (uploadResult.error) { setError(uploadResult.error); setUploading(false); return; }
 
     var uploadedDoc = uploadResult.data;
 
@@ -99,6 +124,8 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
     setTitle('');
     setDescription('');
     setDeleteAfter('');
+    setVisibility('all');
+    setSelectedGroupIds([]);
   }
 
   if (!isOpen) return null;
@@ -141,13 +168,6 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
             <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3" role="alert" aria-live="assertive">
               <p className="text-sm font-semibold text-red-700">{error}</p>
             </div>
-          )}
-
-          {/* Group context notice */}
-          {groupId && (
-            <p className="text-sm text-[#475569] bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-              This document will be shared with this group.
-            </p>
           )}
 
           {/* Drop zone */}
@@ -201,19 +221,18 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
           {/* Title */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="doc-title" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+              <label htmlFor="upload-doc-title" className="text-sm font-semibold" style={{color:'#0E1523'}}>
                 Title <span aria-hidden="true" style={{color:'#EF4444'}}>*</span>
               </label>
               <span
                 className={'text-xs ' + (title.length >= TITLE_MAX ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')}
                 aria-live="polite"
-                aria-label={TITLE_MAX - title.length + ' characters remaining for title'}
               >
                 {TITLE_MAX - title.length}
               </span>
             </div>
             <input
-              id="doc-title"
+              id="upload-doc-title"
               type="text"
               required
               value={title}
@@ -228,20 +247,19 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
           {/* Description */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="doc-description" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+              <label htmlFor="upload-doc-description" className="text-sm font-semibold" style={{color:'#0E1523'}}>
                 Description{' '}
                 <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
               </label>
               <span
                 className={'text-xs ' + (description.length >= DESC_MAX ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')}
                 aria-live="polite"
-                aria-label={DESC_MAX - description.length + ' characters remaining for description'}
               >
                 {DESC_MAX - description.length}
               </span>
             </div>
             <textarea
-              id="doc-description"
+              id="upload-doc-description"
               value={description}
               onChange={function(e) { if (e.target.value.length <= DESC_MAX) setDescription(e.target.value); }}
               rows={2}
@@ -251,10 +269,96 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
             />
           </div>
 
+          {/* Visibility */}
+          <div>
+            <label htmlFor="upload-doc-visibility" className="block text-sm font-semibold mb-1.5" style={{color:'#0E1523'}}>
+              Who can see this?
+            </label>
+            <select
+              id="upload-doc-visibility"
+              value={visibility}
+              onChange={function(e) { setVisibility(e.target.value); if (e.target.value !== 'groups') setSelectedGroupIds([]); }}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Members</option>
+              <option value="admins">Admins Only</option>
+              <option value="groups">Specific Groups</option>
+            </select>
+          </div>
+
+          {/* Group picker — shown when visibility = 'groups' */}
+          {visibility === 'groups' && (
+            <div
+              className="border border-slate-200 rounded-xl overflow-hidden"
+              role="group"
+              aria-labelledby="upload-groups-label"
+            >
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-[#64748B]" aria-hidden="true" />
+                <span
+                  id="upload-groups-label"
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{color:'#64748B'}}
+                >
+                  Select Groups
+                </span>
+                {selectedGroupIds.length > 0 && (
+                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
+                    {selectedGroupIds.length} selected
+                  </span>
+                )}
+              </div>
+
+              {groupsLoading ? (
+                <div className="px-3 py-4 space-y-2" aria-busy="true" aria-label="Loading groups">
+                  {[1,2,3].map(function(i) {
+                    return <div key={i} className="h-8 rounded-lg animate-pulse bg-slate-100" />;
+                  })}
+                </div>
+              ) : groups.length === 0 ? (
+                <div className="px-3 py-4 text-center">
+                  <p className="text-sm" style={{color:'#64748B'}}>No groups found for this organization.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                  {groups.map(function(g) {
+                    var checked = selectedGroupIds.indexOf(g.id) !== -1;
+                    return (
+                      <label
+                        key={g.id}
+                        className={'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ' + (checked ? 'bg-blue-50' : 'hover:bg-slate-50')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={function() { toggleGroup(g.id); }}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 flex-shrink-0"
+                          aria-label={'Include group: ' + g.name}
+                        />
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{background: g.color || '#3B82F6'}}
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm font-medium flex-1" style={{color:'#0E1523'}}>{g.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {visibility === 'groups' && selectedGroupIds.length === 0 && !groupsLoading && groups.length > 0 && (
+                <p className="px-3 py-2 text-xs border-t border-slate-200" style={{color:'#EF4444'}}>
+                  Select at least one group.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Auto-delete date */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="doc-delete-after" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+              <label htmlFor="upload-doc-delete-after" className="text-sm font-semibold" style={{color:'#0E1523'}}>
                 Auto-delete after{' '}
                 <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
               </label>
@@ -272,7 +376,7 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" aria-hidden="true" />
               <input
-                id="doc-delete-after"
+                id="upload-doc-delete-after"
                 type="date"
                 value={deleteAfter}
                 min={todayStr}
@@ -280,12 +384,11 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
                 className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            {deleteAfter && (
+            {deleteAfter ? (
               <p className="text-xs mt-1.5 font-semibold" style={{color:'#F59E0B'}}>
-                Will auto-delete on {new Date(deleteAfter + 'T00:00:00').toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'})}.
+                {'Will auto-delete on ' + new Date(deleteAfter + 'T00:00:00').toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'}) + '.'}
               </p>
-            )}
-            {!deleteAfter && (
+            ) : (
               <p className="text-xs mt-1" style={{color:'#94A3B8'}}>
                 Useful for event fliers or time-sensitive files.
               </p>
@@ -304,7 +407,7 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
             </button>
             <button
               type="submit"
-              disabled={uploading || !file}
+              disabled={uploading || !file || (visibility === 'groups' && selectedGroupIds.length === 0)}
               className="px-4 py-2.5 bg-blue-500 text-white font-semibold rounded-lg text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               aria-busy={uploading}
             >
@@ -321,6 +424,7 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
               )}
             </button>
           </div>
+
         </form>
       </div>
     </div>

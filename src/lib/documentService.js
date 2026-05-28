@@ -238,6 +238,7 @@ export async function uploadDocument(file, metadata) {
         category: metadata.category || null,
         visibility: metadata.visibility || 'members',
         allowed_groups: metadata.allowedGroups || [],
+        uploaded_at: new Date().toISOString(),
         uploaded_by: user.id,
         status: 'approved',
       }])
