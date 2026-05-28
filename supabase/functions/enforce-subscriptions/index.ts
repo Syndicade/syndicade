@@ -7,11 +7,9 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-await supabase.from('login_log').delete().lt('logged_in_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
+
 // Days before expiry to send countdown emails
 const COUNTDOWN_DAYS = [7, 5, 3, 2, 1];
-// Days after expiry to send post-expiry emails
-const POST_EXPIRY_DAYS = [0, 25, 30];
 
 async function sendEmail(to: string, subject: string, html: string) {
   await fetch('https://api.resend.com/emails', {
@@ -50,9 +48,39 @@ function getNextCloseDate(closedAt: Date, interval: string): Date | null {
   return null;
 }
 
+// Shared email wrapper HTML — header + footer, accepts body content string
+function wrapEmail(orgName: string, orgLogoUrl: string, bodyHtml: string): string {
+  return (
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+    '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
+    '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
+    '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
+    (orgLogoUrl
+      ? '<img src="' + orgLogoUrl + '" alt="' + orgName + '" style="height:48px;border-radius:50%;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;" />'
+      : '') +
+    (orgName
+      ? '<span style="font-size:20px;font-weight:800;color:#ffffff;">' + orgName + '</span>'
+      : '<span style="font-size:20px;font-weight:800;color:#F5B731;">Syndi</span><span style="font-size:20px;font-weight:800;color:#ffffff;">cade</span>') +
+    '</td></tr>' +
+    '<tr><td style="padding:32px;">' + bodyHtml + '</td></tr>' +
+    '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
+    '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
+    '</td></tr></table></td></tr></table></body></html>'
+  );
+}
+
 serve(async (req) => {
   try {
-    // Fetch all orgs with trial_started_at set and no active subscription
+    const now = new Date();
+
+    // ── Cleanup: login_log older than 90 days ──────────────────────────────
+    await supabase
+      .from('login_log')
+      .delete()
+      .lt('logged_in_at', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString());
+
+    // ── Fetch all orgs with trial_started_at set ───────────────────────────
     const { data: orgs, error } = await supabase
       .from('organizations')
       .select('id, name, contact_email, trial_started_at, trial_length_days, account_status')
@@ -60,10 +88,8 @@ serve(async (req) => {
 
     if (error) throw error;
 
-    const now = new Date();
-
     for (const org of orgs || []) {
-      // Check for active subscription — skip if subscribed
+      // Skip if actively subscribed
       const { data: sub } = await supabase
         .from('subscriptions')
         .select('id')
@@ -80,34 +106,32 @@ serve(async (req) => {
       const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
       const daysPast = Math.floor((now.getTime() - trialEnd.getTime()) / (1000 * 60 * 60 * 24));
 
-      // ── Pro upsell — Day 2 of trial ──────────────────────────────────────
+      // ── Pro upsell — Day 2 of trial ────────────────────────────────────
       const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
       if (daysLeft > 0 && daysSinceStart >= 1) {
         const eventType = 'pro_upsell_day2';
         const alreadyDone = await alreadySent(org.id, eventType);
         if (!alreadyDone && org.contact_email) {
-          // Generate token and store it
           const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-          await supabase.from('pro_upsell_tokens').insert({
-            organization_id: org.id,
-            token: token
-          });
+          await supabase.from('pro_upsell_tokens').insert({ organization_id: org.id, token });
           const activateUrl = 'https://syndicade.org/activate-pro?token=' + token + '&org=' + org.id;
           await sendEmail(
             org.contact_email,
             'Unlock everything — upgrade to Pro free for 30 days',
-            '<p>Hi ' + org.name + ',</p>' +
-            '<p>You\'re 2 days into your Syndicade trial — great start! We\'d love to show you what <strong>Pro</strong> can do.</p>' +
-            '<p>For a limited time, you can activate a <strong>free 30-day Pro trial</strong> — no credit card required. Get unlimited emails, AI content assistant, custom domain, and priority support.</p>' +
-            '<p><a href="' + activateUrl + '" style="background:#F5B731;color:#111827;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Activate Free Pro Trial</a></p>' +
-            '<p>This link is unique to your account and expires with your trial.</p>' +
-            '<p>— The Syndicade Team</p>'
+            wrapEmail('', '',
+              '<p>Hi ' + org.name + ',</p>' +
+              '<p>You\'re 2 days into your Syndicade trial — great start! We\'d love to show you what <strong>Pro</strong> can do.</p>' +
+              '<p>For a limited time, you can activate a <strong>free 30-day Pro trial</strong> — no credit card required. Get unlimited emails, AI content assistant, custom domain, and priority support.</p>' +
+              '<p style="text-align:center;margin:24px 0 0;"><a href="' + activateUrl + '" style="display:inline-block;padding:12px 28px;background:#F5B731;color:#111827;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Activate Free Pro Trial</a></p>' +
+              '<p style="font-size:13px;color:#64748B;margin-top:16px;">This link is unique to your account and expires with your trial.</p>' +
+              '<p>— The Syndicade Team</p>'
+            )
           );
           await logEvent(org.id, eventType, 'pro_upsell_day2');
         }
       }
 
-      // ── Countdown emails (before expiry) ──────────────────────────────────
+      // ── Countdown emails (before expiry) ──────────────────────────────
       if (daysLeft > 0 && COUNTDOWN_DAYS.includes(daysLeft)) {
         const eventType = 'countdown_' + daysLeft + 'd';
         const alreadyDone = await alreadySent(org.id, eventType);
@@ -115,18 +139,21 @@ serve(async (req) => {
           await sendEmail(
             org.contact_email,
             'Your Syndicade trial ends in ' + daysLeft + (daysLeft === 1 ? ' day' : ' days'),
-            '<p>Hi ' + org.name + ',</p>' +
-            '<p>Your free trial ends in <strong>' + daysLeft + (daysLeft === 1 ? ' day' : ' days') + '</strong>.</p>' +
-            '<p>Subscribe now to keep full access to your member portal, events, announcements, and more.</p>' +
-            '<p><a href="https://syndicade.com/pricing" style="background:#3B82F6;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Choose a Plan</a></p>' +
-            '<p>Questions? Reply to this email — we\'re happy to help.</p>' +
-            '<p>— The Syndicade Team</p>'
+            wrapEmail('', '',
+              '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Trial ending soon</h2>' +
+              '<p>Hi ' + org.name + ',</p>' +
+              '<p>Your free trial ends in <strong>' + daysLeft + (daysLeft === 1 ? ' day' : ' days') + '</strong>.</p>' +
+              '<p>Subscribe now to keep full access to your member portal, events, announcements, and more.</p>' +
+              '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org/pricing" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Choose a Plan</a></p>' +
+              '<p style="font-size:13px;color:#64748B;margin-top:16px;">Questions? Reply to this email — we\'re happy to help.</p>' +
+              '<p>— The Syndicade Team</p>'
+            )
           );
           await logEvent(org.id, eventType, 'countdown_' + daysLeft + 'd');
         }
       }
 
-      // ── Day of expiry ─────────────────────────────────────────────────────
+      // ── Day of expiry ─────────────────────────────────────────────────
       if (daysLeft <= 0 && daysPast === 0) {
         const eventType = 'expired_day0';
         const alreadyDone = await alreadySent(org.id, eventType);
@@ -134,20 +161,21 @@ serve(async (req) => {
           await sendEmail(
             org.contact_email,
             'Your Syndicade trial has ended — keep your community going',
-            '<p>Hi ' + org.name + ',</p>' +
-            '<p>Your free trial has ended. Your org is now in <strong>read-only mode</strong> for up to 30 days.</p>' +
-            '<p>Subscribe now to restore full access instantly.</p>' +
-            '<p><a href="https://syndicade.com/pricing" style="background:#3B82F6;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Reactivate Now</a></p>' +
-            '<p>— The Syndicade Team</p>'
+            wrapEmail('', '',
+              '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Your trial has ended</h2>' +
+              '<p>Hi ' + org.name + ',</p>' +
+              '<p>Your free trial has ended. Your org is now in <strong>read-only mode</strong> for up to 30 days.</p>' +
+              '<p>Subscribe now to restore full access instantly.</p>' +
+              '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org/pricing" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Reactivate Now</a></p>' +
+              '<p>— The Syndicade Team</p>'
+            )
           );
           await logEvent(org.id, eventType, 'expired_day0');
         }
-
-        // Update account_status to expired
         await supabase.from('organizations').update({ account_status: 'expired' }).eq('id', org.id);
       }
 
-      // ── Grace period emails (day 25 and 30) ───────────────────────────────
+      // ── Grace period — day 25 ─────────────────────────────────────────
       if (daysPast === 25) {
         const eventType = 'grace_day25';
         const alreadyDone = await alreadySent(org.id, eventType);
@@ -155,16 +183,20 @@ serve(async (req) => {
           await sendEmail(
             org.contact_email,
             'Your Syndicade account will be frozen in 5 days',
-            '<p>Hi ' + org.name + ',</p>' +
-            '<p>Your account will be <strong>frozen in 5 days</strong>. After that, all features will be locked until you subscribe.</p>' +
-            '<p>Your data is safe — but act now to avoid any interruption.</p>' +
-            '<p><a href="https://syndicade.com/pricing" style="background:#EF4444;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Subscribe Before It\'s Frozen</a></p>' +
-            '<p>— The Syndicade Team</p>'
+            wrapEmail('', '',
+              '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Account freezing soon</h2>' +
+              '<p>Hi ' + org.name + ',</p>' +
+              '<p>Your account will be <strong>frozen in 5 days</strong>. After that, all features will be locked until you subscribe.</p>' +
+              '<p>Your data is safe — but act now to avoid any interruption.</p>' +
+              '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org/pricing" style="display:inline-block;padding:12px 28px;background:#EF4444;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Subscribe Before It\'s Frozen</a></p>' +
+              '<p>— The Syndicade Team</p>'
+            )
           );
           await logEvent(org.id, eventType, 'grace_day25');
         }
       }
 
+      // ── Grace period — day 30 (iced) ──────────────────────────────────
       if (daysPast >= 30) {
         const eventType = 'iced_day30';
         const alreadyDone = await alreadySent(org.id, eventType);
@@ -172,18 +204,21 @@ serve(async (req) => {
           await sendEmail(
             org.contact_email,
             'Your Syndicade account is now frozen',
-            '<p>Hi ' + org.name + ',</p>' +
-            '<p>Your account is now <strong>frozen</strong>. All features are locked, but your data is safe.</p>' +
-            '<p>Subscribe at any time to restore full access instantly.</p>' +
-            '<p><a href="https://syndicade.com/pricing" style="background:#3B82F6;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Reactivate Your Account</a></p>' +
-            '<p>— The Syndicade Team</p>'
+            wrapEmail('', '',
+              '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Account frozen</h2>' +
+              '<p>Hi ' + org.name + ',</p>' +
+              '<p>Your account is now <strong>frozen</strong>. All features are locked, but your data is safe.</p>' +
+              '<p>Subscribe at any time to restore full access instantly.</p>' +
+              '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org/pricing" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Reactivate Your Account</a></p>' +
+              '<p>— The Syndicade Team</p>'
+            )
           );
           await logEvent(org.id, eventType, 'iced_day30');
         }
-        // Update account_status to iced
         await supabase.from('organizations').update({ account_status: 'iced' }).eq('id', org.id);
       }
-      // ── Student plan pause activation ─────────────────────────────────────
+
+      // ── Student plan pause activation ─────────────────────────────────
       if (org.account_status !== 'paused') {
         const { data: pauseOrg } = await supabase
           .from('organizations')
@@ -194,11 +229,9 @@ serve(async (req) => {
         if (pauseOrg && pauseOrg.pause_starts_at) {
           const pauseStart = new Date(pauseOrg.pause_starts_at);
           if (pauseStart <= now) {
-            // Check 6-month annual limit
             const currentYear = now.getFullYear();
             var monthsUsed = (pauseOrg.pause_year === currentYear ? pauseOrg.pause_months_used_this_year : 0) || 0;
             if (monthsUsed < 6) {
-              // Pause the Stripe subscription
               const { data: subRow } = await supabase
                 .from('subscriptions')
                 .select('stripe_subscription_id, stripe_customer_id')
@@ -214,9 +247,7 @@ serve(async (req) => {
                       'Authorization': 'Bearer ' + Deno.env.get('STRIPE_SECRET_KEY'),
                       'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: new URLSearchParams({
-                      'pause_collection[behavior]': 'void',
-                    }).toString(),
+                    body: new URLSearchParams({ 'pause_collection[behavior]': 'void' }).toString(),
                   });
                 } catch (stripeErr) {
                   console.error('Stripe pause error:', stripeErr);
@@ -234,11 +265,13 @@ serve(async (req) => {
                 await sendEmail(
                   org.contact_email,
                   'Your Syndicade account is now paused',
-                  '<p>Hi ' + org.name + ',</p>' +
-                  '<p>Your account has been paused as requested. You won\'t be charged while your account is paused.</p>' +
-                  '<p>Your data is safe and waiting for you. Log in any time to resume your account.</p>' +
-                  '<p><a href="https://syndicade.org" style="background:#3B82F6;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Resume My Account</a></p>' +
-                  '<p>— The Syndicade Team</p>'
+                  wrapEmail('', '',
+                    '<p>Hi ' + org.name + ',</p>' +
+                    '<p>Your account has been paused as requested. You won\'t be charged while your account is paused.</p>' +
+                    '<p>Your data is safe and waiting for you. Log in any time to resume your account.</p>' +
+                    '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Resume My Account</a></p>' +
+                    '<p>— The Syndicade Team</p>'
+                  )
                 );
               }
             }
@@ -246,7 +279,7 @@ serve(async (req) => {
         }
       }
 
-      // ── Student plan pause resume ──────────────────────────────────────────
+      // ── Student plan pause resume ──────────────────────────────────────
       if (org.account_status === 'paused') {
         const { data: pauseOrg } = await supabase
           .from('organizations')
@@ -257,7 +290,6 @@ serve(async (req) => {
         if (pauseOrg && pauseOrg.pause_resumes_at) {
           const resumeDate = new Date(pauseOrg.pause_resumes_at);
           if (resumeDate <= now) {
-            // Calculate months paused
             var monthsPaused = 0;
             if (pauseOrg.pause_starts_at) {
               var pausedMs = resumeDate.getTime() - new Date(pauseOrg.pause_starts_at).getTime();
@@ -265,9 +297,8 @@ serve(async (req) => {
             }
 
             const currentYear = now.getFullYear();
-            var monthsUsed = (pauseOrg.pause_year === currentYear ? pauseOrg.pause_months_used_this_year : 0) || 0;
+            var resumeMonthsUsed = (pauseOrg.pause_year === currentYear ? pauseOrg.pause_months_used_this_year : 0) || 0;
 
-            // Resume Stripe subscription
             const { data: subRow } = await supabase
               .from('subscriptions')
               .select('stripe_subscription_id')
@@ -282,9 +313,7 @@ serve(async (req) => {
                     'Authorization': 'Bearer ' + Deno.env.get('STRIPE_SECRET_KEY'),
                     'Content-Type': 'application/x-www-form-urlencoded',
                   },
-                  body: new URLSearchParams({
-                    'pause_collection': '',
-                  }).toString(),
+                  body: new URLSearchParams({ 'pause_collection': '' }).toString(),
                 });
               } catch (stripeErr) {
                 console.error('Stripe resume error:', stripeErr);
@@ -296,7 +325,7 @@ serve(async (req) => {
               pause_starts_at: null,
               pause_resumes_at: null,
               pause_scheduled_at: null,
-              pause_months_used_this_year: monthsUsed + monthsPaused,
+              pause_months_used_this_year: resumeMonthsUsed + monthsPaused,
               pause_year: currentYear,
             }).eq('id', org.id);
 
@@ -306,10 +335,12 @@ serve(async (req) => {
               await sendEmail(
                 org.contact_email,
                 'Welcome back — your Syndicade account is active',
-                '<p>Hi ' + org.name + ',</p>' +
-                '<p>Your account has been resumed and billing is active again. Welcome back!</p>' +
-                '<p><a href="https://syndicade.org" style="background:#22C55E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Go to My Dashboard</a></p>' +
-                '<p>— The Syndicade Team</p>'
+                wrapEmail('', '',
+                  '<p>Hi ' + org.name + ',</p>' +
+                  '<p>Your account has been resumed and billing is active again. Welcome back!</p>' +
+                  '<p style="text-align:center;margin:24px 0 0;"><a href="https://syndicade.org" style="display:inline-block;padding:12px 28px;background:#22C55E;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Go to My Dashboard</a></p>' +
+                  '<p>— The Syndicade Team</p>'
+                )
               );
             }
           }
@@ -317,7 +348,7 @@ serve(async (req) => {
       }
     }
 
-    // ── Dues renewal reminders (7 days before dues_paid_until) ───────────────
+    // ── Dues renewal reminders (7 days before dues_paid_until) ────────────
     var reminderWindow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     var { data: duesSoon } = await supabase
       .from('memberships')
@@ -326,9 +357,9 @@ serve(async (req) => {
       .gte('dues_paid_until', now.toISOString())
       .lte('dues_paid_until', reminderWindow.toISOString());
 
-    for (const membership of duesSoon || []) {
-      var duesUntilDate = new Date(membership.dues_paid_until);
-      var duesKey = 'dues_reminder_' + membership.id + '_' + duesUntilDate.getFullYear() + '_' + (duesUntilDate.getMonth() + 1);
+    for (var dues of (duesSoon || [])) {
+      var duesUntilDate = new Date(dues.dues_paid_until);
+      var duesKey = 'dues_reminder_' + dues.id + '_' + duesUntilDate.getFullYear() + '_' + (duesUntilDate.getMonth() + 1);
       var { data: alreadySentDues } = await supabase
         .from('enforcement_log')
         .select('id')
@@ -336,29 +367,29 @@ serve(async (req) => {
         .maybeSingle();
       if (alreadySentDues) continue;
 
-      var memberEmail = membership.members?.email;
-      if (!memberEmail) continue;
+      var duesMemberEmail = (dues.members as any)?.email;
+      if (!duesMemberEmail) continue;
 
-      var memberName = membership.members?.display_name ||
-        ((membership.members?.first_name || '') + ' ' + (membership.members?.last_name || '')).trim();
-      var orgName = membership.organizations?.name || 'Your organization';
-      var orgLogoUrl = membership.organizations?.logo_url || '';
+      var duesMemberName = (dues.members as any)?.display_name ||
+        (((dues.members as any)?.first_name || '') + ' ' + ((dues.members as any)?.last_name || '')).trim();
+      var duesOrgName = (dues.organizations as any)?.name || 'Your organization';
+      var duesOrgLogoUrl = (dues.organizations as any)?.logo_url || '';
       var daysUntilExpiry = Math.ceil((duesUntilDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       var untilStr = duesUntilDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
       var paymentSection = '';
-      if (membership.organizations?.stripe_connect_status === 'active' && membership.dues_amount && parseFloat(membership.dues_amount) > 0) {
+      if ((dues.organizations as any)?.stripe_connect_status === 'active' && dues.dues_amount && parseFloat(dues.dues_amount) > 0) {
         try {
           var duesSessionRes = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/create-dues-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              organization_id: membership.organization_id,
-              member_id: membership.member_id,
-              tier_id: membership.tier_id || null,
-              amount: membership.dues_amount,
-              member_name: memberName,
-              member_email: memberEmail,
+              organization_id: dues.organization_id,
+              member_id: dues.member_id,
+              tier_id: dues.tier_id || null,
+              amount: dues.dues_amount,
+              member_name: duesMemberName,
+              member_email: duesMemberEmail,
             }),
           });
           if (duesSessionRes.ok) {
@@ -374,46 +405,32 @@ serve(async (req) => {
           console.error('Dues reminder link error:', duesLinkErr);
         }
       }
-      if (!paymentSection && membership.organizations?.manual_payment_instructions) {
+      if (!paymentSection && (dues.organizations as any)?.manual_payment_instructions) {
         paymentSection =
           '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-top:24px;">' +
           '<p style="font-size:13px;font-weight:700;color:#374151;margin:0 0 8px;">Payment Instructions</p>' +
-          '<p style="font-size:13px;color:#6b7280;margin:0;white-space:pre-wrap;">' + membership.organizations.manual_payment_instructions + '</p>' +
+          '<p style="font-size:13px;color:#6b7280;margin:0;white-space:pre-wrap;">' + (dues.organizations as any).manual_payment_instructions + '</p>' +
           '</div>';
       }
 
-      var duesReminderHtml =
-        '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
-        '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
-        '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
-        '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
-        (orgLogoUrl ? '<img src="' + orgLogoUrl + '" alt="' + orgName + '" style="height:48px;border-radius:50%;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;" />' : '') +
-        '<span style="font-size:20px;font-weight:800;color:#ffffff;">' + orgName + '</span>' +
-        '</td></tr>' +
-        '<tr><td style="padding:32px;">' +
-        '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Your membership renews soon</h2>' +
-        '<p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ' + (memberName || 'there') + ', your membership dues expire in <strong>' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days') + '</strong> on ' + untilStr + '.</p>' +
-        paymentSection +
-        '</td></tr>' +
-        '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
-        '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
-        '</td></tr></table></td></tr></table></body></html>';
-
       await sendEmail(
-        memberEmail,
-        'Your ' + orgName + ' membership renews in ' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days'),
-        duesReminderHtml
+        duesMemberEmail,
+        'Your ' + duesOrgName + ' membership renews in ' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days'),
+        wrapEmail(duesOrgName, duesOrgLogoUrl,
+          '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">Your membership renews soon</h2>' +
+          '<p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ' + (duesMemberName || 'there') + ', your membership dues expire in <strong>' + daysUntilExpiry + (daysUntilExpiry === 1 ? ' day' : ' days') + '</strong> on ' + untilStr + '.</p>' +
+          paymentSection
+        )
       );
 
       await supabase.from('enforcement_log').insert({
-        org_id: membership.organization_id,
+        org_id: dues.organization_id,
         event_type: duesKey,
         notification_sent: 'dues_renewal_reminder',
       });
     }
 
-    // ── K4: Recurring Polls ──────────────────────────────────────────────────
+    // ── K4: Recurring Polls ───────────────────────────────────────────────
     var yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     var { data: recurringPolls } = await supabase
       .from('polls')
@@ -480,7 +497,7 @@ serve(async (req) => {
       }
     }
 
-    // ── K4: Recurring Surveys ────────────────────────────────────────────────
+    // ── K4: Recurring Surveys ─────────────────────────────────────────────
     var { data: recurringSurveys } = await supabase
       .from('surveys')
       .select('id, organization_id, title, description, anonymous_responses, allow_multiple_responses, show_results_after_submission, closes_at, retention_days, visibility, result_visibility, recurring_interval, recurring_ends_at, created_by')
@@ -555,7 +572,172 @@ serve(async (req) => {
       }
     }
 
-    // ── Document Pre-Deletion Warning Email (≤3 days before auto-delete) ────────
+    // ── K4: Poll Reminder Emails (once per week per member per poll) ──────
+    // Week bucket: unique integer that increments every 7 days from epoch
+    var weekNumber = Math.floor(now.getTime() / (7 * 24 * 60 * 60 * 1000));
+
+    var { data: activePolls } = await supabase
+      .from('polls')
+      .select('id, organization_id, title, closes_at, organizations(name, logo_url)')
+      .eq('status', 'active')
+      .or('closes_at.is.null,closes_at.gt.' + now.toISOString());
+
+    for (var poll of (activePolls || [])) {
+      var pollOrgName = (poll.organizations as any)?.name || 'Your organization';
+      var pollOrgLogo = (poll.organizations as any)?.logo_url || '';
+      var pollUrl = 'https://syndicade.org/organizations/' + poll.organization_id + '/polls';
+
+      var closingNote = poll.closes_at
+        ? '<p style="font-size:14px;color:#475569;margin:0 0 20px;">This poll closes on <strong>' +
+          new Date(poll.closes_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) +
+          '</strong>.</p>'
+        : '';
+
+      // Get all active members for this org
+      var { data: pollMemberships } = await supabase
+        .from('memberships')
+        .select('member_id, members(email, display_name, first_name, last_name)')
+        .eq('organization_id', poll.organization_id)
+        .eq('status', 'active');
+
+      if (!pollMemberships || pollMemberships.length === 0) continue;
+
+      // Get IDs of members who already voted
+      var { data: pollVotes } = await supabase
+        .from('poll_votes')
+        .select('member_id')
+        .eq('poll_id', poll.id);
+
+      var votedIds = new Set((pollVotes || []).map(function(v: any) { return v.member_id; }));
+
+      // Send to non-respondents only
+      for (var pm of pollMemberships) {
+        if (votedIds.has(pm.member_id)) continue;
+
+        var pmEmail = (pm.members as any)?.email;
+        if (!pmEmail) continue;
+
+        var pollReminderKey = 'poll_reminder_' + poll.id + '_' + pm.member_id + '_' + weekNumber;
+        var { data: alreadySentPollReminder } = await supabase
+          .from('enforcement_log')
+          .select('id')
+          .eq('event_type', pollReminderKey)
+          .maybeSingle();
+        if (alreadySentPollReminder) continue;
+
+        var pmName = (pm.members as any)?.display_name ||
+          (((pm.members as any)?.first_name || '') + ' ' + ((pm.members as any)?.last_name || '')).trim() ||
+          'there';
+
+        await sendEmail(
+          pmEmail,
+          pollOrgName + ': Your vote is needed — "' + poll.title + '"',
+          wrapEmail(pollOrgName, pollOrgLogo,
+            '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Your vote is needed</h2>' +
+            '<p style="font-size:15px;color:#374151;margin:0 0 16px;">Hi ' + pmName + ', <strong>' + pollOrgName + '</strong> has an active poll waiting for your response:</p>' +
+            '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:16px;margin:0 0 16px;">' +
+            '<p style="font-size:16px;font-weight:700;color:#1E40AF;margin:0;">' + poll.title + '</p>' +
+            '</div>' +
+            closingNote +
+            '<p style="text-align:center;margin:24px 0 0;">' +
+            '<a href="' + pollUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Cast My Vote</a>' +
+            '</p>' +
+            '<p style="font-size:12px;color:#94A3B8;margin-top:20px;text-align:center;">You\'re receiving this because you\'re a member of ' + pollOrgName + '.</p>'
+          )
+        );
+
+        await supabase.from('enforcement_log').insert({
+          org_id: poll.organization_id,
+          event_type: pollReminderKey,
+          notification_sent: 'poll_reminder',
+        });
+
+        console.log('Poll reminder sent: poll=' + poll.id + ' member=' + pm.member_id + ' week=' + weekNumber);
+      }
+    }
+
+    // ── K4: Survey Reminder Emails (once per week per member per survey) ──
+    var { data: activeSurveys } = await supabase
+      .from('surveys')
+      .select('id, organization_id, title, closes_at, organizations(name, logo_url)')
+      .eq('status', 'active')
+      .or('closes_at.is.null,closes_at.gt.' + now.toISOString());
+
+    for (var survey of (activeSurveys || [])) {
+      var surveyOrgName = (survey.organizations as any)?.name || 'Your organization';
+      var surveyOrgLogo = (survey.organizations as any)?.logo_url || '';
+      var surveyUrl = 'https://syndicade.org/organizations/' + survey.organization_id + '/surveys';
+
+      var surveyClosingNote = survey.closes_at
+        ? '<p style="font-size:14px;color:#475569;margin:0 0 20px;">This survey closes on <strong>' +
+          new Date(survey.closes_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) +
+          '</strong>.</p>'
+        : '';
+
+      // Get all active members for this org
+      var { data: surveyMemberships } = await supabase
+        .from('memberships')
+        .select('member_id, members(email, display_name, first_name, last_name)')
+        .eq('organization_id', survey.organization_id)
+        .eq('status', 'active');
+
+      if (!surveyMemberships || surveyMemberships.length === 0) continue;
+
+      // Get IDs of members who already responded
+      var { data: surveyResponses } = await supabase
+        .from('survey_responses')
+        .select('member_id')
+        .eq('survey_id', survey.id);
+
+      var respondedIds = new Set((surveyResponses || []).map(function(r: any) { return r.member_id; }));
+
+      // Send to non-respondents only
+      for (var sm of surveyMemberships) {
+        if (respondedIds.has(sm.member_id)) continue;
+
+        var smEmail = (sm.members as any)?.email;
+        if (!smEmail) continue;
+
+        var surveyReminderKey = 'survey_reminder_' + survey.id + '_' + sm.member_id + '_' + weekNumber;
+        var { data: alreadySentSurveyReminder } = await supabase
+          .from('enforcement_log')
+          .select('id')
+          .eq('event_type', surveyReminderKey)
+          .maybeSingle();
+        if (alreadySentSurveyReminder) continue;
+
+        var smName = (sm.members as any)?.display_name ||
+          (((sm.members as any)?.first_name || '') + ' ' + ((sm.members as any)?.last_name || '')).trim() ||
+          'there';
+
+        await sendEmail(
+          smEmail,
+          surveyOrgName + ': Your feedback is needed — "' + survey.title + '"',
+          wrapEmail(surveyOrgName, surveyOrgLogo,
+            '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800;color:#111827;">Your feedback is needed</h2>' +
+            '<p style="font-size:15px;color:#374151;margin:0 0 16px;">Hi ' + smName + ', <strong>' + surveyOrgName + '</strong> has an active survey waiting for your response:</p>' +
+            '<div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:16px;margin:0 0 16px;">' +
+            '<p style="font-size:16px;font-weight:700;color:#5B21B6;margin:0;">' + survey.title + '</p>' +
+            '</div>' +
+            surveyClosingNote +
+            '<p style="text-align:center;margin:24px 0 0;">' +
+            '<a href="' + surveyUrl + '" style="display:inline-block;padding:12px 28px;background:#8B5CF6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Take the Survey</a>' +
+            '</p>' +
+            '<p style="font-size:12px;color:#94A3B8;margin-top:20px;text-align:center;">You\'re receiving this because you\'re a member of ' + surveyOrgName + '.</p>'
+          )
+        );
+
+        await supabase.from('enforcement_log').insert({
+          org_id: survey.organization_id,
+          event_type: surveyReminderKey,
+          notification_sent: 'survey_reminder',
+        });
+
+        console.log('Survey reminder sent: survey=' + survey.id + ' member=' + sm.member_id + ' week=' + weekNumber);
+      }
+    }
+
+    // ── Document Pre-Deletion Warning Email (≤3 days before auto-delete) ──
     var warnTodayStr = now.toISOString().split('T')[0];
     var warnDateStr = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -568,7 +750,6 @@ serve(async (req) => {
       .lte('delete_after', warnDateStr);
 
     for (var warnDoc of (warnDocs || [])) {
-      // Get org admin emails
       var { data: adminRows } = await supabase
         .from('memberships')
         .select('member_id, members(email, display_name, first_name)')
@@ -588,42 +769,24 @@ serve(async (req) => {
         await sendEmail(
           adminEmail,
           'Document expiring in ' + daysUntilDelete + (daysUntilDelete === 1 ? ' day' : ' days') + ': ' + warnDoc.title,
-          '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
-          '<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">' +
-          '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;"><tr><td align="center">' +
-          '<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">' +
-          '<tr><td style="background:#0E1523;padding:24px 32px;text-align:center;">' +
-          '<span style="font-size:20px;font-weight:800;color:#F5B731;">Syndi</span><span style="font-size:20px;font-weight:800;color:#ffffff;">cade</span>' +
-          '</td></tr>' +
-          '<tr><td style="padding:32px;">' +
-          '<h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#111827;">Document scheduled for deletion</h2>' +
-          '<p style="font-size:15px;color:#374151;margin:0 0 16px;">The following document will be <strong>automatically deleted on ' + deleteDateStr + '</strong> (' + daysUntilDelete + (daysUntilDelete === 1 ? ' day' : ' days') + ' away):</p>' +
-          '<div style="background:#FEF9C3;border:1px solid rgba(245,183,49,0.3);border-radius:8px;padding:16px;margin:0 0 16px;">' +
-          '<p style="font-size:15px;font-weight:700;color:#0E1523;margin:0;">' + warnDoc.title + '</p>' +
-          '</div>' +
-          '<p style="font-size:14px;color:#475569;margin:0 0 24px;">To keep this document, open the Document Library and remove the auto-delete date.</p>' +
-          '<p style="text-align:center;margin:0;">' +
-          '<a href="' + libUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Go to Document Library</a>' +
-          '</p>' +
-          '</td></tr>' +
-          '<tr><td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;">' +
-          '<p style="font-size:12px;color:#9ca3af;margin:0;">Powered by <span style="color:#F5B731;font-weight:700;">Syndi</span><span style="color:#374151;font-weight:700;">cade</span></p>' +
-          '</td></tr></table></td></tr></table></body></html>'
+          wrapEmail('', '',
+            '<h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#111827;">Document scheduled for deletion</h2>' +
+            '<p style="font-size:15px;color:#374151;margin:0 0 16px;">The following document will be <strong>automatically deleted on ' + deleteDateStr + '</strong> (' + daysUntilDelete + (daysUntilDelete === 1 ? ' day' : ' days') + ' away):</p>' +
+            '<div style="background:#FEF9C3;border:1px solid rgba(245,183,49,0.3);border-radius:8px;padding:16px;margin:0 0 16px;">' +
+            '<p style="font-size:15px;font-weight:700;color:#0E1523;margin:0;">' + warnDoc.title + '</p>' +
+            '</div>' +
+            '<p style="font-size:14px;color:#475569;margin:0 0 24px;">To keep this document, open the Document Library and remove the auto-delete date.</p>' +
+            '<p style="text-align:center;margin:0;"><a href="' + libUrl + '" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">Go to Document Library</a></p>'
+          )
         );
       }
 
-      // Mark as notified — prevents duplicate emails even if cron runs again
-      await supabase
-        .from('documents')
-        .update({ auto_delete_notified: true })
-        .eq('id', warnDoc.id);
-
+      await supabase.from('documents').update({ auto_delete_notified: true }).eq('id', warnDoc.id);
       console.log('Pre-deletion warning sent for: "' + warnDoc.title + '" (' + warnDoc.id + ')');
     }
 
-// ── Document Auto-Delete ─────────────────────────────────────────────────
-    // Deletes any document whose delete_after date is today or in the past
-    var todayDateStr = now.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    // ── Document Auto-Delete ──────────────────────────────────────────────
+    var todayDateStr = now.toISOString().split('T')[0];
 
     var { data: expiredDocs } = await supabase
       .from('documents')
@@ -633,8 +796,6 @@ serve(async (req) => {
 
     for (var expDoc of (expiredDocs || [])) {
       var docKey = 'doc_autodelete_' + expDoc.id;
-
-      // Idempotency — skip if already processed
       var { data: alreadyAutoDeleted } = await supabase
         .from('enforcement_log')
         .select('id')
@@ -642,28 +803,17 @@ serve(async (req) => {
         .maybeSingle();
       if (alreadyAutoDeleted) continue;
 
-      // 1. Delete the file from storage bucket
       if (expDoc.storage_path) {
-        var { error: storageErr } = await supabase.storage
-          .from('documents')
-          .remove([expDoc.storage_path]);
-        if (storageErr) {
-          console.error('Storage delete failed for doc ' + expDoc.id + ':', storageErr.message);
-        }
+        var { error: storageErr } = await supabase.storage.from('documents').remove([expDoc.storage_path]);
+        if (storageErr) console.error('Storage delete failed for doc ' + expDoc.id + ':', storageErr.message);
       }
 
-      // 2. Delete the DB record
-      var { error: docDbErr } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', expDoc.id);
-
+      var { error: docDbErr } = await supabase.from('documents').delete().eq('id', expDoc.id);
       if (docDbErr) {
         console.error('DB delete failed for doc ' + expDoc.id + ':', docDbErr.message);
         continue;
       }
 
-      // 3. Log the deletion
       await supabase.from('enforcement_log').insert({
         org_id: expDoc.organization_id,
         event_type: docKey,
@@ -671,6 +821,7 @@ serve(async (req) => {
       });
       console.log('Auto-deleted document: "' + expDoc.title + '" (' + expDoc.id + ')');
     }
+
     return new Response(JSON.stringify({ ok: true, processed: orgs?.length || 0 }), {
       headers: { 'Content-Type': 'application/json' }
     });

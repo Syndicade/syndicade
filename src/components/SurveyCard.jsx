@@ -477,16 +477,25 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, is
         return;
       }
 
-      var notifications = nonRespondents.map(function(memberId) {
-        return {
-          member_id:       memberId,
-          organization_id: survey.organization_id,
-          type:            'announcement',
-          title:           'Survey reminder: ' + survey.title,
-          message:         'You have not yet responded to this survey. Your feedback matters!',
-          read:            false,
-        };
-      });
+var nonRespondents = allMemberIds.filter(function(id) {
+  return id != null && !respondedIds.has(id);
+});
+if (nonRespondents.length === 0) {
+  toast.error('All members have already responded.');
+  return;
+}
+
+var notifications = nonRespondents.map(function(memberId) {
+  return {
+    user_id:         memberId,   // ← fixed
+    organization_id: survey.organization_id,
+    type:            'announcement',
+    title:           'Survey reminder: ' + survey.title,
+    message:         'You have not yet responded to this survey. Your feedback matters!',
+    read:            false,
+  };
+});
+
       var nR = await supabase.from('notifications').insert(notifications);
       if (nR.error) throw nR.error;
       mascotSuccessToast('Reminders sent!', nonRespondents.length + ' member' + (nonRespondents.length !== 1 ? 's' : '') + ' notified.');

@@ -293,9 +293,9 @@ function PollCard({ poll, onVote, onDelete, onPollUpdated, onDuplicate, onEdit, 
       var voterIds = new Set((votersResult.data || []).map(function(v) { return v.member_id; }));
       var auth = await supabase.auth.getUser();
       var currentUserId = auth.data.user ? auth.data.user.id : null;
-      var recipients = (membersResult.data || []).filter(function(m) {
-        return !voterIds.has(m.member_id) && m.member_id !== currentUserId;
-      });
+var recipients = (membersResult.data || []).filter(function(m) {
+  return m.member_id != null && !voterIds.has(m.member_id) && m.member_id !== currentUserId;
+});
       toast.dismiss(loadId);
       if (recipients.length === 0) { toast.error('Everyone has already voted.'); return; }
       var closesText = poll.closes_at ? ' Closes ' + format(new Date(poll.closes_at), 'MMM d') + '.' : '';
