@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -7,52 +7,61 @@ import {
   Bell, Megaphone, Calendar, Users, Mail,
   FileText, Handshake, MessageSquare, CheckCheck,
   Inbox, Trash2, MoreVertical, Search, X,
-  ChevronDown, Eye, EyeOff, Filter
+  ChevronDown, Eye, EyeOff, Image, BookOpen, ClipboardList,
 } from 'lucide-react';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 var PAGE_SIZE = 20;
 
 var TYPE_CONFIG = {
-  announcement:            { icon: Megaphone,     color: '#F5B731', bg: 'rgba(245,183,49,0.12)',  label: 'Announcement' },
-  event:                   { icon: Calendar,      color: '#3B82F6', bg: 'rgba(59,130,246,0.10)',  label: 'Event' },
-  member:                  { icon: Users,         color: '#22C55E', bg: 'rgba(34,197,94,0.10)',   label: 'Member' },
-  invitation:              { icon: Mail,          color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Invitation' },
-  document:                { icon: FileText,      color: '#64748B', bg: 'rgba(100,116,139,0.10)',label: 'Document' },
-  collaboration_request:   { icon: Handshake,     color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration' },
-  collab_request:          { icon: Handshake,     color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration' },
-  collab_invite:           { icon: Handshake,     color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration' },
-  collab_accepted:         { icon: Handshake,     color: '#22C55E', bg: 'rgba(34,197,94,0.10)',  label: 'Collaboration' },
-  collab_declined:         { icon: Handshake,     color: '#EF4444', bg: 'rgba(239,68,68,0.10)',  label: 'Collaboration' },
-  community_board_message: { icon: MessageSquare, color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Community Board' },
+  announcement:            { icon: Megaphone,      color: '#F5B731', bg: 'rgba(245,183,49,0.12)',  label: 'Announcement',    linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/announcements' : null; } },
+  event:                   { icon: Calendar,       color: '#3B82F6', bg: 'rgba(59,130,246,0.10)',  label: 'Event',           linkFn: function(n) { return n.link || null; } },
+  member:                  { icon: Users,          color: '#22C55E', bg: 'rgba(34,197,94,0.10)',   label: 'Member',          linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/members' : null; } },
+  invitation:              { icon: Mail,           color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Invitation',      linkFn: function(n) { return n.link || null; } },
+  document:                { icon: FileText,       color: '#64748B', bg: 'rgba(100,116,139,0.10)',label: 'Document',        linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/documents' : null; } },
+  collaboration_request:   { icon: Handshake,      color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration',   linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
+  collab_request:          { icon: Handshake,      color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration',   linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
+  collab_invite:           { icon: Handshake,      color: '#F97316', bg: 'rgba(249,115,22,0.10)', label: 'Collaboration',   linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
+  collab_accepted:         { icon: Handshake,      color: '#22C55E', bg: 'rgba(34,197,94,0.10)',  label: 'Collaboration',   linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
+  collab_declined:         { icon: Handshake,      color: '#EF4444', bg: 'rgba(239,68,68,0.10)',  label: 'Collaboration',   linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
+  community_board_message: { icon: MessageSquare,  color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Community Board', linkFn: function(n) { return n.link || null; } },
+  board_reply:             { icon: MessageSquare,  color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Community Board', linkFn: function(n) { return n.link || null; } },
+  new_poll:                { icon: ClipboardList,  color: '#3B82F6', bg: 'rgba(59,130,246,0.10)', label: 'Poll',            linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/polls' : null; } },
+  new_survey:              { icon: ClipboardList,  color: '#8B5CF6', bg: 'rgba(139,92,246,0.10)', label: 'Survey',          linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/surveys' : null; } },
+  new_photo:               { icon: Image,          color: '#22C55E', bg: 'rgba(34,197,94,0.10)',  label: 'Photo',           linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/photos' : null; } },
+  new_program:             { icon: BookOpen,       color: '#F5B731', bg: 'rgba(245,183,49,0.12)', label: 'Program',         linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/programs' : null; } },
+  inbox_message:           { icon: Mail,           color: '#3B82F6', bg: 'rgba(59,130,246,0.10)', label: 'Inbox',           linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : null; } },
 };
 
-var DEFAULT_CONFIG = { icon: Bell, color: '#64748B', bg: 'rgba(100,116,139,0.10)', label: 'Notification' };
+var DEFAULT_CONFIG = { icon: Bell, color: '#64748B', bg: 'rgba(100,116,139,0.10)', label: 'Notification', linkFn: function(n) { return n.link || null; } };
 
-// Collab types all map to the same filter bucket
 var COLLAB_TYPES = ['collaboration_request','collab_request','collab_invite','collab_accepted','collab_declined'];
 
 var TYPE_OPTIONS = [
-  { value: '',                     label: 'All Types' },
-  { value: 'announcement',         label: 'Announcements' },
-  { value: 'event',                label: 'Events' },
-  { value: 'member',               label: 'Members' },
-  { value: 'invitation',           label: 'Invitations' },
-  { value: 'document',             label: 'Documents' },
-  { value: 'collab_request',       label: 'Collaboration' },
+  { value: '',                        label: 'All Types' },
+  { value: 'announcement',            label: 'Announcements' },
+  { value: 'event',                   label: 'Events' },
+  { value: 'member',                  label: 'Members' },
+  { value: 'invitation',              label: 'Invitations' },
+  { value: 'document',                label: 'Documents' },
+  { value: 'collab_request',          label: 'Collaboration' },
   { value: 'community_board_message', label: 'Community Board' },
+  { value: 'new_poll',                label: 'Polls' },
+  { value: 'new_survey',              label: 'Surveys' },
+  { value: 'new_photo',               label: 'Photos' },
+  { value: 'new_program',             label: 'Programs' },
 ];
 
 var GROUP_ORDER = ['Today', 'Yesterday', 'This Week', 'Older'];
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function getGroup(dateStr) {
-  var now = new Date();
-  var d = new Date(dateStr);
+  var now      = new Date();
+  var d        = new Date(dateStr);
   var diffDays = Math.floor((now - d) / 86400000);
   if (now.toDateString() === d.toDateString()) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays <= 7) return 'This Week';
+  if (diffDays === 1)  return 'Yesterday';
+  if (diffDays <= 7)   return 'This Week';
   return 'Older';
 }
 
@@ -68,7 +77,7 @@ function groupNotifications(list) {
 
 function formatTime(dateStr) {
   return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
 }
 
@@ -78,7 +87,12 @@ function typeMatchesFilter(notifType, filterValue) {
   return notifType === filterValue;
 }
 
-// ── Skeleton row ─────────────────────────────────────────────────────────────
+function resolveLink(n) {
+  var cfg = TYPE_CONFIG[n.type] || DEFAULT_CONFIG;
+  return (cfg.linkFn && cfg.linkFn(n)) || n.link || null;
+}
+
+// ── Skeleton row ──────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
     <div className="flex items-start gap-3 p-4 animate-pulse" aria-hidden="true">
@@ -93,7 +107,7 @@ function SkeletonRow() {
   );
 }
 
-// ── Select dropdown ──────────────────────────────────────────────────────────
+// ── Filter select ─────────────────────────────────────────────────────────────
 function FilterSelect(props) {
   return (
     <div style={{position:'relative'}}>
@@ -124,25 +138,26 @@ function FilterSelect(props) {
   );
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function NotificationsPage() {
-  var navigate = useNavigate();
-  var offsetRef = useRef(0);
-  var menuRef = useRef(null);
-  var openMenuIdRef = useRef(null);
+  var navigate       = useNavigate();
+  var offsetRef      = useRef(0);
+  var lastFetchRef   = useRef(null);
+  var menuRef        = useRef(null);
+  var openMenuIdRef  = useRef(null);
 
   var [notifications, setNotifications] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [loadingMore, setLoadingMore] = useState(false);
-  var [hasMore, setHasMore] = useState(false);
-  var [userId, setUserId] = useState(null);
-  var [orgs, setOrgs] = useState([]);
+  var [loading,       setLoading]       = useState(true);
+  var [loadingMore,   setLoadingMore]   = useState(false);
+  var [hasMore,       setHasMore]       = useState(false);
+  var [userId,        setUserId]        = useState(null);
+  var [orgs,          setOrgs]          = useState([]);
 
   // Filters
   var [readFilter, setReadFilter] = useState('all');
   var [typeFilter, setTypeFilter] = useState('');
-  var [orgFilter, setOrgFilter] = useState('');
-  var [search, setSearch] = useState('');
+  var [orgFilter,  setOrgFilter]  = useState('');
+  var [search,     setSearch]     = useState('');
 
   // Selection
   var [selectedIds, setSelectedIds] = useState(new Set());
@@ -150,11 +165,11 @@ export default function NotificationsPage() {
   // 3-dot menu
   var [openMenuId, setOpenMenuId] = useState(null);
 
-  // Bulk / delete loading
-  var [bulkLoading, setBulkLoading] = useState(false);
-  var [deletingOlder, setDeletingOlder] = useState(false);
+  // Loading states
+  var [bulkLoading,    setBulkLoading]    = useState(false);
+  var [deletingOlder,  setDeletingOlder]  = useState(false);
 
-  // ── Close menu on outside click ────────────────────────────────────────────
+  // ── Close menu on outside click + Escape key ──────────────────────────────
   useEffect(function() {
     function handleOutside(e) {
       if (openMenuIdRef.current !== null) {
@@ -164,11 +179,21 @@ export default function NotificationsPage() {
         }
       }
     }
+    function handleKeydown(e) {
+      if (e.key === 'Escape' && openMenuIdRef.current !== null) {
+        setOpenMenuId(null);
+        openMenuIdRef.current = null;
+      }
+    }
     document.addEventListener('mousedown', handleOutside);
-    return function() { document.removeEventListener('mousedown', handleOutside); };
+    document.addEventListener('keydown', handleKeydown);
+    return function() {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKeydown);
+    };
   }, []);
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(function() {
     supabase.auth.getUser().then(function(res) {
       if (res.data && res.data.user) {
@@ -179,7 +204,7 @@ export default function NotificationsPage() {
     });
   }, [navigate]);
 
-  // ── Fetch helpers ──────────────────────────────────────────────────────────
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
   function fetchOrgsForNotifs(data) {
     var orgIds = [];
     data.forEach(function(n) {
@@ -188,25 +213,20 @@ export default function NotificationsPage() {
       }
     });
     if (orgIds.length === 0) return;
-    supabase
-      .from('organizations')
-      .select('id, name')
-      .in('id', orgIds)
-      .then(function(res) {
-        if (!res.error && res.data) {
-          setOrgs(function(prev) {
-            var merged = prev.slice();
-            res.data.forEach(function(o) {
-              if (!merged.find(function(x) { return x.id === o.id; })) {
-                merged.push(o);
-              }
-            });
-            return merged;
+    supabase.from('organizations').select('id, name').in('id', orgIds).then(function(res) {
+      if (!res.error && res.data) {
+        setOrgs(function(prev) {
+          var merged = prev.slice();
+          res.data.forEach(function(o) {
+            if (!merged.find(function(x) { return x.id === o.id; })) merged.push(o);
           });
-        }
-      });
+          return merged;
+        });
+      }
+    });
   }
 
+  // Full paginated fetch
   function doFetch(fromOffset, isReset) {
     if (!userId) return;
     if (isReset) setLoading(true);
@@ -221,16 +241,14 @@ export default function NotificationsPage() {
       .then(function(res) {
         setLoading(false);
         setLoadingMore(false);
-        if (res.error) {
-          toast.error('Could not load notifications.');
-          return;
-        }
+        if (res.error) { toast.error('Could not load notifications.'); return; }
         var data = res.data || [];
         var nextOffset = fromOffset + data.length;
         offsetRef.current = nextOffset;
 
         if (isReset) {
           setNotifications(data);
+          if (data.length > 0) lastFetchRef.current = data[0].created_at;
         } else {
           setNotifications(function(prev) { return prev.concat(data); });
         }
@@ -239,6 +257,37 @@ export default function NotificationsPage() {
       });
   }
 
+  // Incremental fetch — only new rows since lastFetchRef
+  var fetchIncremental = useCallback(function() {
+    if (!userId) return;
+    var query = supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (lastFetchRef.current) {
+      query = query.gt('created_at', lastFetchRef.current);
+    }
+
+    query.then(function(res) {
+      if (res.error || !res.data || res.data.length === 0) return;
+      var incoming = res.data;
+      setNotifications(function(prev) {
+        var existingIds = {};
+        prev.forEach(function(n) { existingIds[n.id] = true; });
+        var truly_new = incoming.filter(function(n) { return !existingIds[n.id]; });
+        if (truly_new.length === 0) return prev;
+        var merged = truly_new.concat(prev);
+        lastFetchRef.current = merged[0].created_at;
+        return merged;
+      });
+      fetchOrgsForNotifs(incoming);
+    });
+  }, [userId]);
+
+  // Initial load
   useEffect(function() {
     if (userId) {
       offsetRef.current = 0;
@@ -246,31 +295,74 @@ export default function NotificationsPage() {
     }
   }, [userId]); // eslint-disable-line
 
-  function loadMore() {
-    doFetch(offsetRef.current, false);
-  }
+  // ── Realtime subscription + polling + visibility ──────────────────────────
+  useEffect(function() {
+    if (!userId) return;
 
-  // ── Single-row actions ─────────────────────────────────────────────────────
+    var dbChannel        = null;
+    var broadcastChannel = null;
+    var pollInterval     = null;
+
+    // postgres_changes with user_id filter
+    dbChannel = supabase
+      .channel('notifpage-db-' + userId)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + userId },
+        function() { fetchIncremental(); }
+      )
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED' && dbChannel._prevStatus === 'CLOSED') fetchIncremental();
+        dbChannel._prevStatus = status;
+      });
+
+    // Broadcast channel
+    broadcastChannel = supabase
+      .channel('notifpage-broadcast-' + userId)
+      .on('broadcast', { event: 'new_notification' }, function() { fetchIncremental(); })
+      .subscribe();
+
+    // 30s poll
+    pollInterval = setInterval(function() { fetchIncremental(); }, 30000);
+
+    // Tab visibility
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') fetchIncremental();
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return function() {
+      if (dbChannel)        supabase.removeChannel(dbChannel);
+      if (broadcastChannel) supabase.removeChannel(broadcastChannel);
+      if (pollInterval)     clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [userId, fetchIncremental]);
+
+  function loadMore() { doFetch(offsetRef.current, false); }
+
+  // ── Single-row actions ────────────────────────────────────────────────────
   function updateOne(id, patch) {
     setNotifications(function(prev) {
-      return prev.map(function(n) {
-        return n.id === id ? Object.assign({}, n, patch) : n;
-      });
+      return prev.map(function(n) { return n.id === id ? Object.assign({}, n, patch) : n; });
     });
   }
 
-  function markAsRead(id) {
-    supabase.from('notifications').update({ is_read: true }).eq('id', id)
-      .then(function(res) { if (!res.error) updateOne(id, { is_read: true }); });
+  function closeMenu() {
     setOpenMenuId(null);
     openMenuIdRef.current = null;
   }
 
+  function markAsRead(id) {
+    supabase.from('notifications').update({ read: true }).eq('id', id)
+      .then(function(res) { if (!res.error) updateOne(id, { read: true }); });
+    closeMenu();
+  }
+
   function markAsUnread(id) {
-    supabase.from('notifications').update({ is_read: false }).eq('id', id)
-      .then(function(res) { if (!res.error) updateOne(id, { is_read: false }); });
-    setOpenMenuId(null);
-    openMenuIdRef.current = null;
+    supabase.from('notifications').update({ read: false }).eq('id', id)
+      .then(function(res) { if (!res.error) updateOne(id, { read: false }); });
+    closeMenu();
   }
 
   function deleteOne(id) {
@@ -279,16 +371,16 @@ export default function NotificationsPage() {
       setNotifications(function(prev) { return prev.filter(function(n) { return n.id !== id; }); });
       setSelectedIds(function(prev) { var s = new Set(prev); s.delete(id); return s; });
     });
-    setOpenMenuId(null);
-    openMenuIdRef.current = null;
+    closeMenu();
   }
 
   function handleRowClick(n) {
-    if (!n.is_read) markAsRead(n.id);
-    if (n.link) navigate(n.link);
+    if (!n.read) markAsRead(n.id);
+    var link = resolveLink(n);
+    if (link) navigate(link);
   }
 
-  // ── Bulk actions ───────────────────────────────────────────────────────────
+  // ── Bulk actions ──────────────────────────────────────────────────────────
   function toggleSelect(id) {
     setSelectedIds(function(prev) {
       var s = new Set(prev);
@@ -299,11 +391,7 @@ export default function NotificationsPage() {
 
   function toggleSelectAll(visibleIds) {
     var allSel = visibleIds.every(function(id) { return selectedIds.has(id); });
-    if (allSel) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(visibleIds));
-    }
+    setSelectedIds(allSel ? new Set() : new Set(visibleIds));
   }
 
   function bulkUpdate(patch, successMsg) {
@@ -314,9 +402,7 @@ export default function NotificationsPage() {
       setBulkLoading(false);
       if (res.error) { toast.error('Could not update notifications.'); return; }
       setNotifications(function(prev) {
-        return prev.map(function(n) {
-          return ids.includes(n.id) ? Object.assign({}, n, patch) : n;
-        });
+        return prev.map(function(n) { return ids.includes(n.id) ? Object.assign({}, n, patch) : n; });
       });
       setSelectedIds(new Set());
       mascotSuccessToast(successMsg);
@@ -337,12 +423,12 @@ export default function NotificationsPage() {
   }
 
   function markAllRead() {
-    var ids = notifications.filter(function(n) { return !n.is_read; }).map(function(n) { return n.id; });
+    var ids = notifications.filter(function(n) { return !n.read; }).map(function(n) { return n.id; });
     if (!ids.length) return;
-    supabase.from('notifications').update({ is_read: true }).in('id', ids).then(function(res) {
+    supabase.from('notifications').update({ read: true }).in('id', ids).then(function(res) {
       if (res.error) { toast.error('Could not mark all as read.'); return; }
       setNotifications(function(prev) {
-        return prev.map(function(n) { return Object.assign({}, n, { is_read: true }); });
+        return prev.map(function(n) { return Object.assign({}, n, { read: true }); });
       });
       mascotSuccessToast('All notifications marked as read.');
     });
@@ -367,26 +453,26 @@ export default function NotificationsPage() {
     });
   }
 
-  // ── Filtering (client-side) ────────────────────────────────────────────────
+  // ── Client-side filtering ─────────────────────────────────────────────────
   var filtered = notifications.filter(function(n) {
-    if (readFilter === 'unread' && n.is_read) return false;
+    if (readFilter === 'unread' && n.read) return false;
     if (typeFilter && !typeMatchesFilter(n.type, typeFilter)) return false;
     if (orgFilter && n.organization_id !== orgFilter) return false;
     if (search) {
-      var q = search.toLowerCase();
-      var inTitle = (n.title || '').toLowerCase().includes(q);
-      var inBody = (n.body || '').toLowerCase().includes(q);
-      if (!inTitle && !inBody) return false;
+      var q      = search.toLowerCase();
+      var inTitle   = (n.title   || '').toLowerCase().includes(q);
+      var inMessage = (n.message || '').toLowerCase().includes(q);
+      if (!inTitle && !inMessage) return false;
     }
     return true;
   });
 
-  var groups = groupNotifications(filtered);
-  var visibleIds = filtered.map(function(n) { return n.id; });
-  var allSelected = visibleIds.length > 0 && visibleIds.every(function(id) { return selectedIds.has(id); });
-  var someSelected = visibleIds.some(function(id) { return selectedIds.has(id); });
-  var unreadCount = notifications.filter(function(n) { return !n.is_read; }).length;
-  var hasOlder = notifications.some(function(n) { return getGroup(n.created_at) === 'Older'; });
+  var groups        = groupNotifications(filtered);
+  var visibleIds    = filtered.map(function(n) { return n.id; });
+  var allSelected   = visibleIds.length > 0 && visibleIds.every(function(id) { return selectedIds.has(id); });
+  var someSelected  = visibleIds.some(function(id) { return selectedIds.has(id); });
+  var unreadCount   = notifications.filter(function(n) { return !n.read; }).length;
+  var hasOlder      = notifications.some(function(n) { return getGroup(n.created_at) === 'Older'; });
   var activeFilters = (readFilter !== 'all' ? 1 : 0) + (typeFilter ? 1 : 0) + (orgFilter ? 1 : 0) + (search ? 1 : 0);
 
   function clearFilters() {
@@ -396,61 +482,36 @@ export default function NotificationsPage() {
     setSearch('');
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div
-      style={{
-        background:'#F8FAFC',
-        minHeight:'100vh',
-        fontFamily:"'Inter','Segoe UI',system-ui,-apple-system,sans-serif",
-      }}
-    >
+    <div style={{background:'#F8FAFC',minHeight:'100vh',fontFamily:"'Inter','Segoe UI',system-ui,-apple-system,sans-serif"}}>
 
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <header
-        style={{background:'#FFFFFF',borderBottom:'1px solid #E2E8F0',padding:'20px 24px'}}
-        role="banner"
-      >
+      {/* Page header */}
+      <header style={{background:'#FFFFFF',borderBottom:'1px solid #E2E8F0',padding:'20px 24px'}} role="banner">
         <div style={{maxWidth:'760px',margin:'0 auto'}}>
 
           {/* Title row */}
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'16px',marginBottom:'16px'}}>
             <div>
-              <h1 style={{fontSize:'28px',fontWeight:800,color:'#0E1523',margin:0,lineHeight:1.2}}>
-                Notifications
-              </h1>
+              <h1 style={{fontSize:'28px',fontWeight:800,color:'#0E1523',margin:0,lineHeight:1.2}}>Notifications</h1>
               {unreadCount > 0 && (
-                <p style={{fontSize:'13px',color:'#64748B',margin:'4px 0 0'}}>
+                <p style={{fontSize:'13px',color:'#64748B',margin:'4px 0 0'}} aria-live="polite" aria-atomic="true">
                   {unreadCount} unread
                 </p>
               )}
             </div>
-
-            <div style={{display:'flex',gap:'8px',flexShrink:0,marginTop:'2px'}}>
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllRead}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                  style={{fontSize:'13px',fontWeight:600,cursor:'pointer'}}
-                  aria-label="Mark all notifications as read"
-                >
-                  <CheckCheck size={14} aria-hidden="true" />
-                  Mark all read
-                </button>
-              )}
-              {hasOlder && (
-                <button
-                  onClick={deleteAllOlder}
-                  disabled={deletingOlder}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
-                  style={{fontSize:'13px',fontWeight:600,cursor:deletingOlder?'not-allowed':'pointer',opacity:deletingOlder?0.6:1}}
-                  aria-label="Delete all older notifications"
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                  Clear older
-                </button>
-              )}
-            </div>
+            {/* Only show Mark all read in header — Clear older lives in group only */}
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllRead}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+                style={{fontSize:'13px',fontWeight:600,cursor:'pointer',flexShrink:0,marginTop:'2px'}}
+                aria-label="Mark all notifications as read"
+              >
+                <CheckCheck size={14} aria-hidden="true" />
+                Mark all read
+              </button>
+            )}
           </div>
 
           {/* Filters row */}
@@ -458,10 +519,8 @@ export default function NotificationsPage() {
 
             {/* Search */}
             <div style={{position:'relative',flex:'1 1 180px',minWidth:'0'}}>
-              <Search
-                size={14} color="#94A3B8" aria-hidden="true"
-                style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}
-              />
+              <Search size={14} color="#94A3B8" aria-hidden="true"
+                style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} />
               <input
                 id="notif-search"
                 type="search"
@@ -472,8 +531,7 @@ export default function NotificationsPage() {
                   width:'100%',
                   paddingLeft:'32px',
                   paddingRight: search ? '32px' : '12px',
-                  paddingTop:'8px',
-                  paddingBottom:'8px',
+                  paddingTop:'8px',paddingBottom:'8px',
                   fontSize:'13px',
                   border:'1px solid #E2E8F0',
                   borderRadius:'8px',
@@ -502,9 +560,7 @@ export default function NotificationsPage() {
             <button
               onClick={function() { setReadFilter(readFilter === 'unread' ? 'all' : 'unread'); }}
               className={'flex items-center gap-1.5 px-3 py-2 rounded-lg border font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' +
-                (readFilter === 'unread'
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50')}
+                (readFilter === 'unread' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50')}
               style={{fontSize:'13px',whiteSpace:'nowrap'}}
               aria-pressed={readFilter === 'unread'}
             >
@@ -513,27 +569,15 @@ export default function NotificationsPage() {
             </button>
 
             {/* Type filter */}
-            <FilterSelect
-              value={typeFilter}
-              onChange={function(e) { setTypeFilter(e.target.value); }}
-              ariaLabel="Filter by notification type"
-            >
-              {TYPE_OPTIONS.map(function(o) {
-                return <option key={o.value} value={o.value}>{o.label}</option>;
-              })}
+            <FilterSelect value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }} ariaLabel="Filter by notification type">
+              {TYPE_OPTIONS.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
             </FilterSelect>
 
-            {/* Org filter — only shows if orgs available */}
+            {/* Org filter */}
             {orgs.length > 0 && (
-              <FilterSelect
-                value={orgFilter}
-                onChange={function(e) { setOrgFilter(e.target.value); }}
-                ariaLabel="Filter by organization"
-              >
+              <FilterSelect value={orgFilter} onChange={function(e) { setOrgFilter(e.target.value); }} ariaLabel="Filter by organization">
                 <option value="">All Orgs</option>
-                {orgs.map(function(o) {
-                  return <option key={o.id} value={o.id}>{o.name}</option>;
-                })}
+                {orgs.map(function(o) { return <option key={o.id} value={o.id}>{o.name}</option>; })}
               </FilterSelect>
             )}
 
@@ -541,12 +585,7 @@ export default function NotificationsPage() {
             {activeFilters > 0 && (
               <button
                 onClick={clearFilters}
-                style={{
-                  fontSize:'12px',fontWeight:600,color:'#64748B',
-                  background:'none',border:'none',cursor:'pointer',
-                  padding:'4px 6px',display:'flex',alignItems:'center',gap:'4px',
-                  borderRadius:'6px',
-                }}
+                style={{fontSize:'12px',fontWeight:600,color:'#64748B',background:'none',border:'none',cursor:'pointer',padding:'4px 6px',display:'flex',alignItems:'center',gap:'4px',borderRadius:'6px'}}
                 className="hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 aria-label={'Clear all filters (' + activeFilters + ' active)'}
               >
@@ -558,28 +597,19 @@ export default function NotificationsPage() {
         </div>
       </header>
 
-      {/* ── Main content ──────────────────────────────────────────────────── */}
+      {/* Main content */}
       <main style={{maxWidth:'760px',margin:'0 auto',padding:'24px 24px 80px'}}>
 
         {/* Bulk action bar */}
         {selectedIds.size > 0 && (
           <div
-            style={{
-              display:'flex',alignItems:'center',gap:'8px',
-              padding:'10px 14px',
-              background:'#EFF6FF',
-              border:'1px solid #BFDBFE',
-              borderRadius:'10px',
-              marginBottom:'16px',
-            }}
+            style={{display:'flex',alignItems:'center',gap:'8px',padding:'10px 14px',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:'10px',marginBottom:'16px'}}
             role="toolbar"
             aria-label="Bulk notification actions"
           >
-            <span style={{fontSize:'13px',fontWeight:600,color:'#1D4ED8',flex:1}}>
-              {selectedIds.size} selected
-            </span>
+            <span style={{fontSize:'13px',fontWeight:600,color:'#1D4ED8',flex:1}}>{selectedIds.size} selected</span>
             <button
-              onClick={function() { bulkUpdate({ is_read: true }, 'Marked as read.'); }}
+              onClick={function() { bulkUpdate({ read: true }, 'Marked as read.'); }}
               disabled={bulkLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
               style={{fontSize:'12px',fontWeight:600,opacity:bulkLoading?0.6:1,cursor:bulkLoading?'not-allowed':'pointer'}}
@@ -587,7 +617,7 @@ export default function NotificationsPage() {
               <Eye size={13} aria-hidden="true" /> Mark read
             </button>
             <button
-              onClick={function() { bulkUpdate({ is_read: false }, 'Marked as unread.'); }}
+              onClick={function() { bulkUpdate({ read: false }, 'Marked as unread.'); }}
               disabled={bulkLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
               style={{fontSize:'12px',fontWeight:600,opacity:bulkLoading?0.6:1,cursor:bulkLoading?'not-allowed':'pointer'}}
@@ -613,31 +643,20 @@ export default function NotificationsPage() {
           </div>
         )}
 
-        {/* ── Skeleton ────────────────────────────────────────────────────── */}
+        {/* Skeleton */}
         {loading && (
-          <div
-            className="bg-white border border-slate-200 rounded-xl overflow-hidden"
-            aria-busy="true"
-            aria-label="Loading notifications"
-          >
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" aria-busy="true" aria-label="Loading notifications">
             {[1,2,3,4,5].map(function(i) { return <SkeletonRow key={i} />; })}
           </div>
         )}
 
-        {/* ── Empty: no notifications at all ──────────────────────────────── */}
+        {/* Empty — no notifications at all */}
         {!loading && notifications.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
-            <div style={{
-              width:'60px',height:'60px',borderRadius:'50%',
-              background:'#F1F5F9',
-              display:'flex',alignItems:'center',justifyContent:'center',
-              margin:'0 auto 16px',
-            }}>
+            <div style={{width:'60px',height:'60px',borderRadius:'50%',background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
               <Inbox size={28} color="#94A3B8" aria-hidden="true" />
             </div>
-            <h2 style={{fontSize:'18px',fontWeight:700,color:'#0E1523',marginBottom:'8px'}}>
-              All caught up
-            </h2>
+            <h2 style={{fontSize:'18px',fontWeight:700,color:'#0E1523',marginBottom:'8px'}}>All caught up</h2>
             <p style={{fontSize:'15px',color:'#64748B',maxWidth:'300px',margin:'0 auto 24px',lineHeight:1.6}}>
               You have no notifications yet. Activity from your orgs and community boards will appear here.
             </p>
@@ -651,23 +670,14 @@ export default function NotificationsPage() {
           </div>
         )}
 
-        {/* ── Empty: filters returned nothing ─────────────────────────────── */}
+        {/* Empty — filters returned nothing */}
         {!loading && notifications.length > 0 && filtered.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
-            <div style={{
-              width:'52px',height:'52px',borderRadius:'50%',
-              background:'#F1F5F9',
-              display:'flex',alignItems:'center',justifyContent:'center',
-              margin:'0 auto 12px',
-            }}>
-              <Filter size={22} color="#94A3B8" aria-hidden="true" />
+            <div style={{width:'52px',height:'52px',borderRadius:'50%',background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
+              <Bell size={22} color="#94A3B8" aria-hidden="true" />
             </div>
-            <h2 style={{fontSize:'16px',fontWeight:700,color:'#0E1523',marginBottom:'6px'}}>
-              No matching notifications
-            </h2>
-            <p style={{fontSize:'14px',color:'#64748B',marginBottom:'16px'}}>
-              Try adjusting your filters or search.
-            </p>
+            <h2 style={{fontSize:'16px',fontWeight:700,color:'#0E1523',marginBottom:'6px'}}>No matching notifications</h2>
+            <p style={{fontSize:'14px',color:'#64748B',marginBottom:'16px'}}>Try adjusting your filters or search.</p>
             <button
               onClick={clearFilters}
               className="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
@@ -678,7 +688,7 @@ export default function NotificationsPage() {
           </div>
         )}
 
-        {/* ── Notification groups ──────────────────────────────────────────── */}
+        {/* Notification groups */}
         {!loading && filtered.length > 0 && (
           <div style={{display:'flex',flexDirection:'column',gap:'28px'}}>
 
@@ -693,10 +703,7 @@ export default function NotificationsPage() {
                 className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 aria-label="Select all visible notifications"
               />
-              <label
-                htmlFor="select-all-notifs"
-                style={{fontSize:'13px',color:'#64748B',cursor:'pointer',userSelect:'none'}}
-              >
+              <label htmlFor="select-all-notifs" style={{fontSize:'13px',color:'#64748B',cursor:'pointer',userSelect:'none'}}>
                 Select all ({filtered.length})
               </label>
             </div>
@@ -709,24 +716,14 @@ export default function NotificationsPage() {
 
                   {/* Group header */}
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
-                    <span style={{
-                      fontSize:'11px',fontWeight:700,
-                      color:'#F5B731',
-                      letterSpacing:'4px',
-                      textTransform:'uppercase',
-                    }}>
+                    <span style={{fontSize:'11px',fontWeight:700,color:'#F5B731',letterSpacing:'4px',textTransform:'uppercase'}}>
                       {groupName}
                     </span>
                     {groupName === 'Older' && (
                       <button
                         onClick={deleteAllOlder}
                         disabled={deletingOlder}
-                        style={{
-                          fontSize:'12px',fontWeight:600,color:'#EF4444',
-                          background:'none',border:'none',cursor:deletingOlder?'not-allowed':'pointer',
-                          opacity:deletingOlder?0.6:1,
-                          display:'flex',alignItems:'center',gap:'4px',padding:'2px 4px',borderRadius:'4px',
-                        }}
+                        style={{fontSize:'12px',fontWeight:600,color:'#EF4444',background:'none',border:'none',cursor:deletingOlder?'not-allowed':'pointer',opacity:deletingOlder?0.6:1,display:'flex',alignItems:'center',gap:'4px',padding:'2px 4px',borderRadius:'4px'}}
                         className="hover:underline focus:outline-none focus:ring-2 focus:ring-red-400"
                         aria-label="Delete all older notifications"
                       >
@@ -736,17 +733,15 @@ export default function NotificationsPage() {
                   </div>
 
                   {/* Notification list */}
-                  <div
-                    className="bg-white border border-slate-200 rounded-xl overflow-hidden"
-                    role="list"
-                    aria-label={groupName + ' notifications'}
-                  >
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="list" aria-label={groupName + ' notifications'}>
                     {groups[groupName].map(function(n, idx) {
-                      var cfg = TYPE_CONFIG[n.type] || DEFAULT_CONFIG;
-                      var IconComp = cfg.icon;
-                      var isLast = idx === groups[groupName].length - 1;
-                      var isSelected = selectedIds.has(n.id);
-                      var menuOpen = openMenuId === n.id;
+                      var cfg          = TYPE_CONFIG[n.type] || DEFAULT_CONFIG;
+                      var IconComp     = cfg.icon;
+                      var isLast       = idx === groups[groupName].length - 1;
+                      var isNearBottom = idx >= groups[groupName].length - 2;
+                      var isSelected   = selectedIds.has(n.id);
+                      var menuOpen     = openMenuId === n.id;
+                      var link         = resolveLink(n);
 
                       return (
                         <div
@@ -757,7 +752,7 @@ export default function NotificationsPage() {
                             alignItems:'flex-start',
                             gap:'12px',
                             padding:'14px 16px',
-                            background: isSelected ? '#EFF6FF' : (n.is_read ? '#FFFFFF' : '#F8FAFC'),
+                            background: isSelected ? '#EFF6FF' : (n.read ? '#FFFFFF' : '#F8FAFC'),
                             borderBottom: isLast ? 'none' : '1px solid #E2E8F0',
                             borderLeft: isSelected ? '3px solid #3B82F6' : '3px solid transparent',
                             transition:'background 0.1s',
@@ -776,54 +771,32 @@ export default function NotificationsPage() {
                           />
 
                           {/* Type icon */}
-                          <div style={{
-                            width:'36px',height:'36px',borderRadius:'50%',
-                            background:cfg.bg,
-                            display:'flex',alignItems:'center',justifyContent:'center',
-                            flexShrink:0,marginTop:'2px',
-                          }}>
+                          <div style={{width:'36px',height:'36px',borderRadius:'50%',background:cfg.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'2px'}}>
                             <IconComp size={16} color={cfg.color} aria-hidden="true" />
                           </div>
 
-                          {/* Text body — clickable when link present */}
+                          {/* Text body */}
                           <div
-                            style={{flex:1,minWidth:0,cursor:n.link?'pointer':'default'}}
-                            onClick={n.link ? function() { handleRowClick(n); } : undefined}
-                            onKeyDown={n.link
-                              ? function(e) { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); handleRowClick(n); } }
-                              : undefined
-                            }
-                            tabIndex={n.link ? 0 : undefined}
-                            role={n.link ? 'button' : undefined}
-                            aria-label={n.link ? ('Open: ' + (n.title || cfg.label)) : undefined}
-                            className={n.link ? 'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 rounded' : ''}
+                            style={{flex:1,minWidth:0,cursor:link?'pointer':'default'}}
+                            onClick={link ? function() { handleRowClick(n); } : undefined}
+                            onKeyDown={link ? function(e) { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); handleRowClick(n); } } : undefined}
+                            tabIndex={link ? 0 : undefined}
+                            role={link ? 'button' : undefined}
+                            aria-label={link ? ('Open: ' + (n.title || cfg.label)) : undefined}
+                            className={link ? 'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 rounded' : ''}
                           >
                             <div style={{display:'flex',alignItems:'flex-start',gap:'8px'}}>
-                              <p style={{
-                                fontSize:'14px',
-                                fontWeight: n.is_read ? 400 : 600,
-                                color:'#0E1523',
-                                margin:0,
-                                lineHeight:1.45,
-                                flex:1,
-                              }}>
+                              <p style={{fontSize:'14px',fontWeight:n.read ? 400 : 600,color:'#0E1523',margin:0,lineHeight:1.45,flex:1}}>
                                 {n.title || cfg.label}
                               </p>
-                              {!n.is_read && (
-                                <span
-                                  style={{width:'7px',height:'7px',borderRadius:'50%',background:'#3B82F6',flexShrink:0,marginTop:'5px'}}
-                                  aria-label="Unread"
-                                />
+                              {!n.read && (
+                                <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'#3B82F6',flexShrink:0,marginTop:'5px'}} aria-label="Unread" />
                               )}
                             </div>
-                            {n.body && (
-                              <p style={{fontSize:'13px',color:'#475569',margin:'4px 0 0',lineHeight:1.5}}>
-                                {n.body}
-                              </p>
+                            {n.message && (
+                              <p style={{fontSize:'13px',color:'#475569',margin:'4px 0 0',lineHeight:1.5}}>{n.message}</p>
                             )}
-                            <p style={{fontSize:'11px',color:'#94A3B8',margin:'5px 0 0'}}>
-                              {formatTime(n.created_at)}
-                            </p>
+                            <p style={{fontSize:'11px',color:'#94A3B8',margin:'5px 0 0'}}>{formatTime(n.created_at)}</p>
                           </div>
 
                           {/* 3-dot menu */}
@@ -838,11 +811,7 @@ export default function NotificationsPage() {
                                 setOpenMenuId(next);
                                 openMenuIdRef.current = next;
                               }}
-                              style={{
-                                padding:'6px',background:'none',border:'none',
-                                cursor:'pointer',color:'#94A3B8',borderRadius:'6px',
-                                display:'flex',alignItems:'center',
-                              }}
+                              style={{padding:'6px',background:'none',border:'none',cursor:'pointer',color:'#94A3B8',borderRadius:'6px',display:'flex',alignItems:'center'}}
                               className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
                               aria-label={'Actions for: ' + (n.title || cfg.label)}
                               aria-expanded={menuOpen}
@@ -853,28 +822,18 @@ export default function NotificationsPage() {
 
                             {menuOpen && (
                               <div
-                                style={{
-                                  position:'absolute',right:0,top:'34px',
-                                  background:'#FFFFFF',
-                                  border:'1px solid #E2E8F0',
-                                  borderRadius:'10px',
-                                  boxShadow:'0 4px 16px rgba(0,0,0,0.10)',
-                                  zIndex:50,
-                                  minWidth:'168px',
-                                  overflow:'hidden',
-                                }}
+                                style={{position:'absolute',right:0,top:isNearBottom?'auto':'34px',bottom:isNearBottom?'34px':'auto',background:'#FFFFFF',border:'1px solid #E2E8F0',borderRadius:'10px',boxShadow:'0 4px 16px rgba(0,0,0,0.10)',zIndex:50,minWidth:'168px',overflow:'hidden'}}
                                 role="menu"
                                 aria-label="Notification actions"
                               >
-                                {n.is_read ? (
+                                {n.read ? (
                                   <button
                                     onClick={function(e) { e.stopPropagation(); markAsUnread(n.id); }}
                                     className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 focus:outline-none focus:bg-slate-50"
                                     style={{fontSize:'13px',fontWeight:500,color:'#475569',background:'none',border:'none',cursor:'pointer'}}
                                     role="menuitem"
                                   >
-                                    <EyeOff size={14} aria-hidden="true" />
-                                    Mark as unread
+                                    <EyeOff size={14} aria-hidden="true" /> Mark as unread
                                   </button>
                                 ) : (
                                   <button
@@ -883,8 +842,7 @@ export default function NotificationsPage() {
                                     style={{fontSize:'13px',fontWeight:500,color:'#475569',background:'none',border:'none',cursor:'pointer'}}
                                     role="menuitem"
                                   >
-                                    <Eye size={14} aria-hidden="true" />
-                                    Mark as read
+                                    <Eye size={14} aria-hidden="true" /> Mark as read
                                   </button>
                                 )}
                                 <div style={{height:'1px',background:'#E2E8F0',margin:'2px 0'}} />
@@ -894,8 +852,7 @@ export default function NotificationsPage() {
                                   style={{fontSize:'13px',fontWeight:500,color:'#EF4444',background:'none',border:'none',cursor:'pointer'}}
                                   role="menuitem"
                                 >
-                                  <Trash2 size={14} aria-hidden="true" />
-                                  Delete
+                                  <Trash2 size={14} aria-hidden="true" /> Delete
                                 </button>
                               </div>
                             )}
@@ -921,7 +878,6 @@ export default function NotificationsPage() {
                 </button>
               </div>
             )}
-
           </div>
         )}
       </main>

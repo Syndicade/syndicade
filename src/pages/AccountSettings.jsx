@@ -5,23 +5,52 @@ import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import {
   Download, AlertTriangle, UserCheck, Trash2, CheckCircle,
-  Plus, X, Pencil, Building2, Camera,
+  Plus, X, Pencil, Building2, Camera, Bell, Mail, ChevronDown, ChevronUp, VolumeX,
 } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
-var BG   = '#F8FAFC';
-var TEXT = '#0E1523';
+var BG    = '#F8FAFC';
+var TEXT  = '#0E1523';
 var MUTED = '#64748B';
 
 var NAV_ITEMS = [
-  { id: 'profile',  label: 'Profile'     },
-  { id: 'account',  label: 'Account'     },
-  { id: 'privacy',  label: 'Privacy'     },
-  { id: 'danger',   label: 'Danger Zone' },
+  { id: 'profile',       label: 'Profile'       },
+  { id: 'account',       label: 'Account'       },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'privacy',       label: 'Privacy'       },
+  { id: 'danger',        label: 'Danger Zone'   },
 ];
 
 var inputCls = 'w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500';
 var labelCls = 'block text-sm font-medium text-slate-700 mb-1';
+
+// ── Notification type definitions ─────────────────────────────────────────────
+var MEMBER_NOTIF_TYPES = [
+  { key: 'new_event',        label: 'New event posted',         desc: 'When a new event is added to your org' },
+  { key: 'new_announcement', label: 'New announcement',         desc: 'When a new announcement is posted' },
+  { key: 'event_reminder',   label: 'Event reminder',           desc: '24 hours before an event you have RSVPd to' },
+  { key: 'board_reply',      label: 'Community Board reply',    desc: 'When someone replies to your post' },
+  { key: 'new_poll',         label: 'New poll',                 desc: 'When a new poll is created in your org' },
+  { key: 'new_survey',       label: 'New survey',               desc: 'When a new survey is created in your org' },
+  { key: 'new_signup_form',  label: 'New sign-up form',         desc: 'When a new sign-up form is created' },
+  { key: 'new_program',      label: 'New program added',        desc: 'When a new program is listed in your org' },
+  { key: 'new_document',     label: 'New document uploaded',    desc: 'When a file is added to your org library' },
+  { key: 'new_photo',        label: 'New photo added',          desc: 'When a new photo is added to the gallery' },
+];
+
+var ADMIN_NOTIF_TYPES = [
+  { key: 'member_joined', label: 'Member joined',           desc: 'When someone joins your org' },
+  { key: 'event_rsvp',    label: 'Member RSVPd to event',   desc: 'When a member RSVPs to one of your events' },
+  { key: 'inbox_message', label: 'New inbox message',       desc: 'When you receive an inquiry or collaboration request' },
+];
+
+function buildDefaultPrefs() {
+  var prefs = {};
+  MEMBER_NOTIF_TYPES.concat(ADMIN_NOTIF_TYPES).forEach(function(t) {
+    prefs[t.key] = { bell: true, email: true };
+  });
+  return prefs;
+}
 
 // ── Reusable Toggle ───────────────────────────────────────────────────────────
 function Toggle({ checked, onChange, label, desc, id }) {
@@ -52,6 +81,59 @@ function SectionCard({ id, title, subtitle, children, danger }) {
   );
 }
 
+// ── Notification grid row (Bell + Email toggles) ───────────────────────────────
+function NotifRow({ typeKey, label, desc, prefs, onChange, idPrefix }) {
+  var bell  = (prefs[typeKey] && prefs[typeKey].bell  !== undefined) ? prefs[typeKey].bell  : true;
+  var email = (prefs[typeKey] && prefs[typeKey].email !== undefined) ? prefs[typeKey].email : true;
+  return (
+    <div className="grid grid-cols-[1fr_56px_56px] items-center gap-2 py-3 border-b border-slate-100 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-slate-700">{label}</p>
+        {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
+      </div>
+      {/* Bell toggle */}
+      <div className="flex justify-center">
+        <button
+          role="switch" aria-checked={bell}
+          aria-label={label + ' — bell notification'}
+          onClick={function() { onChange(typeKey, 'bell', !bell); }}
+          className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (bell ? 'bg-blue-600' : 'bg-slate-200')}
+        >
+          <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (bell ? 'translate-x-6' : 'translate-x-1')} />
+        </button>
+      </div>
+      {/* Email toggle */}
+      <div className="flex justify-center">
+        <button
+          role="switch" aria-checked={email}
+          aria-label={label + ' — email notification'}
+          onClick={function() { onChange(typeKey, 'email', !email); }}
+          className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (email ? 'bg-blue-600' : 'bg-slate-200')}
+        >
+          <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (email ? 'translate-x-6' : 'translate-x-1')} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Column header for the notif grid ──────────────────────────────────────────
+function NotifGridHeader() {
+  return (
+    <div className="grid grid-cols-[1fr_56px_56px] gap-2 pb-2 border-b border-slate-200 mb-1" aria-hidden="true">
+      <div />
+      <div className="flex flex-col items-center gap-1">
+        <Bell size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bell</span>
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <Mail size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</span>
+      </div>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -71,7 +153,7 @@ function LoadingSkeleton() {
                 </div>
               </div>
             </div>
-            {[1,2,3,4].map(function(i) {
+            {[1,2,3,4,5].map(function(i) {
               return <div key={i} className="px-4 py-3 border-b border-slate-100"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse" /></div>;
             })}
           </div>
@@ -104,7 +186,7 @@ function AccountSettings() {
   var [currentUser, setCurrentUser]       = useState(null);
   var [organizations, setOrganizations]   = useState([]);
 
-  // ── Profile form (all fields from MemberProfileSettings) ──
+  // ── Profile form ──
   var [profile, setProfile] = useState({
     first_name: '', last_name: '', display_name: '', pronouns: '', bio: '', birthday: '',
     phone: '', address_line1: '', address_line2: '', city: '', state: '', zip: '',
@@ -116,7 +198,7 @@ function AccountSettings() {
   var [interests, setInterests]         = useState([]);
   var [interestInput, setInterestInput] = useState('');
 
-  // ── Affiliations (member_affiliations table) ──
+  // ── Affiliations ──
   var [affiliations, setAffiliations]   = useState([]);
   var [affForm, setAffForm]             = useState({ org_name: '', role_title: '', joined_year: '' });
   var [editingAffId, setEditingAffId]   = useState(null);
@@ -129,18 +211,19 @@ function AccountSettings() {
   var [passwordForm, setPasswordForm]         = useState({ newPassword: '', confirmPassword: '' });
   var [changingPassword, setChangingPassword] = useState(false);
 
-  // ── Notification prefs (saved as JSONB to members.notification_prefs) ──
-  var [notifPrefs, setNotifPrefs] = useState({
-    email_announcements: true, email_events: true,
-    email_invites: true, in_app_all: true,
-  });
+  // ── Notifications ──
+  // globalNotifPrefs: { [typeKey]: { bell: bool, email: bool } }
+  var [globalNotifPrefs, setGlobalNotifPrefs] = useState(buildDefaultPrefs());
+  // orgNotifPrefs: { [orgId]: { muted: bool, overrides: { [typeKey]: { bell, email } } } }
+  var [orgNotifPrefs, setOrgNotifPrefs]       = useState({});
+  var [expandedOrgs, setExpandedOrgs]         = useState({});
+  var [savingNotif, setSavingNotif]           = useState(false);
+  var [savingOrgNotif, setSavingOrgNotif]     = useState(null); // orgId currently saving
 
   // ── Privacy tab ──
-  // Per-org: show_email, show_bio (member_privacy table) + show_affiliations (memberships col)
   var [privacySettings, setPrivacySettings] = useState({});
   var [affVisibility, setAffVisibility]     = useState({});
-  // Global privacy flags (members.privacy_settings JSONB)
-  var [globalPrivacy, setGlobalPrivacy] = useState({
+  var [globalPrivacy, setGlobalPrivacy]     = useState({
     show_phone: false, show_address: false, show_social: true,
     show_birthday: false, share_with_groups: false,
   });
@@ -175,28 +258,32 @@ function AccountSettings() {
       var m = memberRes.data;
       if (m) {
         setProfile({
-          first_name:   m.first_name    || '',
-          last_name:    m.last_name     || '',
-          display_name: m.display_name  || '',
-          pronouns:     m.pronouns      || '',
-          bio:          m.bio           || '',
-          birthday:     m.birthday      || '',
-          phone:        m.phone         || '',
-          address_line1:m.address_line1 || '',
-          address_line2:m.address_line2 || '',
-          city:         m.city          || '',
-          state:        m.state         || '',
-          zip:          m.zip           || '',
-          website:      m.website       || '',
-          linkedin:     m.linkedin      || '',
-          instagram:    m.instagram     || '',
-          facebook:     m.facebook      || '',
-          twitter:      m.twitter       || '',
-          avatar_url:   m.avatar_url    || m.profile_photo_url || '',
+          first_name:    m.first_name    || '',
+          last_name:     m.last_name     || '',
+          display_name:  m.display_name  || '',
+          pronouns:      m.pronouns      || '',
+          bio:           m.bio           || '',
+          birthday:      m.birthday      || '',
+          phone:         m.phone         || '',
+          address_line1: m.address_line1 || '',
+          address_line2: m.address_line2 || '',
+          city:          m.city          || '',
+          state:         m.state         || '',
+          zip:           m.zip           || '',
+          website:       m.website       || '',
+          linkedin:      m.linkedin      || '',
+          instagram:     m.instagram     || '',
+          facebook:      m.facebook      || '',
+          twitter:       m.twitter       || '',
+          avatar_url:    m.avatar_url    || m.profile_photo_url || '',
         });
         setInterests(m.interests || []);
-        if (m.notification_prefs) setNotifPrefs(Object.assign({}, notifPrefs, m.notification_prefs));
-        if (m.privacy_settings)   setGlobalPrivacy(Object.assign({}, globalPrivacy, m.privacy_settings));
+        if (m.privacy_settings) setGlobalPrivacy(Object.assign({}, globalPrivacy, m.privacy_settings));
+
+        // Load global notification prefs — merge saved over defaults
+        if (m.notification_prefs && typeof m.notification_prefs === 'object') {
+          setGlobalNotifPrefs(Object.assign({}, buildDefaultPrefs(), m.notification_prefs));
+        }
       }
 
       setAffiliations(affRes.data || []);
@@ -220,13 +307,32 @@ function AccountSettings() {
 
       var orgIds = orgs.map(function(o) { return o.id; });
       if (orgIds.length > 0) {
-        var privacyRes = await supabase.from('member_privacy').select('*').eq('user_id', user.id).in('organization_id', orgIds);
+        var [privacyRes, orgNotifRes] = await Promise.all([
+          supabase.from('member_privacy').select('*').eq('user_id', user.id).in('organization_id', orgIds),
+          supabase.from('member_notification_prefs').select('*').eq('user_id', user.id).in('org_id', orgIds),
+        ]);
+
         var privacyMap = {};
         orgs.forEach(function(org) {
           var existing = ((privacyRes.data) || []).find(function(p) { return p.organization_id === org.id; });
-          privacyMap[org.id] = { show_email: existing ? existing.show_email : false, show_bio: existing ? existing.show_bio : true, show_pronouns: existing ? (existing.show_pronouns || false) : false };
+          privacyMap[org.id] = {
+            show_email:    existing ? existing.show_email    : false,
+            show_bio:      existing ? existing.show_bio      : true,
+            show_pronouns: existing ? (existing.show_pronouns || false) : false,
+          };
         });
         setPrivacySettings(privacyMap);
+
+        // Build orgNotifPrefs map
+        var notifMap = {};
+        orgs.forEach(function(org) {
+          var existing = ((orgNotifRes.data) || []).find(function(p) { return p.org_id === org.id; });
+          notifMap[org.id] = {
+            muted:     existing ? existing.muted     : false,
+            overrides: existing ? (existing.overrides || {}) : {},
+          };
+        });
+        setOrgNotifPrefs(notifMap);
       }
     } catch (err) {
       mascotErrorToast('Failed to load profile.', err.message);
@@ -236,7 +342,12 @@ function AccountSettings() {
   }
 
   function updateProfile(field, value) {
-    setProfile(function(prev) { var next = {}; Object.keys(prev).forEach(function(k) { next[k] = prev[k]; }); next[field] = value; return next; });
+    setProfile(function(prev) {
+      var next = {};
+      Object.keys(prev).forEach(function(k) { next[k] = prev[k]; });
+      next[field] = value;
+      return next;
+    });
   }
 
   // ── Photo ─────────────────────────────────────────────────────────────────
@@ -249,9 +360,9 @@ function AccountSettings() {
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB.'); return; }
     try {
       setUploadingPhoto(true);
-      var authRes = await supabase.auth.getUser();
-      var user    = authRes.data.user;
-      var ext     = file.name.split('.').pop();
+      var authRes  = await supabase.auth.getUser();
+      var user     = authRes.data.user;
+      var ext      = file.name.split('.').pop();
       var filePath = user.id + '/avatar.' + ext;
       var uploadRes = await supabase.storage.from('member-avatars').upload(filePath, file, { upsert: true });
       if (uploadRes.error) throw uploadRes.error;
@@ -289,26 +400,25 @@ function AccountSettings() {
       var user    = authRes.data.user;
       await supabase.auth.updateUser({ data: { full_name: (profile.first_name + ' ' + profile.last_name).trim() } });
       var res = await supabase.from('members').upsert({
-        user_id:      user.id,
-        first_name:   profile.first_name.trim(),
-        last_name:    profile.last_name.trim(),
-        display_name: profile.display_name.trim() || null,
-        pronouns:     profile.pronouns.trim() || null,
-        bio:          profile.bio.trim() || null,
-        birthday:     profile.birthday || null,
-        phone:        profile.phone.trim() || null,
-        address_line1:profile.address_line1.trim() || null,
-        address_line2:profile.address_line2.trim() || null,
-        city:         profile.city.trim() || null,
-        state:        profile.state.trim() || null,
-        zip:          profile.zip.trim() || null,
-        website:      profile.website.trim() || null,
-        linkedin:     profile.linkedin.trim() || null,
-        instagram:    profile.instagram.trim() || null,
-        facebook:     profile.facebook.trim() || null,
-        twitter:      profile.twitter.trim() || null,
-        interests:    interests,
-        notification_prefs: notifPrefs,
+        user_id:       user.id,
+        first_name:    profile.first_name.trim(),
+        last_name:     profile.last_name.trim(),
+        display_name:  profile.display_name.trim()  || null,
+        pronouns:      profile.pronouns.trim()      || null,
+        bio:           profile.bio.trim()            || null,
+        birthday:      profile.birthday             || null,
+        phone:         profile.phone.trim()          || null,
+        address_line1: profile.address_line1.trim() || null,
+        address_line2: profile.address_line2.trim() || null,
+        city:          profile.city.trim()           || null,
+        state:         profile.state.trim()          || null,
+        zip:           profile.zip.trim()            || null,
+        website:       profile.website.trim()        || null,
+        linkedin:      profile.linkedin.trim()       || null,
+        instagram:     profile.instagram.trim()      || null,
+        facebook:      profile.facebook.trim()       || null,
+        twitter:       profile.twitter.trim()        || null,
+        interests:     interests,
       }, { onConflict: 'user_id' });
       if (res.error) throw res.error;
       mascotSuccessToast('Profile saved!');
@@ -335,7 +445,9 @@ function AccountSettings() {
     try {
       var authRes = await supabase.auth.getUser();
       var res = await supabase.from('member_affiliations').insert({
-        user_id: authRes.data.user.id, org_name: affForm.org_name.trim(), role_title: affForm.role_title.trim() || null,
+        user_id:     authRes.data.user.id,
+        org_name:    affForm.org_name.trim(),
+        role_title:  affForm.role_title.trim() || null,
         joined_year: affForm.joined_year ? parseInt(affForm.joined_year, 10) : null,
       }).select().single();
       if (res.error) throw res.error;
@@ -353,7 +465,11 @@ function AccountSettings() {
     if (!editAffForm.org_name.trim()) { toast.error('Organization name is required.'); return; }
     setSavingAff(true);
     try {
-      var res = await supabase.from('member_affiliations').update({ org_name: editAffForm.org_name.trim(), role_title: editAffForm.role_title.trim() || null, joined_year: editAffForm.joined_year ? parseInt(editAffForm.joined_year, 10) : null }).eq('id', id).select().single();
+      var res = await supabase.from('member_affiliations').update({
+        org_name:    editAffForm.org_name.trim(),
+        role_title:  editAffForm.role_title.trim() || null,
+        joined_year: editAffForm.joined_year ? parseInt(editAffForm.joined_year, 10) : null,
+      }).eq('id', id).select().single();
       if (res.error) throw res.error;
       setAffiliations(affiliations.map(function(a) { return a.id === id ? res.data : a; }));
       setEditingAffId(null);
@@ -406,6 +522,89 @@ function AccountSettings() {
     }
   }
 
+  // ── Notifications: global prefs ───────────────────────────────────────────
+  function handleGlobalNotifChange(typeKey, channel, value) {
+    setGlobalNotifPrefs(function(prev) {
+      var next = Object.assign({}, prev);
+      next[typeKey] = Object.assign({}, prev[typeKey] || { bell: true, email: true });
+      next[typeKey][channel] = value;
+      return next;
+    });
+  }
+
+  async function handleSaveGlobalNotifPrefs() {
+    try {
+      setSavingNotif(true);
+      var authRes = await supabase.auth.getUser();
+      var res = await supabase.from('members').upsert(
+        { user_id: authRes.data.user.id, notification_prefs: globalNotifPrefs },
+        { onConflict: 'user_id' }
+      );
+      if (res.error) throw res.error;
+      mascotSuccessToast('Notification preferences saved!');
+    } catch (err) {
+      mascotErrorToast('Failed to save notification preferences.', err.message);
+    } finally {
+      setSavingNotif(false);
+    }
+  }
+
+  // ── Notifications: per-org prefs ──────────────────────────────────────────
+  function handleOrgNotifChange(orgId, typeKey, channel, value) {
+    setOrgNotifPrefs(function(prev) {
+      var orgEntry = Object.assign({}, prev[orgId] || { muted: false, overrides: {} });
+      var overrides = Object.assign({}, orgEntry.overrides);
+      overrides[typeKey] = Object.assign({}, overrides[typeKey] || { bell: true, email: true });
+      overrides[typeKey][channel] = value;
+      orgEntry.overrides = overrides;
+      var next = Object.assign({}, prev);
+      next[orgId] = orgEntry;
+      return next;
+    });
+  }
+
+  function handleOrgMuteToggle(orgId) {
+    setOrgNotifPrefs(function(prev) {
+      var orgEntry = Object.assign({}, prev[orgId] || { muted: false, overrides: {} });
+      orgEntry.muted = !orgEntry.muted;
+      var next = Object.assign({}, prev);
+      next[orgId] = orgEntry;
+      return next;
+    });
+  }
+
+  async function handleSaveOrgNotifPrefs(orgId) {
+    try {
+      setSavingOrgNotif(orgId);
+      var authRes  = await supabase.auth.getUser();
+      var orgEntry = orgNotifPrefs[orgId] || { muted: false, overrides: {} };
+      var res = await supabase.from('member_notification_prefs').upsert(
+        {
+          user_id:   authRes.data.user.id,
+          org_id:    orgId,
+          muted:     orgEntry.muted,
+          overrides: orgEntry.overrides,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,org_id' }
+      );
+      if (res.error) throw res.error;
+      mascotSuccessToast('Org notification settings saved!');
+    } catch (err) {
+      mascotErrorToast('Failed to save org notification settings.', err.message);
+    } finally {
+      setSavingOrgNotif(null);
+    }
+  }
+
+  function toggleOrgExpanded(orgId) {
+    setExpandedOrgs(function(prev) {
+      var next = Object.assign({}, prev);
+      next[orgId] = !prev[orgId];
+      return next;
+    });
+  }
+
   // ── Privacy ───────────────────────────────────────────────────────────────
   async function handleSavePrivacy() {
     try {
@@ -413,11 +612,9 @@ function AccountSettings() {
       var authRes = await supabase.auth.getUser();
       var user    = authRes.data.user;
 
-      // Global privacy → members.privacy_settings
       var memberRes = await supabase.from('members').upsert({ user_id: user.id, privacy_settings: globalPrivacy }, { onConflict: 'user_id' });
       if (memberRes.error) throw memberRes.error;
 
-      // Per-org show_email + show_bio → member_privacy table
       var upserts = Object.keys(privacySettings).map(function(orgId) {
         return { user_id: user.id, organization_id: orgId, show_email: privacySettings[orgId].show_email, show_bio: privacySettings[orgId].show_bio, show_pronouns: privacySettings[orgId].show_pronouns || false };
       });
@@ -426,7 +623,6 @@ function AccountSettings() {
         if (privRes.error) throw privRes.error;
       }
 
-      // Per-org show_affiliations → memberships.show_affiliations
       var affUpdates = Object.keys(affVisibility).map(function(orgId) {
         return supabase.from('memberships').update({ show_affiliations: affVisibility[orgId] }).eq('organization_id', orgId).eq('member_id', user.id);
       });
@@ -467,7 +663,7 @@ function AccountSettings() {
         survey_responses: getValue(results[5]) || [], ticket_purchases: getValue(results[6]) || [],
         notifications: getValue(results[7]) || [],
       };
-      var fn = 'syndicade-data-' + (p && p.first_name ? p.first_name.toLowerCase() : 'user') + '-' + new Date().toISOString().split('T')[0] + '.json';
+      var fn   = 'syndicade-data-' + (p && p.first_name ? p.first_name.toLowerCase() : 'user') + '-' + new Date().toISOString().split('T')[0] + '.json';
       var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement('a'); a.href = url; a.download = fn;
@@ -485,7 +681,7 @@ function AccountSettings() {
   // ── Danger Zone ───────────────────────────────────────────────────────────
   function setOrgResolution(orgId, patch) {
     setAdminOrgResolutions(function(prev) {
-      var next = {}; Object.keys(prev).forEach(function(k) { next[k] = prev[k]; });
+      var next  = {}; Object.keys(prev).forEach(function(k) { next[k] = prev[k]; });
       var entry = {}; Object.keys(prev[orgId]).forEach(function(k) { entry[k] = prev[orgId][k]; });
       Object.keys(patch).forEach(function(k) { entry[k] = patch[k]; });
       next[orgId] = entry; return next;
@@ -645,13 +841,13 @@ function AccountSettings() {
 
                 {/* Basic info */}
                 <SectionCard id="basic" title="Basic Information">
-                  {/* Visibility disclaimer */}
                   <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-5" role="note">
                     <svg className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p className="text-xs text-blue-700">
-                      This information is visible to admins and members of organizations you belong to. You can adjust what's shown per organization in the <button onClick={function() { setActiveSection('privacy'); }} className="underline font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 rounded">Privacy tab</button>.
+                      This information is visible to admins and members of organizations you belong to. You can adjust what's shown per organization in the{' '}
+                      <button onClick={function() { setActiveSection('privacy'); }} className="underline font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 rounded">Privacy tab</button>.
                     </p>
                   </div>
                   <form onSubmit={handleSaveProfile} noValidate className="space-y-4">
@@ -723,7 +919,7 @@ function AccountSettings() {
                   </div>
                 </SectionCard>
 
-                {/* Other memberships */}
+                {/* Affiliations */}
                 <SectionCard id="affiliations" title="Memberships" subtitle="Share the organizations and groups you belong to — it helps other members discover communities they might want to join. Control visibility per org in the Privacy tab.">
                   <div className="space-y-2 mb-4">
                     {affiliations.length === 0 && <p className="text-sm text-slate-400">No affiliations added yet.</p>}
@@ -810,21 +1006,149 @@ function AccountSettings() {
                     </button>
                   </form>
                 </SectionCard>
+              </>
+            )}
 
-                <SectionCard id="notifications" title="Notification Preferences" subtitle="Control which emails and in-app notifications you receive.">
-                  <div>
-                    <Toggle id="notif-ann" checked={notifPrefs.email_announcements} onChange={function() { setNotifPrefs(function(p) { return Object.assign({}, p, { email_announcements: !p.email_announcements }); }); }} label="Email — Announcements" desc="Receive email when new announcements are posted" />
-                    <Toggle id="notif-events" checked={notifPrefs.email_events} onChange={function() { setNotifPrefs(function(p) { return Object.assign({}, p, { email_events: !p.email_events }); }); }} label="Email — Events" desc="Receive email when new events are created" />
-                    <Toggle id="notif-invites" checked={notifPrefs.email_invites} onChange={function() { setNotifPrefs(function(p) { return Object.assign({}, p, { email_invites: !p.email_invites }); }); }} label="Email — Invitations" desc="Receive email when invited to an organization" />
-                    <Toggle id="notif-inapp" checked={notifPrefs.in_app_all} onChange={function() { setNotifPrefs(function(p) { return Object.assign({}, p, { in_app_all: !p.in_app_all }); }); }} label="In-App Notifications" desc="Show notifications inside the Syndicade platform" />
-                  </div>
+            {/* ── NOTIFICATIONS ── */}
+            {activeSection === 'notifications' && (
+              <>
+                {/* Global defaults */}
+                <SectionCard id="notif-global" title="Default Notification Preferences" subtitle="These apply to all organizations unless you override them below.">
+                  <NotifGridHeader />
+                  {MEMBER_NOTIF_TYPES.map(function(t) {
+                    return (
+                      <NotifRow
+                        key={t.key}
+                        typeKey={t.key}
+                        label={t.label}
+                        desc={t.desc}
+                        prefs={globalNotifPrefs}
+                        onChange={handleGlobalNotifChange}
+                      />
+                    );
+                  })}
                   <div className="mt-5">
-                    <button onClick={handleSaveProfile} disabled={saving} className="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 text-sm">
-                      {saving ? 'Saving...' : 'Save Preferences'}
+                    <button onClick={handleSaveGlobalNotifPrefs} disabled={savingNotif} className="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 text-sm">
+                      {savingNotif ? 'Saving...' : 'Save Preferences'}
                     </button>
                   </div>
                 </SectionCard>
 
+                {/* Per-org overrides */}
+                <SectionCard id="notif-orgs" title="Per-Organization Overrides" subtitle="Customize or silence notifications for a specific organization.">
+                  {organizations.length === 0 ? (
+                    <p className="text-sm text-slate-400">You are not a member of any organizations yet.</p>
+                  ) : (
+                    <div className="space-y-3" role="list" aria-label="Organization notification overrides">
+                      {organizations.map(function(org) {
+                        var orgPrefs   = orgNotifPrefs[org.id] || { muted: false, overrides: {} };
+                        var isExpanded = expandedOrgs[org.id] || false;
+                        var isAdmin    = org.role === 'admin';
+                        var isSaving   = savingOrgNotif === org.id;
+
+                        // Effective prefs for this org — merge global defaults with org overrides
+                        var effectivePrefs = Object.assign({}, globalNotifPrefs, orgPrefs.overrides);
+
+                        return (
+                          <div key={org.id} className={'border rounded-xl overflow-hidden ' + (orgPrefs.muted ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white')} role="listitem">
+                            {/* Org header row */}
+                            <div className="flex items-center gap-3 px-4 py-3">
+                              {/* Org initials avatar */}
+                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0" aria-hidden="true">
+                                {org.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={'text-sm font-semibold ' + (orgPrefs.muted ? 'text-slate-400' : 'text-slate-900')}>{org.name}</p>
+                                <p className="text-xs text-slate-400 capitalize">{org.role}</p>
+                              </div>
+                              {/* Mute toggle */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {orgPrefs.muted && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-500">
+                                    <VolumeX size={10} aria-hidden="true" /> Muted
+                                  </span>
+                                )}
+                                <button
+                                  role="switch"
+                                  aria-checked={!orgPrefs.muted}
+                                  aria-label={'Mute all notifications from ' + org.name}
+                                  onClick={function() { handleOrgMuteToggle(org.id); }}
+                                  title={orgPrefs.muted ? 'Unmute this org' : 'Mute this org'}
+                                  className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ' + (!orgPrefs.muted ? 'bg-blue-600' : 'bg-slate-200')}
+                                >
+                                  <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' + (!orgPrefs.muted ? 'translate-x-6' : 'translate-x-1')} />
+                                </button>
+                                {/* Expand toggle */}
+                                <button
+                                  onClick={function() { toggleOrgExpanded(org.id); }}
+                                  aria-expanded={isExpanded}
+                                  aria-controls={'org-notif-' + org.id}
+                                  aria-label={(isExpanded ? 'Collapse' : 'Expand') + ' notification settings for ' + org.name}
+                                  className="p-1 text-slate-400 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                                >
+                                  {isExpanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Expanded overrides */}
+                            {isExpanded && (
+                              <div id={'org-notif-' + org.id} className={'border-t border-slate-100 px-4 pt-3 pb-4 ' + (orgPrefs.muted ? 'opacity-40 pointer-events-none' : '')} aria-hidden={orgPrefs.muted}>
+                                <p className="text-xs text-slate-500 mb-3">These override your global defaults for <strong>{org.name}</strong> only.</p>
+                                <NotifGridHeader />
+
+                                {/* Member notification types */}
+                                {MEMBER_NOTIF_TYPES.map(function(t) {
+                                  return (
+                                    <NotifRow
+                                      key={t.key}
+                                      typeKey={t.key}
+                                      label={t.label}
+                                      desc={t.desc}
+                                      prefs={effectivePrefs}
+                                      onChange={function(typeKey, channel, value) { handleOrgNotifChange(org.id, typeKey, channel, value); }}
+                                    />
+                                  );
+                                })}
+
+                                {/* Admin-only types — only show for admin orgs */}
+                                {isAdmin && (
+                                  <>
+                                    <div className="mt-4 mb-2 pt-3 border-t border-slate-100">
+                                      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#F5B731', letterSpacing: '4px' }}>Admin Only</p>
+                                    </div>
+                                    {ADMIN_NOTIF_TYPES.map(function(t) {
+                                      return (
+                                        <NotifRow
+                                          key={t.key}
+                                          typeKey={t.key}
+                                          label={t.label}
+                                          desc={t.desc}
+                                          prefs={effectivePrefs}
+                                          onChange={function(typeKey, channel, value) { handleOrgNotifChange(org.id, typeKey, channel, value); }}
+                                        />
+                                      );
+                                    })}
+                                  </>
+                                )}
+
+                                <div className="mt-4">
+                                  <button
+                                    onClick={function() { handleSaveOrgNotifPrefs(org.id); }}
+                                    disabled={isSaving}
+                                    className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 text-sm"
+                                  >
+                                    {isSaving ? 'Saving...' : 'Save ' + org.name + ' Settings'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </SectionCard>
               </>
             )}
 
