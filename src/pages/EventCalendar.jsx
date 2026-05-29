@@ -82,6 +82,7 @@ var params = useParams();
   var [loading, setLoading]                 = useState(true);
   var [error, setError]                     = useState(null);
   var [showCreateModal, setShowCreateModal] = useState(false);
+  var [createEventPrefill, setCreateEventPrefill] = useState(null);
   var [openPickerFor, setOpenPickerFor]     = useState(null);
 
   useEffect(function() { fetchOrganizationsAndEvents(); }, [organizationId]);
@@ -389,6 +390,17 @@ var userOrgs = [];
                     onNavigate={setDate}
                     onSelectEvent={handleSelectEvent}
                     selectable
+                    onSelectSlot={function(slotInfo) {
+                      if (!isAdmin) return;
+                      var d = slotInfo.start;
+                      var dateStr = d.getFullYear() + '-' +
+                        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(d.getDate()).padStart(2, '0');
+                      var timeStr = String(d.getHours()).padStart(2, '0') + ':' +
+                        String(d.getMinutes()).padStart(2, '0');
+                      setCreateEventPrefill({ date: dateStr, startTime: timeStr });
+                      setShowCreateModal(true);
+                    }}
                     eventPropGetter={eventStyleGetter}
                     components={{ toolbar: CustomToolbar, event: CustomEvent }}
                     popup
@@ -426,13 +438,14 @@ var userOrgs = [];
       </div>
 
       {isOrgScoped && (
-        <CreateEvent
-          isOpen={showCreateModal}
-          onClose={function() { setShowCreateModal(false); }}
-          onSuccess={function() { setShowCreateModal(false); fetchOrganizationsAndEvents(); }}
-          organizationId={organizationId}
-          organizationName={orgName}
-        />
+      <CreateEvent
+        isOpen={showCreateModal}
+        onClose={function() { setShowCreateModal(false); setCreateEventPrefill(null); }}
+        onSuccess={function() { setShowCreateModal(false); setCreateEventPrefill(null); fetchOrganizationsAndEvents(); }}
+        organizationId={organizationId}
+        organizationName={orgName}
+        prefillData={createEventPrefill}
+      />
       )}
     </div>
   );

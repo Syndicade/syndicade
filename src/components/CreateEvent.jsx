@@ -332,7 +332,7 @@ function CheckoutFieldRow({ field, index, onChange, onRemove, canRemove }) {
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent }) {
+function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent, prefillData }) {
   var [activeTab, setActiveTab] = useState('details');
   var planData = usePlanLimits(organizationId);
   var isAllowed = planData ? planData.isAllowed : function() { return false; };
@@ -430,8 +430,22 @@ visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
     }
   }, [activeTab, editingEvent]);
 
-  useEffect(function(){
-    if (!isOpen) { resetAll(); return; }
+useEffect(function(){
+if (!isOpen) { resetAll(); return; }
+
+    if (!editingEvent && prefillData) {
+      var pd = prefillData;
+      if (pd.date || pd.startTime || pd.title) {
+        setForm(function(prev) {
+          return Object.assign({}, prev, {
+            title: pd.title || '',
+            schedule: [{ date: pd.date || '', startTime: pd.startTime || '', endTime: '' }],
+          });
+        });
+      }
+      return;
+    }
+
     if (!editingEvent) return;
 
     function parseDT(isoStr) {
