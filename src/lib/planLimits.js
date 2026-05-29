@@ -108,9 +108,9 @@ export var PLAN_LIMITS = {
 };
 
 export var STRIPE_PRICE_IDS = {
-  listed: {
-    month: 'price_LISTED_MONTHLY_TBD',
-    year: 'price_LISTED_ANNUAL_TBD',
+listed: {
+month: 'price_1TbJvlKMpHjSZayWgtSa1gIH',
+year: 'price_1TbJwAKMpHjSZayWQ2REzDyi',
   },
   starter: {
     month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',

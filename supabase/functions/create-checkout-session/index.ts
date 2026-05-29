@@ -4,8 +4,8 @@ var corsHeaders = {
 }
 
 var PRICE_IDS = {
-  listed_month:  'price_LISTED_MONTHLY_TBD',
-  listed_year:   'price_LISTED_ANNUAL_TBD',
+  listed_month: 'price_1TbJvlKMpHjSZayWgtSa1gIH',
+listed_year:  'price_1TbJwAKMpHjSZayWQ2REzDyi',
   starter_month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
   starter_year:  'price_1TMnuAKMpHjSZayWbYHYUoS8',
   growth_month:  'price_1TOKEKKMpHjSZayWoryYepSM',

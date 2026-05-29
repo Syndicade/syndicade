@@ -10,6 +10,7 @@ import { mascotErrorToast } from '../components/MascotToast'
 import CreateOrganization from '../components/CreateOrganization'
 import CreateEvent from '../components/CreateEvent.jsx'
 import MySignups from '../components/MySignups'
+import TasksWidget from '../components/TasksWidget';
 import InviteMemberModal from '../components/InviteMemberModal'
 import InviteOrgModal from '../components/InviteOrgModal'
 import { UserPlus, Building2 } from 'lucide-react'
@@ -63,6 +64,7 @@ var WIDGET_DEFS = [
   { key: 'chats',     label: 'Recent Chats',      desc: 'Latest channel messages'     },
   { key: 'saved',     label: 'Saved Events',      desc: 'Events you bookmarked'       },
   { key: 'following', label: 'Following',          desc: 'Orgs you follow publicly'   },
+  { key: 'tasks', label: 'My Tasks', desc: 'Tasks assigned to you across orgs' },
   { key: 'signups',   label: 'My Sign-Ups',        desc: 'Volunteer sign-up slots'    },
   { key: 'groups',    label: 'My Groups',          desc: 'Committees and teams'       },
 ]
@@ -1320,10 +1322,15 @@ var [removingSaved,       setRemovingSaved]         = useState(null)
       .select('widgets, org_colors')
       .eq('user_id', userId)
       .single()
-    if (res.data) {
-      if (res.data.widgets && res.data.widgets.length > 0) setActiveWidgets(res.data.widgets)
-      if (res.data.org_colors) setOrgColors(res.data.org_colors)
-    }
+if (res.data) {
+  if (res.data.widgets && res.data.widgets.length > 0) {
+    var saved = res.data.widgets;
+    // Auto-inject tasks widget if not already present
+    var withTasks = saved.includes('tasks') ? saved : saved.concat(['tasks']);
+    setActiveWidgets(withTasks);
+  }
+  if (res.data.org_colors) setOrgColors(res.data.org_colors)
+}
     setPrefLoaded(true)
   }
 
@@ -1985,6 +1992,14 @@ return (
         </WidgetShell>
       )
     }
+
+    if (key === 'tasks') {
+  return (
+    <WidgetShell key="tasks" id="tasks" label="My Tasks" onRemove={function() { handleToggleWidget('tasks') }}>
+      <TasksWidget />
+    </WidgetShell>
+  );
+}
 
     return null
   }

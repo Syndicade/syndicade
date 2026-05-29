@@ -72,6 +72,7 @@ var ICONS = {
   menu:       'M4 6h16M4 12h16M4 18h16',
   email:      'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
   contacts:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+tasks:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
   scheduling: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
 };
 
@@ -108,6 +109,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       items: [
         { id:'approvals',    label:'Approvals',    iconKey:'approvals', route:'approvals',    path: base + '/approvals',    badge: pendingCount },
         { id:'inbox',        label:'Inbox',        iconKey:'inbox',     route:'inbox',        path: base + '/inbox',        badge: unreadCount },
+        { id: 'tasks',       label: 'Tasks',        iconKey: 'tasks',    route: 'tasks',      path: base + '/tasks' },
         { id:'contacts',     label:'Contacts',     iconKey:'contacts',  route:'contacts',     path: base + '/contacts' },
         { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics',    lock:'growth' },
         { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey:'tour-public-page-nav', adminOnly: true },

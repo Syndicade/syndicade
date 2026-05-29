@@ -202,8 +202,8 @@ serve(async (req) => {
 
         // ── Price ID → plan name mapping (update placeholders when Listed IDs are created in Stripe)
         var PRICE_TO_PLAN: Record<string, string> = {
-          'price_LISTED_MONTHLY_TBD':          'listed',
-          'price_LISTED_ANNUAL_TBD':            'listed',
+         'price_1TbJvlKMpHjSZayWgtSa1gIH': 'listed',
+'price_1TbJwAKMpHjSZayWQ2REzDyi': 'listed',
           'price_1TMnuAKMpHjSZayWhfMtS8AB':    'starter',
           'price_1TMnuAKMpHjSZayWbYHYUoS8':    'starter',
           'price_1TOKEKKMpHjSZayWoryYepSM':    'growth',
@@ -216,7 +216,7 @@ serve(async (req) => {
 
         // ── Annual price IDs (used to set billing_interval = 'year')
         var yearlyPrices = [
-          'price_LISTED_ANNUAL_TBD',
+          'price_1TbJwAKMpHjSZayWQ2REzDyi',
           'price_1TMnuAKMpHjSZayWbYHYUoS8',
           'price_1TMnu9KMpHjSZayW67fBSDzC',
           'price_1TMnu7KMpHjSZayW34qmec4T',

@@ -39,6 +39,7 @@ import OrgPrograms from './pages/OrgPrograms';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
+import AdminTasks from './pages/AdminTasks';
 import NotificationsPage from './pages/NotificationsPage';
 import SchedulingPolls from './pages/SchedulingPolls';
 import GroupsList from './pages/GroupsList';
@@ -203,6 +204,7 @@ var hideChrome = (
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />
               <Route path="inbox" element={<AdminInbox />} />
+              <Route path="tasks" element={<AdminTasks />} />
               <Route path="contacts" element={<AdminContacts />} />
               <Route path="page-editor" element={<OrgPageEditor />} />
               <Route path="billing" element={<BillingPage />} />
