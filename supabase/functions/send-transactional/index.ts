@@ -267,6 +267,59 @@ function buildCollabDeclined(data: any) {
   return { subject, html: wrapEmail(inner) }
 }
 
+function buildBugReportAlert(data: any) {
+  var subject = '[' + (data.severity ? data.severity.toUpperCase() : 'SUGGESTION') + '] ' + data.reportType.toUpperCase() + ': ' + data.title
+  var severityColors: Record<string, string> = {
+    low:      '#22C55E',
+    medium:   '#F5B731',
+    high:     '#F97316',
+    critical: '#EF4444',
+  }
+  var severityColor = data.severity ? (severityColors[data.severity] || '#64748B') : '#8B5CF6'
+  var inner =
+    '<tr><td style="background:#0E1523;padding:24px 32px;">' +
+    '<span style="font-size:20px;font-weight:800;color:#ffffff;">Syndi</span>' +
+    '<span style="font-size:20px;font-weight:800;color:#F5B731;">cade</span>' +
+    '<span style="font-size:13px;color:#94A3B8;margin-left:12px;">Beta Feedback Alert</span>' +
+    '</td></tr>' +
+    '<tr><td style="padding:32px;">' +
+    '<div style="display:inline-block;padding:4px 12px;border-radius:99px;background:' + severityColor + ';color:#ffffff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">' +
+    (data.reportType === 'bug' ? (data.severity || 'bug') : 'suggestion') +
+    '</div>' +
+    '<h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#111827;">' + data.title + '</h2>' +
+    '<p style="font-size:13px;color:#6b7280;margin:0 0 24px;">' +
+    'Area: <strong>' + data.appArea + '</strong>' +
+    (data.reporterEmail ? ' &nbsp;·&nbsp; From: <strong>' + data.reporterEmail + '</strong>' : ' &nbsp;·&nbsp; Anonymous') +
+    '</p>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">' +
+    '<tr><td style="padding:12px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">' +
+    (data.reportType === 'bug' ? 'What happened' : 'Suggestion') +
+    '</td></tr>' +
+    '<tr><td style="padding:2px 16px 16px;font-size:14px;color:#374151;line-height:1.6;">' + data.description + '</td></tr>' +
+    '</table>' +
+    (data.stepsToReproduce ?
+      '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">' +
+      '<tr><td style="padding:12px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Steps to Reproduce</td></tr>' +
+      '<tr><td style="padding:2px 16px 16px;font-size:14px;color:#374151;line-height:1.8;white-space:pre-line;">' + data.stepsToReproduce + '</td></tr>' +
+      '</table>' : '') +
+    (data.screenshotUrl ?
+      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">' +
+      '<tr><td style="font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;">Screenshot</td></tr>' +
+      '<tr><td><a href="' + data.screenshotUrl + '" target="_blank"><img src="' + data.screenshotUrl + '" alt="Screenshot" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;" /></a></td></tr>' +
+      '</table>' : '') +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px;">' +
+    '<tr><td style="padding:12px 16px;font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Technical Details</td></tr>' +
+    (data.reportedUrl ? '<tr><td style="padding:2px 16px 8px;font-size:12px;color:#475569;"><strong>URL:</strong> ' + data.reportedUrl + '</td></tr>' : '') +
+    (data.userAgent ? '<tr><td style="padding:2px 16px 12px;font-size:11px;color:#94A3B8;word-break:break-all;">' + data.userAgent + '</td></tr>' : '') +
+    '</table>' +
+    '<p style="text-align:center;margin:0;">' +
+    '<a href="https://supabase.com/dashboard/project/zktmhqrygknkodydbumq/editor" style="display:inline-block;padding:12px 28px;background:#3B82F6;color:#ffffff;font-size:14px;font-weight:700;border-radius:8px;text-decoration:none;">View in Supabase</a>' +
+    '</p>' +
+    '</td></tr>' +
+    brandFooter()
+  return { subject, html: wrapEmail(inner) }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -309,9 +362,12 @@ serve(async (req) => {
     } else if (type === 'collab_accepted') {
       toEmail = data.toEmail
       emailContent = buildCollabAccepted(data)
-    } else if (type === 'collab_declined') {
+   } else if (type === 'collab_declined') {
       toEmail = data.toEmail
       emailContent = buildCollabDeclined(data)
+    } else if (type === 'bug_report_submitted') {
+      toEmail = 'admin@syndicade.org'
+      emailContent = buildBugReportAlert(data)
     } else {
       return new Response(JSON.stringify({ error: 'Unknown email type: ' + type }), { status: 400, headers: corsHeaders })
     }

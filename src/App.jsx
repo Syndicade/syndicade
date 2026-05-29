@@ -56,6 +56,7 @@ import BillingPage from './pages/BillingPage';
 import NotFound from './pages/NotFound';
 import ActivateProTrial from './pages/ActivateProTrial';
 import AcceptInvite from './pages/AcceptInvite';
+import BugReportPage from './pages/BugReportPage';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -144,6 +145,7 @@ var hideChrome = (
             <Route path="/welcome" element={session ? <WelcomePage /> : <Navigate to="/login" replace />} />
             <Route path="/onboarding" element={session ? <OnboardingPage /> : <Navigate to="/login" replace />} />
             <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/report-a-bug" element={<BugReportPage />} />
             <Route path="/legal" element={<LegalCenter />} />
             <Route path="/home" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />

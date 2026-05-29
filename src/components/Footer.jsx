@@ -23,10 +23,11 @@ function Footer() {
   ];
 
 var authLinks = [
-    { label: 'Dashboard',   path: '/dashboard'    },
-    { label: 'Calendar',    path: '/calendar'     },
+    { label: 'Dashboard',    path: '/dashboard'    },
+    { label: 'Calendar',     path: '/calendar'     },
     { label: 'Saved Events', path: '/saved-events' },
-    { label: 'Wishlist',    path: '/wishlist'     },
+    { label: 'Wishlist',     path: '/wishlist'     },
+    { label: 'Report a Bug', path: '/report-a-bug' },
   ];
   var navLinks = isLoggedIn
     ? publicLinks.concat(authLinks)
