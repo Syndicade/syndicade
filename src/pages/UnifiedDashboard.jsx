@@ -997,7 +997,7 @@ function OrgColorLegend({ organizations, orgColors, onColorChange }) {
 // ─── InlineDashboardCalendar ──────────────────────────────────────────────
 var _cardShadow = '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'
 
-function InlineDashboardCalendar({ events, organizations, orgColors, onColorChange }) {
+function InlineDashboardCalendar({ events, organizations, orgColors, onColorChange, onSelectSlot }) {
   var navigate = useNavigate()
 var [calView,      setCalView]      = useState('month')
   var [calDate,      setCalDate]      = useState(new Date())
@@ -1080,7 +1080,8 @@ var [calView,      setCalView]      = useState('month')
             onNavigate={setCalDate}
             onSelectEvent={handleSelectEvent}
             selectable
-            eventPropGetter={eventStyleGetter}
+onSelectSlot={onSelectSlot}
+eventPropGetter={eventStyleGetter}
             components={{ toolbar: CustomToolbar }}
             popup
             tooltipAccessor={function(event) { return event.title + ' — ' + event.resource.orgName }}
@@ -1268,6 +1269,7 @@ function UnifiedDashboard() {
   var [showInviteMember,    setShowInviteMember]     = useState(false)
   var [showInviteOrg,       setShowInviteOrg]        = useState(false)
   var [selectedOrgForEvent, setSelectedOrgForEvent]  = useState(null)
+  var [createEventPrefill, setCreateEventPrefill] = useState(null);
 
   // ── Tour state ──
   var [tourStep,   setTourStep]   = useState(-1)
@@ -1659,12 +1661,12 @@ var isFeedTab = activeTab === 'all' || activeTab === 'announcements'
 // Events — calendar view
     if (activeTab === 'events' && eventsView === 'calendar') {
       return (
-        <InlineDashboardCalendar
-          events={calendarEvents}
-          organizations={organizations}
-          orgColors={orgColors}
-          onColorChange={handleOrgColorChange}
-        />
+<InlineDashboardCalendar
+  events={calendarEvents}
+  organizations={organizations}
+  orgColors={orgColors}
+  onColorChange={handleOrgColorChange}
+/>
       )
     }
 
@@ -2335,10 +2337,11 @@ return (
       {selectedOrgForEvent && (
         <CreateEvent
           isOpen={showCreateEvent}
-          onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null) }}
+          onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null); setCreateEventPrefill(null); }}
           onSuccess={fetchAll}
           organizationId={selectedOrgForEvent.id}
           organizationName={selectedOrgForEvent.name}
+          prefillData={createEventPrefill}
         />
       )}
       <InviteMemberModal isOpen={showInviteMember} onClose={function() { setShowInviteMember(false) }} />
