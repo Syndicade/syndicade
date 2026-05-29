@@ -1238,7 +1238,8 @@ function UnifiedDashboard() {
   var [error,               setError]                = useState(null)
   var [currentUserId,       setCurrentUserId]        = useState(null)
   var [memberName,          setMemberName]           = useState('')
-var [removingSaved,       setRemovingSaved]         = useState(null)
+  var [removingSaved,       setRemovingSaved]         = useState(null)
+  var [unfollowingId, setUnfollowingId] = useState(null)
 
   // ── UI state ──
   var [activeTab,           setActiveTab]            = useState('all')
@@ -1246,8 +1247,6 @@ var [removingSaved,       setRemovingSaved]         = useState(null)
  var [recentActivity,      setRecentActivity]       = useState([])
   var [activityLoading,     setActivityLoading]      = useState(false)
   var [calendarEvents,      setCalendarEvents]       = useState([])
-  var [calendarMonth,       setCalendarMonth]        = useState(new Date())
-  var [calendarSelectedDay, setCalendarSelectedDay]  = useState(null)
   var [orgFilter,           setOrgFilter]            = useState('all')
   var [dateFilter,          setDateFilter]           = useState('2weeks')
   var [dismissedActivities, setDismissedActivities]  = useState(function() {
@@ -1512,7 +1511,6 @@ if (res.data) {
         // Chats
         var chatRes = await supabase.from('chat_messages').select('id, content, created_at, chat_channels(name, organization_id, organizations(name))').order('created_at', { ascending: false }).limit(4)
         if (chatRes.data) setRecentChats(chatRes.data)
-          if (chatRes.data) setRecentChats(chatRes.data)
         await fetchRecentActivity(orgIds)
       }
     } catch (err) {
@@ -2099,7 +2097,7 @@ return (
           {/* Stat cards */}
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
             <StatCard label="Orgs"       value={organizations.length}  Icon={IcoOrgs}     accentColor={PURPLE} loading={loading} />
-            <StatCard label="Events This Week"  value={upcomingEvents.length} Icon={IcoCalendar} accentColor={BLUE}   loading={loading} />
+            <StatCard label="Upcoming Events" value={upcomingEvents.length} Icon={IcoCalendar} accentColor={BLUE} loading={loading} />
             <StatCard label="Unread"     value={totalUnread}           Icon={IcoBell}     accentColor={RED}    loading={loading} />
           </div>
 
@@ -2161,7 +2159,7 @@ return (
                   return (
                     <button
                       key={view.key}
-                      onClick={function() { setEventsView(view.key); setCalendarSelectedDay(null) }}
+                      onClick={function() { setEventsView(view.key) }}
                       aria-pressed={isActive}
                       style={{
                         padding: '5px 14px', borderRadius: '99px',
