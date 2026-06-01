@@ -156,6 +156,113 @@ function MapEmbed({ location }) {
   );
 }
 
+// ── Sponsors section ─────────────────────────────────────────────────────────
+function SponsorsSection({ sponsors, cardStyle, sectionLabel }) {
+  if (!sponsors || sponsors.length === 0) return null;
+
+  // Group by tier for display ordering
+  var tierOrder = ['Title Sponsor', 'Gold', 'Silver', 'Bronze', 'Community Partner', 'In-Kind Supporter'];
+
+  function getTierColor(tier) {
+    if (!tier) return { bg: '#F1F5F9', color: '#64748B' };
+    var t = tier.toLowerCase();
+    if (t.includes('title')) return { bg: 'rgba(245,183,49,0.15)', color: '#B45309', border: 'rgba(245,183,49,0.4)' };
+    if (t.includes('gold')) return { bg: 'rgba(245,183,49,0.12)', color: '#B45309', border: 'rgba(245,183,49,0.35)' };
+    if (t.includes('silver')) return { bg: '#F1F5F9', color: '#475569', border: '#E2E8F0' };
+    if (t.includes('bronze')) return { bg: 'rgba(180,83,9,0.08)', color: '#92400E', border: 'rgba(180,83,9,0.2)' };
+    if (t.includes('community')) return { bg: 'rgba(59,130,246,0.08)', color: '#1D4ED8', border: 'rgba(59,130,246,0.2)' };
+    return { bg: '#F1F5F9', color: '#64748B', border: '#E2E8F0' };
+  }
+
+  return (
+    <section aria-labelledby="section-sponsors" style={cardStyle}>
+      <span id="section-sponsors" style={sectionLabel}>Sponsors</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {sponsors.map(function(sp) {
+          var tierColors = getTierColor(sp.tier);
+          return (
+            <div
+              key={sp.id}
+              style={{ display: 'flex', alignItems: 'center', gap: '14px' }}
+            >
+              {/* Logo or initials */}
+              {sp.logo_url ? (
+                <div style={{ width: '56px', height: '56px', borderRadius: '10px', border: '1px solid #E2E8F0', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', padding: '6px' }}>
+                  <img
+                    src={sp.logo_url}
+                    alt={sp.name + ' logo'}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }}
+                  />
+                </div>
+              ) : (
+                <div
+                  aria-hidden="true"
+                  style={{ width: '56px', height: '56px', borderRadius: '10px', border: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '18px', fontWeight: 800, color: '#94A3B8' }}>
+                  {sp.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+
+              {/* Name + tier */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {sp.website_url ? (
+                  <a
+                    href={sp.website_url.startsWith('http') ? sp.website_url : 'https://' + sp.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', textDecoration: 'none', display: 'block' }}
+                    className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    aria-label={sp.name + ' website'}
+                  >
+                    {sp.name}
+                  </a>
+                ) : (
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', margin: 0 }}>{sp.name}</p>
+                )}
+                {sp.tier && (
+                  <span style={{
+                    display: 'inline-block',
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    padding: '2px 8px',
+                    borderRadius: '99px',
+                    background: tierColors.bg,
+                    color: tierColors.color,
+                    border: '1px solid ' + (tierColors.border || tierColors.bg),
+                  }}>
+                    {sp.tier}
+                  </span>
+                )}
+              </div>
+
+              {/* External link icon if website */}
+              {sp.website_url && (
+                <a
+                  href={sp.website_url.startsWith('http') ? sp.website_url : 'https://' + sp.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ flexShrink: 0, color: '#94A3B8' }}
+                  className="hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  aria-label={'Visit ' + sp.name + ' website'}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ── Checkout Form Modal ──────────────────────────────────────────────────────
 function CheckoutFormModal({ fields, onSubmit, onCancel, totalQty, orderTotal }) {
   var [values, setValues] = useState(function() {
@@ -317,7 +424,6 @@ function CollaborateModal({ event, userAdminOrgs, onClose }) {
           setSending(false);
           return;
         }
-        // Re-send if previously declined/withdrawn
         var { error: updateErr } = await supabase
           .from('event_collaborators')
           .update({ status: 'pending', message: message.trim() || null, updated_at: new Date().toISOString() })
@@ -336,7 +442,6 @@ function CollaborateModal({ event, userAdminOrgs, onClose }) {
         if (insertErr) throw insertErr;
       }
 
-      // Notify host org via email
       var selectedOrg = userAdminOrgs.find(function(o) { return o.id === selectedOrgId; });
       fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
         method: 'POST',
@@ -375,7 +480,6 @@ function CollaborateModal({ event, userAdminOrgs, onClose }) {
         style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '480px' }}
         onClick={function(e) { e.stopPropagation(); }}
       >
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
           <div>
             <h2 id="collab-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0E1523', margin: 0 }}>Request to Co-host</h2>
@@ -392,8 +496,6 @@ function CollaborateModal({ event, userAdminOrgs, onClose }) {
             </svg>
           </button>
         </div>
-
-        {/* Body */}
         <form onSubmit={handleSubmit}>
           <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {userAdminOrgs.length > 1 && (
@@ -478,6 +580,7 @@ function EventDetails() {
   var [event, setEvent] = useState(null);
   var [organization, setOrganization] = useState(null);
   var [coHosts, setCoHosts] = useState([]);
+  var [sponsors, setSponsors] = useState([]);
   var [rsvps, setRsvps] = useState([]);
   var [userRsvp, setUserRsvp] = useState(null);
   var [currentUser, setCurrentUser] = useState(null);
@@ -501,10 +604,8 @@ function EventDetails() {
   var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '' });
   var [guestRsvpLoading, setGuestRsvpLoading] = useState(false);
   var [guestRsvpSuccess, setGuestRsvpSuccess] = useState(false);
-  // Save event
   var [savedEvent, setSavedEvent] = useState(false);
   var [savingEvent, setSavingEvent] = useState(false);
-  // Collaborate
   var [showCollabModal, setShowCollabModal] = useState(false);
   var [userAdminOrgs, setUserAdminOrgs] = useState([]);
 
@@ -514,18 +615,23 @@ function EventDetails() {
       setError(null);
       var { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+
       var { data: eventData, error: eventError } = await supabase
         .from('events').select('*').eq('id', eventId).single();
       if (eventError) throw eventError;
       if (!eventData) { setError('Event not found'); setLoading(false); return; }
       setEvent(eventData);
+
       if (eventData.visibility !== 'public' && !user) { navigate('/login'); return; }
+
       var { data: orgData } = await supabase
         .from('organizations')
         .select('name, logo_url, slug')
         .eq('id', eventData.organization_id)
         .single();
       if (orgData) setOrganization(orgData);
+
+      // Co-hosts
       var { data: collabRows } = await supabase
         .from('event_collaborators')
         .select('requesting_org_id')
@@ -541,6 +647,15 @@ function EventDetails() {
       } else {
         setCoHosts([]);
       }
+
+      // Sponsors
+      var { data: sponsorData } = await supabase
+        .from('event_sponsors')
+        .select('*')
+        .eq('event_id', eventData.id)
+        .order('display_order');
+      setSponsors(sponsorData || []);
+
       if (user) {
         var { data: membership } = await supabase
           .from('memberships').select('role')
@@ -549,7 +664,7 @@ function EventDetails() {
           setIsMember(true);
           if (membership.role === 'admin') setIsAdmin(true);
         }
-        // Load save state
+
         var saveResult = await supabase
           .from('event_saves')
           .select('event_id')
@@ -557,7 +672,7 @@ function EventDetails() {
           .eq('event_id', eventId)
           .maybeSingle();
         setSavedEvent(!!saveResult.data);
-        // Load orgs this user admins (excluding host org) for collaborate button
+
         var { data: adminMemberships } = await supabase
           .from('memberships')
           .select('organization_id, organizations(id, name, logo_url)')
@@ -575,11 +690,13 @@ function EventDetails() {
           }));
         }
       }
+
       var { count: guestCount } = await supabase
         .from('guest_rsvps')
         .select('*', { count: 'exact', head: true })
         .eq('event_id', eventId);
       setGuestRsvpCount(guestCount || 0);
+
       var { data: rsvpData } = await supabase
         .from('event_rsvps')
         .select('*, members(first_name, last_name, profile_photo_url)')
@@ -591,6 +708,7 @@ function EventDetails() {
           if (userResponse) setUserRsvp(userResponse.status);
         }
       }
+
       if (eventData.is_paid) {
         var { data: ttData } = await supabase
           .from('event_ticket_types').select('*').eq('event_id', eventData.id).order('sort_order');
@@ -636,7 +754,7 @@ function EventDetails() {
           .eq('event_id', eventId);
         if (delErr) throw delErr;
         setSavedEvent(false);
-        toast('Removed from saved events');
+        mascotSuccessToast('Removed from saved events.');
       } else {
         var { error: insErr } = await supabase
           .from('event_saves')
@@ -646,7 +764,7 @@ function EventDetails() {
         mascotSuccessToast('Event saved!');
       }
     } catch (err) {
-      toast.error('Could not update saved events');
+      mascotErrorToast('Could not update saved events.', 'Please try again.');
     } finally {
       setSavingEvent(false);
     }
@@ -693,9 +811,7 @@ function EventDetails() {
             if (orgRefetch.data) {
               orgName = orgRefetch.data.name || '';
               orgLogoUrl = orgRefetch.data.logo_url || '';
-              orgUrl = orgRefetch.data.slug
-                ? APP_URL + '/org/' + orgRefetch.data.slug
-                : APP_URL;
+              orgUrl = orgRefetch.data.slug ? APP_URL + '/org/' + orgRefetch.data.slug : APP_URL;
             }
           }
           if (fromTicket) {
@@ -1091,7 +1207,6 @@ function EventDetails() {
               Back
             </button>
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Save / Bookmark */}
               {currentUser && (
                 <button
                   onClick={handleSaveEvent}
@@ -1134,6 +1249,7 @@ function EventDetails() {
               )}
             </div>
           </div>
+
           {/* Title + badges */}
           <div className="flex items-start gap-3 flex-wrap">
             {event.is_recurring && (
@@ -1143,19 +1259,10 @@ function EventDetails() {
             )}
             {isPaidEvent && (
               <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                marginTop: '8px',
-                background: 'rgba(245,183,49,0.12)',
-                border: '1px solid rgba(245,183,49,0.35)',
-                color: '#B45309',
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '2px 10px',
-                borderRadius: '99px',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
+                display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '8px',
+                background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.35)',
+                color: '#B45309', fontSize: '10px', fontWeight: 700, padding: '2px 10px',
+                borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '1px',
               }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
@@ -1172,6 +1279,7 @@ function EventDetails() {
               )}
             </div>
           </div>
+
           {/* Org + co-hosts */}
           <div className="mt-2">
             {organization && (
@@ -1205,6 +1313,7 @@ function EventDetails() {
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
           {/* ── Left column ─────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
             {rsvpSuccess && (
@@ -1219,18 +1328,15 @@ function EventDetails() {
                 </div>
               </div>
             )}
-            {/* When, Where & Price — combined compact card */}
+
+            {/* When & Where */}
             <section aria-labelledby="section-datetime" style={cardStyle}>
               <span id="section-datetime" style={sectionLabel}>When &amp; Where</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-                {/* Date row */}
                 <div>
                   <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Date</p>
                   <p style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>{formatDate(event.start_time)}</p>
                 </div>
-
-                {/* Time + Add to Calendar inline */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
                   <div>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Time</p>
@@ -1240,8 +1346,6 @@ function EventDetails() {
                   </div>
                   <AddToCalendarButton event={event} />
                 </div>
-
-                {/* Location / Virtual */}
                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '14px' }}>
                   <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
                     {event.is_virtual ? 'Format' : 'Location'}
@@ -1297,8 +1401,6 @@ function EventDetails() {
                     </div>
                   )}
                 </div>
-
-                {/* Price */}
                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '14px' }}>
                   <p style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Price</p>
                   {isPaidEvent && ticketTypes.length > 0 ? (
@@ -1322,7 +1424,6 @@ function EventDetails() {
                     </div>
                   )}
                 </div>
-
                 {isPastEvent && (
                   <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px' }}>
                     <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>This event has already occurred.</p>
@@ -1330,6 +1431,7 @@ function EventDetails() {
                 )}
               </div>
             </section>
+
             {/* Event flier */}
             {event.flier_url && (
               <section aria-labelledby="section-flier" style={cardStyle}>
@@ -1355,6 +1457,7 @@ function EventDetails() {
                 </a>
               </section>
             )}
+
             {/* Description */}
             {event.description && (
               <section aria-labelledby="section-description" style={cardStyle}>
@@ -1362,6 +1465,10 @@ function EventDetails() {
                 <p className="text-[#475569] whitespace-pre-wrap leading-relaxed">{event.description}</p>
               </section>
             )}
+
+            {/* Sponsors — shown to everyone, hidden if none */}
+            <SponsorsSection sponsors={sponsors} cardStyle={cardStyle} sectionLabel={sectionLabel} />
+
             {/* Capacity */}
             {event.max_attendees && (
               <section aria-labelledby="section-capacity" style={cardStyle}>
@@ -1379,8 +1486,10 @@ function EventDetails() {
                 </div>
               </section>
             )}
+
             {/* QR Code */}
             <EventQRCode event={event} hideUrl />
+
             {/* Attendance Check-In — event day only */}
             {showCheckIn && (
               <AttendanceCheckIn
@@ -1429,11 +1538,8 @@ function EventDetails() {
                           var soldOut = remaining != null && remaining <= 0;
                           return (
                             <div key={tt.id} style={{
-                              borderRadius: '12px',
-                              border: '1px solid #E2E8F0',
-                              padding: '12px',
-                              background: soldOut ? '#F8FAFC' : '#FFFFFF',
-                              opacity: soldOut ? 0.55 : 1,
+                              borderRadius: '12px', border: '1px solid #E2E8F0', padding: '12px',
+                              background: soldOut ? '#F8FAFC' : '#FFFFFF', opacity: soldOut ? 0.55 : 1,
                               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                             }}>
                               <div className="flex items-start justify-between gap-2 mb-2">
@@ -1528,6 +1634,7 @@ function EventDetails() {
                 )}
               </section>
             )}
+
             {/* Response counts — members only */}
             {isMember && (
               <section aria-labelledby="section-responses" style={cardStyle}>
@@ -1548,6 +1655,7 @@ function EventDetails() {
                 </div>
               </section>
             )}
+
             {/* Going list — members only */}
             {isMember && counts.going > 0 && (
               <section aria-labelledby="section-going" style={cardStyle}>
@@ -1575,6 +1683,7 @@ function EventDetails() {
                 </ul>
               </section>
             )}
+
             {/* Guest RSVP — non-members, free public events */}
             {!isPastEvent && !isMember && !isPaidEvent && (
               <section aria-labelledby="section-guest-rsvp" style={cardStyle}>
@@ -1628,6 +1737,7 @@ function EventDetails() {
                 )}
               </section>
             )}
+
             {/* Paid event — non-members */}
             {!isPastEvent && !isMember && isPaidEvent && (
               <section aria-labelledby="section-tickets-gate" style={cardStyle} className="text-center">
@@ -1639,6 +1749,7 @@ function EventDetails() {
                 </Link>
               </section>
             )}
+
             {/* Co-host request — org admins of other orgs */}
             {currentUser && userAdminOrgs.length > 0 && (
               <section aria-labelledby="section-cohost" style={cardStyle}>

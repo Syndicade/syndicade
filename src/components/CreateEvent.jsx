@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { notifyOrganizationMembers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
-import { mascotSuccessToast } from './MascotToast';
+import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import usePlanLimits from '../hooks/usePlanLimits';
 import { Lock } from 'lucide-react';
 import { getStorageUsage } from '../lib/storageUtils';
@@ -22,12 +22,14 @@ var LANGUAGE_OPTIONS = [
   'Arabic','Chinese (Mandarin)','English','French','Haitian Creole',
   'Hindi','Portuguese','Russian','Somali','Spanish','Tagalog','Vietnamese',
 ];
+var SPONSOR_TIER_SUGGESTIONS = ['Title Sponsor','Gold','Silver','Bronze','Community Partner','In-Kind Supporter'];
 var TABS = [
   { id: 'details',   label: 'Details' },
   { id: 'settings',  label: 'Settings' },
   { id: 'audience',  label: 'Audience & Tags' },
   { id: 'ticketing', label: 'Ticketing' },
   { id: 'cohosts',   label: 'Co-Hosts' },
+  { id: 'sponsors',  label: 'Sponsors' },
   { id: 'publishing',label: 'Publishing' },
 ];
 var TZ_MAP = {
@@ -66,6 +68,9 @@ function defaultCheckoutFields() {
 }
 function blankCustomField() {
   return { _key:'custom-'+Date.now(), label:'', field_type:'text', is_required:false, is_default:false, options:null, sort_order:99 };
+}
+function blankSponsor() {
+  return { _key:'sponsor-'+Date.now(), name:'', tier:'', website_url:'', logo_url:'', logoFile:null, logoPreview:null };
 }
 
 // ── Primitives ───────────────────────────────────────────────────────────────
@@ -331,6 +336,164 @@ function CheckoutFieldRow({ field, index, onChange, onRemove, canRemove }) {
   );
 }
 
+// ── Sponsor Row ──────────────────────────────────────────────────────────────
+function SponsorRow({ sponsor, index, onChange, onRemove }) {
+  var [showTierSuggestions, setShowTierSuggestions] = useState(false);
+  var tierRef = useRef(null);
+
+  function update(field, value) {
+    onChange(index, Object.assign({}, sponsor, { [field]: value }));
+  }
+
+  function handleLogoChange(e) {
+    var file = e.target.files[0] || null;
+    if (!file) return;
+    var preview = URL.createObjectURL(file);
+    onChange(index, Object.assign({}, sponsor, { logoFile: file, logoPreview: preview }));
+  }
+
+  function removeLogo() {
+    onChange(index, Object.assign({}, sponsor, { logoFile: null, logoPreview: null, logo_url: '' }));
+  }
+
+  function selectTier(tier) {
+    update('tier', tier);
+    setShowTierSuggestions(false);
+    if (tierRef.current) tierRef.current.focus();
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 space-y-4 bg-white">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Sponsor {index + 1}</p>
+        <button
+          type="button"
+          onClick={function(){ onRemove(index); }}
+          className="text-red-400 hover:text-red-600 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-0.5"
+          aria-label={'Remove sponsor ' + (index + 1)}>
+          Remove
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Name */}
+        <div>
+          <label htmlFor={'sp-name-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Sponsor Name <span className="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            id={'sp-name-'+index}
+            type="text"
+            value={sponsor.name}
+            onChange={function(e){ update('name', e.target.value); }}
+            placeholder="e.g. Acme Corporation"
+            aria-required="true"
+            className={inputCls}
+          />
+        </div>
+
+        {/* Tier — free text with suggestions */}
+        <div className="relative">
+          <label htmlFor={'sp-tier-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+            Sponsorship Level <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <div className="relative">
+            <input
+              ref={tierRef}
+              id={'sp-tier-'+index}
+              type="text"
+              value={sponsor.tier}
+              onChange={function(e){ update('tier', e.target.value); }}
+              onFocus={function(){ setShowTierSuggestions(true); }}
+              onBlur={function(){ setTimeout(function(){ setShowTierSuggestions(false); }, 150); }}
+              placeholder="e.g. Gold, Title Sponsor…"
+              className={inputCls}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={function(){ setShowTierSuggestions(!showTierSuggestions); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+              aria-label="Show tier suggestions">
+              <Icon path="M19 9l-7 7-7-7" className="h-3.5 w-3.5"/>
+            </button>
+          </div>
+          {showTierSuggestions && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+              {SPONSOR_TIER_SUGGESTIONS.map(function(t){
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onMouseDown={function(e){ e.preventDefault(); selectTier(t); }}
+                    className={'w-full text-left px-3 py-2 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none ' + (sponsor.tier === t ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700')}>
+                    {t}
+                  </button>
+                );
+              })}
+              <p className="px-3 py-2 text-xs text-gray-400 border-t border-gray-100">Or type your own level above</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Website */}
+      <div>
+        <label htmlFor={'sp-url-'+index} className="block text-xs font-semibold text-gray-700 mb-1">
+          Website URL <span className="text-gray-400 font-normal">(optional)</span>
+        </label>
+        <input
+          id={'sp-url-'+index}
+          type="url"
+          value={sponsor.website_url}
+          onChange={function(e){ update('website_url', e.target.value); }}
+          placeholder="https://example.com"
+          className={inputCls}
+        />
+      </div>
+
+      {/* Logo */}
+      <div>
+        <p className="block text-xs font-semibold text-gray-700 mb-2">
+          Logo <span className="text-gray-400 font-normal">(optional — max 2MB)</span>
+        </p>
+        {(sponsor.logoPreview || sponsor.logo_url) ? (
+          <div className="flex items-center gap-3">
+            <img
+              src={sponsor.logoPreview || sponsor.logo_url}
+              alt={'Logo for ' + (sponsor.name || 'sponsor')}
+              className="h-12 w-auto max-w-[120px] object-contain rounded border border-gray-200 bg-gray-50 p-1"
+            />
+            <button
+              type="button"
+              onClick={removeLogo}
+              className="text-xs text-red-500 hover:text-red-700 font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+              aria-label={'Remove logo for ' + (sponsor.name || 'sponsor')}>
+              Remove logo
+            </button>
+          </div>
+        ) : (
+          <label
+            htmlFor={'sp-logo-'+index}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 cursor-pointer focus-within:ring-2 focus-within:ring-blue-500">
+            <Icon path="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" className="h-4 w-4 text-gray-400"/>
+            Upload logo
+            <input
+              id={'sp-logo-'+index}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleLogoChange}
+              aria-label={'Upload logo for sponsor ' + (index + 1)}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationName, groupId, editingEvent, prefillData }) {
   var [activeTab, setActiveTab] = useState('details');
@@ -351,7 +514,7 @@ function CreateEvent({ isOpen, onClose, onSuccess, organizationId, organizationN
     schedule:[{date:'',startTime:'',endTime:''}],
     locationName:'', fullAddress:'', city:'', state:'', zipCode:'',
     virtualLink:'', locationLink:'', maxAttendees:'',
-visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
+    visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
   });
 
   var [loading, setLoading] = useState(false);
@@ -406,6 +569,11 @@ visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
   var [ticketTypes, setTicketTypes] = useState([blankTicketType()]);
   var [checkoutFields, setCheckoutFields] = useState(defaultCheckoutFields());
 
+  // Sponsors tab
+  var [sponsors, setSponsors] = useState([]);
+  var [sponsorsLoading, setSponsorsLoading] = useState(false);
+  var [deletedSponsorIds, setDeletedSponsorIds] = useState([]);
+
   // Co-Hosts tab
   var [coHostSearch, setCoHostSearch] = useState('');
   var [coHostResults, setCoHostResults] = useState([]);
@@ -423,15 +591,17 @@ visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
     if (form.visibility === 'groups' && organizationId) fetchGroups();
   }, [form.visibility, organizationId]);
 
-  // Load co-host invites when tab is opened
   useEffect(function() {
     if (activeTab === 'cohosts' && editingEvent) {
       fetchCoHostInvites();
     }
+    if (activeTab === 'sponsors' && editingEvent) {
+      fetchSponsors();
+    }
   }, [activeTab, editingEvent]);
 
-useEffect(function(){
-if (!isOpen) { resetAll(); return; }
+  useEffect(function(){
+    if (!isOpen) { resetAll(); return; }
 
     if (!editingEvent && prefillData) {
       var pd = prefillData;
@@ -475,7 +645,7 @@ if (!isOpen) { resetAll(); return; }
       state:editingEvent.state||'', zipCode:editingEvent.zip_code||'',
       virtualLink:editingEvent.virtual_link||'', locationLink:'',
       maxAttendees:editingEvent.max_attendees?String(editingEvent.max_attendees):'',
-visibility:editingEvent.visibility||'members',
+      visibility:editingEvent.visibility||'members',
       requireRSVP:editingEvent.require_rsvp||false,
       enableCheckIn:editingEvent.enable_check_in!==false,
       displayPrice:editingEvent.display_price!=null?String(editingEvent.display_price):'',
@@ -540,7 +710,7 @@ visibility:editingEvent.visibility||'members',
 
   function resetAll() {
     setActiveTab('details');
-setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false,enableCheckIn:true,displayPrice:''});
+    setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule:[{date:'',startTime:'',endTime:''}],locationName:'',fullAddress:'',city:'',state:'',zipCode:'',virtualLink:'',locationLink:'',maxAttendees:'',visibility:'members',requireRSVP:false,enableCheckIn:true,displayPrice:''});
     setShowTimezoneSelector(false); setSelectedTimezone(null);
     setAddressInput(''); setAddressSuggestions([]); setShowSuggestions(false);
     setSelectedGroupIds([]); setAvailableGroups([]);
@@ -551,6 +721,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
     setPublishToDiscovery(false); setPublishToWebsite(false); setIsFeatured(false);
     setFlierFile(null);
     setIsPaid(false); setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields());
+    setSponsors([]); setDeletedSponsorIds([]);
     setCoHostSearch(''); setCoHostResults([]); setCoHostInvites([]); setCoHostMessage('');
     setError(null);
   }
@@ -561,8 +732,40 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
       var { data, error:e } = await supabase.from('org_groups').select('id,name,description').eq('organization_id', organizationId).order('name');
       if (e) throw e;
       setAvailableGroups(data||[]);
-    } catch(err) { toast.error('Could not load groups'); }
-    finally { setLoadingGroups(false); }
+    } catch(err) {
+      mascotErrorToast('Could not load groups.', 'Please try again.');
+    } finally {
+      setLoadingGroups(false);
+    }
+  }
+
+  async function fetchSponsors() {
+    if (!editingEvent) return;
+    setSponsorsLoading(true);
+    try {
+      var { data, error: e } = await supabase
+        .from('event_sponsors')
+        .select('*')
+        .eq('event_id', editingEvent.id)
+        .order('display_order');
+      if (e) throw e;
+      setSponsors((data || []).map(function(s) {
+        return {
+          _key: s.id,
+          _dbId: s.id,
+          name: s.name || '',
+          tier: s.tier || '',
+          website_url: s.website_url || '',
+          logo_url: s.logo_url || '',
+          logoFile: null,
+          logoPreview: null,
+        };
+      }));
+    } catch(err) {
+      mascotErrorToast('Could not load sponsors.', 'Please try again.');
+    } finally {
+      setSponsorsLoading(false);
+    }
   }
 
   // ── Co-Host functions ──────────────────────────────────────────────────────
@@ -593,7 +796,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
         setCoHostInvites([]);
       }
     } catch (err) {
-      console.error('fetchCoHostInvites error:', err);
+      mascotErrorToast('Could not load co-host invitations.');
     } finally {
       setCoHostInvitesLoading(false);
     }
@@ -649,7 +852,6 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
         throw insertErr;
       }
 
-      // Notify invited org admins
       var { data: orgAdmins } = await supabase
         .from('memberships')
         .select('member_id')
@@ -693,7 +895,70 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
       mascotSuccessToast(status === 'accepted' ? 'Co-host accepted!' : 'Invite withdrawn.');
       await fetchCoHostInvites();
     } catch (err) {
-      toast.error('Could not update status');
+      mascotErrorToast('Could not update co-host status.');
+    }
+  }
+
+  // ── Sponsor handlers ───────────────────────────────────────────────────────
+
+  function handleSponsorChange(index, updated) {
+    setSponsors(function(prev){ var next = prev.slice(); next[index] = updated; return next; });
+  }
+
+  function addSponsor() {
+    setSponsors(function(prev){ return prev.concat([blankSponsor()]); });
+  }
+
+  function removeSponsor(index) {
+    var sp = sponsors[index];
+    if (sp && sp._dbId) {
+      setDeletedSponsorIds(function(prev){ return prev.concat([sp._dbId]); });
+    }
+    setSponsors(function(prev){ return prev.filter(function(_,i){ return i !== index; }); });
+  }
+
+  async function uploadSponsorLogo(file, eventId, sponsorIndex) {
+    var ext = file.name.split('.').pop();
+    var fileName = 'event-' + eventId + '-' + sponsorIndex + '-' + Date.now() + '.' + ext;
+    var { error: uploadErr } = await supabase.storage.from('sponsor-logos').upload(fileName, file, { upsert: true });
+    if (uploadErr) throw uploadErr;
+    var { data: urlData } = supabase.storage.from('sponsor-logos').getPublicUrl(fileName);
+    return urlData.publicUrl;
+  }
+
+  async function saveSponsors(eventId) {
+    // Delete removed sponsors
+    if (deletedSponsorIds.length > 0) {
+      await supabase.from('event_sponsors').delete().in('id', deletedSponsorIds);
+    }
+
+    for (var i = 0; i < sponsors.length; i++) {
+      var sp = sponsors[i];
+      if (!sp.name.trim()) continue;
+
+      var logoUrl = sp.logo_url || null;
+      if (sp.logoFile) {
+        try {
+          logoUrl = await uploadSponsorLogo(sp.logoFile, eventId, i);
+        } catch(uploadErr) {
+          toast.error('Logo upload failed for "' + sp.name + '" — sponsor saved without logo.');
+        }
+      }
+
+      var row = {
+        event_id: eventId,
+        name: sp.name.trim(),
+        tier: sp.tier.trim() || null,
+        website_url: sp.website_url.trim() || null,
+        logo_url: logoUrl,
+        display_order: i,
+      };
+
+      if (sp._dbId) {
+        await supabase.from('event_sponsors').update(row).eq('id', sp._dbId);
+      } else {
+        await supabase.from('event_sponsors').insert([row]);
+      }
     }
   }
 
@@ -805,6 +1070,15 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
     if (form.eventType==='hybrid' && !form.virtualLink.trim()) { toast.error('Hybrid events require a virtual meeting link'); setActiveTab('details'); return; }
     if (form.visibility==='groups' && selectedGroupIds.length===0) { toast.error('Please select at least one group'); setActiveTab('settings'); return; }
 
+    // Sponsor validation
+    for (var si = 0; si < sponsors.length; si++) {
+      if (!sponsors[si].name.trim()) {
+        toast.error('Sponsor ' + (si + 1) + ' needs a name');
+        setActiveTab('sponsors');
+        return;
+      }
+    }
+
     if (isPaid) {
       for (var ti=0; ti<ticketTypes.length; ti++) {
         var tt = ticketTypes[ti];
@@ -875,7 +1149,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
         var fileExt = flierFile.name.split('.').pop();
         var fileName = organizationId+'/'+Date.now()+'.'+fileExt;
         var {error:uploadErr} = await supabase.storage.from('event-fliers').upload(fileName, flierFile, {upsert:true});
-        if (uploadErr) { toast.error('File upload failed'); setLoading(false); return; }
+        if (uploadErr) { mascotErrorToast('Flier upload failed.', 'Please try again.'); setLoading(false); return; }
         var {data:urlData} = supabase.storage.from('event-fliers').getPublicUrl(fileName);
         flierUrl = urlData.publicUrl;
       }
@@ -911,7 +1185,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
         is_public:form.visibility==='public'||publishToDiscovery,
         publish_to_discovery:publishToDiscovery, publish_to_website:publishToWebsite,
         is_paid:isPaid, is_featured:isGrowthPlus?isFeatured:false,
-enable_check_in:form.enableCheckIn,
+        enable_check_in:form.enableCheckIn,
         display_price:form.displayPrice!==''?parseFloat(form.displayPrice):null,
         approval_status:approvalStatus, flier_url:flierUrl,
       };
@@ -952,6 +1226,9 @@ enable_check_in:form.enableCheckIn,
         if (grpErr) toast.error('Event created but group link failed.');
       }
 
+      // Sponsors
+      await saveSponsors(savedEvent.id);
+
       if (editingEvent) {
         mascotSuccessToast('"'+savedEvent.title+'" updated!');
       } else if (approvalStatus === 'pending') {
@@ -971,7 +1248,7 @@ enable_check_in:form.enableCheckIn,
       resetAll(); onClose();
     } catch(err) {
       console.error('CreateEvent error:', err);
-      toast.error('Failed to save event: '+err.message);
+      mascotErrorToast('Failed to save event.', err.message);
       setError(err.message);
     } finally { setLoading(false); }
   }
@@ -985,6 +1262,7 @@ enable_check_in:form.enableCheckIn,
     if (tabId==='publishing') return publishToDiscovery||publishToWebsite||isFeatured;
     if (tabId==='settings') return isRecurring||form.visibility!=='members'||form.requireRSVP||form.maxAttendees;
     if (tabId==='cohosts') return coHostInvites.length > 0;
+    if (tabId==='sponsors') return sponsors.length > 0;
     return false;
   }
 
@@ -1024,7 +1302,7 @@ enable_check_in:form.enableCheckIn,
             </button>
             <button
               type="button"
-              onClick={function() { if (form.displayPrice === '') setForm(function(p) { return Object.assign({}, p, { displayPrice: '' }); }); setForm(function(p) { return Object.assign({}, p, { displayPrice: p.displayPrice !== '' ? p.displayPrice : '0' }); }); }}
+              onClick={function() { setForm(function(p) { return Object.assign({}, p, { displayPrice: p.displayPrice !== '' ? p.displayPrice : '0' }); }); }}
               className={'flex-1 py-3 rounded-lg text-sm font-semibold border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (form.displayPrice !== '' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
               aria-pressed={form.displayPrice !== ''}>
               Paid / Donation
@@ -1414,35 +1692,24 @@ enable_check_in:form.enableCheckIn,
   function renderAudience() {
     return (
       <div className="space-y-6">
-
-        {/* Event Types */}
         <div>
           <p className={labelCls}>Event Types</p>
           <p className="text-xs text-gray-500 mb-3">Select all categories that apply.</p>
           <MultiCheckbox options={EVENT_TYPES} selected={eventTypes} onChange={setEventTypes} legend="Event types"/>
         </div>
-
         <div className="border-t border-gray-100"/>
-
-        {/* Audience */}
         <div>
           <p className={labelCls}>Audience</p>
           <p className="text-xs text-gray-500 mb-3">Who is this event intended for?</p>
           <MultiCheckbox options={AUDIENCE_OPTIONS} selected={audience} onChange={setAudience} legend="Audience"/>
         </div>
-
         <div className="border-t border-gray-100"/>
-
-        {/* Languages */}
         <div>
           <p className={labelCls}>Languages Supported</p>
           <p className="text-xs text-gray-500 mb-3">Which languages will this event be conducted in?</p>
           <MultiCheckbox options={LANGUAGE_OPTIONS} selected={languages} onChange={setLanguages} legend="Languages"/>
         </div>
-
         <div className="border-t border-gray-100"/>
-
-        {/* Tags */}
         <div>
           <label htmlFor="event-tags-input" className={labelCls}>Tags &amp; Keywords</label>
           <p className="text-xs text-gray-500 mb-3">
@@ -1453,16 +1720,13 @@ enable_check_in:form.enableCheckIn,
             <p className="text-xs text-gray-400 mt-2">{eventTags.length}/20 tags added</p>
           )}
         </div>
-
         <div className="border-t border-gray-100"/>
-
-        {/* Additional flags */}
         <div>
           <p className={labelCls}>Additional Options</p>
           <div className="space-y-3">
             {[
               {id:'volunteer', checked:volunteerSignup, onChange:function(){ setVolunteerSignup(!volunteerSignup); }, label:'Volunteer Sign-Up Available', desc:'This event needs volunteers.'},
-              {id:'donation',  checked:donationDropoff, onChange:function(){ setDonationDropoff(!donationDropoff); }, label:'Donation Drop-Off',           desc:'Physical donations can be dropped off at this event.'},
+              {id:'donation',  checked:donationDropoff, onChange:function(){ setDonationDropoff(!donationDropoff); }, label:'Donation Drop-Off', desc:'Physical donations can be dropped off at this event.'},
             ].map(function(item){
               return (
                 <div key={item.id} className={'flex items-center justify-between p-4 rounded-xl border '+(item.checked?'border-blue-400 bg-blue-50':'border-gray-200 bg-white')}>
@@ -1473,7 +1737,6 @@ enable_check_in:form.enableCheckIn,
             })}
           </div>
         </div>
-
       </div>
     );
   }
@@ -1507,8 +1770,6 @@ enable_check_in:form.enableCheckIn,
 
     return (
       <div className="space-y-6">
-
-        {/* Paid Event toggle */}
         <div className={'flex items-center justify-between p-4 rounded-xl border ' + (isPaid ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white')}>
           <div>
             <p className="font-semibold text-gray-900 text-sm">Paid Event</p>
@@ -1529,8 +1790,6 @@ enable_check_in:form.enableCheckIn,
 
         {isPaid && (
           <div className="space-y-6">
-
-            {/* Ticket Types */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Ticket Types</p>
@@ -1557,9 +1816,7 @@ enable_check_in:form.enableCheckIn,
                       {nearLimit && (
                         <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
                           <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5"/>
-                          <p className="text-xs text-amber-700 font-medium">
-                            Approaching your plan limit of {planTicketLimit} tickets per event.
-                          </p>
+                          <p className="text-xs text-amber-700 font-medium">Approaching your plan limit of {planTicketLimit} tickets per event.</p>
                         </div>
                       )}
                     </div>
@@ -1575,7 +1832,6 @@ enable_check_in:form.enableCheckIn,
 
             <div className="border-t border-gray-200"/>
 
-            {/* Checkout Fields */}
             <div>
               <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Checkout Fields</p>
               <p className="text-xs text-gray-500 mb-3">Collected from buyers before payment. Toggle required, remove defaults, or add custom fields.</p>
@@ -1594,10 +1850,86 @@ enable_check_in:form.enableCheckIn,
                 Add Custom Field
               </button>
             </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
+  function renderSponsors() {
+    return (
+      <div className="space-y-6">
+        <div>
+          <p className={labelCls}>Event Sponsors</p>
+          <p className="text-xs text-gray-500 mb-4">
+            Sponsors will be displayed on the event detail page. Add a logo, sponsorship level, and website link for each.
+            {!editingEvent && (
+              <span className="block mt-1 text-xs text-amber-600 font-medium">
+                Save the event first, then sponsor logos will be uploaded automatically when you save again.
+              </span>
+            )}
+          </p>
+        </div>
+
+        {sponsorsLoading ? (
+          <div className="space-y-3" aria-label="Loading sponsors">
+            {[1,2].map(function(i){
+              return (
+                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-3" aria-hidden="true">
+                  <div className="h-4 bg-gray-100 rounded animate-pulse w-24"/>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-10 bg-gray-100 rounded-lg animate-pulse"/>
+                    <div className="h-10 bg-gray-100 rounded-lg animate-pulse"/>
+                  </div>
+                  <div className="h-10 bg-gray-100 rounded-lg animate-pulse"/>
+                </div>
+              );
+            })}
+          </div>
+        ) : sponsors.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+            <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center mb-3 shadow-sm" aria-hidden="true">
+              <Icon path="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" className="h-6 w-6 text-gray-400"/>
+            </div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">No sponsors yet</p>
+            <p className="text-xs text-gray-400 mb-4 max-w-xs">Add organizations or businesses that are supporting this event.</p>
+            <button
+              type="button"
+              onClick={addSponsor}
+              className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Add First Sponsor
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4" role="list" aria-label="Event sponsors">
+            {sponsors.map(function(sp, i){
+              return (
+                <div key={sp._key || i} role="listitem">
+                  <SponsorRow sponsor={sp} index={i} onChange={handleSponsorChange} onRemove={removeSponsor}/>
+                </div>
+              );
+            })}
           </div>
         )}
 
+        {sponsors.length > 0 && (
+          <button
+            type="button"
+            onClick={addSponsor}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-500 hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <Icon path="M12 4v16m8-8H4" className="h-4 w-4"/>
+            Add Another Sponsor
+          </button>
+        )}
+
+        {sponsors.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <Icon path="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5"/>
+            <p className="text-xs text-blue-700">
+              Sponsors are displayed on the public event page in the order listed here. Logos are uploaded when you save the event.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1624,8 +1956,6 @@ enable_check_in:form.enableCheckIn,
 
     return (
       <div className="space-y-6">
-
-        {/* Existing co-hosts */}
         <div>
           <p className={labelCls}>Co-Host Organizations</p>
           <p className="text-xs text-gray-500 mb-4">
@@ -1686,11 +2016,8 @@ enable_check_in:form.enableCheckIn,
 
         <div className="border-t border-gray-100"/>
 
-        {/* Invite new org */}
         <div>
           <p className={labelCls}>Invite an Organization</p>
-
-          {/* Optional message */}
           <div className="mb-4">
             <label htmlFor="cohost-message" className="block text-xs font-semibold text-gray-700 mb-1">
               Message <span className="text-gray-400 font-normal">(optional — sent with all invitations below)</span>
@@ -1706,7 +2033,6 @@ enable_check_in:form.enableCheckIn,
             />
           </div>
 
-          {/* Org search */}
           <div>
             <label htmlFor="cohost-search" className="block text-xs font-semibold text-gray-700 mb-1">Search Organizations</label>
             <div className="relative">
@@ -1727,7 +2053,6 @@ enable_check_in:form.enableCheckIn,
               )}
             </div>
 
-            {/* Results */}
             {coHostResults.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm" role="list" aria-label="Organization search results">
                 {coHostResults.map(function(org) {
@@ -1765,7 +2090,6 @@ enable_check_in:form.enableCheckIn,
             )}
           </div>
         </div>
-
       </div>
     );
   }
@@ -1773,14 +2097,11 @@ enable_check_in:form.enableCheckIn,
   function renderPublishing() {
     return (
       <div className="space-y-6">
-
         <div>
           <p className={labelCls}>Where should this event appear?</p>
           <p className="text-xs text-gray-500 mb-4">Choose where this event is visible beyond your member list.</p>
 
           <div className="space-y-3">
-
-            {/* Featured event — Growth+ only */}
             {isGrowthPlus ? (
               <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (isFeatured ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white')}>
                 <div className="flex-1">
@@ -1824,7 +2145,6 @@ enable_check_in:form.enableCheckIn,
               </div>
             )}
 
-            {/* Discover page */}
             <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (!orgIsVerified ? 'border-gray-200 bg-gray-50 opacity-60' : publishToDiscovery ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white')}>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">Discover Events page</p>
@@ -1839,7 +2159,6 @@ enable_check_in:form.enableCheckIn,
               <Toggle checked={publishToDiscovery} onChange={function(){ if (orgIsVerified) setPublishToDiscovery(!publishToDiscovery); }} id="pub-discovery" label="Show on Discover Events page"/>
             </div>
 
-            {/* Org website */}
             <div className={'flex items-start justify-between p-4 rounded-xl border gap-4 ' + (publishToWebsite ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white')}>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">Organization website</p>
@@ -1853,7 +2172,6 @@ enable_check_in:form.enableCheckIn,
               </div>
               <Toggle checked={publishToWebsite} onChange={function(){ setPublishToWebsite(!publishToWebsite); }} id="pub-website" label="Show on organization's website"/>
             </div>
-
           </div>
         </div>
 
@@ -1866,7 +2184,6 @@ enable_check_in:form.enableCheckIn,
             <p className="text-xs text-gray-400 mt-1">This event will only be visible to your members. Toggle the options above to publish it more broadly.</p>
           </div>
         )}
-
       </div>
     );
   }
@@ -1930,6 +2247,7 @@ enable_check_in:form.enableCheckIn,
           {activeTab==='audience'   && renderAudience()}
           {activeTab==='ticketing'  && renderTicketing()}
           {activeTab==='cohosts'    && renderCoHosts()}
+          {activeTab==='sponsors'   && renderSponsors()}
           {activeTab==='publishing' && renderPublishing()}
         </div>
 
