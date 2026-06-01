@@ -128,8 +128,8 @@ function EventsListBlock({ block, primary, borderRadius }) {
     <div>
       {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading || 'Upcoming Events'}</h2>}
       {loading ? (
-        <div className="space-y-3">
-          {[1,2,3].map(function(i) { return <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />; })}
+        <div className="space-y-3" aria-busy="true" aria-label="Loading events">
+          {[1,2,3].map(function(i) { return <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" aria-hidden="true" />; })}
         </div>
       ) : events.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
@@ -175,7 +175,7 @@ function TeamGridBlock({ block, primary, org }) {
   var c = block.content || {};
   var [members, setMembers] = useState([]);
   var [loading, setLoading] = useState(true);
-var mode = 'auto';
+  var mode = 'auto';
 
   useEffect(function() {
     async function fetch() {
@@ -206,8 +206,8 @@ var mode = 'auto';
       {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">{c.heading}</h2>}
       {mode === 'auto' ? (
         loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {[1,2,3,4].map(function(i) { return <div key={i} className="text-center"><div className="w-24 h-24 rounded-full bg-gray-100 animate-pulse mx-auto mb-3" /><div className="h-3 bg-gray-100 rounded animate-pulse w-20 mx-auto mb-1" /><div className="h-2 bg-gray-100 rounded animate-pulse w-16 mx-auto" /></div>; })}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" aria-busy="true" aria-label="Loading team members">
+            {[1,2,3,4].map(function(i) { return <div key={i} className="text-center"><div className="w-24 h-24 rounded-full bg-gray-100 animate-pulse mx-auto mb-3" aria-hidden="true" /><div className="h-3 bg-gray-100 rounded animate-pulse w-20 mx-auto mb-1" aria-hidden="true" /><div className="h-2 bg-gray-100 rounded animate-pulse w-16 mx-auto" aria-hidden="true" /></div>; })}
           </div>
         ) : members.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
@@ -262,7 +262,6 @@ var mode = 'auto';
   );
 }
 
-// ── Main renderer ─────────────────────────────────────────────────────────────
 // ── Smart Programs List Block ─────────────────────────────────────────────────
 function ProgramsListBlock({ block, primary }) {
   var c = block.content || {};
@@ -322,14 +321,14 @@ function ProgramsListBlock({ block, primary }) {
     </div>
   );
 
-var displayItems = programs.concat((c.items || []).filter(function(item) { return item.name; }));
+  var displayItems = programs.concat((c.items || []).filter(function(item) { return item.name; }));
 
   return (
     <div>
       {c.heading && <h2 className="text-3xl font-bold text-gray-900 mb-8">{c.heading}</h2>}
       {loading && mode === 'auto' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[1,2,3,4].map(function(i) { return <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />; })}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" aria-busy="true" aria-label="Loading programs">
+          {[1,2,3,4].map(function(i) { return <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" aria-hidden="true" />; })}
         </div>
       ) : displayItems.length === 0 ? emptyState : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -340,6 +339,23 @@ var displayItems = programs.concat((c.items || []).filter(function(item) { retur
   );
 }
 
+// ── Tier style helper (shared by renderer + editor form) ──────────────────────
+var TIER_STYLES = {
+  'title sponsor':     { bg: '#FEF3C7', color: '#92400E' },
+  'gold':              { bg: '#FEF9C3', color: '#854D0E' },
+  'silver':            { bg: '#F1F5F9', color: '#475569' },
+  'bronze':            { bg: '#FFF7ED', color: '#9A3412' },
+  'community partner': { bg: '#DBEAFE', color: '#1E40AF' },
+  'in-kind supporter': { bg: '#DCFCE7', color: '#166534' },
+};
+
+export function getTierStyle(tier) {
+  if (!tier || !tier.trim()) return null;
+  var key = tier.toLowerCase().trim();
+  return TIER_STYLES[key] || { bg: '#F1F5F9', color: '#475569' };
+}
+
+// ── Main renderer ─────────────────────────────────────────────────────────────
 export function renderBlock(block, primary, secondary, borderRadius, fontFamily, org) {
   var c = block.content || {};
   var type = block.block_type;
@@ -566,7 +582,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     );
   }
 
-// EVENTS LIST
+  // EVENTS LIST
   if (type === 'events_list') {
     return <EventsListBlock key={key} block={block} primary={primary} borderRadius={borderRadius} />;
   }
@@ -576,7 +592,7 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
     return <ProgramsListBlock key={key} block={block} primary={primary} />;
   }
 
-// TEAM GRID
+  // TEAM GRID
   if (type === 'team_grid') {
     return <TeamGridBlock key={key} block={block} primary={primary} org={org} />;
   }
@@ -652,17 +668,71 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
 
   // PARTNER LOGOS
   if (type === 'partner_logos') {
+    var partners = c.partners || [];
+    // Hidden entirely if no partners added
+    if (partners.length === 0) return null;
+
     return (
-      <div key={key} className="text-center">
-        {c.heading && <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-8">{c.heading}</p>}
-        <div className="flex flex-wrap items-center justify-center gap-8">
-          {(c.partners || []).map(function(partner, i) {
-            var inner = partner.logo_url
-              ? <img src={partner.logo_url} alt={partner.logo_alt || (partner.name ? partner.name + ' logo' : 'Partner logo')} className="h-12 object-contain grayscale hover:grayscale-0 transition-all" />
-              : <span className="text-gray-400 font-semibold text-sm">{partner.name}</span>;
-            return partner.url
-              ? <a key={i} href={partner.url} target="_blank" rel="noopener noreferrer" aria-label={partner.name}>{inner}</a>
-              : <div key={i}>{inner}</div>;
+      <div key={key}>
+        {/* Divider treatment heading */}
+        {c.heading && (
+          <div className="flex items-center gap-4 mb-10" aria-hidden="true">
+            <div className="flex-1 h-px bg-slate-200" />
+            <p className="text-xs font-bold uppercase tracking-[4px] text-slate-400 whitespace-nowrap flex-shrink-0 px-2">
+              {c.heading}
+            </p>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+        )}
+        {c.subtext && (
+          <p className="text-sm text-center text-slate-500 mb-8 -mt-4">{c.subtext}</p>
+        )}
+        <div className="flex flex-wrap items-end justify-center gap-10" role="list" aria-label={c.heading || 'Partners and sponsors'}>
+          {partners.map(function(partner, i) {
+            var ts = getTierStyle(partner.tier);
+            var logoNode = partner.logo_url ? (
+              <img
+                src={partner.logo_url}
+                alt={partner.logo_alt || (partner.name ? partner.name + ' logo' : 'Sponsor logo')}
+                className="max-h-12 max-w-full object-contain transition-opacity group-hover:opacity-70"
+                style={{ mixBlendMode: 'multiply' }}
+              />
+            ) : partner.name ? (
+              <div className="h-12 px-4 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-sm font-bold text-slate-500">{partner.name}</span>
+              </div>
+            ) : null;
+
+            var inner = (
+              <div className="flex flex-col items-center gap-2 group" role="listitem">
+                <div className="w-28 flex items-center justify-center">
+                  {logoNode}
+                </div>
+                {ts && (
+                  <span
+                    className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                    style={{ background: ts.bg, color: ts.color }}
+                  >
+                    {partner.tier}
+                  </span>
+                )}
+              </div>
+            );
+
+            return partner.url ? (
+              <a
+                key={i}
+                href={partner.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={partner.name + (partner.tier ? ' — ' + partner.tier : '') + ' (opens in new tab)'}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl"
+              >
+                {inner}
+              </a>
+            ) : (
+              <div key={i}>{inner}</div>
+            );
           })}
         </div>
       </div>
@@ -693,12 +763,8 @@ export function renderBlock(block, primary, secondary, borderRadius, fontFamily,
                     style={{ maxHeight: '240px' }}
                   />
                 )}
-                {col.heading && (
-                  <h3 className="text-xl font-bold text-gray-900">{col.heading}</h3>
-                )}
-                {col.body && (
-                  <p className="text-gray-600 leading-relaxed text-sm">{col.body}</p>
-                )}
+                {col.heading && <h3 className="text-xl font-bold text-gray-900">{col.heading}</h3>}
+                {col.body && <p className="text-gray-600 leading-relaxed text-sm">{col.body}</p>}
                 {col.button_label && (
                   <a
                     href={col.button_url || '#'}

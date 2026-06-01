@@ -46,6 +46,21 @@ var inputCls = 'w-full px-3 py-2.5 bg-white border border-gray-300 text-gray-900
 var labelCls = 'block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide';
 
 // ── Block type definitions ────────────────────────────────────────────────────
+var TIER_STYLES_LOCAL = {
+  'title sponsor':     { bg: '#FEF3C7', color: '#92400E' },
+  'gold':              { bg: '#FEF9C3', color: '#854D0E' },
+  'silver':            { bg: '#F1F5F9', color: '#475569' },
+  'bronze':            { bg: '#FFF7ED', color: '#9A3412' },
+  'community partner': { bg: '#DBEAFE', color: '#1E40AF' },
+  'in-kind supporter': { bg: '#DCFCE7', color: '#166534' },
+};
+
+function getTierStyle(tier) {
+  if (!tier || !tier.trim()) return null;
+  var key = tier.toLowerCase().trim();
+  return TIER_STYLES_LOCAL[key] || { bg: '#F1F5F9', color: '#475569' };
+}
+
 var BLOCK_CATEGORIES = [
   {
     label: 'Core',
@@ -1031,47 +1046,173 @@ function BlockForm({ block, onChange, organizationId }) {
   );
 
   // PARTNER LOGOS
-  if (type === 'partner_logos') return (
-    <div className="space-y-4">
-      <div>
-        <label htmlFor={'block-heading-' + block.id} className={labelCls}>Section Heading</label>
-        <input id={'block-heading-' + block.id} type="text" value={c.heading || ''} onChange={function(e) { set('heading', e.target.value); }} placeholder="Our Partners" className={inputCls} />
-      </div>
-      <div>
-        <p className={labelCls}>Partners</p>
-        <div className="space-y-3">
-          {(c.partners || []).map(function(partner, i) {
-            return (
-              <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-500">Partner {i + 1}</span>
-                  <button onClick={function() { removeItem('partners', i); }} aria-label={'Remove partner ' + (i + 1)} className="p-1 text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors">
-                    <Icon path="M6 18L18 6M6 6l12 12" className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={partner.name || ''} onChange={function(e) { setNested('partners', i, 'name', e.target.value); }} placeholder="Organization Name" className={inputCls} />
-                  <input type="url" value={partner.url || ''} onChange={function(e) { setNested('partners', i, 'url', e.target.value); }} placeholder="https://partner.org" className={inputCls} />
-                </div>
-                <ImageUploader value={partner.logo_url || ''} onChange={function(v) { setNested('partners', i, 'logo_url', v); }} organizationId={organizationId} label="Logo" fieldKey={'partner-' + block.id + '-' + i} />
-                {partner.logo_url && (
-                <div>
-                  <label className={labelCls}>Logo Alt Text <span className="text-blue-500 font-normal normal-case tracking-normal">(Accessibility)</span></label>
-                  <input type="text" value={partner.logo_alt || ''} onChange={function(e) { setNested('partners', i, 'logo_alt', e.target.value); }} placeholder={partner.name ? partner.name + ' logo' : 'e.g. United Way logo'} className={inputCls} maxLength={200} />
-                  <p className="text-xs text-gray-400 mt-1">Describe the logo for screen readers.</p>
-                </div>
-              )}
-              </div>
-            );
-          })}
+  if (type === 'partner_logos') {
+    var SPONSOR_TIER_SUGGESTIONS = [
+      'Title Sponsor', 'Gold', 'Silver', 'Bronze', 'Community Partner', 'In-Kind Supporter',
+    ];
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <label htmlFor={'block-heading-' + block.id} className={labelCls}>Section Heading</label>
+          <input
+            id={'block-heading-' + block.id}
+            type="text"
+            value={c.heading || ''}
+            onChange={function(e) { set('heading', e.target.value); }}
+            placeholder="Our Partners"
+            className={inputCls}
+          />
+          <p className="text-xs text-gray-400 mt-1">Displayed as a centered divider label on the public page.</p>
         </div>
-        <button onClick={function() { addItem('partners', { name: '', url: '', logo_url: '' }); }}
-          className="mt-2 w-full py-2 text-xs font-semibold text-blue-600 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-          + Add Partner
-        </button>
+
+        <div>
+          <label htmlFor={'block-subtext-' + block.id} className={labelCls}>Subtext (optional)</label>
+          <input
+            id={'block-subtext-' + block.id}
+            type="text"
+            value={c.subtext || ''}
+            onChange={function(e) { set('subtext', e.target.value); }}
+            placeholder="e.g. Thank you to our generous sponsors"
+            className={inputCls}
+          />
+        </div>
+
+        <div>
+          <p className={labelCls}>Partners & Sponsors</p>
+          {(c.partners || []).length === 0 && (
+            <div className="text-center py-8 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 mb-3">
+              <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center mx-auto mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-500 mb-0.5">No partners yet</p>
+              <p className="text-xs text-gray-400">Add sponsors, funders, or community partners below.</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {(c.partners || []).map(function(partner, i) {
+              var tierStyle = getTierStyle(partner.tier);
+              return (
+                <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-500">Partner {i + 1}</span>
+                    <button
+                      onClick={function() { removeItem('partners', i); }}
+                      aria-label={'Remove partner ' + (i + 1)}
+                      className="p-1 text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 rounded transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Name + URL */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Name <span className="text-red-400" aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={partner.name || ''}
+                        onChange={function(e) { setNested('partners', i, 'name', e.target.value); }}
+                        placeholder="Organization Name"
+                        className={inputCls}
+                        aria-label={'Partner ' + (i + 1) + ' name'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Website URL</label>
+                      <input
+                        type="url"
+                        value={partner.url || ''}
+                        onChange={function(e) { setNested('partners', i, 'url', e.target.value); }}
+                        placeholder="https://partner.org"
+                        className={inputCls}
+                        aria-label={'Partner ' + (i + 1) + ' website'}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tier */}
+                  <div className="relative">
+                    <label className="block text-xs text-gray-400 mb-1">Tier (optional)</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={partner.tier || ''}
+                          onChange={function(e) { setNested('partners', i, 'tier', e.target.value); }}
+                          placeholder="e.g. Gold, Title Sponsor..."
+                          className={inputCls}
+                          list={'tier-suggestions-' + block.id + '-' + i}
+                          aria-label={'Partner ' + (i + 1) + ' tier'}
+                        />
+                        <datalist id={'tier-suggestions-' + block.id + '-' + i}>
+                          {SPONSOR_TIER_SUGGESTIONS.map(function(s) {
+                            return <option key={s} value={s} />;
+                          })}
+                        </datalist>
+                      </div>
+                      {tierStyle && (
+                        <span
+                          className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
+                          style={{ background: tierStyle.bg, color: tierStyle.color }}
+                          aria-label={'Tier preview: ' + partner.tier}
+                        >
+                          {partner.tier}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Logo upload */}
+                  <ImageUploader
+                    value={partner.logo_url || ''}
+                    onChange={function(v) { setNested('partners', i, 'logo_url', v); }}
+                    organizationId={organizationId}
+                    label="Logo"
+                    fieldKey={'partner-' + block.id + '-' + i}
+                  />
+
+                  {/* Alt text — only shown when logo is present */}
+                  {partner.logo_url && (
+                    <div>
+                      <label className={labelCls}>
+                        Logo Alt Text
+                        <span className="text-blue-500 font-normal normal-case tracking-normal ml-1">(Accessibility)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={partner.logo_alt || ''}
+                        onChange={function(e) { setNested('partners', i, 'logo_alt', e.target.value); }}
+                        placeholder={partner.name ? partner.name + ' logo' : 'e.g. United Way logo'}
+                        className={inputCls}
+                        maxLength={200}
+                        aria-label={'Partner ' + (i + 1) + ' logo alt text'}
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Describe the logo for screen readers.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={function() { addItem('partners', { name: '', url: '', tier: '', logo_url: '', logo_alt: '' }); }}
+            className="mt-2 w-full py-2 text-xs font-semibold text-blue-600 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            + Add Partner
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 // COLUMN CONTAINER
 if (type === 'column_container') return (
   <div className="space-y-4">

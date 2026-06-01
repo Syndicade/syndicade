@@ -231,7 +231,6 @@ function SortablePageItem({ page, isExpanded, onToggleExpand, navCount, onNavTog
   return (
     <div ref={sortable.setNodeRef} style={style} role="listitem">
       <div className={'rounded-lg border transition-all bg-white ' + cardBorder}>
-        {/* Row 1: drag handle + title + expand */}
         <div className="flex items-center gap-1.5 px-2 pt-2 pb-0.5">
           <button
             {...sortable.attributes}
@@ -261,11 +260,8 @@ function SortablePageItem({ page, isExpanded, onToggleExpand, navCount, onNavTog
           </button>
         </div>
 
-        {/* Row 2: slug + toggles + actions */}
         <div className="flex items-center gap-2 px-2 pb-2 pl-6">
           <p className={'text-[10px] w-16 truncate flex-shrink-0 ' + TTER}>/{page.page_key}</p>
-
-          {/* Nav toggle */}
           <div className={'flex items-center gap-1 flex-shrink-0 relative ' + (navAtLimit ? 'group' : '')}>
             <span className={'text-[10px] ' + TTER}>Nav</span>
             <Toggle
@@ -280,8 +276,6 @@ function SortablePageItem({ page, isExpanded, onToggleExpand, navCount, onNavTog
               </div>
             )}
           </div>
-
-          {/* On toggle */}
           <div className={'flex items-center gap-1 flex-shrink-0 relative ' + (planDisabled ? 'group' : '')}>
             <span className={'text-[10px] ' + TTER}>On</span>
             <Toggle
@@ -296,8 +290,6 @@ function SortablePageItem({ page, isExpanded, onToggleExpand, navCount, onNavTog
               </div>
             )}
           </div>
-
-          {/* Actions */}
           <div className="flex items-center flex-shrink-0">
             <button onClick={onArchive} aria-label={'Archive ' + page.title} className="p-1 focus:outline-none focus:ring-1 focus:ring-amber-500 rounded transition-colors text-slate-300 hover:text-amber-500">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -333,12 +325,7 @@ function SortableSectionItem({ section, isEditing, editingLabel, onStartEdit, on
   var cardBorder = sortable.isDragging ? 'shadow-xl border-blue-300' : 'border-slate-200';
 
   return (
-    <div
-      ref={sortable.setNodeRef}
-      style={style}
-      role="listitem"
-      className={'rounded-xl border-2 transition-all bg-white ' + cardBorder + (!section.visible ? ' opacity-60' : '')}
-    >
+    <div ref={sortable.setNodeRef} style={style} role="listitem" className={'rounded-xl border-2 transition-all bg-white ' + cardBorder + (!section.visible ? ' opacity-60' : '')}>
       <div className="flex items-center gap-3 p-3">
         <button
           {...sortable.attributes}
@@ -350,7 +337,6 @@ function SortableSectionItem({ section, isEditing, editingLabel, onStartEdit, on
             <path d="M8 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 12a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM8 18a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm8 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/>
           </svg>
         </button>
-
         <div className="flex-1 min-w-0">
           {isEditing ? (
             <div className="flex items-center gap-2">
@@ -382,18 +368,12 @@ function SortableSectionItem({ section, isEditing, editingLabel, onStartEdit, on
             </div>
           )}
         </div>
-
         {!isEditing && (
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button onClick={onStartEdit} aria-label={'Rename ' + section.label} className="p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg transition-colors text-slate-300 hover:text-blue-500">
               <Icon path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" className="h-3.5 w-3.5" />
             </button>
-            <Toggle
-              checked={section.visible}
-              onChange={onToggleVisible}
-              label={(section.visible ? 'Hide ' : 'Show ') + section.label}
-              id={'sv-' + section.id}
-            />
+            <Toggle checked={section.visible} onChange={onToggleVisible} label={(section.visible ? 'Hide ' : 'Show ') + section.label} id={'sv-' + section.id} />
             <button onClick={onArchive} aria-label={'Archive ' + section.label} className="p-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg transition-colors text-slate-300 hover:text-amber-500">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
@@ -419,22 +399,10 @@ function DeletePageModal({ page, onConfirm, onCancel }) {
           <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-8 w-8 text-red-400" />
         </div>
         <h2 id="dp-title" className={'text-xl font-bold mb-2 ' + TPRI}>Delete "{page.title}"?</h2>
-        <p className={'text-sm mb-8 ' + TMUT}>
-          This will be permanently deleted and <span className="font-semibold text-red-500">cannot be recovered</span>.
-        </p>
+        <p className={'text-sm mb-8 ' + TMUT}>This will be permanently deleted and <span className="font-semibold text-red-500">cannot be recovered</span>.</p>
         <div className="flex gap-3 w-full">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors"
-          >
-            No, Keep Page
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-          >
-            Yes, Delete Forever
-          </button>
+          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">No, Keep Page</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">Yes, Delete Forever</button>
         </div>
       </div>
     </div>
@@ -451,23 +419,11 @@ function DeleteSectionModal({ section, onConfirm, onCancel }) {
           <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-8 w-8 text-red-400" />
         </div>
         <h2 id="ds-title" className={'text-xl font-bold mb-2 ' + TPRI}>Delete "{section.label}"?</h2>
-        <p className={'text-sm mb-2 ' + TMUT}>
-          This section will be permanently removed and <span className="font-semibold text-red-500">cannot be restored</span>.
-        </p>
+        <p className={'text-sm mb-2 ' + TMUT}>This section will be permanently removed and <span className="font-semibold text-red-500">cannot be restored</span>.</p>
         <p className={'text-xs mb-8 ' + TTER}>Tip: Use Archive instead if you might want it back later.</p>
         <div className="flex gap-3 w-full">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors"
-          >
-            No, Keep Section
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-          >
-            Yes, Delete
-          </button>
+          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">No, Keep Section</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">Yes, Delete</button>
         </div>
       </div>
     </div>
@@ -485,11 +441,7 @@ function LayoutModal({ currentTemplate, onSelect, onClose }) {
             <p className={'text-xs font-bold uppercase tracking-[4px] mb-0.5 ' + TYEL}>Layout</p>
             <h2 id="lm-title" className={'text-xl font-bold ' + TPRI}>Change Layout</h2>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-          >
+          <button onClick={onClose} aria-label="Close" className="p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-400 hover:text-slate-600 hover:bg-slate-100">
             <Icon path="M6 18L18 6M6 6l12 12" className="h-5 w-5" />
           </button>
         </div>
@@ -498,15 +450,9 @@ function LayoutModal({ currentTemplate, onSelect, onClose }) {
             {TEMPLATES.map(function(t) {
               var isSel = currentTemplate === t.id;
               return (
-                <button
-                  key={t.id}
-                  onClick={function() { onSelect(t.id); }}
-                  className={'rounded-xl border-2 p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '
-                    + (isSel ? 'border-blue-500 bg-slate-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300')}
-                  role="radio"
-                  aria-checked={isSel}
-                  aria-label={'Select ' + t.name + ' template'}
-                >
+                <button key={t.id} onClick={function() { onSelect(t.id); }}
+                  className={'rounded-xl border-2 p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isSel ? 'border-blue-500 bg-slate-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300')}
+                  role="radio" aria-checked={isSel} aria-label={'Select ' + t.name + ' template'}>
                   <div className="aspect-video bg-white rounded-lg overflow-hidden mb-3 border border-slate-200">{t.preview}</div>
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -544,7 +490,7 @@ export default function OrgPageEditor() {
   var isStarterPlan = plan === 'starter';
   var additionalPageLimit = plan === 'pro' ? null : plan === 'growth' ? 6 : 0;
 
-  // State
+  // ─── State ─────────────────────────────────────────────────────────────────
   var [org, setOrg] = useState(null);
   var [loading, setLoading] = useState(true);
   var [saving, setSaving] = useState(false);
@@ -568,6 +514,7 @@ export default function OrgPageEditor() {
   var [showArchivedSections, setShowArchivedSections] = useState(false);
   var [expandedPageId, setExpandedPageId] = useState(null);
   var [footerOpen, setFooterOpen] = useState(false);
+
 
   var [form, setForm] = useState({
     name: '', tagline: '', description: '', contact_email: '', contact_phone: '',
@@ -608,7 +555,8 @@ export default function OrgPageEditor() {
 
   useEffect(function() { fetchOrg(); }, [organizationId]);
 
-  // ─── HELPERS ───────────────────────────────────────────────────────────────
+
+  // ─── Page helpers ──────────────────────────────────────────────────────────
   async function savePageField(pageId, fields) {
     try {
       var r = await supabase.from('org_site_pages')
@@ -642,25 +590,6 @@ export default function OrgPageEditor() {
     );
   }
 
-  // ─── PAGE MANAGEMENT ───────────────────────────────────────────────────────
-  async function handlePageDragEnd(ev) {
-    var active = ev.active, over = ev.over;
-    if (!over || active.id === over.id) return;
-    var aps = sitePages.filter(function(p) { return p.is_enabled && p.page_key !== 'home'; });
-    var oi = aps.findIndex(function(p) { return p.id === active.id; });
-    var ni = aps.findIndex(function(p) { return p.id === over.id; });
-    if (oi === -1 || ni === -1) return;
-    var next = aps.slice();
-    var mv = next.splice(oi, 1)[0];
-    next.splice(ni, 0, mv);
-    next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
-    var dis = sitePages.filter(function(p) { return !p.is_enabled; });
-    var merged = next.concat(dis);
-    setSitePages(merged);
-    await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
-    await saveNavInstant(merged);
-  }
-
   function handlePageNavToggle(page) {
     var nc = sitePages.filter(function(p) { return p.is_visible_in_nav && p.is_enabled; }).length;
     if (!page.is_visible_in_nav && nc >= NAV_LIMIT) { toast.error('Nav limit reached.'); return; }
@@ -686,6 +615,24 @@ export default function OrgPageEditor() {
     saveNavInstant(updated);
   }
 
+  async function handlePageDragEnd(ev) {
+    var active = ev.active, over = ev.over;
+    if (!over || active.id === over.id) return;
+    var aps = sitePages.filter(function(p) { return p.is_enabled && p.page_key !== 'home'; });
+    var oi = aps.findIndex(function(p) { return p.id === active.id; });
+    var ni = aps.findIndex(function(p) { return p.id === over.id; });
+    if (oi === -1 || ni === -1) return;
+    var next = aps.slice();
+    var mv = next.splice(oi, 1)[0];
+    next.splice(ni, 0, mv);
+    next = next.map(function(p, i) { return Object.assign({}, p, { sort_order: i }); });
+    var dis = sitePages.filter(function(p) { return !p.is_enabled; });
+    var merged = next.concat(dis);
+    setSitePages(merged);
+    await Promise.all(next.map(function(p) { return savePageField(p.id, { sort_order: p.sort_order }); }));
+    await saveNavInstant(merged);
+  }
+
   function handlePageTitleChange(pageId, title) {
     var nk = slugify(title);
     var nl = title.slice(0, 20);
@@ -704,7 +651,7 @@ export default function OrgPageEditor() {
     savePageDebounced(pageId, { nav_label: label });
   }
 
-  // ─── SECTION HELPERS ───────────────────────────────────────────────────────
+  // ─── Section helpers ───────────────────────────────────────────────────────
   function getActiveSections() {
     return sections.filter(function(s) { return !s.archived; }).sort(function(a, b) { return a.order - b.order; });
   }
@@ -742,7 +689,7 @@ export default function OrgPageEditor() {
     mascotSuccessToast('Section deleted');
   }
 
-  // ─── FETCH ─────────────────────────────────────────────────────────────────
+  // ─── Fetch ─────────────────────────────────────────────────────────────────
   async function fetchOrg() {
     try {
       var ur = await supabase.auth.getUser();
@@ -822,13 +769,8 @@ export default function OrgPageEditor() {
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return; }
     if (!file.type.startsWith('image/')) { toast.error('File must be an image'); return; }
     var storageCheck = await getStorageUsage(organizationId);
-    if (storageCheck && storageCheck.isBlocked) {
-      toast.error('Storage limit reached. Upgrade your plan to upload images.');
-      return;
-    }
-    if (storageCheck && storageCheck.isWarning) {
-      toast('Storage is above 90% — consider upgrading soon.', { icon: null });
-    }
+    if (storageCheck && storageCheck.isBlocked) { toast.error('Storage limit reached. Upgrade your plan to upload images.'); return; }
+    if (storageCheck && storageCheck.isWarning) { toast('Storage is above 90% — consider upgrading soon.', { icon: null }); }
     setUploadingLogo(true);
     try {
       var ext = file.name.split('.').pop();
@@ -887,7 +829,7 @@ export default function OrgPageEditor() {
     setForm(function(prev) { return Object.assign({}, prev, { publish_channels: Object.assign({}, prev.publish_channels, { [k]: v }) }); });
   }
 
-  // ─── DERIVED ───────────────────────────────────────────────────────────────
+  // ─── Derived ───────────────────────────────────────────────────────────────
   var cps = sectionsToLegacy(sections);
   var pOrg = {
     id: organizationId, name: form.name || 'Your Organization', tagline: form.tagline,
@@ -934,8 +876,7 @@ export default function OrgPageEditor() {
           <div className={'flex items-center justify-between p-5 rounded-xl border-2 transition-all '
             + (form.is_public ? 'border-green-500 bg-green-50' : 'border-slate-200 bg-slate-50')}>
             <div className="flex items-center gap-4">
-              <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 '
-                + (form.is_public ? 'bg-green-100' : BGELE)} aria-hidden="true">
+              <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ' + (form.is_public ? 'bg-green-100' : BGELE)} aria-hidden="true">
                 <Icon
                   path={form.is_public
                     ? 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064'
@@ -1140,11 +1081,11 @@ export default function OrgPageEditor() {
             <h2 className={'text-xl font-bold mb-1 ' + TPRI}>Social Media Links</h2>
           </div>
           {[
-            { k: 'facebook',  l: 'Facebook',  p: 'https://facebook.com/yourorg'   },
-            { k: 'instagram', l: 'Instagram', p: 'https://instagram.com/yourorg'  },
-            { k: 'twitter',   l: 'X / Twitter', p: 'https://twitter.com/yourorg' },
-            { k: 'linkedin',  l: 'LinkedIn',  p: 'https://linkedin.com/company/yourorg' },
-            { k: 'youtube',   l: 'YouTube',   p: 'https://youtube.com/@yourorg'   },
+            { k: 'facebook',  l: 'Facebook',    p: 'https://facebook.com/yourorg'   },
+            { k: 'instagram', l: 'Instagram',   p: 'https://instagram.com/yourorg'  },
+            { k: 'twitter',   l: 'X / Twitter', p: 'https://twitter.com/yourorg'    },
+            { k: 'linkedin',  l: 'LinkedIn',    p: 'https://linkedin.com/company/yourorg' },
+            { k: 'youtube',   l: 'YouTube',     p: 'https://youtube.com/@yourorg'   },
           ].map(function(it) {
             return (
               <div key={it.k}>
@@ -1175,9 +1116,7 @@ export default function OrgPageEditor() {
                   onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { template: t.id }); }); }}
                   className={'rounded-xl border-2 p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '
                     + (isSel ? 'border-blue-500 bg-slate-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300')}
-                  role="radio"
-                  aria-checked={isSel}
-                  aria-label={'Select ' + t.name + ' template: ' + t.description}
+                  role="radio" aria-checked={isSel} aria-label={'Select ' + t.name + ' template: ' + t.description}
                 >
                   <div className="aspect-video bg-white rounded-lg overflow-hidden mb-3 border border-slate-200">{t.preview}</div>
                   <div className="flex items-start justify-between gap-2">
@@ -1201,38 +1140,25 @@ export default function OrgPageEditor() {
               var iv = /^#([0-9A-Fa-f]{3}){1,2}$/.test(val);
               return (
                 <div key={i} className="flex items-center gap-4">
-                  <div
-                    className="w-12 h-12 rounded-lg border-2 border-slate-200 flex-shrink-0"
-                    style={{ background: iv ? val : '#f1f5f9' }}
-                    aria-hidden="true"
-                  />
+                  <div className="w-12 h-12 rounded-lg border-2 border-slate-200 flex-shrink-0" style={{ background: iv ? val : '#f1f5f9' }} aria-hidden="true" />
                   <div className="flex-1">
                     <label htmlFor={'c-' + i} className={LABEL_CLS}>{'Brand Color ' + (i + 1) + (i === 0 ? ' (Primary)' : ' (Optional)')}</label>
                     <div className="flex items-center gap-2">
-                      <input
-                        id={'c-' + i}
-                        type="text"
-                        value={val}
+                      <input id={'c-' + i} type="text" value={val}
                         onChange={function(e) {
                           var nc = (form.theme.customColors || ['#3B82F6', '', '']).slice();
                           nc[i] = e.target.value;
                           setTV('customColors', nc);
                         }}
-                        placeholder="#3B82F6"
-                        maxLength={7}
-                        className={INPUT_CLS + ' font-mono uppercase'}
-                      />
-                      <input
-                        type="color"
-                        value={iv ? val : '#3B82F6'}
+                        placeholder="#3B82F6" maxLength={7} className={INPUT_CLS + ' font-mono uppercase'} />
+                      <input type="color" value={iv ? val : '#3B82F6'}
                         onChange={function(e) {
                           var nc = (form.theme.customColors || ['#3B82F6', '', '']).slice();
                           nc[i] = e.target.value.toUpperCase();
                           setTV('customColors', nc);
                         }}
                         className="w-12 h-12 rounded-lg border border-slate-200 cursor-pointer flex-shrink-0 p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={'Color picker ' + (i + 1)}
-                      />
+                        aria-label={'Color picker ' + (i + 1)} />
                     </div>
                   </div>
                 </div>
@@ -1246,14 +1172,10 @@ export default function OrgPageEditor() {
             {FONT_PAIRINGS.map(function(fp) {
               var isSel = form.theme.fontPairing === fp.id;
               return (
-                <button
-                  key={fp.id}
-                  onClick={function() { setTV('fontPairing', fp.id); }}
+                <button key={fp.id} onClick={function() { setTV('fontPairing', fp.id); }}
                   className={'w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 text-left '
                     + (isSel ? 'border-blue-500 bg-slate-100' : 'border-slate-200 bg-white hover:border-blue-300')}
-                  role="radio"
-                  aria-checked={isSel}
-                >
+                  role="radio" aria-checked={isSel}>
                   <div>
                     <p className={'font-semibold text-sm ' + TPRI}>{fp.label}</p>
                     <p className={'text-xs mt-0.5 ' + TMUT}>{fp.description}</p>
@@ -1271,15 +1193,10 @@ export default function OrgPageEditor() {
             {BUTTON_STYLES.map(function(bs) {
               var isSel = form.theme.buttonStyle === bs.id;
               return (
-                <button
-                  key={bs.id}
-                  onClick={function() { setTV('buttonStyle', bs.id); }}
+                <button key={bs.id} onClick={function() { setTV('buttonStyle', bs.id); }}
                   className={'p-4 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 text-center '
                     + (isSel ? 'border-blue-500 bg-slate-100' : 'border-slate-200 bg-white hover:border-blue-300')}
-                  role="radio"
-                  aria-checked={isSel}
-                  aria-label={'Button style: ' + bs.label}
-                >
+                  role="radio" aria-checked={isSel} aria-label={'Button style: ' + bs.label}>
                   <div className="flex justify-center mb-3">
                     <span className={'px-4 py-1.5 bg-blue-500 text-white text-xs font-bold ' + bs.previewClass} aria-hidden="true">Button</span>
                   </div>
@@ -1302,7 +1219,6 @@ export default function OrgPageEditor() {
     return (
       <div className="space-y-6">
         <div className={'rounded-xl border shadow-sm p-6 ' + BGCARD + ' ' + BORDER}>
-          {/* Header */}
           <div className="flex items-center justify-between gap-3 mb-2">
             <div>
               <p className={'text-xs font-bold uppercase tracking-[4px] mb-0.5 ' + TYEL}>Pages</p>
@@ -1319,7 +1235,6 @@ export default function OrgPageEditor() {
           </div>
           <p className={'text-xs mb-4 ' + TMUT}>Expand any page row to edit its content blocks. Drag rows to reorder.</p>
 
-          {/* Status badges */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {!isStarterPlan && (function() {
               return (
@@ -1398,8 +1313,7 @@ export default function OrgPageEditor() {
                                   setSections(function(prev) {
                                     return prev.map(function(s) { return s.id === section.id ? Object.assign({}, s, { label: editingSectionLabel.trim() }) : s; });
                                   });
-                                  setEditingSectionId(null);
-                                  setEditingSectionLabel('');
+                                  setEditingSectionId(null); setEditingSectionLabel('');
                                   mascotSuccessToast('Section renamed');
                                 }}
                                 onCancelEdit={function() { setEditingSectionId(null); setEditingSectionLabel(''); }}
@@ -1424,61 +1338,43 @@ export default function OrgPageEditor() {
                     </div>
                   )}
 
-                  {/* Add custom section */}
                   {showAddSection ? (
                     <div className="flex items-center gap-2 mt-3 p-3 rounded-xl border border-slate-200 bg-white">
                       <input
-                        type="text"
-                        value={newSectionLabel}
+                        type="text" value={newSectionLabel}
                         onChange={function(e) { setNewSectionLabel(e.target.value); }}
                         onKeyDown={function(e) {
                           if (e.key === 'Enter' && newSectionLabel.trim()) {
-                            setSections(function(prev) {
-                              return prev.concat([{ id: 'c-' + Date.now(), key: 'c-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: getActiveSections().length, isCustom: true }]);
-                            });
+                            setSections(function(prev) { return prev.concat([{ id: 'c-' + Date.now(), key: 'c-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: getActiveSections().length, isCustom: true }]); });
                             setNewSectionLabel(''); setShowAddSection(false); mascotSuccessToast('Section added');
                           }
                           if (e.key === 'Escape') { setShowAddSection(false); setNewSectionLabel(''); }
                         }}
                         placeholder="Section name"
                         className="flex-1 px-3 py-2 border-2 border-blue-500 rounded-lg text-sm focus:outline-none text-[#0E1523]"
-                        autoFocus
-                        maxLength={50}
-                        aria-label="New section name"
+                        autoFocus maxLength={50} aria-label="New section name"
                       />
-                      <button
-                        onClick={function() {
-                          if (!newSectionLabel.trim()) return;
-                          setSections(function(prev) {
-                            return prev.concat([{ id: 'c-' + Date.now(), key: 'c-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: getActiveSections().length, isCustom: true }]);
-                          });
-                          setNewSectionLabel(''); setShowAddSection(false); mascotSuccessToast('Section added');
-                        }}
-                        className="px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        Add
-                      </button>
+                      <button onClick={function() {
+                        if (!newSectionLabel.trim()) return;
+                        setSections(function(prev) { return prev.concat([{ id: 'c-' + Date.now(), key: 'c-' + Date.now(), label: newSectionLabel.trim(), visible: true, archived: false, order: getActiveSections().length, isCustom: true }]); });
+                        setNewSectionLabel(''); setShowAddSection(false); mascotSuccessToast('Section added');
+                      }} className="px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Add</button>
                       <button onClick={function() { setShowAddSection(false); setNewSectionLabel(''); }} aria-label="Cancel" className={'p-2 focus:outline-none focus:ring-2 focus:ring-slate-400 rounded-lg ' + TTER}>
                         <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={function() { setShowAddSection(true); }}
-                      className={'w-full flex items-center justify-center gap-2 py-3 mt-3 rounded-xl border-2 border-dashed text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-300 text-slate-500 hover:text-blue-500 hover:border-blue-400'}
-                    >
+                    <button onClick={function() { setShowAddSection(true); }}
+                      className={'w-full flex items-center justify-center gap-2 py-3 mt-3 rounded-xl border-2 border-dashed text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 border-slate-300 text-slate-500 hover:text-blue-500 hover:border-blue-400'}>
                       <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />Add Custom Section
                     </button>
                   )}
 
-                  {/* Archived sections */}
                   {archivedSecs.length > 0 && (
                     <div className="mt-4 border-t border-slate-100 pt-4">
-                      <button
-                        onClick={function() { setShowArchivedSections(!showArchivedSections); }}
+                      <button onClick={function() { setShowArchivedSections(!showArchivedSections); }}
                         className={'flex items-center gap-2 text-xs font-bold uppercase tracking-[3px] focus:outline-none focus:ring-2 focus:ring-slate-400 rounded w-full text-left ' + TTER}
-                        aria-expanded={showArchivedSections}
-                      >
+                        aria-expanded={showArchivedSections}>
                         <span>Archived Sections ({archivedSecs.length})</span>
                         <Icon path={showArchivedSections ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} className={'h-4 w-4 flex-shrink-0 ' + TTER} />
                       </button>
@@ -1492,9 +1388,7 @@ export default function OrgPageEditor() {
                                   {s.isCustom && <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-600">Custom</span>}
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  <button onClick={function() { restoreSection(s.id); }} className="px-3 py-1.5 text-xs font-semibold text-blue-500 border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    Restore
-                                  </button>
+                                  <button onClick={function() { restoreSection(s.id); }} className="px-3 py-1.5 text-xs font-semibold text-blue-500 border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500">Restore</button>
                                   <button onClick={function() { setSectionDeleteModal(s); }} aria-label={'Delete ' + s.label} className={'p-1.5 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg text-slate-300 hover:text-red-500'}>
                                     <Icon path="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" className="h-4 w-4" />
                                   </button>
@@ -1507,15 +1401,10 @@ export default function OrgPageEditor() {
                     </div>
                   )}
 
-                  {/* Block editor for home page */}
                   {homePage && (
                     <div className="mt-4 border-t border-slate-100 pt-4">
                       <p className={'text-xs font-bold uppercase tracking-[3px] mb-3 ' + TTER}>Page Blocks</p>
-                      <BlockEditor
-                        organizationId={organizationId}
-                        pages={[homePage]}
-                        onBlocksChange={function(up) { setSiteBlocks(up); }}
-                      />
+                      <BlockEditor organizationId={organizationId} pages={[homePage]} onBlocksChange={function(up) { setSiteBlocks(up); }} />
                     </div>
                   )}
                 </div>
@@ -1523,39 +1412,26 @@ export default function OrgPageEditor() {
             </div>
           </div>
 
-          {/* Additional pages — draggable */}
+          {/* Additional pages */}
           <DndContext sensors={pgSensors} collisionDetection={closestCenter} onDragEnd={handlePageDragEnd}>
             <SortableContext items={aps.map(function(p) { return p.id; })} strategy={verticalListSortingStrategy}>
               <div className="space-y-2" role="list" aria-label="Site pages">
                 {aps.map(function(page) {
                   var isExp = expandedPageId === page.id;
                   return (
-                    <SortablePageItem
-                      key={page.id}
-                      page={page}
-                      isExpanded={isExp}
-                      planDisabled={isStarterPlan}
+                    <SortablePageItem key={page.id} page={page} isExpanded={isExp} planDisabled={isStarterPlan}
                       onToggleExpand={function() { setExpandedPageId(isExp ? null : page.id); }}
-                      navCount={navCount}
-                      onNavToggle={function() { handlePageNavToggle(page); }}
+                      navCount={navCount} onNavToggle={function() { handlePageNavToggle(page); }}
                       onEnabledToggle={function() { handlePageEnabledToggle(page); }}
                       onArchive={async function() {
                         var up = sitePages.map(function(p) { return p.id === page.id ? Object.assign({}, p, { is_enabled: false, is_visible_in_nav: false }) : p; });
-                        setSitePages(up);
-                        await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false });
-                        await saveNavInstant(up);
+                        setSitePages(up); await savePageField(page.id, { is_enabled: false, is_visible_in_nav: false }); await saveNavInstant(up);
                         mascotSuccessToast(page.title + ' archived');
                       }}
                       onDelete={function() { setDeleteModal(page); }}
-                      onTitleChange={handlePageTitleChange}
-                      onNavLabelChange={handlePageNavLabelChange}
-                    >
+                      onTitleChange={handlePageTitleChange} onNavLabelChange={handlePageNavLabelChange}>
                       <p className={'text-xs font-bold uppercase tracking-[3px] mb-3 ' + TTER}>Page Blocks</p>
-                      <BlockEditor
-                        organizationId={organizationId}
-                        pages={[page]}
-                        onBlocksChange={function(up) { setSiteBlocks(up); }}
-                      />
+                      <BlockEditor organizationId={organizationId} pages={[page]} onBlocksChange={function(up) { setSiteBlocks(up); }} />
                     </SortablePageItem>
                   );
                 })}
@@ -1581,9 +1457,7 @@ export default function OrgPageEditor() {
                           onClick={async function() {
                             if (atPageLimit) { toast.error(plan === 'starter' ? 'Additional pages require Growth.' : 'Page limit reached.'); return; }
                             var up = sitePages.map(function(p) { return p.id === page.id ? Object.assign({}, p, { is_enabled: true }) : p; });
-                            setSitePages(up);
-                            await savePageField(page.id, { is_enabled: true });
-                            await saveNavInstant(up);
+                            setSitePages(up); await savePageField(page.id, { is_enabled: true }); await saveNavInstant(up);
                             mascotSuccessToast(page.title + ' restored');
                           }}
                           className={'px-3 py-1.5 text-xs font-semibold rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors '
@@ -1609,39 +1483,27 @@ export default function OrgPageEditor() {
             {sitePages.filter(function(p) { return p.page_key && p.page_key.startsWith('external-'); }).map(function(page) {
               return (
                 <div key={page.id} className="flex items-center gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={page.nav_label}
+                  <input type="text" value={page.nav_label}
                     onChange={function(e) {
                       var l = e.target.value;
                       setSitePages(function(prev) { return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { nav_label: l }) : p; }); });
                       savePageDebounced(page.id, { nav_label: l });
                     }}
-                    placeholder="e.g. Donate"
-                    className={'flex-1 ' + inpSmCls}
-                  />
-                  <input
-                    type="text"
-                    value={page.title}
+                    placeholder="e.g. Donate" className={'flex-1 ' + inpSmCls} />
+                  <input type="text" value={page.title}
                     onChange={function(e) {
                       var u = e.target.value;
                       setSitePages(function(prev) { return prev.map(function(p) { return p.id === page.id ? Object.assign({}, p, { title: u }) : p; }); });
                       savePageDebounced(page.id, { title: u });
                     }}
-                    placeholder="https://donate.example.com"
-                    className={inpSmCls + ' w-48'}
-                  />
+                    placeholder="https://donate.example.com" className={inpSmCls + ' w-48'} />
                   <button
                     onClick={async function() {
                       var up = sitePages.filter(function(p) { return p.id !== page.id; });
-                      setSitePages(up);
-                      await supabase.from('org_site_pages').delete().eq('id', page.id);
-                      await saveNavInstant(up);
+                      setSitePages(up); await supabase.from('org_site_pages').delete().eq('id', page.id); await saveNavInstant(up);
                       mascotSuccessToast('Link removed');
                     }}
-                    aria-label={'Remove ' + page.nav_label + ' link'}
-                    className={'p-2 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg ' + TTER}
-                  >
+                    aria-label={'Remove ' + page.nav_label + ' link'} className={'p-2 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg ' + TTER}>
                     <Icon path="M6 18L18 6M6 6l12 12" className="h-4 w-4" />
                   </button>
                 </div>
@@ -1653,12 +1515,10 @@ export default function OrgPageEditor() {
                 var r = await supabase.from('org_site_pages').insert([np]).select().single();
                 if (r.error) { toast.error('Could not add link'); return; }
                 var up = sitePages.concat([r.data]);
-                setSitePages(up);
-                await saveNavInstant(up);
+                setSitePages(up); await saveNavInstant(up);
                 mascotSuccessToast('External link added');
               }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-500 hover:text-blue-500 hover:border-blue-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-500 hover:text-blue-500 hover:border-blue-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500">
               <Icon path="M12 4v16m8-8H4" className="h-4 w-4" />Add External Link
             </button>
           </div>
@@ -1668,10 +1528,8 @@ export default function OrgPageEditor() {
         <div className={'rounded-xl border shadow-sm overflow-hidden ' + BGCARD + ' ' + BORDER}>
           <button
             onClick={function() { setFooterOpen(!footerOpen); }}
-            aria-expanded={footerOpen}
-            aria-controls="footer-panel"
-            className={'w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset transition-colors hover:bg-slate-50'}
-          >
+            aria-expanded={footerOpen} aria-controls="footer-panel"
+            className={'w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset transition-colors hover:bg-slate-50'}>
             <div className="flex items-start gap-3">
               <div className={'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ' + BGELE} aria-hidden="true">
                 <Icon path="M4 6h16M4 12h16M4 18h7" className={'h-5 w-5 ' + TMUT} />
@@ -1692,15 +1550,10 @@ export default function OrgPageEditor() {
                   {[2, 3].map(function(n) {
                     var isSel = form.footerColumns === n;
                     return (
-                      <button
-                        key={n}
-                        onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { footerColumns: n }); }); }}
+                      <button key={n} onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { footerColumns: n }); }); }}
                         className={'flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center gap-2 '
                           + (isSel ? 'border-blue-500 bg-blue-50 text-blue-500' : 'border-slate-200 bg-white text-[#64748B] hover:border-blue-400')}
-                        role="radio"
-                        aria-checked={isSel}
-                        aria-label={n + ' column footer layout'}
-                      >
+                        role="radio" aria-checked={isSel} aria-label={n + ' column footer layout'}>
                         <svg viewBox={'0 0 ' + (n * 14 + (n - 1) * 3) + ' 18'} className="h-4" aria-hidden="true">
                           {Array.from({ length: n }).map(function(_, i) {
                             return <rect key={i} x={i * 17} y="0" width="14" height="18" rx="2" fill={isSel ? '#3B82F6' : '#94A3B8'} />;
@@ -1714,22 +1567,17 @@ export default function OrgPageEditor() {
               </div>
               <div className="mt-4">
                 {footerPage ? (
-                  <BlockEditor
-                    organizationId={organizationId}
-                    pages={[footerPage]}
+                  <BlockEditor organizationId={organizationId} pages={[footerPage]}
                     onBlocksChange={function(up) {
                       setSiteBlocks(function(prev) {
                         return prev.filter(function(b) { return b.page_id !== footerPage.id; })
                           .concat(up.filter(function(b) { return b.page_id === footerPage.id; }));
                       });
-                    }}
-                  />
+                    }} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
                     <p className={'text-sm font-semibold mb-1 ' + TSEC}>Footer not available</p>
-                    <button onClick={function() { window.location.reload(); }} className="mt-4 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      Reload
-                    </button>
+                    <button onClick={function() { window.location.reload(); }} className="mt-4 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Reload</button>
                   </div>
                 )}
               </div>
@@ -1748,7 +1596,6 @@ export default function OrgPageEditor() {
           <h2 className={'text-2xl font-bold mb-1 ' + TPRI}>Visibility &amp; Channels</h2>
           <p className={'text-sm mb-6 ' + TMUT}>Control where your organization and events appear.</p>
 
-          {/* Org page visibility */}
           <div className="mb-6">
             <h3 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + TTER}>Organization Page</h3>
             <div className={'flex items-center justify-between p-5 rounded-xl border-2 transition-all '
@@ -1767,28 +1614,22 @@ export default function OrgPageEditor() {
                   <p className={'text-sm ' + TMUT}>{form.is_public ? 'Anyone can find and view your public page' : 'Your page is hidden from the public'}</p>
                 </div>
               </div>
-              <Toggle
-                checked={form.is_public}
-                onChange={function() { setForm(function(prev) { return Object.assign({}, prev, { is_public: !prev.is_public }); }); }}
-                label={form.is_public ? 'Make page private' : 'Make page public'}
-                id="pub-tgl"
-              />
+              <Toggle checked={form.is_public} onChange={function() { setForm(function(prev) { return Object.assign({}, prev, { is_public: !prev.is_public }); }); }}
+                label={form.is_public ? 'Make page private' : 'Make page public'} id="pub-tgl" />
             </div>
           </div>
 
-          {/* Event publish channels */}
           <div>
             <h3 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + TTER}>Event Publish Channels</h3>
             <p className={'text-xs mb-4 ' + TTER}>Org-level defaults — individual events can override these.</p>
             <div className="space-y-3">
               {[
-                { key: 'website',   label: 'Org Website',           desc: 'Events appear on your public organization page', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', activeBg: 'bg-blue-50', activeBorder: 'border-blue-300', activeIcon: 'text-blue-500', activeIconBg: 'bg-blue-100' },
-                { key: 'discovery', label: 'Syndicade Discovery', desc: 'Events appear on the public Syndicade discovery page',    icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',                                                                                                                                                                                                             activeBg: 'bg-purple-50', activeBorder: 'border-purple-300', activeIcon: 'text-purple-500', activeIconBg: 'bg-purple-100' },
+                { key: 'website',   label: 'Org Website',         desc: 'Events appear on your public organization page',     icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', activeBg: 'bg-blue-50', activeBorder: 'border-blue-300', activeIcon: 'text-blue-500', activeIconBg: 'bg-blue-100' },
+                { key: 'discovery', label: 'Syndicade Discovery', desc: 'Events appear on the public Syndicade discovery page', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',                                                                                                                                                                                          activeBg: 'bg-purple-50', activeBorder: 'border-purple-300', activeIcon: 'text-purple-500', activeIconBg: 'bg-purple-100' },
               ].map(function(ch) {
                 var on = form.publish_channels[ch.key];
                 return (
-                  <div key={ch.key} className={'flex items-center justify-between p-4 rounded-xl border transition-all '
-                    + (on ? ch.activeBorder + ' ' + ch.activeBg : 'border-slate-200 bg-slate-50')}>
+                  <div key={ch.key} className={'flex items-center justify-between p-4 rounded-xl border transition-all ' + (on ? ch.activeBorder + ' ' + ch.activeBg : 'border-slate-200 bg-slate-50')}>
                     <div className="flex items-center gap-3">
                       <div className={'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ' + (on ? ch.activeIconBg : BGELE)} aria-hidden="true">
                         <Icon path={ch.icon} className={'h-4 w-4 ' + (on ? ch.activeIcon : TTER)} />
@@ -1798,12 +1639,7 @@ export default function OrgPageEditor() {
                         <p className={'text-xs ' + TMUT}>{ch.desc}</p>
                       </div>
                     </div>
-                    <Toggle
-                      checked={on}
-                      onChange={function() { setPC(ch.key, !on); }}
-                      label={(on ? 'Disable ' : 'Enable ') + ch.label + ' channel'}
-                      id={'ch-' + ch.key}
-                    />
+                    <Toggle checked={on} onChange={function() { setPC(ch.key, !on); }} label={(on ? 'Disable ' : 'Enable ') + ch.label + ' channel'} id={'ch-' + ch.key} />
                   </div>
                 );
               })}
@@ -1811,15 +1647,11 @@ export default function OrgPageEditor() {
           </div>
         </div>
 
-        {/* Domain & Branding */}
         <div className={'rounded-xl border shadow-sm p-6 ' + BGCARD + ' ' + BORDER}>
           <p className={'text-xs font-bold uppercase tracking-[4px] mb-1 ' + TYEL}>Domain &amp; Branding</p>
           <h2 className={'text-xl font-bold mb-1 ' + TPRI}>Custom Domain &amp; Branding</h2>
           <p className={'text-sm mb-5 ' + TMUT}>Control how your organization appears on the web.</p>
-
-          {/* Custom Domain */}
-          <div className={'rounded-xl border-2 p-5 mb-4 '
-            + (plan === 'pro' ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50')}>
+          <div className={'rounded-xl border-2 p-5 mb-4 ' + (plan === 'pro' ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50')}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 flex-1 min-w-0">
                 <div className={'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + (plan === 'pro' ? 'bg-green-100' : BGELE)}>
@@ -1840,8 +1672,6 @@ export default function OrgPageEditor() {
               {plan === 'starter' && <button onClick={function() { navigate('/organizations/' + organizationId + '/billing'); }} className="px-4 py-2 text-sm font-semibold rounded-lg bg-purple-500 text-white hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 flex-shrink-0">Upgrade</button>}
             </div>
           </div>
-
-          {/* Remove Branding */}
           <div className={'rounded-xl border-2 p-5 ' + (plan === 'pro' ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50')}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -1872,13 +1702,9 @@ export default function OrgPageEditor() {
               <code className="rounded-lg px-3 py-2 text-blue-500 text-sm font-mono break-all flex-1 border bg-white border-blue-200">
                 {window.location.origin + '/org/' + org.slug}
               </code>
-              <a
-                href={'/org/' + org.slug}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={'/org/' + org.slug} target="_blank" rel="noopener noreferrer"
                 className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0"
-                aria-label="Open public page in new tab"
-              >
+                aria-label="Open public page in new tab">
                 Open Page
               </a>
             </div>
@@ -1888,7 +1714,7 @@ export default function OrgPageEditor() {
     );
   }
 
-  // ─── LOADING ───────────────────────────────────────────────────────────────
+  // ─── Loading ───────────────────────────────────────────────────────────────
   if (loading) return <EditorSkeleton />;
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1949,9 +1775,7 @@ export default function OrgPageEditor() {
             <button
               onClick={function() { setPreviewOpen(!previewOpen); }}
               className={'hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg border transition-all focus:outline-none focus:ring-2 focus:ring-slate-400 '
-                + (previewOpen
-                  ? 'bg-[#0E1523] text-white border-[#0E1523]'
-                  : 'bg-white text-[#475569] border-slate-300 hover:bg-slate-50')}
+                + (previewOpen ? 'bg-[#0E1523] text-white border-[#0E1523]' : 'bg-white text-[#475569] border-slate-300 hover:bg-slate-50')}
               aria-label={previewOpen ? 'Hide preview' : 'Show preview'}
               aria-pressed={previewOpen}
             >
@@ -1964,13 +1788,9 @@ export default function OrgPageEditor() {
               {previewOpen ? 'Hide Preview' : 'Preview'}
             </button>
             {org && org.slug && (
-              <a
-                href={'/org/' + org.slug}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={'/org/' + org.slug} target="_blank" rel="noopener noreferrer"
                 className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-blue-300 text-blue-500 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                aria-label="Open public page in new tab"
-              >
+                aria-label="Open public page in new tab">
                 <Icon path="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" className="h-4 w-4" />
                 Open Page
               </a>
@@ -2071,14 +1891,9 @@ export default function OrgPageEditor() {
                       {pp.map(function(page) {
                         var isA = aid === page.id;
                         return (
-                          <button
-                            key={page.id}
-                            role="tab"
-                            aria-selected={isA}
-                            onClick={function() { setPreviewPageId(page.id); }}
+                          <button key={page.id} role="tab" aria-selected={isA} onClick={function() { setPreviewPageId(page.id); }}
                             className={'px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 '
-                              + (isA ? 'bg-blue-500 text-white' : 'text-slate-500 hover:bg-slate-200')}
-                          >
+                              + (isA ? 'bg-blue-500 text-white' : 'text-slate-500 hover:bg-slate-200')}>
                             {page.title}
                           </button>
                         );
@@ -2091,9 +1906,7 @@ export default function OrgPageEditor() {
                   <div style={{ width: PREVIEW_WIDTH + 'px', transform: 'scale(' + previewScale + ')', transformOrigin: 'top left', pointerEvents: 'none', userSelect: 'none' }}>
                     {siteBlocks.length > 0 ? (
                       <PreviewNewPage
-                        org={pOrg}
-                        pages={sitePages}
-                        blocks={siteBlocks}
+                        org={pOrg} pages={sitePages} blocks={siteBlocks}
                         primary={form.theme.customColors[0] || form.theme.primaryColor || '#3B82F6'}
                         borderRadius={form.theme.buttonStyle === 'pill' ? '9999px' : form.theme.buttonStyle === 'sharp' ? '0px' : '8px'}
                         fontFamily={form.theme.fontPairing === 'serif' ? 'Georgia,serif' : form.theme.fontPairing === 'mono' ? '"Roboto Slab",Georgia,serif' : 'Inter,system-ui,sans-serif'}
