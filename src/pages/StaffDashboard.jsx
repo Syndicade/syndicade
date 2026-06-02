@@ -1,26 +1,20 @@
 /**
  * StaffDashboard.jsx — Light Theme (V3.0)
- * Rebuilt May 29, 2026
+ * Updated June 2, 2026
  *
  * Tabs:
  * 1. Overview    — metrics, pending actions, at-risk orgs, verification queue
  * 2. Members     — search, staff filter, account tools
- * 3. Orgs        — search + recent signups on load, plan adjustment
- * 4. Content     — zero-code content editing (ContentEditor — pending light theme)
- * 5. Financials  — revenue (StaffFinancials — pending light theme)
- * 6. Promo Codes — discount codes (StaffPromoCodes — pending light theme)
- * 7. Goals       — revenue goals (StaffGoals — pending light theme)
- * 8. Contacts    — marketing contacts
- * 9. Bug Reports — bug_reports table, filters, inline status update, expandable rows
- *
- * Pending light theme rewrites (touch on next session):
- * - ContentEditor.jsx
- * - StaffFinancials.jsx
- * - StaffPromoCodes.jsx
- * - StaffGoals.jsx
+ * 3. Orgs        — search + filters + plan adjustment
+ * 4. Financials  — revenue (StaffFinancials)
+ * 5. Promo Codes — discount codes (StaffPromoCodes)
+ * 6. Goals       — revenue goals (StaffGoals)
+ * 7. Contacts    — marketing contacts with full CRM features
+ * 8. Bug Reports — bug_reports table, filters, inline status update
+ * 9. Content     — zero-code content editing (ContentEditor)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -34,10 +28,11 @@ import {
   Calendar, Activity, Clock, CheckCircle, XCircle, RefreshCw, ChevronDown,
   MapPin, BarChart2, UserX, Zap, Search, KeyRound, Ban, ChevronRight, X,
   FileText, Download, Mail, Bug, ChevronUp, ExternalLink, Image, Filter,
-  Receipt, AlertCircle,
+  Receipt, AlertCircle, Pin, PinOff, Trash2, Eye, EyeOff, StickyNote,
+  ChevronLeft, MoreHorizontal, CheckSquare, Square, Tag as TagIcon,
 } from 'lucide-react';
 
-// ─── Plan config (locked May 22, 2026) ───────────────────────────────────────
+// ─── Plan config ──────────────────────────────────────────────────────────────
 var PLAN_PRICES = {
   listed_month: 10.00,   listed_year: 8.33,
   starter_month: 29.99,  starter_year: 24.99,
@@ -53,6 +48,27 @@ var PLAN_LABELS = {
   student_month: 'Student (Monthly)',
 };
 var ALL_PLANS = Object.keys(PLAN_LABELS).map(function(k) { return { value: k, label: PLAN_LABELS[k] }; });
+
+// ─── Contact config ───────────────────────────────────────────────────────────
+var CONTACT_CATEGORIES = [
+  { value: 'general',     label: 'General',     bg: '#F1F5F9', color: '#475569', border: '#E2E8F0' },
+  { value: 'hot_lead',    label: 'Hot Lead',    bg: '#FEF3C7', color: '#B45309', border: '#FDE68A' },
+  { value: 'partnership', label: 'Partnership', bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
+  { value: 'support',     label: 'Support',     bg: '#EDE9FE', color: '#7C3AED', border: '#DDD6FE' },
+  { value: 'spam',        label: 'Spam',        bg: '#FEE2E2', color: '#DC2626', border: '#FECACA' },
+];
+
+function getCategoryStyle(val) {
+  var found = CONTACT_CATEGORIES.find(function(c) { return c.value === val; });
+  return found || CONTACT_CATEGORIES[0];
+}
+
+var DATE_RANGES = [
+  { value: 'all',  label: 'All time' },
+  { value: '7',    label: 'Last 7 days' },
+  { value: '30',   label: 'Last 30 days' },
+  { value: '90',   label: 'Last 90 days' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -79,7 +95,7 @@ async function logAction(action, targetType, targetId, details) {
   });
 }
 
-// ─── Severity config ──────────────────────────────────────────────────────────
+// ─── Severity / Status config ─────────────────────────────────────────────────
 var SEVERITY_CONFIG = {
   critical: { label: 'Critical', bg: '#FEE2E2', color: '#DC2626', border: '#FECACA' },
   high:     { label: 'High',     bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
@@ -120,7 +136,7 @@ function RowSkeleton() {
 function TableSkeleton() {
   return (
     <div className="divide-y divide-slate-100" aria-hidden="true">
-      {Array.from({ length: 4 }).map(function(_, i) {
+      {[1,2,3,4].map(function(i) {
         return (
           <div key={i} className="flex items-center gap-4 px-6 py-4 animate-pulse">
             <div className="w-9 h-9 rounded-full bg-slate-100 flex-shrink-0" />
@@ -138,36 +154,38 @@ function TableSkeleton() {
 }
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
-function SectionLabel({ children }) {
+function SectionLabel(props) {
   return (
     <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '16px' }}>
-      {children}
+      {props.children}
     </div>
   );
 }
 
-function MetricCard({ icon: Icon, label, value, sub, iconBg, iconColor, alert }) {
+function MetricCard(props) {
+  var Icon = props.icon;
   return (
-    <div className={'bg-white rounded-xl p-5 border ' + (alert ? 'border-yellow-300' : 'border-slate-200')} role="region" aria-label={label + ' metric'}>
-      <div className={'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mb-3 ' + iconBg}>
-        <Icon size={18} className={iconColor} aria-hidden="true" />
+    <div className={'bg-white rounded-xl p-5 border ' + (props.alert ? 'border-yellow-300' : 'border-slate-200')} role="region" aria-label={props.label + ' metric'}>
+      <div className={'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mb-3 ' + props.iconBg}>
+        <Icon size={18} className={props.iconColor} aria-hidden="true" />
       </div>
-      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '4px' }}>{label}</div>
-      <div style={{ fontSize: '28px', fontWeight: 800, color: '#0E1523', marginBottom: '4px' }}>{value}</div>
-      {sub && <div style={{ fontSize: '12px', color: '#64748B' }}>{sub}</div>}
+      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '4px' }}>{props.label}</div>
+      <div style={{ fontSize: '28px', fontWeight: 800, color: '#0E1523', marginBottom: '4px' }}>{props.value}</div>
+      {props.sub && <div style={{ fontSize: '12px', color: '#64748B' }}>{props.sub}</div>}
     </div>
   );
 }
 
-function EmptyState({ icon: Icon, title, description, action, onAction }) {
+function EmptyState(props) {
+  var Icon = props.icon;
   return (
     <div className="px-6 py-12 text-center">
       <Icon size={36} className="text-slate-300 mx-auto mb-3" aria-hidden="true" />
-      <p style={{ fontWeight: 700, fontSize: '15px', color: '#0E1523', marginBottom: '4px' }}>{title}</p>
-      <p style={{ fontSize: '13px', color: '#64748B', marginBottom: action ? '16px' : '0' }}>{description}</p>
-      {action && onAction && (
-        <button onClick={onAction} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-          {action}
+      <p style={{ fontWeight: 700, fontSize: '15px', color: '#0E1523', marginBottom: '4px' }}>{props.title}</p>
+      <p style={{ fontSize: '13px', color: '#64748B', marginBottom: props.action ? '16px' : '0' }}>{props.description}</p>
+      {props.action && props.onAction && (
+        <button onClick={props.onAction} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          {props.action}
         </button>
       )}
     </div>
@@ -175,7 +193,8 @@ function EmptyState({ icon: Icon, title, description, action, onAction }) {
 }
 
 // ─── Member drawer ────────────────────────────────────────────────────────────
-function MemberDrawer({ member, onClose, onAction }) {
+function MemberDrawer(props) {
+  var member = props.member;
   var [memberships, setMemberships] = useState([]);
   var [loadingMemberships, setLoadingMemberships] = useState(true);
   var [actionLoading, setActionLoading] = useState(null);
@@ -203,7 +222,7 @@ function MemberDrawer({ member, onClose, onAction }) {
     else {
       mascotSuccessToast(newStatus === 'suspended' ? 'Account suspended.' : 'Account reactivated.');
       await logAction(newStatus === 'suspended' ? 'account_suspended' : 'account_reactivated', 'member', member.user_id);
-      onAction();
+      props.onAction();
     }
     setActionLoading(null);
   }
@@ -219,11 +238,7 @@ function MemberDrawer({ member, onClose, onAction }) {
       body: JSON.stringify({ target_user_id: member.user_id }),
     });
     var json = await res.json();
-    if (!res.ok || !json.link) {
-      toast.error(json.error || 'Failed to generate impersonation link.');
-      setActionLoading(null);
-      return;
-    }
+    if (!res.ok || !json.link) { toast.error(json.error || 'Failed to generate impersonation link.'); setActionLoading(null); return; }
     navigator.clipboard.writeText(json.link).catch(function() {});
     window.open(json.link, '_blank', 'noopener,noreferrer');
     mascotSuccessToast('Impersonation link opened.', 'Link copied to clipboard.');
@@ -231,17 +246,16 @@ function MemberDrawer({ member, onClose, onAction }) {
   }
 
   var isSuspended = member.account_status === 'suspended';
-
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={'Member details: ' + member.first_name + ' ' + member.last_name}>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/40" onClick={props.onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full overflow-y-auto flex flex-col shadow-xl">
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
           <div>
             <h2 style={{ fontWeight: 800, fontSize: '16px', color: '#0E1523' }}>{member.first_name} {member.last_name}</h2>
             <p style={{ fontSize: '12px', color: '#64748B' }}>{member.email}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label="Close">
+          <button onClick={props.onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label="Close">
             <X size={16} aria-hidden="true" />
           </button>
         </div>
@@ -287,7 +301,7 @@ function MemberDrawer({ member, onClose, onAction }) {
           <div>
             <SectionLabel>Organization Memberships</SectionLabel>
             {loadingMemberships ? (
-              <div className="space-y-2">{Array.from({ length: 2 }).map(function(_, i) { return <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />; })}</div>
+              <div className="space-y-2">{[1,2].map(function(i) { return <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />; })}</div>
             ) : memberships.length === 0 ? (
               <p style={{ fontSize: '13px', color: '#64748B' }}>Not a member of any organizations.</p>
             ) : memberships.map(function(m, i) {
@@ -312,7 +326,9 @@ function MemberDrawer({ member, onClose, onAction }) {
 }
 
 // ─── Org drawer ───────────────────────────────────────────────────────────────
-function OrgDrawer({ org, subscription, onClose, onAction }) {
+function OrgDrawer(props) {
+  var org = props.org;
+  var subscription = props.subscription;
   var [members, setMembers] = useState([]);
   var [loadingMembers, setLoadingMembers] = useState(true);
   var [selectedPlan, setSelectedPlan] = useState(subscription && subscription.plan_id || '');
@@ -337,19 +353,21 @@ function OrgDrawer({ org, subscription, onClose, onAction }) {
     await logAction('plan_changed', 'organization', org.id, { old_plan: subscription && subscription.plan_id || 'none', new_plan: selectedPlan || 'none', org_name: org.name });
     mascotSuccessToast(selectedPlan ? 'Plan updated to ' + PLAN_LABELS[selectedPlan] : 'Plan removed.');
     setPlanLoading(false);
-    onAction();
+    props.onAction();
   }
+
+  var publicPageUrl = 'https://app.syndicade.com/org/' + (org.slug || org.id);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={'Org details: ' + org.name}>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/40" onClick={props.onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full overflow-y-auto flex flex-col shadow-xl">
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
           <div>
             <h2 style={{ fontWeight: 800, fontSize: '16px', color: '#0E1523' }}>{org.name}</h2>
             <p style={{ fontSize: '12px', color: '#64748B' }}>{org.city && org.state ? org.city + ', ' + org.state : 'Location not set'}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label="Close">
+          <button onClick={props.onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label="Close">
             <X size={16} aria-hidden="true" />
           </button>
         </div>
@@ -374,12 +392,20 @@ function OrgDrawer({ org, subscription, onClose, onAction }) {
               {subscription && subscription.status === 'active' ? 'Paid' : subscription && subscription.status === 'trialing' ? 'Trial' : 'Free'}
             </span>
           </div>
+
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            {org.org_number && <div className="flex justify-between text-sm"><span style={{ color: '#64748B' }}>Org #</span><span style={{ color: '#475569', fontWeight: 600 }}>{org.org_number}</span></div>}
             <div className="flex justify-between text-sm"><span style={{ color: '#64748B' }}>Current Plan</span><span style={{ color: '#475569', fontWeight: 600 }}>{subscription ? (PLAN_LABELS[subscription.plan_id] || subscription.plan_id) : 'Free'}</span></div>
             <div className="flex justify-between text-sm"><span style={{ color: '#64748B' }}>Created</span><span style={{ color: '#475569' }}>{new Date(org.created_at).toLocaleDateString()}</span></div>
             {subscription && subscription.current_period_end && <div className="flex justify-between text-sm"><span style={{ color: '#64748B' }}>Renews</span><span style={{ color: '#475569' }}>{new Date(subscription.current_period_end).toLocaleDateString()}</span></div>}
             {subscription && subscription.trial_ends_at && <div className="flex justify-between text-sm"><span style={{ color: '#64748B' }}>Trial ends</span><span style={{ color: '#475569' }}>{new Date(subscription.trial_ends_at).toLocaleDateString()}</span></div>}
           </div>
+
+          <a href={publicPageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-label={'View public page for ' + org.name}>
+            <ExternalLink size={14} className="text-blue-500" aria-hidden="true" />
+            View Public Page
+          </a>
+
           <div>
             <SectionLabel>Adjust Plan</SectionLabel>
             <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '12px' }}>Manually override plan tier. All changes are logged.</p>
@@ -397,10 +423,11 @@ function OrgDrawer({ org, subscription, onClose, onAction }) {
               </button>
             </div>
           </div>
+
           <div>
             <SectionLabel>Active Members</SectionLabel>
             {loadingMembers ? (
-              <div className="space-y-2">{Array.from({ length: 3 }).map(function(_, i) { return <div key={i} className="h-10 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />; })}</div>
+              <div className="space-y-2">{[1,2,3].map(function(i) { return <div key={i} className="h-10 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />; })}</div>
             ) : members.length === 0 ? (
               <p style={{ fontSize: '13px', color: '#64748B' }}>No active members found.</p>
             ) : members.map(function(m, i) {
@@ -536,6 +563,9 @@ function MembersTab() {
 // ─── Orgs tab ─────────────────────────────────────────────────────────────────
 function OrgsTab() {
   var [query, setQuery] = useState('');
+  var [filterPlan, setFilterPlan] = useState('');
+  var [filterVerified, setFilterVerified] = useState(false);
+  var [sortBy, setSortBy] = useState('newest');
   var [results, setResults] = useState([]);
   var [subsMap, setSubsMap] = useState({});
   var [loading, setLoading] = useState(true);
@@ -548,17 +578,20 @@ function OrgsTab() {
     setLoading(true);
     var res = await supabase.from('organizations')
       .select('id, name, slug, org_number, city, state, created_at, is_verified_nonprofit, edu_email, edu_email_verified')
-      .order('created_at', { ascending: false }).limit(10);
+      .order('created_at', { ascending: false }).limit(25);
     var orgs = res.data || [];
-    setResults(orgs);
-    if (orgs.length > 0) {
-      var ids = orgs.map(function(o) { return o.id; });
-      var subRes = await supabase.from('subscriptions').select('organization_id, plan_id, status, trial_ends_at, current_period_end').in('organization_id', ids);
-      var map = {};
-      (subRes.data || []).forEach(function(s) { map[s.organization_id] = s; });
-      setSubsMap(map);
-    }
+    await hydrateOrgs(orgs);
     setLoading(false);
+  }
+
+  async function hydrateOrgs(orgs) {
+    setResults(orgs);
+    if (orgs.length === 0) return;
+    var ids = orgs.map(function(o) { return o.id; });
+    var subRes = await supabase.from('subscriptions').select('organization_id, plan_id, status, trial_ends_at, current_period_end').in('organization_id', ids);
+    var map = {};
+    (subRes.data || []).forEach(function(s) { map[s.organization_id] = s; });
+    setSubsMap(map);
   }
 
   async function handleSearch(e) {
@@ -567,31 +600,119 @@ function OrgsTab() {
     setLoading(true); setSearched(true);
     var res = await supabase.from('organizations')
       .select('id, name, slug, org_number, city, state, created_at, is_verified_nonprofit, edu_email, edu_email_verified')
-      .or('name.ilike.%' + query + '%,city.ilike.%' + query + '%,state.ilike.%' + query + '%').limit(25);
-    if (res.error) { toast.error('Search failed.'); setLoading(false); return; }
-    var orgs = res.data || [];
-    setResults(orgs);
-    if (orgs.length > 0) {
-      var ids = orgs.map(function(o) { return o.id; });
-      var subRes = await supabase.from('subscriptions').select('organization_id, plan_id, status, trial_ends_at, current_period_end').in('organization_id', ids);
-      var map = {};
-      (subRes.data || []).forEach(function(s) { map[s.organization_id] = s; });
-      setSubsMap(map);
-    }
+      .or('name.ilike.%' + query + '%,city.ilike.%' + query + '%,state.ilike.%' + query + '%').limit(50);
+    if (res.error) { mascotErrorToast('Search failed.', 'Check your connection and try again.'); setLoading(false); return; }
+    await hydrateOrgs(res.data || []);
     setLoading(false);
   }
 
-  function renderOrgList(label) {
-    return (
+  function getPlanBase(planId) {
+    if (!planId) return 'free';
+    if (planId.startsWith('listed')) return 'listed';
+    if (planId.startsWith('starter')) return 'starter';
+    if (planId.startsWith('growth')) return 'growth';
+    if (planId.startsWith('pro')) return 'pro';
+    if (planId.startsWith('student')) return 'student';
+    return 'free';
+  }
+
+  var filteredResults = results.filter(function(org) {
+    var sub = subsMap[org.id];
+    var planBase = getPlanBase(sub && sub.plan_id);
+    if (filterVerified && !org.is_verified_nonprofit) return false;
+    if (filterPlan) {
+      if (filterPlan === 'free' && sub && sub.status === 'active') return false;
+      if (filterPlan !== 'free' && planBase !== filterPlan) return false;
+    }
+    return true;
+  });
+
+  var sortedResults = filteredResults.slice().sort(function(a, b) {
+    if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at);
+    if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
+    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+    if (sortBy === 'plan') {
+      var planOrder = { pro: 0, growth: 1, starter: 2, student: 3, listed: 4, free: 5 };
+      var aBase = getPlanBase(subsMap[a.id] && subsMap[a.id].plan_id);
+      var bBase = getPlanBase(subsMap[b.id] && subsMap[b.id].plan_id);
+      return (planOrder[aBase] || 5) - (planOrder[bBase] || 5);
+    }
+    return 0;
+  });
+
+  return (
+    <div>
+      <form onSubmit={handleSearch} className="flex gap-3 mb-4" role="search" aria-label="Search organizations">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <label htmlFor="org-search" className="sr-only">Search by name, city, or state</label>
+          <input id="org-search" type="search" value={query} onChange={function(e) { setQuery(e.target.value); }} placeholder="Search by name, city, or state..." className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-slate-400" autoComplete="off" />
+        </div>
+        <button type="submit" disabled={loading || !query.trim()} className="px-6 py-3 bg-blue-500 text-white font-semibold text-sm rounded-xl hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
+          {loading ? 'Searching...' : 'Search'}
+        </button>
+        {searched && (
+          <button type="button" onClick={function() { setQuery(''); setSearched(false); setFilterPlan(''); setFilterVerified(false); setSortBy('newest'); loadRecent(); }} className="px-4 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
+            Clear
+          </button>
+        )}
+      </form>
+
+      {/* Filters + sort */}
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <Filter size={14} className="text-slate-400 flex-shrink-0" aria-hidden="true" />
+        <div className="relative">
+          <label htmlFor="org-filter-plan" className="sr-only">Filter by plan</label>
+          <select id="org-filter-plan" value={filterPlan} onChange={function(e) { setFilterPlan(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All plans</option>
+            <option value="free">Free</option>
+            <option value="listed">Listed</option>
+            <option value="starter">Starter</option>
+            <option value="growth">Growth</option>
+            <option value="pro">Pro</option>
+            <option value="student">Student</option>
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+        </div>
+        <button
+          onClick={function() { setFilterVerified(!filterVerified); }}
+          className={'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 ' + (filterVerified ? 'bg-green-50 text-green-700 border-green-300' : 'bg-white text-slate-600 border-slate-200 hover:border-green-300 hover:bg-green-50')}
+          aria-pressed={filterVerified}
+        >
+          <CheckCircle size={13} aria-hidden="true" /> Verified only
+        </button>
+        <div className="relative ml-auto">
+          <label htmlFor="org-sort" className="sr-only">Sort organizations</label>
+          <select id="org-sort" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="plan">By plan tier</option>
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+        </div>
+      </div>
+
+      {!searched && <SectionLabel>Recent Signups</SectionLabel>}
+
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? <TableSkeleton />
-          : results.length === 0 ? <EmptyState icon={Building2} title="No organizations found" description={searched ? 'No results for "' + query + '".' : 'No organizations yet.'} />
+          : sortedResults.length === 0 ? <EmptyState icon={Building2} title="No organizations found" description={searched ? 'No results match your search or filters.' : 'No organizations yet.'} action={(filterPlan || filterVerified) ? 'Clear filters' : null} onAction={function() { setFilterPlan(''); setFilterVerified(false); }} />
           : (
-            <div role="list" aria-label={label}>
-              <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
-                <span style={{ fontSize: '12px', color: '#64748B' }}>{searched ? results.length + ' result' + (results.length !== 1 ? 's' : '') : 'Showing ' + results.length + ' most recent'}</span>
+            <div role="list" aria-label={searched ? 'Org search results' : 'Recent signups'}>
+              <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <span style={{ fontSize: '12px', color: '#64748B' }}>
+                  {searched
+                    ? sortedResults.length + ' result' + (sortedResults.length !== 1 ? 's' : '') + (sortedResults.length === 50 ? ' (capped at 50)' : '')
+                    : 'Showing ' + sortedResults.length + ' most recent' + (sortedResults.length === 25 ? ' (capped at 25)' : '')}
+                </span>
+                {(filterPlan || filterVerified) && (
+                  <button onClick={function() { setFilterPlan(''); setFilterVerified(false); }} style={{ fontSize: '12px', color: '#3B82F6' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                    Clear filters
+                  </button>
+                )}
               </div>
-              {results.map(function(org) {
+              {sortedResults.map(function(org) {
                 var sub = subsMap[org.id];
                 var statusColor = sub && sub.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : sub && sub.status === 'trialing' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-500 border-slate-200';
                 return (
@@ -620,29 +741,583 @@ function OrgsTab() {
             </div>
           )}
       </div>
-    );
+      {selected && <OrgDrawer org={selected.org} subscription={selected.sub} onClose={function() { setSelected(null); }} onAction={function() { setSelected(null); searched ? handleSearch(null) : loadRecent(); }} />}
+    </div>
+  );
+}
+
+// ─── Contacts tab ─────────────────────────────────────────────────────────────
+function ContactsTab() {
+  var [contacts, setContacts] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [search, setSearch] = useState('');
+  var [filterCategory, setFilterCategory] = useState('');
+  var [filterRead, setFilterRead] = useState('');
+  var [filterDateRange, setFilterDateRange] = useState('all');
+  var [expandedId, setExpandedId] = useState(null);
+  var [expandedMessageId, setExpandedMessageId] = useState(null);
+  var [editingNoteId, setEditingNoteId] = useState(null);
+  var [noteValues, setNoteValues] = useState({});
+  var [savingNoteId, setSavingNoteId] = useState(null);
+  var [actionLoading, setActionLoading] = useState(null);
+  var [selected, setSelected] = useState({});
+  var [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  var [bulkAction, setBulkAction] = useState('');
+  var [bulkCategoryValue, setBulkCategoryValue] = useState('general');
+  var [showBulkCategoryPicker, setShowBulkCategoryPicker] = useState(false);
+
+  useEffect(function() { loadContacts(); }, []);
+
+  async function loadContacts() {
+    setLoading(true);
+    var result = await supabase.from('marketing_contacts')
+      .select('*')
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (result.error) { mascotErrorToast('Failed to load contacts.'); }
+    else {
+      var data = result.data || [];
+      setContacts(data);
+      var notes = {};
+      data.forEach(function(c) { notes[c.id] = c.notes || ''; });
+      setNoteValues(notes);
+    }
+    setLoading(false);
+  }
+
+  async function patchContact(id, patch) {
+    var res = await supabase.from('marketing_contacts').update(patch).eq('id', id);
+    if (res.error) { mascotErrorToast('Failed to update contact.'); return false; }
+    setContacts(function(prev) {
+      return prev.map(function(c) { return c.id === id ? Object.assign({}, c, patch) : c; });
+    });
+    return true;
+  }
+
+  async function handleToggleRead(contact) {
+    setActionLoading(contact.id + '_read');
+    var ok = await patchContact(contact.id, { is_read: !contact.is_read });
+    if (ok) mascotSuccessToast(contact.is_read ? 'Marked as unread.' : 'Marked as read.');
+    setActionLoading(null);
+  }
+
+  async function handleTogglePin(contact) {
+    setActionLoading(contact.id + '_pin');
+    var ok = await patchContact(contact.id, { is_pinned: !contact.is_pinned });
+    if (ok) {
+      mascotSuccessToast(contact.is_pinned ? 'Unpinned.' : 'Pinned to top.');
+      // re-sort so pinned float to top
+      setContacts(function(prev) {
+        return prev.slice().sort(function(a, b) {
+          var aPin = a.id === contact.id ? !contact.is_pinned : a.is_pinned;
+          var bPin = b.id === contact.id ? !contact.is_pinned : b.is_pinned;
+          if (aPin && !bPin) return -1;
+          if (!aPin && bPin) return 1;
+          return new Date(b.created_at) - new Date(a.created_at);
+        });
+      });
+    }
+    setActionLoading(null);
+  }
+
+  async function handleCategoryChange(id, category) {
+    var ok = await patchContact(id, { category: category });
+    if (ok) mascotSuccessToast('Category updated.');
+  }
+
+  async function handleSaveNote(id) {
+    setSavingNoteId(id);
+    var ok = await patchContact(id, { notes: noteValues[id] || '' });
+    if (ok) mascotSuccessToast('Note saved.');
+    setSavingNoteId(null);
+    setEditingNoteId(null);
+  }
+
+  async function handleDelete(id) {
+    setActionLoading(id + '_delete');
+    var res = await supabase.from('marketing_contacts').delete().eq('id', id);
+    if (res.error) { mascotErrorToast('Failed to delete contact.'); }
+    else {
+      setContacts(function(prev) { return prev.filter(function(c) { return c.id !== id; }); });
+      mascotSuccessToast('Contact deleted.');
+      setDeleteConfirmId(null);
+      var newSelected = Object.assign({}, selected);
+      delete newSelected[id];
+      setSelected(newSelected);
+    }
+    setActionLoading(null);
+  }
+
+  async function handleBulkAction() {
+    var ids = Object.keys(selected).filter(function(id) { return selected[id]; });
+    if (ids.length === 0) return;
+    if (bulkAction === 'read' || bulkAction === 'unread') {
+      var res = await supabase.from('marketing_contacts').update({ is_read: bulkAction === 'read' }).in('id', ids);
+      if (res.error) { mascotErrorToast('Bulk update failed.'); return; }
+      setContacts(function(prev) {
+        return prev.map(function(c) { return ids.includes(c.id) ? Object.assign({}, c, { is_read: bulkAction === 'read' }) : c; });
+      });
+      mascotSuccessToast('Marked ' + ids.length + ' contact' + (ids.length !== 1 ? 's' : '') + ' as ' + bulkAction + '.');
+      setSelected({});
+    } else if (bulkAction === 'categorize') {
+      var res = await supabase.from('marketing_contacts').update({ category: bulkCategoryValue }).in('id', ids);
+      if (res.error) { mascotErrorToast('Bulk categorize failed.'); return; }
+      setContacts(function(prev) {
+        return prev.map(function(c) { return ids.includes(c.id) ? Object.assign({}, c, { category: bulkCategoryValue }) : c; });
+      });
+      mascotSuccessToast('Updated category for ' + ids.length + ' contact' + (ids.length !== 1 ? 's' : '') + '.');
+      setSelected({});
+      setShowBulkCategoryPicker(false);
+    } else if (bulkAction === 'delete') {
+      var res = await supabase.from('marketing_contacts').delete().in('id', ids);
+      if (res.error) { mascotErrorToast('Bulk delete failed.'); return; }
+      setContacts(function(prev) { return prev.filter(function(c) { return !ids.includes(c.id); }); });
+      mascotSuccessToast('Deleted ' + ids.length + ' contact' + (ids.length !== 1 ? 's' : '') + '.');
+      setSelected({});
+    }
+    setBulkAction('');
+  }
+
+  function handleExportCSV() {
+    var rows = [['Name', 'Email', 'Organization', 'Message', 'Category', 'Pinned', 'Read', 'Notes', 'Date']];
+    filtered.forEach(function(c) {
+      rows.push([
+        '"' + (c.name || '').replace(/"/g, '""') + '"',
+        '"' + (c.email || '').replace(/"/g, '""') + '"',
+        '"' + (c.organization || '').replace(/"/g, '""') + '"',
+        '"' + (c.message || '').replace(/"/g, '""') + '"',
+        '"' + (c.category || 'general') + '"',
+        c.is_pinned ? 'Yes' : 'No',
+        c.is_read ? 'Yes' : 'No',
+        '"' + (c.notes || '').replace(/"/g, '""') + '"',
+        c.created_at ? new Date(c.created_at).toLocaleDateString() : '',
+      ]);
+    });
+    var csv = rows.map(function(r) { return r.join(','); }).join('\n');
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'syndicade_contacts.csv'; a.click();
+    URL.revokeObjectURL(url);
+    mascotSuccessToast('CSV exported!', filtered.length + ' contacts downloaded.');
+  }
+
+  function getDateCutoff() {
+    if (filterDateRange === 'all') return null;
+    var days = parseInt(filterDateRange);
+    var d = new Date();
+    d.setDate(d.getDate() - days);
+    return d;
+  }
+
+  var cutoff = getDateCutoff();
+  var filtered = contacts.filter(function(c) {
+    var q = search.toLowerCase();
+    var matchSearch = !q || (c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.organization || '').toLowerCase().includes(q);
+    var matchCategory = !filterCategory || (c.category || 'general') === filterCategory;
+    var matchRead = !filterRead || (filterRead === 'unread' ? !c.is_read : c.is_read);
+    var matchDate = !cutoff || new Date(c.created_at) >= cutoff;
+    return matchSearch && matchCategory && matchRead && matchDate;
+  });
+
+  var unreadCount = contacts.filter(function(c) { return !c.is_read; }).length;
+  var selectedIds = Object.keys(selected).filter(function(id) { return selected[id]; });
+  var allFilteredSelected = filtered.length > 0 && filtered.every(function(c) { return selected[c.id]; });
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelected({});
+    } else {
+      var next = {};
+      filtered.forEach(function(c) { next[c.id] = true; });
+      setSelected(next);
+    }
   }
 
   return (
     <div>
-      <form onSubmit={handleSearch} className="flex gap-3 mb-6" role="search" aria-label="Search organizations">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <label htmlFor="org-search" className="sr-only">Search by name, city, or state</label>
-          <input id="org-search" type="search" value={query} onChange={function(e) { setQuery(e.target.value); }} placeholder="Search by name, city, or state..." className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-slate-400" autoComplete="off" />
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523' }}>
+            Marketing Contacts
+            {unreadCount > 0 && (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500 text-white">{unreadCount}</span>
+            )}
+          </h2>
+          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '2px' }}>
+            {loading ? '—' : (search || filterCategory || filterRead || filterDateRange !== 'all')
+              ? filtered.length + ' of ' + contacts.length + ' contacts'
+              : contacts.length + ' total contact' + (contacts.length !== 1 ? 's' : '') + ' from the landing page'}
+          </p>
         </div>
-        <button type="submit" disabled={loading || !query.trim()} className="px-6 py-3 bg-blue-500 text-white font-semibold text-sm rounded-xl hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
-          {loading ? 'Searching...' : 'Search'}
+        <button onClick={handleExportCSV} disabled={loading || filtered.length === 0} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" aria-label="Export filtered contacts as CSV">
+          <Download size={14} aria-hidden="true" /> Export CSV
         </button>
-        {searched && (
-          <button type="button" onClick={function() { setQuery(''); setSearched(false); loadRecent(); }} className="px-4 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
+      </div>
+
+      {/* Search + filters */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1" style={{ minWidth: '220px' }}>
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <label htmlFor="contacts-search" className="sr-only">Search contacts</label>
+          <input id="contacts-search" type="search" value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search by name, email, or organization..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div className="relative">
+          <label htmlFor="contacts-filter-category" className="sr-only">Filter by category</label>
+          <select id="contacts-filter-category" value={filterCategory} onChange={function(e) { setFilterCategory(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All categories</option>
+            {CONTACT_CATEGORIES.map(function(cat) { return <option key={cat.value} value={cat.value}>{cat.label}</option>; })}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+        </div>
+        <div className="relative">
+          <label htmlFor="contacts-filter-read" className="sr-only">Filter by read status</label>
+          <select id="contacts-filter-read" value={filterRead} onChange={function(e) { setFilterRead(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All</option>
+            <option value="unread">Unread</option>
+            <option value="read">Read</option>
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+        </div>
+        <div className="relative">
+          <label htmlFor="contacts-filter-date" className="sr-only">Filter by date range</label>
+          <select id="contacts-filter-date" value={filterDateRange} onChange={function(e) { setFilterDateRange(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {DATE_RANGES.map(function(d) { return <option key={d.value} value={d.value}>{d.label}</option>; })}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+        </div>
+        {(search || filterCategory || filterRead || filterDateRange !== 'all') && (
+          <button onClick={function() { setSearch(''); setFilterCategory(''); setFilterRead(''); setFilterDateRange('all'); }} className="text-sm text-slate-500 hover:text-slate-700 underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded self-center">
             Clear
           </button>
         )}
-      </form>
-      {!searched && <SectionLabel>Recent Signups</SectionLabel>}
-      {renderOrgList(searched ? 'Org search results' : 'Recent signups')}
-      {selected && <OrgDrawer org={selected.org} subscription={selected.sub} onClose={function() { setSelected(null); }} onAction={function() { setSelected(null); searched ? handleSearch(null) : loadRecent(); }} />}
+      </div>
+
+      {/* Bulk actions bar */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl flex-wrap">
+          <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 600 }}>{selectedIds.length} selected</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={function() { setBulkAction('read'); handleBulkAction(); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+              <Eye size={12} aria-hidden="true" /> Mark read
+            </button>
+            <button onClick={function() { setBulkAction('unread'); handleBulkAction(); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+              <EyeOff size={12} aria-hidden="true" /> Mark unread
+            </button>
+            <div className="relative">
+              <button
+                onClick={function() { setShowBulkCategoryPicker(!showBulkCategoryPicker); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                aria-expanded={showBulkCategoryPicker}
+              >
+                <TagIcon size={12} aria-hidden="true" /> Categorize
+              </button>
+              {showBulkCategoryPicker && (
+                <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1" style={{ minWidth: '160px' }}>
+                  {CONTACT_CATEGORIES.map(function(cat) {
+                    var style = getCategoryStyle(cat.value);
+                    return (
+                      <button
+                        key={cat.value}
+                        onClick={function() { setBulkCategoryValue(cat.value); setBulkAction('categorize'); setShowBulkCategoryPicker(false); handleBulkAction(); }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 focus:outline-none focus:bg-slate-50 flex items-center gap-2"
+                      >
+                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: style.color, flexShrink: 0 }} />
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={function() { setBulkAction('delete'); handleBulkAction(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+            >
+              <Trash2 size={12} aria-hidden="true" /> Delete
+            </button>
+          </div>
+          <button onClick={function() { setSelected({}); }} className="ml-auto text-xs text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label="Deselect all">
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Table */}
+      {loading && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" aria-busy="true" aria-label="Loading contacts">
+          <TableSkeleton />
+        </div>
+      )}
+      {!loading && contacts.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <EmptyState icon={Mail} title="No contacts yet" description="Contacts appear when people submit the landing page form." />
+        </div>
+      )}
+      {!loading && contacts.length > 0 && filtered.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <EmptyState icon={Search} title="No contacts match your filters" description="Try adjusting your search or filters." action="Clear filters" onAction={function() { setSearch(''); setFilterCategory(''); setFilterRead(''); setFilterDateRange('all'); }} />
+        </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Marketing contacts">
+          {/* Column header */}
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
+            <button onClick={toggleSelectAll} className="w-5 h-5 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded flex-shrink-0" aria-label={allFilteredSelected ? 'Deselect all' : 'Select all'}>
+              {allFilteredSelected
+                ? <CheckSquare size={16} className="text-blue-500" aria-hidden="true" />
+                : <Square size={16} className="text-slate-300" aria-hidden="true" />
+              }
+            </button>
+            <span style={{ fontSize: '12px', color: '#64748B', flex: 1 }}>
+              {filtered.length} contact{filtered.length !== 1 ? 's' : ''}
+              {selectedIds.length > 0 && ' · ' + selectedIds.length + ' selected'}
+            </span>
+          </div>
+
+          <div role="list" aria-label="Contact list">
+            {filtered.map(function(c) {
+              var isExpanded = expandedId === c.id;
+              var isMessageExpanded = expandedMessageId === c.id;
+              var isEditingNote = editingNoteId === c.id;
+              var catStyle = getCategoryStyle(c.category || 'general');
+              var isUnread = !c.is_read;
+              var isPinned = c.is_pinned;
+
+              return (
+                <div
+                  key={c.id}
+                  role="listitem"
+                  style={{ borderBottom: '1px solid #F1F5F9', background: isUnread ? '#FAFBFF' : '#FFFFFF' }}
+                >
+                  {/* Main row */}
+                  <div className="flex items-start gap-3 px-4 py-4">
+                    {/* Checkbox */}
+                    <button
+                      onClick={function() {
+                        var id = c.id;
+                        setSelected(function(prev) {
+                          var next = Object.assign({}, prev);
+                          next[id] = !prev[id];
+                          return next;
+                        });
+                      }}
+                      className="w-5 h-5 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded flex-shrink-0 mt-0.5"
+                      aria-label={(selected[c.id] ? 'Deselect' : 'Select') + ' ' + (c.name || c.email)}
+                    >
+                      {selected[c.id]
+                        ? <CheckSquare size={16} className="text-blue-500" aria-hidden="true" />
+                        : <Square size={16} className="text-slate-300" aria-hidden="true" />
+                      }
+                    </button>
+
+                    {/* Avatar */}
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: catStyle.bg, color: catStyle.color, border: '1px solid ' + catStyle.border }}
+                      aria-hidden="true"
+                    >
+                      {getInitials(c.name)}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        {isPinned && <Pin size={12} className="text-yellow-500 flex-shrink-0" aria-label="Pinned" />}
+                        <span style={{ fontSize: '14px', fontWeight: isUnread ? 700 : 600, color: '#0E1523' }}>{c.name || '—'}</span>
+                        {isUnread && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-label="Unread" />}
+                        {/* Category badge */}
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '99px', background: catStyle.bg, color: catStyle.color, border: '1px solid ' + catStyle.border, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {catStyle.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <a href={'mailto:' + c.email} style={{ fontSize: '13px', color: '#3B82F6' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Email ' + (c.name || c.email)}>
+                          {c.email}
+                        </a>
+                        {c.organization && <span style={{ fontSize: '12px', color: '#64748B' }}>{c.organization}</span>}
+                        <span style={{ fontSize: '12px', color: '#94A3B8' }}>{timeAgo(c.created_at)}</span>
+                      </div>
+                      {/* Message preview */}
+                      {c.message && (
+                        <div style={{ marginTop: '6px' }}>
+                          {isMessageExpanded ? (
+                            <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>{c.message}</p>
+                          ) : (
+                            <p style={{ fontSize: '13px', color: '#475569', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{c.message}</p>
+                          )}
+                          {c.message.length > 120 && (
+                            <button
+                              onClick={function() { setExpandedMessageId(isMessageExpanded ? null : c.id); }}
+                              style={{ fontSize: '12px', color: '#3B82F6', marginTop: '2px' }}
+                              className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                            >
+                              {isMessageExpanded ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Note preview */}
+                      {c.notes && !isExpanded && (
+                        <div className="flex items-start gap-1.5 mt-2">
+                          <StickyNote size={11} className="text-yellow-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                          <span style={{ fontSize: '12px', color: '#64748B', fontStyle: 'italic' }} className="line-clamp-1">{c.notes}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={function() { handleTogglePin(c); }}
+                        disabled={actionLoading === c.id + '_pin'}
+                        className={'w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 ' + (isPinned ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' : 'text-slate-300 hover:text-yellow-500 hover:bg-yellow-50')}
+                        aria-label={isPinned ? 'Unpin contact' : 'Pin contact'}
+                      >
+                        {isPinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />}
+                      </button>
+                      <button
+                        onClick={function() { handleToggleRead(c); }}
+                        disabled={actionLoading === c.id + '_read'}
+                        className={'w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isUnread ? 'text-blue-500 bg-blue-50 hover:bg-blue-100' : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100')}
+                        aria-label={isUnread ? 'Mark as read' : 'Mark as unread'}
+                      >
+                        {isUnread ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+                      </button>
+                      <button
+                        onClick={function() { setExpandedId(isExpanded ? null : c.id); }}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                      >
+                        {isExpanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+                      </button>
+                      {deleteConfirmId === c.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={function() { handleDelete(c.id); }}
+                            disabled={actionLoading === c.id + '_delete'}
+                            className="px-2 py-1 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                            aria-label="Confirm delete"
+                          >
+                            {actionLoading === c.id + '_delete' ? '...' : 'Delete'}
+                          </button>
+                          <button
+                            onClick={function() { setDeleteConfirmId(null); }}
+                            className="px-2 py-1 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors"
+                            aria-label="Cancel delete"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={function() { setDeleteConfirmId(c.id); }}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                          aria-label={'Delete ' + (c.name || c.email)}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded panel */}
+                  {isExpanded && (
+                    <div style={{ background: '#F8FAFC', borderTop: '1px solid #F1F5F9', padding: '16px 20px 20px 56px' }}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Category picker */}
+                        <div>
+                          <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#94A3B8', marginBottom: '8px' }}>Category</p>
+                          <div className="flex flex-wrap gap-2">
+                            {CONTACT_CATEGORIES.map(function(cat) {
+                              var style = getCategoryStyle(cat.value);
+                              var isActive = (c.category || 'general') === cat.value;
+                              return (
+                                <button
+                                  key={cat.value}
+                                  onClick={function() { handleCategoryChange(c.id, cat.value); }}
+                                  style={{
+                                    fontSize: '12px', fontWeight: 600,
+                                    padding: '4px 12px', borderRadius: '99px',
+                                    background: isActive ? style.bg : '#FFFFFF',
+                                    color: isActive ? style.color : '#64748B',
+                                    border: '1px solid ' + (isActive ? style.border : '#E2E8F0'),
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                  }}
+                                  className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                                  aria-pressed={isActive}
+                                >
+                                  {cat.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Internal notes */}
+                        <div>
+                          <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#94A3B8', marginBottom: '8px' }}>Internal Notes</p>
+                          {isEditingNote ? (
+                            <div>
+                              <label htmlFor={'note-' + c.id} className="sr-only">Internal note for {c.name || c.email}</label>
+                              <textarea
+                                id={'note-' + c.id}
+                                value={noteValues[c.id] || ''}
+                                onChange={function(e) {
+                                  var id = c.id;
+                                  var val = e.target.value;
+                                  setNoteValues(function(prev) { var next = Object.assign({}, prev); next[id] = val; return next; });
+                                }}
+                                rows={3}
+                                placeholder="Add an internal note..."
+                                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#475569', resize: 'vertical', outline: 'none' }}
+                                className="focus:ring-2 focus:ring-blue-500"
+                              />
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={function() { handleSaveNote(c.id); }}
+                                  disabled={savingNoteId === c.id}
+                                  className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                >
+                                  {savingNoteId === c.id ? 'Saving...' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={function() { setEditingNoteId(null); }}
+                                  className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              {noteValues[c.id] ? (
+                                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, marginBottom: '8px' }}>{noteValues[c.id]}</p>
+                              ) : (
+                                <p style={{ fontSize: '13px', color: '#94A3B8', fontStyle: 'italic', marginBottom: '8px' }}>No note yet.</p>
+                              )}
+                              <button
+                                onClick={function() { setEditingNoteId(c.id); }}
+                                className="flex items-center gap-1.5 text-xs text-blue-500 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                              >
+                                <StickyNote size={11} aria-hidden="true" />
+                                {noteValues[c.id] ? 'Edit note' : 'Add note'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -661,9 +1336,7 @@ function BugReportsTab() {
 
   async function loadReports() {
     setLoading(true);
-    var res = await supabase.from('bug_reports')
-      .select('*')
-      .order('created_at', { ascending: false });
+    var res = await supabase.from('bug_reports').select('*').order('created_at', { ascending: false });
     if (res.error) { mascotErrorToast('Failed to load bug reports.'); }
     else { setReports(res.data || []); }
     setLoading(false);
@@ -693,7 +1366,6 @@ function BugReportsTab() {
 
   return (
     <div>
-      {/* Summary strip */}
       {!loading && reports.length > 0 && (
         <div className="flex items-center gap-4 mb-6 flex-wrap">
           {newCount > 0 && (
@@ -711,8 +1383,6 @@ function BugReportsTab() {
           <span style={{ fontSize: '13px', color: '#64748B' }}>{reports.length} total report{reports.length !== 1 ? 's' : ''}</span>
         </div>
       )}
-
-      {/* Filters */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
         <Filter size={14} className="text-slate-400" aria-hidden="true" />
         <div className="relative">
@@ -749,15 +1419,11 @@ function BugReportsTab() {
           </button>
         )}
       </div>
-
-      {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? <TableSkeleton />
-          : reports.length === 0 ? (
-            <EmptyState icon={Bug} title="No bug reports yet" description="Reports submitted through the beta form will appear here." />
-          ) : filtered.length === 0 ? (
-            <EmptyState icon={Filter} title="No reports match your filters" description="Try adjusting the status, type, or severity filter." action="Clear filters" onAction={function() { setFilterStatus(''); setFilterType(''); setFilterSeverity(''); }} />
-          ) : (
+          : reports.length === 0 ? <EmptyState icon={Bug} title="No bug reports yet" description="Reports submitted through the beta form will appear here." />
+          : filtered.length === 0 ? <EmptyState icon={Filter} title="No reports match your filters" description="Try adjusting the status, type, or severity filter." action="Clear filters" onAction={function() { setFilterStatus(''); setFilterType(''); setFilterSeverity(''); }} />
+          : (
             <div role="list" aria-label="Bug reports">
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
                 <span style={{ fontSize: '12px', color: '#64748B' }}>{filtered.length} of {reports.length} report{reports.length !== 1 ? 's' : ''}</span>
@@ -766,72 +1432,39 @@ function BugReportsTab() {
                 var isExpanded = expandedId === report.id;
                 var sev = report.severity && SEVERITY_CONFIG[report.severity];
                 var stat = BUG_STATUS_CONFIG[report.status] || BUG_STATUS_CONFIG['new'];
-
                 return (
                   <div key={report.id} role="listitem" className="border-b border-slate-100 last:border-b-0">
-                    {/* Main row */}
                     <div className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-colors">
-                      {/* Type + severity badges */}
                       <div className="flex flex-col gap-1.5 flex-shrink-0 pt-0.5">
                         <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '0.5px', background: report.type === 'bug' ? '#FEE2E2' : '#EDE9FE', color: report.type === 'bug' ? '#DC2626' : '#7C3AED', border: '1px solid ' + (report.type === 'bug' ? '#FECACA' : '#DDD6FE') }}>
                           {report.type === 'bug' ? 'Bug' : 'Suggestion'}
                         </span>
-                        {sev && (
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '0.5px', background: sev.bg, color: sev.color, border: '1px solid ' + sev.border }}>
-                            {sev.label}
-                          </span>
-                        )}
+                        {sev && <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', textTransform: 'uppercase', letterSpacing: '0.5px', background: sev.bg, color: sev.color, border: '1px solid ' + sev.border }}>{sev.label}</span>}
                       </div>
-
-                      {/* Title + meta */}
                       <div className="flex-1 min-w-0">
                         <p style={{ fontSize: '14px', fontWeight: 600, color: '#0E1523', marginBottom: '4px' }}>{report.title}</p>
                         <div className="flex items-center gap-3 flex-wrap">
                           {report.app_area && <span style={{ fontSize: '12px', color: '#64748B' }}>{report.app_area === 'other' && report.other_area ? report.other_area : report.app_area}</span>}
-                          {report.reporter_email && (
-                            <a href={'mailto:' + report.reporter_email} style={{ fontSize: '12px', color: '#3B82F6' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Email ' + report.reporter_email}>
-                              {report.reporter_email}
-                            </a>
-                          )}
+                          {report.reporter_email && <a href={'mailto:' + report.reporter_email} style={{ fontSize: '12px', color: '#3B82F6' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">{report.reporter_email}</a>}
                           <span style={{ fontSize: '12px', color: '#94A3B8' }}>{timeAgo(report.created_at)}</span>
                         </div>
                       </div>
-
-                      {/* Screenshot thumbnail */}
                       {report.screenshot_url && (
                         <a href={report.screenshot_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label="View screenshot">
                           <img src={report.screenshot_url} alt="Bug screenshot" style={{ width: '48px', height: '36px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #E2E8F0' }} />
                         </a>
                       )}
-
-                      {/* Status dropdown */}
                       <div className="relative flex-shrink-0">
                         <label htmlFor={'status-' + report.id} className="sr-only">Status for {report.title}</label>
-                        <select
-                          id={'status-' + report.id}
-                          value={report.status}
-                          onChange={function(e) { handleStatusChange(report.id, e.target.value); }}
-                          disabled={updatingId === report.id}
-                          style={{ fontSize: '12px', fontWeight: 600, padding: '4px 24px 4px 10px', borderRadius: '99px', background: stat.bg, color: stat.color, border: '1px solid ' + stat.border, appearance: 'none', cursor: 'pointer', opacity: updatingId === report.id ? 0.5 : 1 }}
-                          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
+                        <select id={'status-' + report.id} value={report.status} onChange={function(e) { handleStatusChange(report.id, e.target.value); }} disabled={updatingId === report.id} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 24px 4px 10px', borderRadius: '99px', background: stat.bg, color: stat.color, border: '1px solid ' + stat.border, appearance: 'none', cursor: 'pointer', opacity: updatingId === report.id ? 0.5 : 1 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                           {BUG_STATUS_OPTIONS.map(function(s) { return <option key={s} value={s}>{BUG_STATUS_CONFIG[s].label}</option>; })}
                         </select>
                         <ChevronDown size={10} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: stat.color }} aria-hidden="true" />
                       </div>
-
-                      {/* Expand toggle */}
-                      <button
-                        onClick={function() { setExpandedId(isExpanded ? null : report.id); }}
-                        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                        aria-expanded={isExpanded}
-                        aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
-                      >
+                      <button onClick={function() { setExpandedId(isExpanded ? null : report.id); }} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" aria-expanded={isExpanded} aria-label={isExpanded ? 'Collapse details' : 'Expand details'}>
                         {isExpanded ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
                       </button>
                     </div>
-
-                    {/* Expanded detail row */}
                     {isExpanded && (
                       <div className="px-6 pb-5 bg-slate-50 border-t border-slate-100">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
@@ -853,9 +1486,7 @@ function BugReportsTab() {
                               {report.reported_url && (
                                 <div className="flex items-start gap-2">
                                   <ExternalLink size={12} className="text-slate-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-                                  <a href={report.reported_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3B82F6', wordBreak: 'break-all' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
-                                    {report.reported_url}
-                                  </a>
+                                  <a href={report.reported_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3B82F6', wordBreak: 'break-all' }} className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">{report.reported_url}</a>
                                 </div>
                               )}
                               {report.user_agent && (
@@ -883,115 +1514,6 @@ function BugReportsTab() {
             </div>
           )}
       </div>
-    </div>
-  );
-}
-
-// ─── Contacts tab ─────────────────────────────────────────────────────────────
-function ContactsTab() {
-  var [contacts, setContacts] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [search, setSearch] = useState('');
-
-  useEffect(function() { loadContacts(); }, []);
-
-  function loadContacts() {
-    setLoading(true);
-    supabase.from('marketing_contacts').select('*').order('created_at', { ascending: false })
-      .then(function(result) {
-        if (result.error) { mascotErrorToast('Failed to load contacts.'); }
-        else { setContacts(result.data || []); }
-        setLoading(false);
-      });
-  }
-
-  function handleExportCSV() {
-    var rows = [['Name', 'Email', 'Organization', 'Message', 'Date']];
-    contacts.forEach(function(c) {
-      rows.push([
-        '"' + (c.name || '').replace(/"/g, '""') + '"',
-        '"' + (c.email || '').replace(/"/g, '""') + '"',
-        '"' + (c.organization || '').replace(/"/g, '""') + '"',
-        '"' + (c.message || '').replace(/"/g, '""') + '"',
-        c.created_at ? new Date(c.created_at).toLocaleDateString() : '',
-      ]);
-    });
-    var csv = rows.map(function(r) { return r.join(','); }).join('\n');
-    var blob = new Blob([csv], { type: 'text/csv' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = 'syndicade_contacts.csv'; a.click();
-    URL.revokeObjectURL(url);
-    mascotSuccessToast('CSV exported!', contacts.length + ' contacts downloaded.');
-  }
-
-  var filtered = contacts.filter(function(c) {
-    var q = search.toLowerCase();
-    return (c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (c.organization || '').toLowerCase().includes(q);
-  });
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523' }}>Marketing Contacts</h2>
-          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '2px' }}>{loading ? '—' : contacts.length + ' total contact' + (contacts.length !== 1 ? 's' : '') + ' from the landing page'}</p>
-        </div>
-        <button onClick={handleExportCSV} disabled={loading || contacts.length === 0} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" aria-label="Export contacts as CSV">
-          <Download size={14} aria-hidden="true" /> Export CSV
-        </button>
-      </div>
-      <div className="relative mb-5">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-        <label htmlFor="contacts-search" className="sr-only">Search contacts</label>
-        <input id="contacts-search" type="search" value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search by name, email, or organization..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-      </div>
-      {loading && <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" aria-busy="true" aria-label="Loading contacts"><TableSkeleton /></div>}
-      {!loading && contacts.length === 0 && <div className="bg-white border border-slate-200 rounded-xl"><EmptyState icon={Mail} title="No contacts yet" description="Contacts appear when people submit the landing page form." /></div>}
-      {!loading && contacts.length > 0 && filtered.length === 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl">
-          <EmptyState icon={Search} title="No contacts match your search" description="Try a different name, email, or organization." action="Clear search" onAction={function() { setSearch(''); }} />
-        </div>
-      )}
-      {!loading && filtered.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Marketing contacts table">
-          <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
-            <span style={{ fontSize: '12px', color: '#64748B' }}>{search ? filtered.length + ' of ' + contacts.length + ' contacts' : contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '')}</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" role="table">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100" role="row">
-                  <th className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">Name</th>
-                  <th className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">Email</th>
-                  <th className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">Organization</th>
-                  <th className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">Message</th>
-                  <th className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(function(c, idx) {
-                  return (
-                    <tr key={c.id} className={'border-t border-slate-100 hover:bg-slate-50 transition-colors ' + (idx % 2 === 0 ? '' : 'bg-slate-50/50')} role="row">
-                      <td className="px-6 py-4" style={{ fontWeight: 600, color: '#0E1523', whiteSpace: 'nowrap' }}>{c.name || '—'}</td>
-                      <td className="px-6 py-4">
-                        <a href={'mailto:' + c.email} className="text-blue-500 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Email ' + (c.name || c.email)}>{c.email || '—'}</a>
-                      </td>
-                      <td className="px-6 py-4" style={{ color: '#475569' }}>{c.organization || '—'}</td>
-                      <td className="px-6 py-4 max-w-xs" style={{ color: '#64748B' }}>
-                        {c.message ? <span className="line-clamp-2" title={c.message}>{c.message}</span> : <span style={{ color: '#94A3B8' }}>—</span>}
-                      </td>
-                      <td className="px-6 py-4" style={{ color: '#94A3B8', whiteSpace: 'nowrap' }}>
-                        {c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1076,8 +1598,7 @@ function OverviewTab() {
       trialOrgs: allOrgs.filter(function(o) { return trialIds.has(o.id); }).length,
       freeOrgs: allOrgs.length - allOrgs.filter(function(o) { return paidIds.has(o.id) || trialIds.has(o.id); }).length,
       canceledSubs: canceledSubs.length, mrr: mrr.toFixed(2),
-      totalEvents: er.count || 0,
-      atRiskCount: atRisk.length,
+      totalEvents: er.count || 0, atRiskCount: atRisk.length,
       verifiedNonprofits: allOrgs.filter(function(o) { return o.is_verified_nonprofit; }).length,
     });
   }
@@ -1108,11 +1629,10 @@ function OverviewTab() {
     setActionLoading(null); loadPendingVerifications(); loadMetrics();
   }
 
-  var pendingActionsCount = (pendingVerifications.length) + (criticalBugs) + (metrics && metrics.atRiskCount || 0);
+  var pendingActionsCount = pendingVerifications.length + criticalBugs + (metrics && metrics.atRiskCount || 0);
 
   return (
     <div>
-      {/* Pending Actions summary */}
       {!loading && pendingActionsCount > 0 && (
         <section aria-label="Pending actions" className="mb-8">
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4">
@@ -1121,27 +1641,13 @@ function OverviewTab() {
               <span style={{ fontSize: '14px', fontWeight: 700, color: '#92400E' }}>Needs your attention</span>
             </div>
             <div className="flex items-center gap-4 flex-wrap">
-              {pendingVerifications.length > 0 && (
-                <span style={{ fontSize: '13px', color: '#92400E' }}>
-                  {pendingVerifications.length} pending verification{pendingVerifications.length !== 1 ? 's' : ''}
-                </span>
-              )}
-              {criticalBugs > 0 && (
-                <span style={{ fontSize: '13px', color: '#DC2626' }}>
-                  {criticalBugs} critical bug{criticalBugs !== 1 ? 's' : ''} open
-                </span>
-              )}
-              {metrics && metrics.atRiskCount > 0 && (
-                <span style={{ fontSize: '13px', color: '#B45309' }}>
-                  {metrics.atRiskCount} at-risk org{metrics.atRiskCount !== 1 ? 's' : ''}
-                </span>
-              )}
+              {pendingVerifications.length > 0 && <span style={{ fontSize: '13px', color: '#92400E' }}>{pendingVerifications.length} pending verification{pendingVerifications.length !== 1 ? 's' : ''}</span>}
+              {criticalBugs > 0 && <span style={{ fontSize: '13px', color: '#DC2626' }}>{criticalBugs} critical bug{criticalBugs !== 1 ? 's' : ''} open</span>}
+              {metrics && metrics.atRiskCount > 0 && <span style={{ fontSize: '13px', color: '#B45309' }}>{metrics.atRiskCount} at-risk org{metrics.atRiskCount !== 1 ? 's' : ''}</span>}
             </div>
           </div>
         </section>
       )}
-
-      {/* Filters + refresh */}
       <div className="flex items-center gap-4 flex-wrap mb-8">
         <div className="flex items-center gap-2 text-sm text-slate-500"><MapPin size={14} aria-hidden="true" />Filter by location:</div>
         <div className="relative">
@@ -1168,12 +1674,10 @@ function OverviewTab() {
           </button>
         </div>
       </div>
-
-      {/* Metrics */}
       <section aria-label="Key metrics" className="mb-10">
         <SectionLabel>Platform Overview</SectionLabel>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {loading ? Array.from({ length: 10 }).map(function(_, i) { return <MetricSkeleton key={i} />; })
+          {loading ? [1,2,3,4,5,6,7,8,9,10].map(function(i) { return <MetricSkeleton key={i} />; })
             : metrics ? (
               <>
                 <MetricCard icon={Users} label="Total Members" value={metrics.totalMembers.toLocaleString()} sub={'+' + metrics.newMembersWeek + ' this week'} iconBg="bg-blue-50" iconColor="text-blue-500" />
@@ -1190,12 +1694,10 @@ function OverviewTab() {
             ) : null}
         </div>
       </section>
-
-      {/* Plan breakdown */}
       <section className="mb-10" aria-label="Revenue by plan">
         <SectionLabel>Revenue by Plan</SectionLabel>
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {loading ? <div className="p-6">{Array.from({ length: 3 }).map(function(_, i) { return <div key={i} className="mb-3"><RowSkeleton /></div>; })}</div>
+          {loading ? <div className="p-6">{[1,2,3].map(function(i) { return <div key={i} className="mb-3"><RowSkeleton /></div>; })}</div>
             : planBreakdown.length === 0 ? <EmptyState icon={Zap} title="No paid subscriptions yet" description="Revenue breakdown appears once orgs start paying." />
             : (
               <table className="w-full" role="table" aria-label="Plan revenue breakdown">
@@ -1221,8 +1723,6 @@ function OverviewTab() {
             )}
         </div>
       </section>
-
-      {/* Two column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
         <section aria-label="At-risk organizations">
           <SectionLabel>At-Risk Orgs</SectionLabel>
@@ -1232,7 +1732,7 @@ function OverviewTab() {
               <span style={{ fontSize: '12px', color: '#92400E' }}>14+ days since signup — no plan</span>
             </div>
             <div className="divide-y divide-slate-100">
-              {loading ? Array.from({ length: 3 }).map(function(_, i) { return <div key={i} className="px-5 py-3"><RowSkeleton /></div>; })
+              {loading ? [1,2,3].map(function(i) { return <div key={i} className="px-5 py-3"><RowSkeleton /></div>; })
                 : atRiskOrgs.length === 0 ? (
                   <div className="px-5 py-8 text-center">
                     <CheckCircle size={26} className="text-green-500 mx-auto mb-2" aria-hidden="true" />
@@ -1261,7 +1761,7 @@ function OverviewTab() {
               <span style={{ fontSize: '12px', color: '#64748B' }}>Most recently created orgs</span>
             </div>
             <div className="divide-y divide-slate-100">
-              {loading ? Array.from({ length: 3 }).map(function(_, i) { return <div key={i} className="px-5 py-3"><RowSkeleton /></div>; })
+              {loading ? [1,2,3].map(function(i) { return <div key={i} className="px-5 py-3"><RowSkeleton /></div>; })
                 : recentOrgs.length === 0 ? <EmptyState icon={Building2} title="No organizations yet" description="New orgs will appear here." />
                 : recentOrgs.map(function(org) {
                   return (
@@ -1279,12 +1779,10 @@ function OverviewTab() {
           </div>
         </section>
       </div>
-
-      {/* Verification queue */}
       <section aria-label="Pending verifications" className="mb-10">
         <SectionLabel>Verification Queue</SectionLabel>
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {loading ? <div className="p-6">{Array.from({ length: 2 }).map(function(_, i) { return <div key={i} className="mb-3"><RowSkeleton /></div>; })}</div>
+          {loading ? <div className="p-6">{[1,2].map(function(i) { return <div key={i} className="mb-3"><RowSkeleton /></div>; })}</div>
             : pendingVerifications.length === 0 ? (
               <div className="px-6 py-10 text-center">
                 <CheckCircle size={36} className="text-green-500 mx-auto mb-3" aria-hidden="true" />
@@ -1336,16 +1834,17 @@ export default function StaffDashboard() {
   var [authChecked, setAuthChecked] = useState(false);
   var [activeTab, setActiveTab] = useState('overview');
 
+  // Content moved to end (after Bug Reports) per product request
   var TABS = [
     { key: 'overview',    label: 'Overview',       icon: BarChart2 },
     { key: 'members',     label: 'Members',         icon: Users },
     { key: 'orgs',        label: 'Organizations',   icon: Building2 },
-    { key: 'content',     label: 'Content',         icon: FileText },
     { key: 'financials',  label: 'Financials',      icon: Receipt },
     { key: 'promo_codes', label: 'Promo Codes',     icon: Tag },
     { key: 'goals',       label: 'Goals',           icon: TrendingUp },
     { key: 'contacts',    label: 'Contacts',        icon: Mail },
     { key: 'bug_reports', label: 'Bug Reports',     icon: Bug },
+    { key: 'content',     label: 'Content',         icon: FileText },
   ];
 
   useEffect(function() {
@@ -1372,7 +1871,6 @@ export default function StaffDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]" style={{ fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm" role="banner">
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <div>
@@ -1389,7 +1887,6 @@ export default function StaffDashboard() {
         </div>
       </header>
 
-      {/* Tab nav */}
       <nav className="bg-white border-b border-slate-200 px-6" aria-label="Staff dashboard sections" role="tablist">
         <div className="max-w-[1600px] mx-auto flex overflow-x-auto">
           {TABS.map(function(tab) {
@@ -1404,17 +1901,16 @@ export default function StaffDashboard() {
         </div>
       </nav>
 
-      {/* Content */}
       <main className="max-w-[1600px] mx-auto px-6 py-8" role="main">
         {activeTab === 'overview'    && <OverviewTab />}
         {activeTab === 'members'     && <MembersTab />}
         {activeTab === 'orgs'        && <OrgsTab />}
-        {activeTab === 'content'     && <ContentEditor staffUserId={staffMember && staffMember.user_id} />}
         {activeTab === 'financials'  && <StaffFinancials staffUserId={staffMember && staffMember.user_id} />}
         {activeTab === 'promo_codes' && <StaffPromoCodes />}
         {activeTab === 'goals'       && <StaffGoals />}
         {activeTab === 'contacts'    && <ContactsTab />}
         {activeTab === 'bug_reports' && <BugReportsTab />}
+        {activeTab === 'content'     && <ContentEditor staffUserId={staffMember && staffMember.user_id} />}
       </main>
     </div>
   );
