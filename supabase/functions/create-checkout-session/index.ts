@@ -5,7 +5,7 @@ var corsHeaders = {
 
 var PRICE_IDS = {
   listed_month: 'price_1TbJvlKMpHjSZayWgtSa1gIH',
-listed_year:  'price_1TbJwAKMpHjSZayWQ2REzDyi',
+  listed_year:  'price_1TbJwAKMpHjSZayWQ2REzDyi',
   starter_month: 'price_1TMnuAKMpHjSZayWhfMtS8AB',
   starter_year:  'price_1TMnuAKMpHjSZayWbYHYUoS8',
   growth_month:  'price_1TOKEKKMpHjSZayWoryYepSM',
@@ -48,19 +48,6 @@ async function sbUpsert(path, data, serviceKey, supabaseUrl) {
     },
     body: JSON.stringify(data),
   })
-}
-
-async function sbRpc(fnName, params, serviceKey, supabaseUrl) {
-  var res = await fetch(supabaseUrl + '/rest/v1/rpc/' + fnName, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + serviceKey,
-      'apikey': serviceKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(params),
-  })
-  return res.json()
 }
 
 async function stripePost(path, body, secretKey) {
@@ -207,12 +194,11 @@ Deno.serve(async function(req) {
 
     // ── Plan guards ───────────────────────────────────────────────────────────
     if (plan === 'student' && interval === 'year') throw new Error('Student plan is monthly only')
-    // Listed plan supports both monthly and annual — no guard needed
 
     var priceId = PRICE_IDS[plan + '_' + interval]
     if (!priceId) throw new Error('Invalid plan or interval')
 
-    // ── Success/cancel URLs — Listed orgs go to /listing, others go to /billing
+    // ── Success/cancel URLs ───────────────────────────────────────────────────
     var defaultSuccess = plan === 'listed'
       ? 'https://syndicade.org/organizations/' + org_id + '/listing?billing=success'
       : 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
@@ -223,7 +209,8 @@ Deno.serve(async function(req) {
     var successUrl = body.success_url || defaultSuccess
     var cancelUrl  = body.cancel_url  || defaultCancel
 
-    // ── Calculate trial days (promo code can extend trial) ───────────────────
+    // ── Calculate trial days ──────────────────────────────────────────────────
+    // months_free extends trial; percent_off and flat_off apply via Stripe coupon instead
     var trialDays = TRIAL_DAYS
     if (validatedCode && validatedCode.type === 'months_free') {
       trialDays = Math.max(TRIAL_DAYS, Math.round(validatedCode.value * 30))
@@ -241,6 +228,20 @@ Deno.serve(async function(req) {
       success_url: successUrl,
       cancel_url: cancelUrl,
       'metadata[organization_id]': org_id,
+    }
+
+    // ── Apply Stripe coupon for percent_off and flat_off ──────────────────────
+    // months_free is handled via trial extension above — no coupon needed
+    if (validatedCode && (validatedCode.type === 'percent_off' || validatedCode.type === 'flat_off')) {
+      if (validatedCode.stripe_coupon_id) {
+        // Apply to the subscription so it persists on recurring invoices (percent_off: forever)
+        // or applies to first invoice only (flat_off: once) — both handled by Stripe coupon duration
+        sessionParams['discounts[0][coupon]'] = validatedCode.stripe_coupon_id
+      } else {
+        // stripe_coupon_id missing — code was created before Stripe integration
+        // Log warning but don't block checkout; discount won't apply in Stripe
+        console.warn('Promo code ' + validatedCode.code + ' has no stripe_coupon_id — discount not applied in Stripe')
+      }
     }
 
     if (validatedCode) {
