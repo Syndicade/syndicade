@@ -31,6 +31,7 @@ var ICONS = {
   template:   ['M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2'],
   pencil:     ['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
   check:      'M5 13l4 4L19 7',
+  warning:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
 };
 
 var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900';
@@ -101,6 +102,59 @@ function QuestionSkeleton() {
   );
 }
 
+// ─── ConfirmModal ──────────────────────────────────────────────────────────────
+function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel, danger }) {
+  useEffect(function() {
+    function handleEscape(e) { if (e.key === 'Escape') onCancel(); }
+    if (isOpen) document.addEventListener('keydown', handleEscape);
+    return function() { document.removeEventListener('keydown', handleEscape); };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        <div className="flex items-start gap-4 mb-5">
+          <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ' + (danger ? 'bg-red-100' : 'bg-amber-100')}>
+            <Icon path={ICONS.warning} className={'h-5 w-5 ' + (danger ? 'text-red-600' : 'text-amber-600')} />
+          </div>
+          <div>
+            <h3 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h3>
+            <p className="text-sm text-[#475569]">{message}</p>
+          </div>
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 text-sm transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={'px-4 py-2 font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm transition-colors text-white ' + (danger ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500')}
+            autoFocus
+          >
+            {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TemplatePicker ────────────────────────────────────────────────────────────
 function TemplatePicker({ organizationId, onLoad, onClose }) {
   var [templates, setTemplates]       = useState([]);
@@ -109,6 +163,7 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
   var [renameValue, setRenameValue]   = useState('');
   var [renameSaving, setRenameSaving] = useState(false);
   var [deletingId, setDeletingId]     = useState(null);
+  var [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
 
   useEffect(function() { fetchTemplates(); }, []);
 
@@ -160,8 +215,14 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
     }
   }
 
-  async function deleteTemplate(tmplId) {
-    if (!window.confirm('Delete this template? This cannot be undone.')) return;
+  function promptDeleteTemplate(tmpl) {
+    setConfirmDelete({ id: tmpl.id, name: tmpl.name });
+  }
+
+  async function confirmDeleteTemplate() {
+    if (!confirmDelete) return;
+    var tmplId = confirmDelete.id;
+    setConfirmDelete(null);
     setDeletingId(tmplId);
     try {
       var r = await supabase
@@ -184,136 +245,149 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="template-picker-title"
-    >
+    <>
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
-        onClick={function(e) { e.stopPropagation(); }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-picker-title"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Icon path={ICONS.template} className="h-5 w-5 text-[#64748B]" />
-            <h3 id="template-picker-title" className="text-base font-bold text-[#0E1523]">Load Template</h3>
+        <div
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
+          onClick={function(e) { e.stopPropagation(); }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Icon path={ICONS.template} className="h-5 w-5 text-[#64748B]" />
+              <h3 id="template-picker-title" className="text-base font-bold text-[#0E1523]">Load Template</h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              aria-label="Close template picker"
+            >
+              <Icon path={ICONS.x} className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            aria-label="Close template picker"
-          >
-            <Icon path={ICONS.x} className="h-4 w-4" />
-          </button>
-        </div>
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-2">
-          {loading ? (
-            <div className="space-y-2">
-              {[1,2,3].map(function(i) {
+          {/* Body */}
+          <div className="overflow-y-auto flex-1 p-4 space-y-2">
+            {loading ? (
+              <div className="space-y-2">
+                {[1,2,3].map(function(i) {
+                  return (
+                    <div key={i} className="border border-slate-200 rounded-lg p-4 animate-pulse">
+                      <div className="h-4 w-40 bg-gray-200 rounded mb-2" />
+                      <div className="h-3 w-24 bg-gray-100 rounded" />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Icon path={ICONS.template} className="h-6 w-6 text-[#94A3B8]" />
+                </div>
+                <p className="font-semibold text-[#0E1523] text-sm mb-1">No templates yet</p>
+                <p className="text-xs text-[#64748B]">Save a survey as a template from the survey list to reuse it here.</p>
+              </div>
+            ) : (
+              templates.map(function(tmpl) {
+                var qCount = (tmpl.template_data && tmpl.template_data.questions) ? tmpl.template_data.questions.length : 0;
+                var isDeleting = deletingId === tmpl.id;
+
                 return (
-                  <div key={i} className="border border-slate-200 rounded-lg p-4 animate-pulse">
-                    <div className="h-4 w-40 bg-gray-200 rounded mb-2" />
-                    <div className="h-3 w-24 bg-gray-100 rounded" />
+                  <div
+                    key={tmpl.id}
+                    className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                    role="listitem"
+                  >
+                    {renamingId === tmpl.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={function(e) { setRenameValue(e.target.value); }}
+                          onKeyDown={function(e) { handleRenameKeyDown(e, tmpl.id); }}
+                          className="flex-1 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#0E1523]"
+                          aria-label="Rename template"
+                          autoFocus
+                          maxLength={100}
+                        />
+                        <button
+                          type="button"
+                          onClick={function() { saveRename(tmpl.id); }}
+                          disabled={renameSaving}
+                          className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                          aria-label="Save rename"
+                        >
+                          <Icon path={ICONS.check} className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={function() { setRenamingId(null); }}
+                          className="p-1.5 text-[#64748B] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
+                          aria-label="Cancel rename"
+                        >
+                          <Icon path={ICONS.x} className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-[#0E1523] text-sm truncate">{tmpl.name}</p>
+                          <p className="text-xs text-[#64748B] mt-0.5">{qCount + ' question' + (qCount !== 1 ? 's' : '')}</p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={function() { onLoad(tmpl); }}
+                            className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                          >
+                            Load
+                          </button>
+                          <button
+                            type="button"
+                            onClick={function() { startRename(tmpl); }}
+                            className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
+                            aria-label={'Rename template: ' + tmpl.name}
+                          >
+                            <Icon path={ICONS.pencil} className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={function() { promptDeleteTemplate(tmpl); }}
+                            disabled={isDeleting}
+                            className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 transition-colors"
+                            aria-label={'Delete template: ' + tmpl.name}
+                          >
+                            <Icon path={ICONS.trash} className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
-              })}
-            </div>
-          ) : templates.length === 0 ? (
-            <div className="text-center py-10">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Icon path={ICONS.template} className="h-6 w-6 text-[#94A3B8]" />
-              </div>
-              <p className="font-semibold text-[#0E1523] text-sm mb-1">No templates yet</p>
-              <p className="text-xs text-[#64748B]">Save a survey as a template from the survey list to reuse it here.</p>
-            </div>
-          ) : (
-            templates.map(function(tmpl) {
-              var qCount = (tmpl.template_data && tmpl.template_data.questions) ? tmpl.template_data.questions.length : 0;
-              var isDeleting = deletingId === tmpl.id;
-
-              return (
-                <div
-                  key={tmpl.id}
-                  className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                  role="listitem"
-                >
-                  {renamingId === tmpl.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={renameValue}
-                        onChange={function(e) { setRenameValue(e.target.value); }}
-                        onKeyDown={function(e) { handleRenameKeyDown(e, tmpl.id); }}
-                        className="flex-1 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#0E1523]"
-                        aria-label="Rename template"
-                        autoFocus
-                        maxLength={100}
-                      />
-                      <button
-                        type="button"
-                        onClick={function() { saveRename(tmpl.id); }}
-                        disabled={renameSaving}
-                        className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-                        aria-label="Save rename"
-                      >
-                        <Icon path={ICONS.check} className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={function() { setRenamingId(null); }}
-                        className="p-1.5 text-[#64748B] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
-                        aria-label="Cancel rename"
-                      >
-                        <Icon path={ICONS.x} className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-[#0E1523] text-sm truncate">{tmpl.name}</p>
-                        <p className="text-xs text-[#64748B] mt-0.5">{qCount + ' question' + (qCount !== 1 ? 's' : '')}</p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={function() { onLoad(tmpl); }}
-                          className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={function() { startRename(tmpl); }}
-                          className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
-                          aria-label={'Rename template: ' + tmpl.name}
-                        >
-                          <Icon path={ICONS.pencil} className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={function() { deleteTemplate(tmpl.id); }}
-                          disabled={isDeleting}
-                          className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 transition-colors"
-                          aria-label={'Delete template: ' + tmpl.name}
-                        >
-                          <Icon path={ICONS.trash} className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
+              })
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Confirm delete modal — z-[70] sits above the template picker */}
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        title="Delete template?"
+        message={confirmDelete ? 'Delete "' + confirmDelete.name + '"? This cannot be undone.' : ''}
+        confirmLabel="Delete"
+        danger={true}
+        onConfirm={confirmDeleteTemplate}
+        onCancel={function() { setConfirmDelete(null); }}
+      />
+    </>
   );
 }
 
@@ -590,6 +664,8 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
       };
 
       var surveyId;
+      // Track approval status separately so we can use it in the success message
+      var approvalStatus = 'approved';
 
       if (isEditMode) {
         // ── UPDATE path ──
@@ -606,7 +682,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
         var memR = await supabase.from('memberships').select('role')
           .eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').maybeSingle();
         var userRole = memR.data ? memR.data.role : 'member';
-        var approvalStatus = userRole === 'admin' ? 'approved' : 'pending';
+        approvalStatus = userRole === 'admin' ? 'approved' : 'pending';
 
         var sR = await supabase.from('surveys').insert(Object.assign({}, surveyPayload, {
           organization_id: organizationId,
@@ -663,9 +739,10 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
       if (isEditMode) {
         mascotSuccessToast('Survey updated!');
       } else {
-        var approvalMsg = (surveyPayload.approval_status === 'pending') ? 'Survey submitted for approval.' : 'Survey created!';
-        mascotSuccessToast(isEditMode ? 'Survey updated!' : approvalMsg);
+        var approvalMsg = approvalStatus === 'pending' ? 'Survey submitted for approval.' : 'Survey created!';
+        mascotSuccessToast(approvalMsg);
       }
+
       handleClose();
       if (onSuccess) onSuccess({ id: surveyId });
     } catch (err) {
@@ -1004,230 +1081,224 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
                 </button>
               </div>
 
-              {loading ? (
-                <div className="space-y-4">
-                  {questions.map(function(q) { return <QuestionSkeleton key={q.id} />; })}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {questions.map(function(question, index) {
-                    var showOptions    = needsOptions(question.question_type);
-                    var isRating       = question.question_type === 'rating';
-                    var conditionableQs = getConditionableQuestions(question.id);
-                    var condAnswers    = question.condition_question_id ? getConditionAnswers(question.condition_question_id) : [];
+              <div className="space-y-4">
+                {questions.map(function(question, index) {
+                  var showOptions    = needsOptions(question.question_type);
+                  var isRating       = question.question_type === 'rating';
+                  var conditionableQs = getConditionableQuestions(question.id);
+                  var condAnswers    = question.condition_question_id ? getConditionAnswers(question.condition_question_id) : [];
 
-                    return (
-                      <div
-                        key={question.id}
-                        className={'border border-slate-200 rounded-xl p-5 space-y-4 bg-white ' + (question.has_condition ? 'border-l-4 border-l-blue-300' : '')}
-                      >
-                        {/* Question header */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#64748B] uppercase tracking-widest">
-                            {'Question ' + (index + 1)}
-                            {question.has_condition && <span className="ml-2 text-blue-500 normal-case font-semibold">· conditional</span>}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={function() { moveQuestion(question.id, 'up'); }}
-                              disabled={index === 0}
-                              className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
-                              aria-label="Move question up"
-                            >
-                              <Icon path={ICONS.chevUp} className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={function() { moveQuestion(question.id, 'down'); }}
-                              disabled={index === questions.length - 1}
-                              className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
-                              aria-label="Move question down"
-                            >
-                              <Icon path={ICONS.chevDown} className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={function() { removeQuestion(question.id); }}
-                              className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ml-1"
-                              aria-label={'Delete question ' + (index + 1)}
-                            >
-                              <Icon path={ICONS.trash} className="h-4 w-4" />
-                            </button>
-                          </div>
+                  return (
+                    <div
+                      key={question.id}
+                      className={'border border-slate-200 rounded-xl p-5 space-y-4 bg-white ' + (question.has_condition ? 'border-l-4 border-l-blue-300' : '')}
+                    >
+                      {/* Question header */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#64748B] uppercase tracking-widest">
+                          {'Question ' + (index + 1)}
+                          {question.has_condition && <span className="ml-2 text-blue-500 normal-case font-semibold">· conditional</span>}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={function() { moveQuestion(question.id, 'up'); }}
+                            disabled={index === 0}
+                            className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
+                            aria-label="Move question up"
+                          >
+                            <Icon path={ICONS.chevUp} className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={function() { moveQuestion(question.id, 'down'); }}
+                            disabled={index === questions.length - 1}
+                            className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
+                            aria-label="Move question down"
+                          >
+                            <Icon path={ICONS.chevDown} className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={function() { removeQuestion(question.id); }}
+                            className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ml-1"
+                            aria-label={'Delete question ' + (index + 1)}
+                          >
+                            <Icon path={ICONS.trash} className="h-4 w-4" />
+                          </button>
                         </div>
+                      </div>
 
-                        {/* Question text */}
+                      {/* Question text */}
+                      <div>
+                        <label htmlFor={'q-text-' + question.id} className="sr-only">{'Question ' + (index + 1) + ' text'}</label>
+                        <input
+                          id={'q-text-' + question.id}
+                          type="text"
+                          value={question.question_text}
+                          onChange={function(e) { updateQuestion(question.id, 'question_text', e.target.value); }}
+                          className={inputCls}
+                          placeholder="Enter your question"
+                          required
+                          aria-required="true"
+                        />
+                      </div>
+
+                      {/* Type + Required */}
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label htmlFor={'q-text-' + question.id} className="sr-only">{'Question ' + (index + 1) + ' text'}</label>
-                          <input
-                            id={'q-text-' + question.id}
-                            type="text"
-                            value={question.question_text}
-                            onChange={function(e) { updateQuestion(question.id, 'question_text', e.target.value); }}
+                          <label htmlFor={'q-type-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Question Type</label>
+                          <select
+                            id={'q-type-' + question.id}
+                            value={question.question_type}
+                            onChange={function(e) { updateQuestion(question.id, 'question_type', e.target.value); }}
                             className={inputCls}
-                            placeholder="Enter your question"
-                            required
-                            aria-required="true"
-                          />
+                          >
+                            {QUESTION_TYPES.map(function(t) { return <option key={t.value} value={t.value}>{t.label}</option>; })}
+                          </select>
                         </div>
+                        <div className="flex items-end pb-3">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              id={'q-req-' + question.id}
+                              type="checkbox"
+                              checked={question.required}
+                              onChange={function(e) { updateQuestion(question.id, 'required', e.target.checked); }}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                            />
+                            <div>
+                              <span className="text-sm font-semibold text-[#0E1523]">Required</span>
+                              <p className="text-xs text-[#94A3B8]">Must be answered</p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
 
-                        {/* Type + Required */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label htmlFor={'q-type-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Question Type</label>
-                            <select
-                              id={'q-type-' + question.id}
-                              value={question.question_type}
-                              onChange={function(e) { updateQuestion(question.id, 'question_type', e.target.value); }}
-                              className={inputCls}
-                            >
-                              {QUESTION_TYPES.map(function(t) { return <option key={t.value} value={t.value}>{t.label}</option>; })}
-                            </select>
-                          </div>
-                          <div className="flex items-end pb-3">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <input
-                                id={'q-req-' + question.id}
-                                type="checkbox"
-                                checked={question.required}
-                                onChange={function(e) { updateQuestion(question.id, 'required', e.target.checked); }}
-                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                              />
+                      {isRating && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-xs text-blue-700 font-medium">Rating scale: 1 (lowest) to 5 (highest) — options are generated automatically.</p>
+                        </div>
+                      )}
+
+                      {showOptions && (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-xs font-semibold text-[#64748B]">Options</p>
+                          {(question.options || []).map(function(opt, oi) {
+                            return (
+                              <div key={oi} className="flex items-center gap-2">
+                                <span className="text-[#94A3B8] text-xs font-bold w-5 text-right flex-shrink-0">{oi + 1}.</span>
+                                <input
+                                  type="text"
+                                  value={opt}
+                                  onChange={function(e) { updateOption(question.id, oi, e.target.value); }}
+                                  className={inputCls}
+                                  placeholder={'Option ' + (oi + 1)}
+                                  aria-label={'Option ' + (oi + 1) + ' for question ' + (index + 1)}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={function() { removeOption(question.id, oi); }}
+                                  className="p-2 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors flex-shrink-0"
+                                  aria-label={'Remove option ' + (oi + 1)}
+                                >
+                                  <Icon path={ICONS.x} className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={function() { addOption(question.id); }}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors mt-1"
+                          >
+                            <Icon path={ICONS.plus} className="h-4 w-4" />Add Option
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Conditional logic */}
+                      {index > 0 && conditionableQs.length > 0 && (
+                        <div className="pt-3 border-t border-slate-100">
+                          <label className="flex items-center gap-3 cursor-pointer mb-3">
+                            <input
+                              type="checkbox"
+                              checked={question.has_condition}
+                              onChange={function(e) {
+                                updateQuestion(question.id, 'has_condition', e.target.checked);
+                                if (!e.target.checked) {
+                                  updateQuestion(question.id, 'condition_question_id', null);
+                                  updateQuestion(question.id, 'condition_answer', '');
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Icon path={ICONS.filter} className="h-4 w-4 text-blue-500" />
+                              <span className="text-sm font-semibold text-[#0E1523]">Only show if...</span>
+                            </div>
+                          </label>
+                          {question.has_condition && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
                               <div>
-                                <span className="text-sm font-semibold text-[#0E1523]">Required</span>
-                                <p className="text-xs text-[#94A3B8]">Must be answered</p>
-                              </div>
-                            </label>
-                          </div>
-                        </div>
-
-                        {isRating && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p className="text-xs text-blue-700 font-medium">Rating scale: 1 (lowest) to 5 (highest) — options are generated automatically.</p>
-                          </div>
-                        )}
-
-                        {showOptions && (
-                          <div className="space-y-2 pt-1">
-                            <p className="text-xs font-semibold text-[#64748B]">Options</p>
-                            {(question.options || []).map(function(opt, oi) {
-                              return (
-                                <div key={oi} className="flex items-center gap-2">
-                                  <span className="text-[#94A3B8] text-xs font-bold w-5 text-right flex-shrink-0">{oi + 1}.</span>
-                                  <input
-                                    type="text"
-                                    value={opt}
-                                    onChange={function(e) { updateOption(question.id, oi, e.target.value); }}
-                                    className={inputCls}
-                                    placeholder={'Option ' + (oi + 1)}
-                                    aria-label={'Option ' + (oi + 1) + ' for question ' + (index + 1)}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={function() { removeOption(question.id, oi); }}
-                                    className="p-2 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors flex-shrink-0"
-                                    aria-label={'Remove option ' + (oi + 1)}
-                                  >
-                                    <Icon path={ICONS.x} className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                            <button
-                              type="button"
-                              onClick={function() { addOption(question.id); }}
-                              className="inline-flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors mt-1"
-                            >
-                              <Icon path={ICONS.plus} className="h-4 w-4" />Add Option
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Conditional logic */}
-                        {index > 0 && conditionableQs.length > 0 && (
-                          <div className="pt-3 border-t border-slate-100">
-                            <label className="flex items-center gap-3 cursor-pointer mb-3">
-                              <input
-                                type="checkbox"
-                                checked={question.has_condition}
-                                onChange={function(e) {
-                                  updateQuestion(question.id, 'has_condition', e.target.checked);
-                                  if (!e.target.checked) {
-                                    updateQuestion(question.id, 'condition_question_id', null);
+                                <label htmlFor={'cond-q-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Question</label>
+                                <select
+                                  id={'cond-q-' + question.id}
+                                  value={question.condition_question_id || ''}
+                                  onChange={function(e) {
+                                    updateQuestion(question.id, 'condition_question_id', e.target.value || null);
                                     updateQuestion(question.id, 'condition_answer', '');
-                                  }
-                                }}
-                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                              />
-                              <div className="flex items-center gap-2">
-                                <Icon path={ICONS.filter} className="h-4 w-4 text-blue-500" />
-                                <span className="text-sm font-semibold text-[#0E1523]">Only show if...</span>
+                                  }}
+                                  className={inputCls}
+                                >
+                                  <option value="">Select a question...</option>
+                                  {conditionableQs.map(function(cq) {
+                                    return (
+                                      <option key={cq.id} value={cq.id}>
+                                        {'Q' + (questions.indexOf(cq) + 1) + ': ' + cq.question_text.slice(0, 40) + (cq.question_text.length > 40 ? '...' : '')}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
                               </div>
-                            </label>
-                            {question.has_condition && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
-                                <div>
-                                  <label htmlFor={'cond-q-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Question</label>
+                              <div>
+                                <label htmlFor={'cond-a-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Answer is</label>
+                                {question.condition_question_id && condAnswers.length > 0 ? (
                                   <select
-                                    id={'cond-q-' + question.id}
-                                    value={question.condition_question_id || ''}
-                                    onChange={function(e) {
-                                      updateQuestion(question.id, 'condition_question_id', e.target.value || null);
-                                      updateQuestion(question.id, 'condition_answer', '');
-                                    }}
+                                    id={'cond-a-' + question.id}
+                                    value={question.condition_answer || ''}
+                                    onChange={function(e) { updateQuestion(question.id, 'condition_answer', e.target.value); }}
                                     className={inputCls}
                                   >
-                                    <option value="">Select a question...</option>
-                                    {conditionableQs.map(function(cq) {
-                                      return (
-                                        <option key={cq.id} value={cq.id}>
-                                          {'Q' + (questions.indexOf(cq) + 1) + ': ' + cq.question_text.slice(0, 40) + (cq.question_text.length > 40 ? '...' : '')}
-                                        </option>
-                                      );
-                                    })}
+                                    <option value="">Select an answer...</option>
+                                    {condAnswers.map(function(a) { return <option key={a} value={a}>{a}</option>; })}
                                   </select>
-                                </div>
-                                <div>
-                                  <label htmlFor={'cond-a-' + question.id} className="block text-xs font-semibold text-[#64748B] mb-1">Answer is</label>
-                                  {question.condition_question_id && condAnswers.length > 0 ? (
-                                    <select
-                                      id={'cond-a-' + question.id}
-                                      value={question.condition_answer || ''}
-                                      onChange={function(e) { updateQuestion(question.id, 'condition_answer', e.target.value); }}
-                                      className={inputCls}
-                                    >
-                                      <option value="">Select an answer...</option>
-                                      {condAnswers.map(function(a) { return <option key={a} value={a}>{a}</option>; })}
-                                    </select>
-                                  ) : (
-                                    <input
-                                      id={'cond-a-' + question.id}
-                                      type="text"
-                                      value={question.condition_answer || ''}
-                                      onChange={function(e) { updateQuestion(question.id, 'condition_answer', e.target.value); }}
-                                      placeholder="Expected answer..."
-                                      className={inputCls}
-                                    />
-                                  )}
-                                </div>
-                                {question.condition_question_id && question.condition_answer && (
-                                  <div className="md:col-span-2">
-                                    <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 flex items-center gap-2">
-                                      <Icon path={ICONS.filter} className="h-3.5 w-3.5 flex-shrink-0" />
-                                      {'This question will only appear when the answer to the selected question is \u201c' + question.condition_answer + '\u201d'}
-                                    </p>
-                                  </div>
+                                ) : (
+                                  <input
+                                    id={'cond-a-' + question.id}
+                                    type="text"
+                                    value={question.condition_answer || ''}
+                                    onChange={function(e) { updateQuestion(question.id, 'condition_answer', e.target.value); }}
+                                    placeholder="Expected answer..."
+                                    className={inputCls}
+                                  />
                                 )}
                               </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                              {question.condition_question_id && question.condition_answer && (
+                                <div className="md:col-span-2">
+                                  <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 flex items-center gap-2">
+                                    <Icon path={ICONS.filter} className="h-3.5 w-3.5 flex-shrink-0" />
+                                    {'This question will only appear when the answer to the selected question is \u201c' + question.condition_answer + '\u201d'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <button
                 type="button"
@@ -1265,7 +1336,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Creating...
+                  {isEditMode ? 'Saving...' : 'Creating...'}
                 </>
               ) : (
                 <>

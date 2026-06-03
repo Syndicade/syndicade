@@ -39,6 +39,39 @@ async function alreadySent(orgId: string, eventType: string): Promise<boolean> {
   return !!data;
 }
 
+/**
+ * Check whether a member has opted out of a specific notification type for an org.
+ * Logic mirrors notificationService.js:
+ *   - Missing row = all notifications ON (opt-out model)
+ *   - muted = true means ALL notifications off for that org
+ *   - overrides is a jsonb map of { [type]: false } for individually disabled types
+ */
+async function isMemberNotificationEnabled(userId: string, orgId: string, notifType: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('member_notification_prefs')
+      .select('muted, overrides')
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
+      .maybeSingle();
+
+    // No row = all on
+    if (!data) return true;
+
+    // Org-level mute
+    if (data.muted) return false;
+
+    // Per-type override (false = off)
+    if (data.overrides && data.overrides[notifType] === false) return false;
+
+    return true;
+  } catch (err) {
+    // On error, default to sending (don't silently drop emails)
+    console.error('Pref check error for user=' + userId + ' org=' + orgId + ':', err);
+    return true;
+  }
+}
+
 function getNextCloseDate(closedAt: Date, interval: string): Date | null {
   var next = new Date(closedAt);
   if (interval === 'weekly')    { next.setDate(next.getDate() + 7); return next; }
@@ -593,10 +626,10 @@ serve(async (req) => {
           '</strong>.</p>'
         : '';
 
-      // Get all active members for this org
+      // Get all active members for this org, including user_id for pref checks
       var { data: pollMemberships } = await supabase
         .from('memberships')
-        .select('member_id, members(email, display_name, first_name, last_name)')
+        .select('member_id, members(user_id, email, display_name, first_name, last_name)')
         .eq('organization_id', poll.organization_id)
         .eq('status', 'active');
 
@@ -616,6 +649,16 @@ serve(async (req) => {
 
         var pmEmail = (pm.members as any)?.email;
         if (!pmEmail) continue;
+
+        // ── Check notification preferences ──
+        var pmUserId = (pm.members as any)?.user_id;
+        if (pmUserId) {
+          var pollNotifEnabled = await isMemberNotificationEnabled(pmUserId, poll.organization_id, 'new_poll');
+          if (!pollNotifEnabled) {
+            console.log('Poll reminder skipped (pref opt-out): poll=' + poll.id + ' user=' + pmUserId);
+            continue;
+          }
+        }
 
         var pollReminderKey = 'poll_reminder_' + poll.id + '_' + pm.member_id + '_' + weekNumber;
         var { data: alreadySentPollReminder } = await supabase
@@ -674,10 +717,10 @@ serve(async (req) => {
           '</strong>.</p>'
         : '';
 
-      // Get all active members for this org
+      // Get all active members for this org, including user_id for pref checks
       var { data: surveyMemberships } = await supabase
         .from('memberships')
-        .select('member_id, members(email, display_name, first_name, last_name)')
+        .select('member_id, members(user_id, email, display_name, first_name, last_name)')
         .eq('organization_id', survey.organization_id)
         .eq('status', 'active');
 
@@ -697,6 +740,16 @@ serve(async (req) => {
 
         var smEmail = (sm.members as any)?.email;
         if (!smEmail) continue;
+
+        // ── Check notification preferences ──
+        var smUserId = (sm.members as any)?.user_id;
+        if (smUserId) {
+          var surveyNotifEnabled = await isMemberNotificationEnabled(smUserId, survey.organization_id, 'new_survey');
+          if (!surveyNotifEnabled) {
+            console.log('Survey reminder skipped (pref opt-out): survey=' + survey.id + ' user=' + smUserId);
+            continue;
+          }
+        }
 
         var surveyReminderKey = 'survey_reminder_' + survey.id + '_' + sm.member_id + '_' + weekNumber;
         var { data: alreadySentSurveyReminder } = await supabase
