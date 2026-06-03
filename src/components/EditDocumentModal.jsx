@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { updateDocument } from '../lib/documentService';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
-import { X, Users } from 'lucide-react';
+import { X, Users, Tag, Calendar, Layers } from 'lucide-react';
 
-function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
+var TAG_MAX_COUNT = 10;
+var TAG_MAX_LENGTH = 30;
+
+function EditDocumentModal({ isOpen, onClose, document, onSuccess, isAdmin }) {
   var today = new Date().toISOString().split('T')[0];
-  var CATEGORY_MAX = 50;
 
   var [formData, setFormData] = useState({
     title: document?.title || '',
@@ -15,12 +17,61 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
     delete_after: document?.delete_after || ''
   });
   var [category, setCategory] = useState(document?.category || '');
+  var [categories, setCategories] = useState([]);
   var [visibility, setVisibility] = useState(document?.visibility || 'members');
   var [selectedGroupIds, setSelectedGroupIds] = useState(document?.allowed_groups || []);
   var [groups, setGroups] = useState([]);
   var [groupsLoading, setGroupsLoading] = useState(false);
   var [saving, setSaving] = useState(false);
   var [error, setError] = useState(null);
+
+  // Tags state
+  var [tags, setTags] = useState(Array.isArray(document?.tags) ? document.tags : []);
+  var [tagInput, setTagInput] = useState('');
+  var [tagSuggestions, setTagSuggestions] = useState([]);
+  var tagInputRef = useRef(null);
+
+  // Fetch existing org tags + categories on open
+  useEffect(function() {
+    if (!isOpen || !document || !document.organization_id) return;
+    supabase
+      .from('documents')
+      .select('tags, category')
+      .eq('organization_id', document.organization_id)
+      .then(function(result) {
+        if (result.error || !result.data) return;
+        var allTags = [];
+        var allCats = [];
+        result.data.forEach(function(doc) {
+          if (Array.isArray(doc.tags)) {
+            doc.tags.forEach(function(t) {
+              if (t && allTags.indexOf(t) === -1) allTags.push(t);
+            });
+          }
+          if (doc.category && allCats.indexOf(doc.category) === -1) allCats.push(doc.category);
+        });
+        allTags.sort();
+        allCats.sort();
+        setTagSuggestions(allTags);
+        setCategories(allCats);
+      });
+  }, [isOpen]);
+
+  // Re-sync form if document prop changes
+  useEffect(function() {
+    if (!document) return;
+    setFormData({
+      title: document.title || '',
+      description: document.description || '',
+      delete_after: document.delete_after || ''
+    });
+    setCategory(document.category || '');
+    setVisibility(document.visibility || 'members');
+    setSelectedGroupIds(document.allowed_groups || []);
+    setTags(Array.isArray(document.tags) ? document.tags : []);
+    setTagInput('');
+    setError(null);
+  }, [document?.id]);
 
   // Fetch org groups when visibility switches to 'groups'
   useEffect(function() {
@@ -40,6 +91,28 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
       });
   }, [visibility]);
 
+  function addTag(raw) {
+    var val = raw.trim().slice(0, TAG_MAX_LENGTH);
+    if (!val) return;
+    if (tags.length >= TAG_MAX_COUNT) { toast.error('Maximum ' + TAG_MAX_COUNT + ' tags allowed.'); return; }
+    if (tags.indexOf(val) !== -1) { setTagInput(''); return; }
+    setTags(function(prev) { return prev.concat([val]); });
+    setTagInput('');
+  }
+
+  function removeTag(tag) {
+    setTags(function(prev) { return prev.filter(function(t) { return t !== tag; }); });
+  }
+
+  function handleTagKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(tagInput);
+    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags(function(prev) { return prev.slice(0, prev.length - 1); });
+    }
+  }
+
   function toggleGroup(gid) {
     setSelectedGroupIds(function(prev) {
       if (prev.indexOf(gid) !== -1) return prev.filter(function(id) { return id !== gid; });
@@ -50,15 +123,9 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
   var handleSubmit = async function(e) {
     e.preventDefault();
     setError(null);
-
-    if (formData.title.trim().length < 3) {
-      toast.error('Title must be at least 3 characters');
-      return;
-    }
-    if (visibility === 'groups' && selectedGroupIds.length === 0) {
-      toast.error('Select at least one group.');
-      return;
-    }
+    if (tagInput.trim()) addTag(tagInput);
+    if (formData.title.trim().length < 3) { toast.error('Title must be at least 3 characters.'); return; }
+    if (visibility === 'groups' && selectedGroupIds.length === 0) { toast.error('Select at least one group.'); return; }
 
     setSaving(true);
     try {
@@ -66,9 +133,10 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
         title: formData.title.trim(),
         description: formData.description.trim(),
         delete_after: formData.delete_after || null,
-        category: category.trim() || null,
+        category: category || null,
         visibility: visibility,
-        allowed_groups: visibility === 'groups' ? selectedGroupIds : []
+        allowed_groups: visibility === 'groups' ? selectedGroupIds : [],
+        tags: tags.length > 0 ? tags : null
       };
 
       var result = await updateDocument(document.id, updatePayload);
@@ -105,11 +173,13 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
     var d = new Date(formData.delete_after + 'T00:00:00');
     var now = new Date();
     var diffDays = Math.round((d - now) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 7) {
-      return 'Warning: This document will be deleted in ' + diffDays + ' day' + (diffDays === 1 ? '' : 's') + '.';
-    }
+    if (diffDays <= 7) return 'Warning: This document will be deleted in ' + diffDays + ' day' + (diffDays === 1 ? '' : 's') + '.';
     return 'Will auto-delete on ' + d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '.';
   };
+
+  var filteredSuggestions = tagSuggestions.filter(function(s) {
+    return tags.indexOf(s) === -1 && s.toLowerCase().indexOf(tagInput.toLowerCase()) !== -1;
+  });
 
   if (!isOpen || !document) return null;
 
@@ -118,66 +188,62 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 flex items-center justify-center p-4 z-50"
+      style={{background:'rgba(0,0,0,0.45)'}}
       onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-doc-modal-title"
+      onClick={function(e) { if (e.target === e.currentTarget && !saving) onClose(); }}
     >
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-
+      <div
+        className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        style={{boxShadow:'3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)'}}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
         {/* Header */}
-        <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-          <h2
-            id="edit-doc-modal-title"
-            style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', margin: 0 }}
-          >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 id="edit-doc-modal-title" style={{fontSize:'18px', fontWeight:800, color:'#0E1523', margin:0}}>
             Edit Document
           </h2>
           <button
             onClick={onClose}
             disabled={saving}
-            className="text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1 disabled:opacity-50"
+            className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
             aria-label="Close modal"
           >
-            <X className="w-5 h-5" aria-hidden="true" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
 
           {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3" role="alert" aria-live="assertive">
-              <p style={{ fontSize: '13px', color: '#EF4444', margin: 0 }}>{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3" role="alert" aria-live="assertive">
+              <p className="text-sm font-semibold text-red-700">{error}</p>
             </div>
           )}
 
           {/* File name (read-only) */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
-              File Name
-            </label>
-            <div
-              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg"
-              style={{ fontSize: '13px', color: '#64748B' }}
-            >
+            <label className="block text-sm font-semibold mb-1.5" style={{color:'#0E1523'}}>File Name</label>
+            <div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" style={{color:'#64748B'}}>
               {document.file_name}
             </div>
-            <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
-              The file name cannot be changed. Edit the display title below.
-            </p>
+            <p className="text-xs mt-1" style={{color:'#94A3B8'}}>The file name cannot be changed. Edit the display title below.</p>
           </div>
 
           {/* Title */}
           <div>
-            <label
-              htmlFor="edit-doc-title"
-              className="block text-sm font-semibold text-slate-900 mb-1"
-            >
-              Display Title <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="edit-doc-title" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+                Display Title <span style={{color:'#EF4444'}} aria-hidden="true">*</span>
+              </label>
+              <span className={'text-xs ' + (formData.title.length >= 190 ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')} aria-live="polite">
+                {formData.title.length}/200
+              </span>
+            </div>
             <input
               id="edit-doc-title"
               name="title"
@@ -186,29 +252,23 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
               value={formData.title}
               onChange={handleChange}
               placeholder="e.g., Board Meeting Minutes — January 2026"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-required="true"
-              aria-describedby="edit-title-count"
               maxLength={200}
               autoFocus
             />
-            <p
-              id="edit-title-count"
-              style={{ fontSize: '11px', color: formData.title.length >= 190 ? '#EF4444' : '#94A3B8', marginTop: '4px' }}
-            >
-              {formData.title.length}/200
-            </p>
           </div>
 
           {/* Description */}
           <div>
-            <label
-              htmlFor="edit-doc-description"
-              className="block text-sm font-semibold text-slate-900 mb-1"
-            >
-              Description{' '}
-              <span style={{ fontWeight: 400, color: '#64748B' }}>(optional)</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="edit-doc-description" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+                Description <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
+              </label>
+              <span className={'text-xs ' + (formData.description.length >= 480 ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')} aria-live="polite">
+                {formData.description.length}/500
+              </span>
+            </div>
             <textarea
               id="edit-doc-description"
               name="description"
@@ -216,66 +276,108 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
               onChange={handleChange}
               placeholder="Add notes or context about this document..."
               rows={3}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              aria-describedby="edit-desc-count"
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               maxLength={500}
             />
-            <p
-              id="edit-desc-count"
-              style={{ fontSize: '11px', color: formData.description.length >= 480 ? '#EF4444' : '#94A3B8', marginTop: '4px' }}
-            >
-              {formData.description.length}/500
-            </p>
           </div>
 
           {/* Category */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="edit-doc-category" className="block text-sm font-semibold text-slate-900">
-                Category{' '}
-                <span style={{ fontWeight: 400, color: '#64748B' }}>(optional)</span>
-              </label>
-              {category.length > 0 && (
-                <span
-                  style={{ fontSize: '11px', color: category.length >= CATEGORY_MAX ? '#EF4444' : '#94A3B8' }}
-                  aria-live="polite"
-                >
-                  {CATEGORY_MAX - category.length}
+            <label htmlFor="edit-doc-category" className="block text-sm font-semibold mb-1.5" style={{color:'#0E1523'}}>
+              Category <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
+            </label>
+            {categories.length > 0 ? (
+              <select
+                id="edit-doc-category"
+                value={category}
+                onChange={function(e) { setCategory(e.target.value); }}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-describedby="edit-category-hint"
+              >
+                <option value="">No category</option>
+                {categories.map(function(cat) {
+                  return <option key={cat} value={cat}>{cat}</option>;
+                })}
+              </select>
+            ) : (
+              <div className="w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50 flex items-center gap-2" aria-describedby="edit-category-hint">
+                <Layers className="w-4 h-4 text-[#94A3B8] flex-shrink-0" aria-hidden="true" />
+                <span className="text-sm" style={{color:'#94A3B8'}}>
+                  {isAdmin ? 'No categories yet — add them via Manage Labels.' : 'No categories yet — ask an admin to add them.'}
                 </span>
+              </div>
+            )}
+            <p id="edit-category-hint" className="text-xs mt-1" style={{color:'#94A3B8'}}>Used to filter documents in the library.</p>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="edit-doc-tags" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+                Tags <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
+              </label>
+              <span className={'text-xs ' + (tags.length >= TAG_MAX_COUNT ? 'text-red-500 font-semibold' : 'text-[#94A3B8]')} aria-live="polite">
+                {tags.length}/{TAG_MAX_COUNT}
+              </span>
+            </div>
+            <div
+              className={'min-h-[42px] w-full px-2.5 py-2 border rounded-lg flex flex-wrap gap-1.5 items-center cursor-text transition-colors focus-within:ring-2 focus-within:ring-blue-500 ' + (tags.length >= TAG_MAX_COUNT ? 'bg-slate-50 border-slate-200' : 'border-slate-300 bg-white')}
+              onClick={function() { if (tagInputRef.current) tagInputRef.current.focus(); }}
+              role="group"
+              aria-labelledby="edit-tags-sr-label"
+            >
+              <span id="edit-tags-sr-label" className="sr-only">Tags — press Enter or comma to add</span>
+              {tags.map(function(tag) {
+                return (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                    <Tag className="w-2.5 h-2.5" aria-hidden="true" />
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={function(e) { e.stopPropagation(); removeTag(tag); }}
+                      className="ml-0.5 rounded-full hover:bg-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-400 p-0.5"
+                      aria-label={'Remove tag ' + tag}
+                    >
+                      <X className="w-2.5 h-2.5" aria-hidden="true" />
+                    </button>
+                  </span>
+                );
+              })}
+              {tags.length < TAG_MAX_COUNT && (
+                <input
+                  ref={tagInputRef}
+                  id="edit-doc-tags"
+                  type="text"
+                  value={tagInput}
+                  onChange={function(e) { setTagInput(e.target.value.slice(0, TAG_MAX_LENGTH)); }}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={function() { if (tagInput.trim()) addTag(tagInput); }}
+                  list="edit-tag-datalist"
+                  placeholder={tags.length === 0 ? 'Add tags...' : ''}
+                  className="flex-1 min-w-[80px] text-sm text-[#0E1523] placeholder-slate-400 bg-transparent outline-none border-none"
+                  aria-describedby="edit-tags-hint"
+                  autoComplete="off"
+                />
               )}
             </div>
-            <input
-              id="edit-doc-category"
-              type="text"
-              value={category}
-              onChange={function(e) { if (e.target.value.length <= CATEGORY_MAX) setCategory(e.target.value); }}
-              placeholder="e.g. Minutes, Policies, Forms, Financials"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              maxLength={CATEGORY_MAX}
-              aria-describedby="edit-category-hint"
-            />
-            <p id="edit-category-hint" style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
-              Used to filter documents in the library.
+            <datalist id="edit-tag-datalist">
+              {filteredSuggestions.map(function(s) { return <option key={s} value={s} />; })}
+            </datalist>
+            <p id="edit-tags-hint" className="text-xs mt-1" style={{color:'#94A3B8'}}>
+              Press Enter or comma to add. Max {TAG_MAX_COUNT} tags, {TAG_MAX_LENGTH} chars each.
             </p>
           </div>
 
           {/* Visibility */}
           <div>
-            <label
-              htmlFor="edit-doc-visibility"
-              className="block text-sm font-semibold text-slate-900 mb-1"
-            >
+            <label htmlFor="edit-doc-visibility" className="block text-sm font-semibold mb-1.5" style={{color:'#0E1523'}}>
               Who can see this?
             </label>
             <select
               id="edit-doc-visibility"
               value={visibility}
-              onChange={function(e) {
-                setVisibility(e.target.value);
-                if (e.target.value !== 'groups') setSelectedGroupIds([]);
-              }}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ fontSize: '14px', color: '#0E1523' }}
+              onChange={function(e) { setVisibility(e.target.value); if (e.target.value !== 'groups') setSelectedGroupIds([]); }}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="members">All Members</option>
               <option value="admin">Admins Only</option>
@@ -283,34 +385,19 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
             </select>
           </div>
 
-          {/* Group picker — shown when visibility = 'groups' */}
+          {/* Group picker */}
           {visibility === 'groups' && (
-            <div
-              className="border border-slate-200 rounded-xl overflow-hidden"
-              role="group"
-              aria-labelledby="edit-groups-label"
-            >
+            <div className="border border-slate-200 rounded-xl overflow-hidden" role="group" aria-labelledby="edit-groups-label">
               <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
                 <Users className="w-3.5 h-3.5 text-[#64748B]" aria-hidden="true" />
-                <span
-                  id="edit-groups-label"
-                  className="text-xs font-semibold uppercase tracking-wide"
-                  style={{color:'#64748B'}}
-                >
-                  Select Groups
-                </span>
+                <span id="edit-groups-label" className="text-xs font-semibold uppercase tracking-wide" style={{color:'#64748B'}}>Select Groups</span>
                 {selectedGroupIds.length > 0 && (
-                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
-                    {selectedGroupIds.length} selected
-                  </span>
+                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">{selectedGroupIds.length} selected</span>
                 )}
               </div>
-
               {groupsLoading ? (
                 <div className="px-3 py-4 space-y-2" aria-busy="true" aria-label="Loading groups">
-                  {[1,2,3].map(function(i) {
-                    return <div key={i} className="h-8 rounded-lg animate-pulse bg-slate-100" />;
-                  })}
+                  {[1,2,3].map(function(i) { return <div key={i} className="h-8 rounded-lg animate-pulse bg-slate-100" />; })}
                 </div>
               ) : groups.length === 0 ? (
                 <div className="px-3 py-4 text-center">
@@ -321,10 +408,7 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
                   {groups.map(function(g) {
                     var checked = selectedGroupIds.indexOf(g.id) !== -1;
                     return (
-                      <label
-                        key={g.id}
-                        className={'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ' + (checked ? 'bg-blue-50' : 'hover:bg-slate-50')}
-                      >
+                      <label key={g.id} className={'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ' + (checked ? 'bg-blue-50' : 'hover:bg-slate-50')}>
                         <input
                           type="checkbox"
                           checked={checked}
@@ -332,36 +416,38 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
                           className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 flex-shrink-0"
                           aria-label={'Include group: ' + g.name}
                         />
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{background: g.color || '#3B82F6'}}
-                          aria-hidden="true"
-                        />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background: g.color || '#3B82F6'}} aria-hidden="true" />
                         <span className="text-sm font-medium flex-1" style={{color:'#0E1523'}}>{g.name}</span>
                       </label>
                     );
                   })}
                 </div>
               )}
-
               {selectedGroupIds.length === 0 && !groupsLoading && groups.length > 0 && (
-                <p className="px-3 py-2 text-xs border-t border-slate-200" style={{color:'#EF4444'}}>
-                  Select at least one group.
-                </p>
+                <p className="px-3 py-2 text-xs border-t border-slate-200" style={{color:'#EF4444'}}>Select at least one group.</p>
               )}
             </div>
           )}
 
           {/* Auto-delete after */}
           <div>
-            <label
-              htmlFor="edit-doc-delete-after"
-              className="block text-sm font-semibold text-slate-900 mb-1"
-            >
-              Auto-delete after{' '}
-              <span style={{ fontWeight: 400, color: '#64748B' }}>(optional)</span>
-            </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="edit-doc-delete-after" className="text-sm font-semibold" style={{color:'#0E1523'}}>
+                Auto-delete after <span className="font-normal" style={{color:'#94A3B8'}}>(Optional)</span>
+              </label>
+              {formData.delete_after && (
+                <button
+                  type="button"
+                  onClick={handleClearDate}
+                  className="text-xs text-[#64748B] hover:text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-slate-400 rounded"
+                  aria-label="Clear auto-delete date"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" aria-hidden="true" />
               <input
                 id="edit-doc-delete-after"
                 name="delete_after"
@@ -369,48 +455,41 @@ function EditDocumentModal({ isOpen, onClose, document, onSuccess }) {
                 value={formData.delete_after || ''}
                 onChange={handleChange}
                 min={today}
-                className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-describedby="edit-delete-after-help"
               />
-              {formData.delete_after && (
-                <button
-                  type="button"
-                  onClick={handleClearDate}
-                  className="px-3 py-3 text-sm font-semibold border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  aria-label="Clear auto-delete date"
-                >
-                  Clear
-                </button>
-              )}
             </div>
             <p
               id="edit-delete-after-help"
-              style={{
-                fontSize: '11px',
-                color: isWarning ? '#EF4444' : (formData.delete_after ? '#92400E' : '#94A3B8'),
-                marginTop: '4px'
-              }}
+              className="text-xs mt-1"
+              style={{color: isWarning ? '#EF4444' : (formData.delete_after ? '#92400E' : '#94A3B8')}}
             >
               {deleteConfirmText || 'Document will be automatically deleted on this date.'}
             </p>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-6 py-3 bg-transparent border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:opacity-50"
+              className="px-4 py-2.5 border border-slate-300 text-[#475569] font-semibold rounded-lg text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || formData.title.trim().length < 3 || (visibility === 'groups' && selectedGroupIds.length === 0)}
-              className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 bg-blue-500 text-white font-semibold rounded-lg text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              aria-busy={saving}
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" role="status" aria-label="Saving" />
+                  Saving...
+                </>
+              ) : 'Save Changes'}
             </button>
           </div>
 

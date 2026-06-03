@@ -9,12 +9,11 @@ import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import toast from 'react-hot-toast';
 import {
   Eye, Download, Pencil, FolderInput, Trash2,
-  FileText, Image, File, User
+  FileText, Image, File, User, Tag, Layers
 } from 'lucide-react';
 
 var iconBtnBase = 'p-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors';
 
-// Timezone-safe: parse date strings as local midnight, not UTC midnight
 function parseLocalDate(dateStr) {
   if (!dateStr) return null;
   return new Date(dateStr + 'T00:00:00');
@@ -56,16 +55,19 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
 
   var canManage = userRole === 'admin' || userRole === 'editor';
   var canSeeViewers = userRole === 'admin' || userRole === 'editor';
+  var isAdmin = userRole === 'admin';
 
   var isImage = localDoc.file_type && localDoc.file_type.startsWith('image/');
   var isPDF = localDoc.file_type && localDoc.file_type.includes('pdf');
   var uploaderName = getUploaderName(localDoc.uploader);
   var viewCount = (typeof localDoc.view_count === 'number') ? localDoc.view_count : 0;
 
-  // Expiry + New status — self-contained, no prop needed
   var expiryStatus = getExpiryStatus(localDoc.delete_after);
   var daysLeft = getDaysLeft(localDoc.delete_after);
   var docIsNew = isNewDoc(localDoc.uploaded_at, localDoc.created_at);
+
+  var docTags = Array.isArray(localDoc.tags) ? localDoc.tags : [];
+  var docCategory = localDoc.category || null;
 
   var expiryBadgeText = '';
   var expiryBadgeClass = '';
@@ -202,6 +204,38 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
     );
   }
 
+  // Tags + category chips — visible to all members
+  function renderLabels(compact) {
+    var hasLabels = docCategory || docTags.length > 0;
+    if (!hasLabels) return null;
+    var maxTags = compact ? 3 : docTags.length;
+    var visibleTags = docTags.slice(0, maxTags);
+    var overflow = docTags.length - visibleTags.length;
+    return (
+      <div className="flex items-center flex-wrap gap-1" aria-label="Document labels">
+        {docCategory && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">
+            <Layers className="w-2.5 h-2.5" aria-hidden="true" />
+            {docCategory}
+          </span>
+        )}
+        {visibleTags.map(function(tag) {
+          return (
+            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+              <Tag className="w-2.5 h-2.5" aria-hidden="true" />
+              {tag}
+            </span>
+          );
+        })}
+        {overflow > 0 && (
+          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-[#64748B]">
+            +{overflow}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   function renderFooter() {
     return (
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
@@ -247,6 +281,7 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             onClose={function() { setShowEditModal(false); }}
             document={localDoc}
             onSuccess={handleEditSuccess}
+            isAdmin={isAdmin}
           />
         )}
         {showPreview && (
@@ -317,6 +352,12 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             {localDoc.description && (
               <p className="text-xs mt-1 truncate" style={{color:'#475569'}}>{localDoc.description}</p>
             )}
+            {/* Labels row in list view */}
+            {(docCategory || docTags.length > 0) && (
+              <div className="mt-1.5">
+                {renderLabels(true)}
+              </div>
+            )}
           </div>
 
           <div className="flex-shrink-0">{renderViewCount()}</div>
@@ -361,33 +402,15 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
   }
 
   // ─── GRID VIEW ────────────────────────────────────────────────────────────
-  // h-full + flex flex-col = equal-height cards in the grid row
   return (
     <>
       <div
         className="border rounded-xl overflow-hidden transition-all bg-white border-slate-200 hover:border-blue-400 h-full flex flex-col"
         style={{boxShadow:'3px 4px 14px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)'}}
       >
-        {/* Image thumbnail — only for actual image files, fixed height */}
-        {isImage && (
-          <button
-            onClick={handlePreviewOpen}
-            className="w-full h-32 flex items-center justify-center relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-slate-100 group flex-shrink-0"
-            aria-label={'Preview ' + localDoc.title}
-          >
-            <img src={localDoc.file_url} alt={localDoc.title} className="w-full h-full object-cover" loading="lazy" />
-            <div className="absolute inset-0 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100" style={{background:'rgba(0,0,0,0.35)'}}>
-              <div className="rounded-full p-2.5" style={{background:'rgba(255,255,255,0.2)'}}>
-                <Eye className="w-5 h-5 text-white" aria-hidden="true" />
-              </div>
-            </div>
-          </button>
-        )}
+      <div className="p-4 flex flex-col flex-1">
 
-        {/* Card body — flex-1 fills remaining height; actions pinned to bottom */}
-        <div className="p-4 flex flex-col flex-1">
-
-          {/* Title row: file icon + title + filename — fixed height */}
+          {/* Title row */}
           <div className="flex items-start gap-2.5 mb-2">
             <div className={'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 border ' + getIconBgClass()}>
               {getFileIconNode('w-4 h-4')}
@@ -402,14 +425,14 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             </div>
           </div>
 
-          {/* Uploader — fixed height row */}
+          {/* Uploader */}
           <div className="flex items-center gap-1.5 mb-2 h-4">
             <User className="w-3 h-3 flex-shrink-0 text-[#94A3B8]" aria-hidden="true" />
             <span className="text-xs truncate" style={{color:'#64748B'}}>{uploaderName}</span>
           </div>
 
-          {/* Size + date + view count — fixed height row */}
-          <div className="flex items-center justify-between mb-3 h-4">
+          {/* Size + date + view count */}
+          <div className="flex items-center justify-between mb-2 h-4">
             <span className="text-xs" style={{color:'#94A3B8'}}>
               {formatFileSize(localDoc.file_size_bytes)}
               {' \u00b7 '}
@@ -418,8 +441,8 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             {renderViewCount()}
           </div>
 
-          {/* Description — ALWAYS reserves 2-line height for consistent card sizing */}
-          <div className="mb-3" style={{minHeight:'2.5rem'}}>
+          {/* Description — reserves 2-line height */}
+          <div className="mb-2" style={{minHeight:'2.5rem'}}>
             {localDoc.description && (
               <p className="text-xs line-clamp-2" style={{color:'#475569', lineHeight:'1.4'}}>
                 {localDoc.description}
@@ -427,7 +450,12 @@ function DocumentCard({ document: doc, viewMode, userRole, organizationId, onDel
             )}
           </div>
 
-          {/* Actions — pushed to bottom via mt-auto */}
+          {/* Labels — category + tags. Reserve min height so cards stay equal */}
+          <div className="mb-3" style={{minHeight:'1.5rem'}}>
+            {renderLabels(true)}
+          </div>
+
+          {/* Actions — pinned to bottom */}
           <div className="mt-auto">
             <div className="flex items-center gap-2 mb-3">
               <button
