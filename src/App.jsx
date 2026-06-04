@@ -127,7 +127,8 @@ var hideChrome = (
   path === '/onboarding' ||
   path === '/discover' ||
   path === '/explore' ||
-  path.startsWith('/org/')
+  path.startsWith('/org/') ||
+  path === '/accept-invite'
 );
   return (
     <div className="min-h-screen bg-gray-50" style={{ display: 'flex', flexDirection: 'column' }}>
