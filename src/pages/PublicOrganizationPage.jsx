@@ -141,6 +141,28 @@ if (org.contact_email) {
   });
 }
 
+// Notify org admins of new inquiry
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var { data: admins } = await supabase
+        .from('memberships')
+        .select('member_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('status', 'active');
+      if (admins && admins.length > 0) {
+        await notifModule.notifyUsers({
+          userIds: admins.map(function(a) { return a.member_id; }),
+          organizationId: org.id,
+          type: 'inbox_message',
+          title: 'New Inquiry from ' + form.name.trim(),
+          message: form.name.trim() + ' sent a message via your public page.',
+          link: '/organizations/' + org.id + '/inbox',
+        });
+        window.dispatchEvent(new CustomEvent('notificationCreated'));
+      }
+    } catch(ne){ console.error('Inbox notification failed:', ne); }
+
     setSuccess(true);
     setForm({ name: '', email: '', message: '' });
   } catch (err) {
@@ -841,6 +863,27 @@ async function handleJoinSubmit(e) {
           }),
         });
       }
+
+try {
+        var notifModule2 = await import('../lib/notificationService');
+        var { data: admins2 } = await supabase
+          .from('memberships')
+          .select('member_id')
+          .eq('organization_id', organization.id)
+          .eq('role', 'admin')
+          .eq('status', 'active');
+        if (admins2 && admins2.length > 0) {
+          await notifModule2.notifyUsers({
+            userIds: admins2.map(function(a) { return a.member_id; }),
+            organizationId: organization.id,
+            type: 'inbox_message',
+            title: 'New Inquiry from ' + joinForm.name.trim(),
+            message: joinForm.name.trim() + ' sent a message via your public page.',
+            link: '/organizations/' + organization.id + '/inbox',
+          });
+          window.dispatchEvent(new CustomEvent('notificationCreated'));
+        }
+      } catch(ne){ console.error('Inbox notification failed:', ne); }
 
       setJoinSuccess(true);
       setJoinForm({ name: '', email: '', message: '' });

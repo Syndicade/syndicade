@@ -786,9 +786,24 @@ function EventDetails() {
           { event_id: eventId, member_id: currentUser.id, status: status, guest_count: 0, updated_at: new Date().toISOString() },
           { onConflict: 'event_id,member_id' }
         );
-      if (upsertErr) throw upsertErr;
+if (upsertErr) throw upsertErr;
       setUserRsvp(status);
       setRsvpSuccess(true);
+
+      if (status === 'going' && event && currentUser) {
+        try {
+          var { notifyOrgAdmins } = await import('../lib/notificationService');
+          await notifyOrgAdmins({
+            organizationId: event.organization_id,
+            type: 'event_rsvp',
+            title: 'New RSVP',
+            message: 'A member RSVP\'d "Going" to ' + event.title,
+            link: '/events/' + event.id,
+            excludeUserId: currentUser.id,
+          });
+          window.dispatchEvent(new CustomEvent('notificationCreated'));
+        } catch(ne){ console.error('RSVP notification failed:', ne); }
+      }
       var { data: updatedRsvps } = await supabase
         .from('event_rsvps').select('*, members(first_name, last_name, profile_photo_url)').eq('event_id', eventId);
       if (updatedRsvps) setRsvps(updatedRsvps);

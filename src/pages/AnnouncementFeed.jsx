@@ -173,11 +173,25 @@ function AnnouncementFeed() {
     setAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
   }
 
-  function handleAnnouncementCreated(newAnnouncement) {
+async function handleAnnouncementCreated(newAnnouncement) {
     setAnnouncements(function(prev) {
       return [Object.assign({}, newAnnouncement, { is_read: false }), ...prev];
     });
     setUnreadCount(function(prev) { return prev + 1; });
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var authRes = await supabase.auth.getUser();
+      var user = authRes.data.user;
+      await notifModule.notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'new_announcement',
+        title: newAnnouncement.title || 'New Announcement',
+        message: (organization ? organization.name : 'Your organization') + ' posted a new announcement.',
+        link: '/organizations/' + organizationId + '/announcements',
+        excludeUserId: user ? user.id : null,
+      });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne){ console.error('Announcement notification failed:', ne); }
   }
 
   async function handleMarkAllAsRead() {

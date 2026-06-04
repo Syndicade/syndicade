@@ -179,14 +179,16 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
       }
     }
 
-    try {
+try {
+      var authRes = await supabase.auth.getUser();
+      var currentUser = authRes.data.user;
       var notifResult = await notifyOrganizationMembers({
         organizationId: organizationId,
-        type: 'document',
-        title: 'New Document',
-        message: title || file.name,
+        type: 'new_document',
+        title: title || file.name,
+        message: 'A new document has been added to the library.',
         link: '/organizations/' + organizationId + '/documents',
-        excludeUserId: null,
+        excludeUserId: currentUser ? currentUser.id : null,
       });
       if (!notifResult.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
     } catch (notifError) {

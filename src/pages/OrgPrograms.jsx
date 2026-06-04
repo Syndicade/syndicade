@@ -236,10 +236,26 @@ function OrgPrograms() {
       ? await supabase.from('org_programs').update(payload).eq('id', editingProgram.id)
       : await supabase.from('org_programs').insert(payload);
     setSaving(false);
-    if (result.error) { mascotErrorToast('Failed to save program', 'Check your connection and try again.'); return; }
+if (result.error) { mascotErrorToast('Failed to save program', 'Check your connection and try again.'); return; }
     mascotSuccessToast(editingProgram ? 'Program updated' : 'Program created');
     setShowModal(false);
     fetchPrograms();
+    if (!editingProgram) {
+      try {
+        var notifModule = await import('../lib/notificationService');
+        var authRes = await supabase.auth.getUser();
+        var user = authRes.data.user;
+        await notifModule.notifyOrganizationMembers({
+          organizationId: organizationId,
+          type: 'new_program',
+          title: form.name.trim(),
+          message: (organization ? organization.name : 'Your organization') + ' added a new program.',
+          link: '/organizations/' + organizationId + '/programs',
+          excludeUserId: user ? user.id : null,
+        });
+        window.dispatchEvent(new CustomEvent('notificationCreated'));
+      } catch(ne){ console.error('Program notification failed:', ne); }
+    }
   }
 
   async function deleteProgram(id) {

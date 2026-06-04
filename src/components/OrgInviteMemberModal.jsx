@@ -46,7 +46,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
 
     setSending(true);
 
-    // Check for existing pending invite
     var { data: existing } = await supabase
       .from('invitations')
       .select('id')
@@ -139,7 +138,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
 
   async function handleResend(invite) {
     setResending(invite.id);
-    // Extend expiry by 7 days from now
     var newExpiry = new Date();
     newExpiry.setDate(newExpiry.getDate() + 7);
 
@@ -176,7 +174,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
   function isExpiringSoon(dateStr) {
     var d = new Date(dateStr);
     var diff = d - new Date();
-    return diff > 0 && diff < 2 * 24 * 60 * 60 * 1000; // within 48 hours
+    return diff > 0 && diff < 2 * 24 * 60 * 60 * 1000;
   }
 
   function getRoleDescription(r) {
@@ -200,7 +198,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
         className="w-full max-w-lg rounded-xl border flex flex-col"
         style={{ background: '#FFFFFF', borderColor: '#E2E8F0', maxHeight: '90vh' }}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
           style={{ borderColor: '#E2E8F0' }}
@@ -230,10 +227,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           </button>
         </div>
 
-        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
-
-          {/* Email */}
           <div>
             <label
               htmlFor="invite-email"
@@ -250,17 +244,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               onKeyDown={function (e) { if (e.key === 'Enter') handleSend(); }}
               placeholder="member@example.com"
               className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                color: '#0E1523'
-              }}
+              style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0E1523' }}
               aria-required="true"
               autoComplete="email"
             />
           </div>
 
-          {/* Role */}
           <div>
             <label
               htmlFor="invite-role"
@@ -275,11 +264,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                 value={role}
                 onChange={function (e) { setRole(e.target.value); }}
                 className="w-full rounded-lg px-4 py-2.5 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  color: '#0E1523'
-                }}
+                style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0E1523' }}
               >
                 <option value="member">Member</option>
                 <option value="editor">Editor</option>
@@ -297,7 +282,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             </p>
           </div>
 
-          {/* Personal message */}
           <div>
             <label
               htmlFor="invite-message"
@@ -316,15 +300,10 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               placeholder="Add a personal note to include in the invite email..."
               rows={3}
               className="w-full rounded-lg px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                color: '#0E1523'
-              }}
+              style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0E1523' }}
             />
           </div>
 
-          {/* Send button */}
           <button
             onClick={handleSend}
             disabled={sending}
@@ -335,10 +314,8 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             {sending ? 'Sending...' : 'Send Invitation'}
           </button>
 
-          {/* Divider */}
           <div className="border-t" style={{ borderColor: '#E2E8F0' }} />
 
-          {/* Pending invites */}
           <div>
             <p
               className="text-xs font-bold uppercase mb-3"
@@ -351,11 +328,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               <div className="flex flex-col gap-2" aria-busy="true" aria-label="Loading pending invitations">
                 {[1, 2].map(function (i) {
                   return (
-                    <div
-                      key={i}
-                      className="h-16 rounded-lg animate-pulse"
-                      style={{ background: '#F1F5F9' }}
-                    />
+                    <div key={i} className="h-16 rounded-lg animate-pulse" style={{ background: '#F1F5F9' }} />
                   );
                 })}
               </div>
@@ -365,16 +338,10 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                 style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
               >
                 <Mail size={14} style={{ color: '#94A3B8' }} className="shrink-0" aria-hidden="true" />
-                <p className="text-sm" style={{ color: '#64748B' }}>
-                  No pending invitations.
-                </p>
+                <p className="text-sm" style={{ color: '#64748B' }}>No pending invitations.</p>
               </div>
             ) : (
-              <ul
-                className="flex flex-col gap-2"
-                role="list"
-                aria-label="Pending invitations list"
-              >
+              <ul className="flex flex-col gap-2" role="list" aria-label="Pending invitations list">
                 {pendingInvites.map(function (inv) {
                   var expiring = isExpiringSoon(inv.expires_at);
                   return (
@@ -385,40 +352,28 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                       role="listitem"
                       aria-label={'Pending invitation for ' + inv.email}
                     >
-                      {/* Email + expiry row */}
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="min-w-0">
                           <span className="text-sm font-semibold truncate block" style={{ color: '#0E1523' }}>
                             {inv.email}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs capitalize" style={{ color: '#475569' }}>
-                              {inv.role}
-                            </span>
+                            <span className="text-xs capitalize" style={{ color: '#475569' }}>{inv.role}</span>
                             <span style={{ color: '#CBD5E1' }}>·</span>
                             <div className="flex items-center gap-1">
                               <Clock size={10} style={{ color: expiring ? '#F5B731' : '#94A3B8' }} aria-hidden="true" />
-                              <span
-                                className="text-xs"
-                                style={{ color: expiring ? '#B45309' : '#64748B' }}
-                              >
-                                {expiring ? 'Expires soon — ' : 'Expires '}
-                                {formatExpiry(inv.expires_at)}
+                              <span className="text-xs" style={{ color: expiring ? '#B45309' : '#64748B' }}>
+                                {expiring ? 'Expires soon — ' : 'Expires '}{formatExpiry(inv.expires_at)}
                               </span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      {/* Action buttons row */}
                       <div className="flex items-center gap-2">
                         <button
                           onClick={function () { handleCopyLink(inv.id); }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          style={{
-                            background: 'rgba(59,130,246,0.08)',
-                            color: '#3B82F6',
-                            border: '1px solid rgba(59,130,246,0.2)'
-                          }}
+                          style={{ background: 'rgba(59,130,246,0.08)', color: '#3B82F6', border: '1px solid rgba(59,130,246,0.2)' }}
                           aria-label={'Copy invite link for ' + inv.email}
                         >
                           <Copy size={10} aria-hidden="true" />
@@ -428,11 +383,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                           onClick={function () { handleResend(inv); }}
                           disabled={resending === inv.id}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{
-                            background: '#F8FAFC',
-                            color: '#475569',
-                            border: '1px solid #E2E8F0'
-                          }}
+                          style={{ background: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0' }}
                           aria-label={'Resend invitation to ' + inv.email}
                         >
                           <RotateCcw size={10} aria-hidden="true" />
@@ -442,11 +393,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                           onClick={function () { handleRevoke(inv.id, inv.email); }}
                           disabled={revoking === inv.id}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ml-auto focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{
-                            background: 'rgba(239,68,68,0.06)',
-                            color: '#EF4444',
-                            border: '1px solid rgba(239,68,68,0.2)'
-                          }}
+                          style={{ background: 'rgba(239,68,68,0.06)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.2)' }}
                           aria-label={'Revoke invitation for ' + inv.email}
                         >
                           <Trash2 size={10} aria-hidden="true" />
@@ -461,7 +408,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           </div>
         </div>
 
-        {/* Footer */}
         <div
           className="flex justify-end px-6 py-4 border-t shrink-0"
           style={{ borderColor: '#E2E8F0' }}

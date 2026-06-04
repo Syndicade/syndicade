@@ -126,9 +126,21 @@ function SignupFormsList() {
     setFilteredForms(filtered);
   };
 
-  var handleFormCreated = function() {
+var handleFormCreated = async function(newForm) {
     fetchForms();
     setShowCreateModal(false);
+    try {
+      var notifModule = await import('../lib/notificationService');
+      await notifModule.notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'new_signup_form',
+        title: (newForm && newForm.title) ? newForm.title : 'New Sign-Up Form',
+        message: 'A new sign-up form is available. Claim your spot!',
+        link: '/organizations/' + organizationId + '/signup-forms',
+        excludeUserId: currentUser ? currentUser.id : null,
+      });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne){ console.error('Signup form notification failed:', ne); }
   };
 
   var handleFormUpdated = function() {

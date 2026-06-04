@@ -676,7 +676,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   }
 
   async function withdrawCollab(item) {
-    if (!window.confirm('Withdraw your co-host request for "' + (item.event ? item.event.title : 'this event') + '"?')) return;
     setCollabActionLoading(true);
     try {
       var { error } = await supabase.from('event_collaborators').update({ status: 'withdrawn', updated_at: new Date().toISOString() }).eq('id', item.id);
@@ -684,7 +683,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       mascotSuccessToast('Request withdrawn.');
       setCollabItems(function(prev) { return prev.map(function(c) { return c.id === item.id ? Object.assign({}, c, { status: 'withdrawn' }) : c; }); });
       setSelectedCollab(function(prev) { return prev && prev.id === item.id ? Object.assign({}, prev, { status: 'withdrawn' }) : prev; });
-    } catch (err) { toast.error('Could not withdraw request.'); }
+    } catch (err) { mascotErrorToast('Could not withdraw request.'); }
     finally { setCollabActionLoading(false); }
   }
 
@@ -705,7 +704,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       window.dispatchEvent(new CustomEvent('notificationCreated'));
       setCollabItems(function(prev) { return prev.map(function(c) { return c.id === item.id ? Object.assign({}, c, { status: 'pending' }) : c; }); });
       setSelectedCollab(function(prev) { return prev && prev.id === item.id ? Object.assign({}, prev, { status: 'pending' }) : prev; });
-    } catch (err) { toast.error('Could not re-send request.'); }
+    } catch (err) { mascotErrorToast('Could not re-send request.'); }
     finally { setCollabActionLoading(false); }
   }
 

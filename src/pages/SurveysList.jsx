@@ -138,7 +138,25 @@ function SurveysList() {
     } finally { setLoading(false); }
   }
 
-  function handleSurveyCreated()       { loadData(); setShowCreateModal(false); setEditingSurvey(null); }
+  async function handleSurveyCreated(newSurvey) {
+    loadData();
+    setShowCreateModal(false);
+    setEditingSurvey(null);
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var authRes = await supabase.auth.getUser();
+      var user = authRes.data.user;
+      await notifModule.notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'new_survey',
+        title: (newSurvey && newSurvey.title) ? newSurvey.title : 'New Survey',
+        message: (organization ? organization.name : 'Your organization') + ' posted a new survey. Share your feedback!',
+        link: '/organizations/' + organizationId + '/surveys',
+        excludeUserId: user ? user.id : null,
+      });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne){ console.error('Survey notification failed:', ne); }
+  }
   function handleSurveyDeleted()       { loadData(); }
   function handleSurveyUpdated(updated) {
     setSurveys(function(prev) { return prev.map(function(s) { return s.id === updated.id ? updated : s; }); });

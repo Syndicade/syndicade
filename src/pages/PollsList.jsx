@@ -147,8 +147,22 @@ function PollsList() {
     setPolls(function(prev) { return prev.filter(function(p) { return p.id !== pollId; }); });
   }
 
-  function handlePollCreated(newPoll) {
+async function handlePollCreated(newPoll) {
     setPolls(function(prev) { return [newPoll].concat(prev); });
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var authRes = await supabase.auth.getUser();
+      var user = authRes.data.user;
+      await notifModule.notifyOrganizationMembers({
+        organizationId: organizationId,
+        type: 'new_poll',
+        title: newPoll.title || 'New Poll',
+        message: orgName + ' posted a new poll. Cast your vote!',
+        link: '/organizations/' + organizationId + '/polls',
+        excludeUserId: user ? user.id : null,
+      });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne){ console.error('Poll notification failed:', ne); }
   }
 
   function handlePollUpdated(updatedPoll) {

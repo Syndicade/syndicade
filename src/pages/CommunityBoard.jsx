@@ -93,7 +93,7 @@ async function insertCBNotifications(fromOrgId,toOrgId,boardName,boardId,userOrg
     var sendingOrgName=sendingOrg?sendingOrg.name:'An organization';
     var{data:adminIds,error}=await supabase.rpc('get_org_admin_user_ids',{p_org_id:toOrgId});
     if(error||!adminIds||adminIds.length===0)return;
-    var rows=adminIds.map(function(r){return{user_id:r.user_id,type:'community_board_message',title:sendingOrgName+' sent you a message',message:'New message on '+boardName+' Community Board.',link:'/community-board/'+boardId,read:false};});
+    var rows=adminIds.map(function(r){return{user_id:r.user_id,type:'board_reply',title:sendingOrgName+' sent you a message',message:'New message on '+boardName+' Community Board.',link:'/community-board/'+boardId,read:false};});
     await supabase.from('notifications').insert(rows);
     window.dispatchEvent(new Event('notificationCreated'));
     for(var i=0;i<adminIds.length;i++){(function(userId){var bc=supabase.channel('user-notif-'+userId);bc.subscribe(function(status){if(status==='SUBSCRIBED'){bc.send({type:'broadcast',event:'new_notification',payload:{}}).then(function(){supabase.removeChannel(bc);});}});})(adminIds[i].user_id);}

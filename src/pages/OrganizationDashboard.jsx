@@ -690,6 +690,18 @@ function OrganizationDashboard() {
       setPhotoCaption(''); e.target.value = '';
       await fetchPhotos();
       mascotSuccessToast('Photo uploaded!');
+      try {
+        var notifModule = await import('../lib/notificationService');
+        await notifModule.notifyOrganizationMembers({
+          organizationId: organizationId,
+          type: 'new_photo',
+          title: photoCaption.trim() ? photoCaption.trim() : 'New Photo Added',
+          message: (organization ? organization.name : 'Your organization') + ' added a new photo to the gallery.',
+          link: '/organizations/' + organizationId + '/photos',
+          excludeUserId: currentUserId,
+        });
+        window.dispatchEvent(new CustomEvent('notificationCreated'));
+      } catch(ne){ console.error('Photo notification failed:', ne); }
     } catch (err) { setPhotoError('Upload failed: ' + err.message); mascotErrorToast('Upload failed.', 'Please try again.'); }
     finally { setPhotoUploading(false); }
   }
