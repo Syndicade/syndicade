@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, UserPlus, Mail, ChevronDown, Clock, Trash2, Send } from 'lucide-react';
+import { X, UserPlus, Mail, ChevronDown, Clock, Trash2, Send, Copy, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
@@ -12,6 +12,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
   var [pendingInvites, setPendingInvites] = useState([]);
   var [loadingInvites, setLoadingInvites] = useState(true);
   var [revoking, setRevoking] = useState(null);
+  var [resending, setResending] = useState(null);
 
   useEffect(function () {
     if (isOpen) {
@@ -60,7 +61,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
       return;
     }
 
-    // Insert invitation (expires in 7 days)
     var expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -84,23 +84,32 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
       return;
     }
 
-    // Send invite email
+    await sendInviteEmail(invite, email.trim().toLowerCase());
+
+    setEmail('');
+    setRole('member');
+    setMessage('');
+    setSending(false);
+    loadPendingInvites();
+  }
+
+  async function sendInviteEmail(invite, recipientEmail) {
     var inviteUrl = 'https://syndicade.org/accept-invite?token=' + invite.id;
-    var personalHtml = message.trim()
-      ? '<blockquote style="border-left:3px solid #3B82F6;padding-left:12px;color:#94A3B8;margin:16px 0;">' + message.trim() + '</blockquote>'
+    var personalHtml = invite.message
+      ? '<blockquote style="border-left:3px solid #3B82F6;padding-left:12px;color:#475569;margin:16px 0;">' + invite.message + '</blockquote>'
       : '';
 
     var { error: emailError } = await supabase.functions.invoke('send-email', {
       body: {
-        to: email.trim().toLowerCase(),
+        to: recipientEmail,
         subject: "You've been invited to join " + organizationName + ' on Syndicade',
         html:
-          '<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;background:#0E1523;color:#CBD5E1;padding:32px;border-radius:12px;">' +
-          '<p style="font-size:16px;font-weight:700;color:#FFFFFF;margin-bottom:8px;">You\'ve been invited!</p>' +
-          '<p style="color:#94A3B8;margin-bottom:16px;">You\'ve been invited to join <strong style="color:#FFFFFF;">' + organizationName + '</strong> on Syndicade as a <strong style="color:#FFFFFF;">' + role + '</strong>.</p>' +
+          '<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;background:#F8FAFC;color:#475569;padding:32px;border-radius:12px;border:1px solid #E2E8F0;">' +
+          '<p style="font-size:16px;font-weight:700;color:#0E1523;margin-bottom:8px;">You\'ve been invited!</p>' +
+          '<p style="color:#475569;margin-bottom:16px;">You\'ve been invited to join <strong style="color:#0E1523;">' + organizationName + '</strong> on Syndicade as a <strong style="color:#0E1523;">' + invite.role + '</strong>.</p>' +
           personalHtml +
           '<a href="' + inviteUrl + '" style="display:inline-block;background:#3B82F6;color:#FFFFFF;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:8px;">Accept Invitation</a>' +
-          '<p style="color:#64748B;font-size:12px;margin-top:24px;">This invitation expires in 7 days. If you don\'t have a Syndicade account yet, you\'ll be prompted to create one.</p>' +
+          '<p style="color:#94A3B8;font-size:12px;margin-top:24px;">This invitation expires in 7 days. If you don\'t have a Syndicade account yet, you\'ll be prompted to create one.</p>' +
           '</div>'
       }
     });
@@ -108,14 +117,8 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
     if (emailError) {
       mascotSuccessToast('Invitation created.', 'Email delivery may be delayed — link is saved.');
     } else {
-      mascotSuccessToast('Invitation sent!', email.trim().toLowerCase() + ' will receive an email shortly.');
+      mascotSuccessToast('Invitation sent!', recipientEmail + ' will receive an email shortly.');
     }
-
-    setEmail('');
-    setRole('member');
-    setMessage('');
-    setSending(false);
-    loadPendingInvites();
   }
 
   async function handleRevoke(inviteId, inviteEmail) {
@@ -126,7 +129,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
       .eq('id', inviteId);
 
     if (error) {
-      toast.error('Failed to revoke invitation.');
+      mascotErrorToast('Failed to revoke invitation.', 'Please try again.');
     } else {
       mascotSuccessToast('Invitation revoked.', inviteEmail + ' can no longer use this invite.');
       loadPendingInvites();
@@ -134,9 +137,46 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
     setRevoking(null);
   }
 
+  async function handleResend(invite) {
+    setResending(invite.id);
+    // Extend expiry by 7 days from now
+    var newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + 7);
+
+    var { error: updateError } = await supabase
+      .from('invitations')
+      .update({ expires_at: newExpiry.toISOString() })
+      .eq('id', invite.id);
+
+    if (updateError) {
+      mascotErrorToast('Failed to resend invitation.', 'Please try again.');
+      setResending(null);
+      return;
+    }
+
+    await sendInviteEmail({ ...invite, expires_at: newExpiry.toISOString() }, invite.email);
+    loadPendingInvites();
+    setResending(null);
+  }
+
+  function handleCopyLink(inviteId) {
+    var link = 'https://syndicade.org/accept-invite?token=' + inviteId;
+    navigator.clipboard.writeText(link).then(function () {
+      toast.success('Invite link copied!');
+    }).catch(function () {
+      toast.error('Could not copy to clipboard.');
+    });
+  }
+
   function formatExpiry(dateStr) {
     var d = new Date(dateStr);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function isExpiringSoon(dateStr) {
+    var d = new Date(dateStr);
+    var diff = d - new Date();
+    return diff > 0 && diff < 2 * 24 * 60 * 60 * 1000; // within 48 hours
   }
 
   function getRoleDescription(r) {
@@ -151,38 +191,39 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.75)' }}
+      style={{ background: 'rgba(14,21,35,0.5)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="org-invite-title"
     >
       <div
         className="w-full max-w-lg rounded-xl border flex flex-col"
-        style={{ background: '#1A2035', borderColor: '#2A3550', maxHeight: '90vh' }}
+        style={{ background: '#FFFFFF', borderColor: '#E2E8F0', maxHeight: '90vh' }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
-          style={{ borderColor: '#2A3550' }}
+          style={{ borderColor: '#E2E8F0' }}
         >
           <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(59,130,246,0.15)' }}
+              style={{ background: 'rgba(59,130,246,0.1)' }}
             >
-              <UserPlus size={16} className="text-blue-400" aria-hidden="true" />
+              <UserPlus size={16} style={{ color: '#3B82F6' }} aria-hidden="true" />
             </div>
             <h2
               id="org-invite-title"
-              className="font-bold text-white"
-              style={{ fontSize: '16px' }}
+              className="font-bold"
+              style={{ fontSize: '16px', color: '#0E1523' }}
             >
               Invite Member
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: '#64748B' }}
             aria-label="Close invite member dialog"
           >
             <X size={18} aria-hidden="true" />
@@ -196,7 +237,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           <div>
             <label
               htmlFor="invite-email"
-              className="block text-xs font-semibold uppercase mb-2"
+              className="block text-xs font-bold uppercase mb-2"
               style={{ color: '#F5B731', letterSpacing: '4px' }}
             >
               Email Address
@@ -208,8 +249,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               onChange={function (e) { setEmail(e.target.value); }}
               onKeyDown={function (e) { if (e.key === 'Enter') handleSend(); }}
               placeholder="member@example.com"
-              className="w-full rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ background: '#0E1523', border: '1px solid #2A3550' }}
+              className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                color: '#0E1523'
+              }}
               aria-required="true"
               autoComplete="email"
             />
@@ -219,7 +264,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           <div>
             <label
               htmlFor="invite-role"
-              className="block text-xs font-semibold uppercase mb-2"
+              className="block text-xs font-bold uppercase mb-2"
               style={{ color: '#F5B731', letterSpacing: '4px' }}
             >
               Role
@@ -229,8 +274,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                 id="invite-role"
                 value={role}
                 onChange={function (e) { setRole(e.target.value); }}
-                className="w-full rounded-lg px-4 py-2.5 text-sm text-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{ background: '#0E1523', border: '1px solid #2A3550' }}
+                className="w-full rounded-lg px-4 py-2.5 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#0E1523'
+                }}
               >
                 <option value="member">Member</option>
                 <option value="editor">Editor</option>
@@ -238,7 +287,8 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               </select>
               <ChevronDown
                 size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: '#94A3B8' }}
                 aria-hidden="true"
               />
             </div>
@@ -251,19 +301,11 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           <div>
             <label
               htmlFor="invite-message"
-              className="block text-xs font-semibold uppercase mb-2"
+              className="block text-xs font-bold uppercase mb-2"
               style={{ color: '#F5B731', letterSpacing: '4px' }}
             >
               Personal Message{' '}
-              <span
-                style={{
-                  color: '#64748B',
-                  fontWeight: 400,
-                  textTransform: 'none',
-                  letterSpacing: 'normal',
-                  fontSize: '11px'
-                }}
-              >
+              <span style={{ color: '#94A3B8', fontWeight: 400, textTransform: 'none', letterSpacing: 'normal', fontSize: '11px' }}>
                 (optional)
               </span>
             </label>
@@ -273,8 +315,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
               onChange={function (e) { setMessage(e.target.value); }}
               placeholder="Add a personal note to include in the invite email..."
               rows={3}
-              className="w-full rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ background: '#0E1523', border: '1px solid #2A3550' }}
+              className="w-full rounded-lg px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                color: '#0E1523'
+              }}
             />
           </div>
 
@@ -290,12 +336,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           </button>
 
           {/* Divider */}
-          <div className="border-t" style={{ borderColor: '#2A3550' }} />
+          <div className="border-t" style={{ borderColor: '#E2E8F0' }} />
 
           {/* Pending invites */}
           <div>
             <p
-              className="text-xs font-semibold uppercase mb-3"
+              className="text-xs font-bold uppercase mb-3"
               style={{ color: '#F5B731', letterSpacing: '4px' }}
             >
               Pending Invitations
@@ -307,8 +353,8 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                   return (
                     <div
                       key={i}
-                      className="h-14 rounded-lg animate-pulse"
-                      style={{ background: '#0E1523' }}
+                      className="h-16 rounded-lg animate-pulse"
+                      style={{ background: '#F1F5F9' }}
                     />
                   );
                 })}
@@ -316,9 +362,9 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             ) : pendingInvites.length === 0 ? (
               <div
                 className="flex items-center gap-2 px-4 py-3 rounded-lg"
-                style={{ background: '#0E1523', border: '1px solid #2A3550' }}
+                style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
               >
-                <Mail size={14} className="text-gray-500 shrink-0" aria-hidden="true" />
+                <Mail size={14} style={{ color: '#94A3B8' }} className="shrink-0" aria-hidden="true" />
                 <p className="text-sm" style={{ color: '#64748B' }}>
                   No pending invitations.
                 </p>
@@ -329,47 +375,84 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                 role="list"
                 aria-label="Pending invitations list"
               >
-                {pendingInvites.map(function (invite) {
+                {pendingInvites.map(function (inv) {
+                  var expiring = isExpiringSoon(inv.expires_at);
                   return (
                     <li
-                      key={invite.id}
-                      className="flex items-center justify-between px-4 py-2.5 rounded-lg"
-                      style={{ background: '#0E1523', border: '1px solid #2A3550' }}
+                      key={inv.id}
+                      className="rounded-lg px-4 py-3"
+                      style={{ background: '#F8FAFC', border: '1px solid ' + (expiring ? 'rgba(245,183,49,0.4)' : '#E2E8F0') }}
+                      role="listitem"
+                      aria-label={'Pending invitation for ' + inv.email}
                     >
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-sm font-medium text-white truncate">
-                          {invite.email}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-xs capitalize"
-                            style={{ color: '#94A3B8' }}
-                          >
-                            {invite.role}
+                      {/* Email + expiry row */}
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold truncate block" style={{ color: '#0E1523' }}>
+                            {inv.email}
                           </span>
-                          <span style={{ color: '#2A3550' }}>·</span>
-                          <div className="flex items-center gap-1">
-                            <Clock size={10} style={{ color: '#64748B' }} aria-hidden="true" />
-                            <span className="text-xs" style={{ color: '#64748B' }}>
-                              Expires {formatExpiry(invite.expires_at)}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs capitalize" style={{ color: '#475569' }}>
+                              {inv.role}
                             </span>
+                            <span style={{ color: '#CBD5E1' }}>·</span>
+                            <div className="flex items-center gap-1">
+                              <Clock size={10} style={{ color: expiring ? '#F5B731' : '#94A3B8' }} aria-hidden="true" />
+                              <span
+                                className="text-xs"
+                                style={{ color: expiring ? '#B45309' : '#64748B' }}
+                              >
+                                {expiring ? 'Expires soon — ' : 'Expires '}
+                                {formatExpiry(inv.expires_at)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={function () { handleRevoke(invite.id, invite.email); }}
-                        disabled={revoking === invite.id}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold shrink-0 ml-3 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                          background: 'rgba(239,68,68,0.1)',
-                          color: '#EF4444',
-                          border: '1px solid rgba(239,68,68,0.2)'
-                        }}
-                        aria-label={'Revoke invitation for ' + invite.email}
-                      >
-                        <Trash2 size={11} aria-hidden="true" />
-                        {revoking === invite.id ? 'Revoking...' : 'Revoke'}
-                      </button>
+                      {/* Action buttons row */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={function () { handleCopyLink(inv.id); }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{
+                            background: 'rgba(59,130,246,0.08)',
+                            color: '#3B82F6',
+                            border: '1px solid rgba(59,130,246,0.2)'
+                          }}
+                          aria-label={'Copy invite link for ' + inv.email}
+                        >
+                          <Copy size={10} aria-hidden="true" />
+                          Copy Link
+                        </button>
+                        <button
+                          onClick={function () { handleResend(inv); }}
+                          disabled={resending === inv.id}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            background: '#F8FAFC',
+                            color: '#475569',
+                            border: '1px solid #E2E8F0'
+                          }}
+                          aria-label={'Resend invitation to ' + inv.email}
+                        >
+                          <RotateCcw size={10} aria-hidden="true" />
+                          {resending === inv.id ? 'Resending...' : 'Resend'}
+                        </button>
+                        <button
+                          onClick={function () { handleRevoke(inv.id, inv.email); }}
+                          disabled={revoking === inv.id}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ml-auto focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            background: 'rgba(239,68,68,0.06)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239,68,68,0.2)'
+                          }}
+                          aria-label={'Revoke invitation for ' + inv.email}
+                        >
+                          <Trash2 size={10} aria-hidden="true" />
+                          {revoking === inv.id ? 'Revoking...' : 'Revoke'}
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -381,12 +464,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
         {/* Footer */}
         <div
           className="flex justify-end px-6 py-4 border-t shrink-0"
-          style={{ borderColor: '#2A3550' }}
+          style={{ borderColor: '#E2E8F0' }}
         >
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-lg text-sm font-semibold border focus:outline-none focus:ring-2 focus:ring-gray-500"
-            style={{ background: 'transparent', borderColor: '#2A3550', color: '#94A3B8' }}
+            className="px-5 py-2 rounded-lg text-sm font-semibold border focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+            style={{ background: 'transparent', borderColor: '#E2E8F0', color: '#475569' }}
           >
             Close
           </button>
