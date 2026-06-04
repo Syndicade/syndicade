@@ -1,19 +1,14 @@
 /**
  * GroupsList.jsx
- * K1 light-theme audit + feature additions:
- *   - Search, type filter, My Groups toggle
- *   - Drag-to-reorder (admin only, disabled when filters active)
- *   - Clickable member count → MembersModal
- *   - Request to Join for non-admin members
- *   - Skeleton loading, improved empty state
- *
- * DB NOTE: "Request to Join" requires a `status` column on org_group_members:
- *   ALTER TABLE org_group_members ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
- *   -- values: 'active' | 'pending'
+ * Task 13 changes:
+ *   - Page header: 30px / weight 800 / #0E1523, count-based subtitle
+ *   - window.confirm → ConfirmModal
+ *   - Auto-create chat channel in CreateGroupModal after group insert
+ *   - var only, string concat className, no template literals
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
@@ -38,15 +33,6 @@ var PlusIcon = function() {
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  );
-};
-
-var ChevronRightIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6"/>
     </svg>
   );
 };
@@ -125,6 +111,16 @@ var LockIcon = function() {
   );
 };
 
+var AlertTriangleIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  );
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 var TYPE_LABELS = {
@@ -135,7 +131,6 @@ var TYPE_LABELS = {
   other: 'Other',
 };
 
-// Inline style objects — avoids template literal className issues
 var TYPE_STYLES = {
   committee: { background: '#DBEAFE', color: '#1e3a8a' },
   board:     { background: '#EDE9FE', color: '#3b0764' },
@@ -187,6 +182,58 @@ var CardSkeleton = function() {
   );
 };
 
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
+
+var ConfirmModal = function(props) {
+  var title = props.title;
+  var message = props.message;
+  var confirmLabel = props.confirmLabel || 'Delete';
+  var onConfirm = props.onConfirm;
+  var onCancel = props.onCancel;
+
+  // Close on Escape
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] p-4"
+      role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+            <AlertTriangleIcon />
+          </div>
+          <div>
+            <h2 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h2>
+            <p className="text-sm text-[#475569]">{message}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            autoFocus
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Members Modal ────────────────────────────────────────────────────────────
 
 var MembersModal = function(props) {
@@ -198,11 +245,23 @@ var MembersModal = function(props) {
   useEffect(function() {
     async function load() {
       try {
-        var result = await supabase
+        var gmRes = await supabase
           .from('org_group_members')
-          .select('member_id, members:member_id(user_id, full_name)')
+          .select('member_id')
           .eq('group_id', group.id);
-        setMembers(result.data || []);
+        var ids = (gmRes.data || []).map(function(r) { return r.member_id; });
+        if (ids.length === 0) { setMembers([]); setLoading(false); return; }
+        var namesRes = await supabase
+          .from('members')
+          .select('user_id, first_name, last_name')
+          .in('user_id', ids);
+        var normalized = (namesRes.data || []).map(function(m) {
+          return {
+            member_id: m.user_id,
+            full_name: ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id,
+          };
+        });
+        setMembers(normalized);
       } catch (_err) {
         // show empty state silently
       } finally {
@@ -221,7 +280,6 @@ var MembersModal = function(props) {
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
           <div>
             <h2 id="members-modal-title" className="text-lg font-bold text-[#0E1523]">
@@ -238,7 +296,6 @@ var MembersModal = function(props) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-4 max-h-80 overflow-y-auto">
           {loading ? (
             <div className="space-y-3" aria-busy="true" aria-label="Loading members">
@@ -262,7 +319,7 @@ var MembersModal = function(props) {
           ) : (
             <ul className="space-y-2" role="list" aria-label="Group member list">
               {members.map(function(m) {
-                var name = (m.members && m.members.full_name) || 'Unknown';
+                var name = m.full_name || 'Unknown';
                 var bg = getAvatarColor(name);
                 return (
                   <li key={m.member_id} className="flex items-center gap-3 py-1">
@@ -281,7 +338,6 @@ var MembersModal = function(props) {
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-slate-200">
           <button
             onClick={onClose}
@@ -328,6 +384,9 @@ var CreateGroupModal = function(props) {
     }
     setSaving(true);
     try {
+      var userRes = await supabase.auth.getUser();
+      var userId = userRes.data.user.id;
+
       var payload = {
         name: form.name.trim(),
         description: form.description.trim(),
@@ -340,16 +399,36 @@ var CreateGroupModal = function(props) {
       };
 
       var err;
+      var newGroupId = null;
+
       if (editGroup) {
         var upd = await supabase.from('org_groups').update(payload).eq('id', editGroup.id);
         err = upd.error;
       } else {
-        var userRes = await supabase.auth.getUser();
-        payload.created_by = userRes.data.user.id;
-        var ins = await supabase.from('org_groups').insert(payload);
+        payload.created_by = userId;
+        var ins = await supabase.from('org_groups').insert(payload).select('id').single();
         err = ins.error;
+        if (!err && ins.data) {
+          newGroupId = ins.data.id;
+        }
       }
       if (err) throw err;
+
+      // Auto-create a chat channel when a new group is created
+      if (newGroupId) {
+        var channelRes = await supabase.from('org_chat_channels').insert({
+          name: form.name.trim(),
+          organization_id: organizationId,
+          group_id: newGroupId,
+          created_by: userId,
+          is_private: form.visibility === 'group_only',
+        });
+        // Non-fatal: log but don't block the success toast
+        if (channelRes.error) {
+          console.warn('Could not auto-create chat channel:', channelRes.error.message);
+        }
+      }
+
       mascotSuccessToast(editGroup ? 'Group updated' : 'Group created');
       onSaved();
     } catch (e) {
@@ -368,7 +447,6 @@ var CreateGroupModal = function(props) {
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 id="create-group-title" className="text-xl font-bold text-[#0E1523]">
             {editGroup ? 'Edit Group' : 'Create Group'}
@@ -382,7 +460,6 @@ var CreateGroupModal = function(props) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 space-y-4">
           <div>
             <label htmlFor="g-name" className="block text-sm font-medium text-[#0E1523] mb-1">
@@ -474,7 +551,6 @@ var CreateGroupModal = function(props) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
           <button
             onClick={onClose}
@@ -507,10 +583,11 @@ var CreateGroupModal = function(props) {
 
 function GroupsList() {
   var { organizationId } = useParams();
+  var context = useOutletContext();
+  var isAdmin = context ? context.isAdmin : false;
 
   var [groups, setGroups] = useState([]);
   var [loading, setLoading] = useState(true);
-  var [isAdmin, setIsAdmin] = useState(false);
   var [currentUserId, setCurrentUserId] = useState(null);
   var [memberCounts, setMemberCounts] = useState({});
   var [userGroupIds, setUserGroupIds] = useState(new Set());
@@ -519,6 +596,7 @@ function GroupsList() {
   var [showModal, setShowModal] = useState(false);
   var [editGroup, setEditGroup] = useState(null);
   var [membersModal, setMembersModal] = useState(null);
+  var [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
 
   var [search, setSearch] = useState('');
   var [typeFilter, setTypeFilter] = useState('all');
@@ -528,7 +606,6 @@ function GroupsList() {
   var dragSrcIndexRef = useRef(null);
   var [dragOverIndex, setDragOverIndex] = useState(null);
 
-  // Drag is disabled when filters are active (indices would be wrong)
   var filtersActive = search !== '' || typeFilter !== 'all' || myGroupsOnly;
   var canDrag = isAdmin && !filtersActive && !loading && groups.length > 1;
 
@@ -541,13 +618,14 @@ function GroupsList() {
       var userId = userRes.data.user.id;
       setCurrentUserId(userId);
 
-      var [orgRes, memRes, groupsRes] = await Promise.all([
-        supabase.from('organizations').select('name').eq('id', organizationId).single(),
-        supabase.from('memberships').select('role').eq('organization_id', organizationId).eq('member_id', userId).eq('status', 'active').single(),
-        supabase.from('org_groups').select('*').eq('organization_id', organizationId).eq('is_active', true).order('sort_order').order('name'),
-      ]);
+      var groupsRes = await supabase
+        .from('org_groups')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('sort_order')
+        .order('name');
 
-      setIsAdmin(memRes.data ? memRes.data.role === 'admin' : false);
       var groupsData = groupsRes.data || [];
       setGroups(groupsData);
 
@@ -560,13 +638,13 @@ function GroupsList() {
           groupsData.map(async function(g) {
             var cntRes = await supabase
               .from('org_group_members')
-              .select('*', { count: 'exact', head: true })
+              .select('member_id', { count: 'exact', head: true })
               .eq('group_id', g.id);
             counts[g.id] = cntRes.count || 0;
 
             var myRow = await supabase
               .from('org_group_members')
-              .select('id, status')
+              .select('member_id, status')
               .eq('group_id', g.id)
               .eq('member_id', userId)
               .maybeSingle();
@@ -637,10 +715,12 @@ function GroupsList() {
 
   // ─── Delete ────────────────────────────────────────────────────────────────
 
-  var handleDelete = async function(group) {
-    if (!window.confirm('Delete "' + group.name + '"? This cannot be undone.')) return;
+  var handleDeleteConfirmed = async function() {
+    if (!confirmDelete) return;
+    var groupId = confirmDelete.id;
+    setConfirmDelete(null);
     try {
-      var res = await supabase.from('org_groups').update({ is_active: false }).eq('id', group.id);
+      var res = await supabase.from('org_groups').update({ is_active: false }).eq('id', groupId);
       if (res.error) throw res.error;
       mascotSuccessToast('Group deleted');
       fetchData();
@@ -650,7 +730,6 @@ function GroupsList() {
   };
 
   // ─── Request to Join ───────────────────────────────────────────────────────
-  // Requires `status` column on org_group_members (see top-of-file SQL note)
 
   var handleRequestJoin = async function(group) {
     try {
@@ -702,11 +781,13 @@ function GroupsList() {
     <main className="min-h-screen bg-[#F8FAFC]" aria-label="Groups and Committees">
       <div className="px-6 py-6">
 
-        {/* ── Page Header ── */}
+        {/* ── Page Header (standard: 30px/800, count-based subtitle) ── */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-[#0E1523]">Groups &amp; Committees</h1>
-            <p className="text-sm text-[#64748B] mt-0.5">
+            <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
+              Groups &amp; Committees
+            </h1>
+            <p className="text-sm text-[#64748B] mt-1">
               {loading
                 ? 'Loading...'
                 : groups.length + ' ' + (groups.length === 1 ? 'group' : 'groups')}
@@ -725,7 +806,6 @@ function GroupsList() {
 
         {/* ── Filters ── */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          {/* Search */}
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#94A3B8]">
               <SearchIcon />
@@ -749,7 +829,6 @@ function GroupsList() {
             )}
           </div>
 
-          {/* Type filter */}
           <select
             value={typeFilter}
             onChange={function(e) { setTypeFilter(e.target.value); }}
@@ -764,7 +843,6 @@ function GroupsList() {
             <option value="other">Other</option>
           </select>
 
-          {/* My Groups toggle */}
           <button
             onClick={function() { setMyGroupsOnly(function(v) { return !v; }); }}
             className={'flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ' + (myGroupsOnly ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-[#475569] border-slate-200 hover:bg-slate-50')}
@@ -796,7 +874,6 @@ function GroupsList() {
           </div>
 
         ) : filteredGroups.length === 0 && groups.length === 0 ? (
-          /* Empty state — no groups at all */
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="flex justify-center text-slate-300 mb-4">
               <UsersIcon size={52} />
@@ -819,7 +896,6 @@ function GroupsList() {
           </div>
 
         ) : filteredGroups.length === 0 ? (
-          /* Empty state — filters returned nothing */
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="flex justify-center text-slate-300 mb-4">
               <SearchIcon />
@@ -839,7 +915,6 @@ function GroupsList() {
           </div>
 
         ) : (
-          /* ── Card grid ── */
           <div
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
             role="list"
@@ -864,19 +939,19 @@ function GroupsList() {
                   onDrop={canDrag ? function() { handleDrop(index); } : undefined}
                   className={'bg-white rounded-xl border flex overflow-hidden transition-all ' + (isDragTarget ? 'border-blue-400 shadow-lg' : 'border-slate-200 hover:shadow-md hover:border-slate-300')}
                   style={Object.assign({ minHeight: '160px' }, isDragTarget ? { opacity: 0.85 } : {})}
-                  aria-label={group.name + ' group'}
                 >
-                  {/* Colored left strip */}
                   <div
                     className="w-1.5 flex-shrink-0"
                     style={{ backgroundColor: group.color || '#3B82F6' }}
                     aria-hidden="true"
                   />
 
-                  {/* Card body */}
-                  <div className="flex-1 flex flex-col p-4 min-w-0">
-
-                    {/* Drag handle — top right */}
+                  {/* Entire card body is a link */}
+                  <Link
+                    to={'/organizations/' + organizationId + '/groups/' + group.id}
+                    className="flex-1 flex flex-col p-4 min-w-0 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    aria-label={'Open ' + group.name}
+                  >
                     {canDrag && (
                       <div className="flex justify-end mb-1">
                         <div className="text-[#CBD5E1] hover:text-[#94A3B8] cursor-grab active:cursor-grabbing" aria-hidden="true" title="Drag to reorder">
@@ -885,10 +960,8 @@ function GroupsList() {
                       </div>
                     )}
 
-                    {/* Name */}
                     <p className="font-bold text-[#0E1523] text-base leading-snug mb-1.5">{group.name}</p>
 
-                    {/* Badges */}
                     <div className="flex items-center gap-1.5 flex-wrap mb-2">
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={typeStyle}>
                         {TYPE_LABELS[group.type] || group.type}
@@ -912,18 +985,15 @@ function GroupsList() {
                       )}
                     </div>
 
-                    {/* Description */}
                     {group.description && (
                       <p className="text-sm text-[#475569] line-clamp-2 mb-2">{group.description}</p>
                     )}
 
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Footer */}
                     <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
                       <button
-                        onClick={function() { setMembersModal(group); }}
+                        onClick={function(e) { e.preventDefault(); e.stopPropagation(); setMembersModal(group); }}
                         className="flex items-center gap-1 text-xs text-[#64748B] hover:text-blue-500 focus:outline-none focus:underline transition-colors"
                         aria-label={'View ' + count + ' ' + (count === 1 ? 'member' : 'members') + ' in ' + group.name}
                       >
@@ -934,7 +1004,7 @@ function GroupsList() {
                       <div className="flex items-center gap-1">
                         {canJoin && (
                           <button
-                            onClick={function() { handleRequestJoin(group); }}
+                            onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleRequestJoin(group); }}
                             className="px-2.5 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
                             aria-label={(group.join_approval_required ? 'Request to join ' : 'Join ') + group.name}
                           >
@@ -944,14 +1014,14 @@ function GroupsList() {
                         {isAdmin && (
                           <>
                             <button
-                              onClick={function() { setEditGroup(group); setShowModal(true); }}
+                              onClick={function(e) { e.preventDefault(); e.stopPropagation(); setEditGroup(group); setShowModal(true); }}
                               className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                               aria-label={'Edit ' + group.name}
                             >
                               <EditIcon />
                             </button>
                             <button
-                              onClick={function() { handleDelete(group); }}
+                              onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmDelete({ id: group.id, name: group.name }); }}
                               className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                               aria-label={'Delete ' + group.name}
                             >
@@ -959,16 +1029,9 @@ function GroupsList() {
                             </button>
                           </>
                         )}
-                        <Link
-                          to={'/organizations/' + organizationId + '/groups/' + group.id}
-                          className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                          aria-label={'View ' + group.name + ' details'}
-                        >
-                          <ChevronRightIcon />
-                        </Link>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </div>
               );
             })}
@@ -992,6 +1055,16 @@ function GroupsList() {
           group={membersModal}
           organizationId={organizationId}
           onClose={function() { setMembersModal(null); }}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={'Delete "' + confirmDelete.name + '"?'}
+          message="This group will be deactivated and removed from all member views. This cannot be undone."
+          confirmLabel="Delete Group"
+          onConfirm={handleDeleteConfirmed}
+          onCancel={function() { setConfirmDelete(null); }}
         />
       )}
     </main>

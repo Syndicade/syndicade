@@ -298,10 +298,10 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
 
   var searchResults = searchQuery.trim()
     ? allOrgMembers.filter(function(m) {
-        var name = (m.members.full_name || '').toLowerCase();
-        var email = (m.members.email || '').toLowerCase();
+        var name = (m.full_name || '').toLowerCase();
+        var email = (m.email || '').toLowerCase();
         var q = searchQuery.toLowerCase();
-        return name.includes(q) || email.includes(q);
+        return name.indexOf(q) !== -1 || email.indexOf(q) !== -1;
       }).slice(0, 8)
     : [];
 
@@ -355,7 +355,6 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
             className="absolute top-full mt-1.5 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto"
             style={{ minWidth: '288px', maxHeight: '420px' }}>
 
-            {/* Preset audiences */}
             <div className="py-2">
               <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Member Groups</p>
               {presets.map(function(preset) {
@@ -371,7 +370,6 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
               })}
             </div>
 
-            {/* Groups */}
             {orgGroups.length > 0 && (
               <div className="py-2 border-t border-slate-100">
                 <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Groups</p>
@@ -389,7 +387,6 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
               </div>
             )}
 
-            {/* Event attendees */}
             {orgEvents.length > 0 && (
               <div className="py-2 border-t border-slate-100">
                 <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Event Attendees</p>
@@ -409,7 +406,6 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
               </div>
             )}
 
-            {/* Individual member search */}
             <div className="py-2 border-t border-slate-100">
               <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] px-4 pt-1 pb-2">Individual Members</p>
               <div className="px-3 pb-2">
@@ -429,8 +425,8 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
                 <p className="text-xs text-slate-400 px-4 py-1">Type a name or email to search</p>
               )}
               {searchResults.map(function(m) {
-                var email = m.members.email;
-                var name = m.members.full_name || email;
+                var email = m.email;
+                var name = m.full_name || email;
                 var isSelected = audiences.some(function(a) { return a.type === 'individual' && a.email === email; });
                 return (
                   <button key={m.member_id} role="option" aria-selected={isSelected}
@@ -449,7 +445,6 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
         )}
       </div>
 
-      {/* Estimate */}
       {audiences.length > 0 && (
         <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
           <Users size={11} aria-hidden="true" />
@@ -492,7 +487,6 @@ export default function EmailBlasts() {
   var [showConfirm, setShowConfirm] = useState(false);
   var [analyticsBlast, setAnalyticsBlast] = useState(null);
 
-  // Recipient builder state
   var [orgGroups, setOrgGroups] = useState([]);
   var [orgEvents, setOrgEvents] = useState([]);
   var [allOrgMembers, setAllOrgMembers] = useState([]);
@@ -507,23 +501,24 @@ export default function EmailBlasts() {
   async function loadData() {
     setLoading(true);
     try {
-      var { data: sub } = await supabase.from('subscriptions').select('plan').eq('organization_id', organizationId).eq('status', 'active').maybeSingle();
-      var plan = sub ? sub.plan : 'starter';
+      var subRes = await supabase.from('subscriptions').select('plan').eq('organization_id', organizationId).eq('status', 'active').maybeSingle();
+      var plan = subRes.data ? subRes.data.plan : 'starter';
       setPlanKey(plan);
 
       var now = new Date();
       var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      var { data: blasts } = await supabase.from('email_blasts').select('*').eq('org_id', organizationId).order('sent_at', { ascending: false });
-      var thisMonthBlasts = (blasts || []).filter(function(b) { return b.sent_at >= startOfMonth && b.status === 'sent'; });
+      var blastsRes = await supabase.from('email_blasts').select('*').eq('org_id', organizationId).order('sent_at', { ascending: false });
+      var blasts = blastsRes.data || [];
+      var thisMonthBlasts = blasts.filter(function(b) { return b.sent_at >= startOfMonth && b.status === 'sent'; });
       setUsedThisMonth(thisMonthBlasts.reduce(function(sum, b) { return sum + (b.recipient_count || 0); }, 0));
-      setBlastHistory(blasts || []);
+      setBlastHistory(blasts);
 
-      if (plan !== 'starter' && (blasts || []).length > 0) {
-        var blastIds = (blasts || []).map(function(b) { return b.id; });
-        var { data: eventsData } = await supabase.from('email_events').select('blast_id, resend_email_id, event_type').in('blast_id', blastIds);
+      if (plan !== 'starter' && blasts.length > 0) {
+        var blastIds = blasts.map(function(b) { return b.id; });
+        var eventsRes = await supabase.from('email_events').select('blast_id, resend_email_id, event_type').in('blast_id', blastIds);
         var statsMap = {};
         blastIds.forEach(function(id) { statsMap[id] = { opened: new Set(), clicked: new Set(), bounced: new Set() }; });
-        (eventsData || []).forEach(function(e) {
+        (eventsRes.data || []).forEach(function(e) {
           if (!statsMap[e.blast_id] || !e.resend_email_id) return;
           if (e.event_type === 'opened')  statsMap[e.blast_id].opened.add(e.resend_email_id);
           if (e.event_type === 'clicked') statsMap[e.blast_id].clicked.add(e.resend_email_id);
@@ -531,7 +526,7 @@ export default function EmailBlasts() {
         });
         var computedStats = {};
         blastIds.forEach(function(id) {
-          var blast = (blasts || []).find(function(b) { return b.id === id; });
+          var blast = blasts.find(function(b) { return b.id === id; });
           var total = blast ? (blast.recipient_count || 1) : 1;
           var s = statsMap[id];
           computedStats[id] = { opened: s.opened.size, clicked: s.clicked.size, bounced: s.bounced.size, openRate: Math.round((s.opened.size / total) * 100), clickRate: Math.round((s.clicked.size / total) * 100) };
@@ -539,41 +534,31 @@ export default function EmailBlasts() {
         setBlastStats(computedStats);
       }
 
-      var { data: templates } = await supabase.from('email_templates').select('*').eq('org_id', organizationId).order('created_at', { ascending: false });
-      setCustomTemplates(templates || []);
+      var templatesRes = await supabase.from('email_templates').select('*').eq('org_id', organizationId).order('created_at', { ascending: false });
+      setCustomTemplates(templatesRes.data || []);
 
-      var { count } = await supabase.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'active');
-      setMemberCount(count || 0);
+      var countRes = await supabase.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'active');
+      setMemberCount(countRes.count || 0);
 
-      // Load groups for recipient builder
-      // NOTE: adjust table name below if your groups table is named differently
+      // Load groups for recipient builder — T6: pre-select group from ?group= query param
       try {
-        var { data: groups } = await supabase
-          .from('org_groups')
-          .select('id, name')
-          .eq('organization_id', organizationId)
-          .order('name');
-        setOrgGroups(groups || []);
+        var groupsRes = await supabase.from('org_groups').select('id, name').eq('organization_id', organizationId).eq('is_active', true).order('name');
+        var groups = groupsRes.data || [];
+        setOrgGroups(groups);
 
         var params = new URLSearchParams(location.search);
         var preselectedGroupId = params.get('group');
         if (preselectedGroupId) {
-          var matchedGroup = (groups || []).find(function(g) { return g.id === preselectedGroupId; });
+          var matchedGroup = groups.find(function(g) { return g.id === preselectedGroupId; });
           if (matchedGroup) {
             setAudiences([{ type: 'group', group_id: matchedGroup.id, label: matchedGroup.name }]);
             setTab('compose');
           }
         }
-      } catch (_) { setOrgGroups([]); }
+      } catch (_e) { setOrgGroups([]); }
 
-      // Load recent events for recipient builder
-      var { data: recentEvents } = await supabase
-        .from('events')
-        .select('id, title, start_time')
-        .eq('organization_id', organizationId)
-        .order('start_time', { ascending: false })
-        .limit(20);
-      setOrgEvents(recentEvents || []);
+      var recentEventsRes = await supabase.from('events').select('id, title, start_time').eq('organization_id', organizationId).order('start_time', { ascending: false }).limit(20);
+      setOrgEvents(recentEventsRes.data || []);
 
     } catch (err) {
       toast.error('Failed to load email data');
@@ -585,13 +570,20 @@ export default function EmailBlasts() {
   async function loadAllMembers() {
     if (membersLoaded) return;
     try {
-      var { data } = await supabase
-        .from('memberships')
-        .select('member_id, members!inner(email, full_name)')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active');
-      setAllOrgMembers(data || []);
-    } catch (_) {
+      // Two-step: get member_ids then names (members table uses user_id as PK, no full_name column)
+      var memRes = await supabase.from('memberships').select('member_id').eq('organization_id', organizationId).eq('status', 'active');
+      var ids = (memRes.data || []).map(function(m) { return m.member_id; });
+      if (ids.length === 0) { setAllOrgMembers([]); setMembersLoaded(true); return; }
+      var namesRes = await supabase.from('members').select('user_id, first_name, last_name, email').in('user_id', ids);
+      var normalized = (namesRes.data || []).map(function(m) {
+        return {
+          member_id: m.user_id,
+          full_name: ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id,
+          email: m.email || '',
+        };
+      });
+      setAllOrgMembers(normalized);
+    } catch (_e) {
       setAllOrgMembers([]);
     } finally {
       setMembersLoaded(true);
@@ -610,14 +602,15 @@ export default function EmailBlasts() {
     if (!saveName.trim()) { toast.error('Please enter a template name'); return; }
     if (!subject.trim() || !body.trim()) { toast.error('Write your email first, then save as template'); return; }
     try {
-      var { data: { user } } = await supabase.auth.getUser();
+      var userRes = await supabase.auth.getUser();
+      var user = userRes.data.user;
       if (editingTemplate) {
-        var { error } = await supabase.from('email_templates').update({ name: saveName.trim(), subject: subject, body: body, category: saveCategory, updated_at: new Date().toISOString() }).eq('id', editingTemplate.id);
-        if (error) throw error;
+        var updRes = await supabase.from('email_templates').update({ name: saveName.trim(), subject: subject, body: body, category: saveCategory, updated_at: new Date().toISOString() }).eq('id', editingTemplate.id);
+        if (updRes.error) throw updRes.error;
         mascotSuccessToast('Template updated!', saveName.trim() + ' has been saved.');
       } else {
-        var { error: insertError } = await supabase.from('email_templates').insert({ org_id: organizationId, name: saveName.trim(), subject: subject, body: body, category: saveCategory, created_by: user.id });
-        if (insertError) throw insertError;
+        var insRes = await supabase.from('email_templates').insert({ org_id: organizationId, name: saveName.trim(), subject: subject, body: body, category: saveCategory, created_by: user.id });
+        if (insRes.error) throw insRes.error;
         mascotSuccessToast('Template saved!', saveName.trim() + ' is now in your templates.');
       }
       setShowSaveModal(false);
@@ -640,8 +633,8 @@ export default function EmailBlasts() {
 
   async function deleteTemplate(id) {
     try {
-      var { error } = await supabase.from('email_templates').delete().eq('id', id);
-      if (error) throw error;
+      var delRes = await supabase.from('email_templates').delete().eq('id', id);
+      if (delRes.error) throw delRes.error;
       setCustomTemplates(customTemplates.filter(function(t) { return t.id !== id; }));
       mascotSuccessToast('Template deleted');
     } catch (err) { mascotErrorToast('Failed to delete template.', err.message || ''); }
@@ -651,7 +644,8 @@ export default function EmailBlasts() {
     setShowConfirm(false);
     setSending(true);
     try {
-      var { data: { session } } = await supabase.auth.getSession();
+      var sessionRes = await supabase.auth.getSession();
+      var session = sessionRes.data.session;
       var res = await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-blast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
@@ -697,10 +691,9 @@ export default function EmailBlasts() {
   if (loading) {
     return (
       <main className="flex-1 bg-[#F8FAFC] min-h-screen" aria-label="Email Blasts loading">
-        <div className="bg-white border-b border-slate-200 px-6 py-5">
-          <Skeleton className="h-3 w-24 mb-2" />
-          <Skeleton className="h-7 w-48 mb-2" />
-          <Skeleton className="h-3 w-72" />
+        <div className="px-6 py-6 border-b border-slate-200 bg-white">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-32" />
         </div>
         <div className="p-6 max-w-3xl mx-auto space-y-4">
           <Skeleton className="h-12" />
@@ -715,11 +708,15 @@ export default function EmailBlasts() {
   if (planKey === 'starter') {
     return (
       <main className="flex-1 bg-[#F8FAFC] min-h-screen" aria-label="Email Blasts">
-        <div className="bg-white border-b border-slate-200 px-6 py-5">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-1">Communications</p>
-            <h1 className="text-2xl font-extrabold text-slate-900">Email Blasts</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Send announcements and updates directly to your members.</p>
+        {/* ── Standard page header ── */}
+        <div className="bg-white border-b border-slate-200 px-6 py-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
+                Email Blasts
+              </h1>
+              <p className="text-sm text-[#64748B] mt-1">Send announcements and updates directly to your members.</p>
+            </div>
           </div>
           <div className="flex mt-5 border-b border-slate-200 opacity-40 pointer-events-none select-none" aria-hidden="true">
             {[{ key: 'compose', label: 'Compose', Icon: Mail }, { key: 'newsletter', label: 'Newsletter', Icon: Layout }, { key: 'templates', label: 'Templates', Icon: FileText }, { key: 'history', label: 'Send History', Icon: Clock }].map(function(t) {
@@ -773,12 +770,16 @@ export default function EmailBlasts() {
 
   return (
     <main className="flex-1 bg-[#F8FAFC] min-h-screen" aria-label="Email Blasts">
-      <div className="bg-white border-b border-slate-200 px-6 py-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* ── Standard page header ── */}
+      <div className="bg-white border-b border-slate-200 px-6 py-6">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-1">Communications</p>
-            <h1 className="text-2xl font-extrabold text-slate-900">Email Blasts</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Send announcements and updates directly to your members.</p>
+            <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
+              Email Blasts
+            </h1>
+            <p className="text-sm text-[#64748B] mt-1">
+              {usedThisMonth + ' email' + (usedThisMonth !== 1 ? 's' : '') + ' sent this month'}
+            </p>
           </div>
           <UsageBar used={usedThisMonth} limit={planLimit} />
         </div>
@@ -1022,13 +1023,10 @@ export default function EmailBlasts() {
               </div>
               <div>
                 <label htmlFor="template-category" className="block text-xs font-bold uppercase tracking-widest text-[#F5B731] mb-2">Category</label>
-                <div className="relative">
-                  <select id="template-category" value={saveCategory} onChange={function(e) { setSaveCategory(e.target.value); }}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-10">
-                    {['General', 'Members', 'Events', 'Finance', 'Volunteers'].map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
-                </div>
+                <select id="template-category" value={saveCategory} onChange={function(e) { setSaveCategory(e.target.value); }}
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {['General', 'Members', 'Events', 'Finance', 'Volunteers'].map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
+                </select>
               </div>
             </div>
             <div className="flex gap-3 justify-end mt-6">

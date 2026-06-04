@@ -1,22 +1,18 @@
 /**
  * GroupDetail.jsx
- * K1 light-theme audit + feature additions:
- *   - Pending join requests (admin approve/deny) in Members tab
- *   - Header stats strip (members, events, docs — clickable to switch tab)
- *   - Inline Edit Group button in header
- *   - Member search within Members tab
- *   - Link existing org events to group (+ unlink)
- *   - Announcements tab
- *   - "Email this group" button in header
+ * Task 13 changes:
+ *   - Page header: 30px / weight 800 / #0E1523, count-based subtitle
+ *   - window.confirm → ConfirmModal (4 locations: remove member, unlink event, delete doc, delete announcement)
+ *   - isAdmin from useOutletContext() — consistent with rest of app
+ *   - var only, string concat className, no template literals
  *
  * DB MIGRATIONS NEEDED (run once in Supabase SQL editor):
  *
  * -- Role column on org_group_members:
  * ALTER TABLE public.org_group_members
  *   ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'member';
- * -- values: 'member' | 'chair' | 'co_chair'
  *
- * -- event_groups junction table (if it doesn't exist):
+ * -- event_groups junction table:
  * CREATE TABLE IF NOT EXISTS public.event_groups (
  *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  *   event_id uuid REFERENCES public.events(id) ON DELETE CASCADE NOT NULL,
@@ -24,24 +20,10 @@
  *   created_at timestamptz DEFAULT now(),
  *   UNIQUE(event_id, group_id)
  * );
- * ALTER TABLE public.event_groups ENABLE ROW LEVEL SECURITY;
- * CREATE POLICY "Org members can view event_groups" ON public.event_groups FOR SELECT
- *   USING (EXISTS (SELECT 1 FROM public.memberships WHERE organization_id =
- *     (SELECT organization_id FROM public.org_groups WHERE id = event_groups.group_id)
- *     AND member_id = auth.uid() AND status = 'active'));
- * CREATE POLICY "Admins can manage event_groups" ON public.event_groups FOR ALL
- *   USING (EXISTS (SELECT 1 FROM public.memberships m
- *     JOIN public.org_groups g ON g.organization_id = m.organization_id
- *     WHERE g.id = event_groups.group_id AND m.member_id = auth.uid()
- *     AND m.role IN ('admin','editor') AND m.status = 'active'));
- *
- * -- NOTE: EmailBlasts.jsx — to support ?group= deep-link, read
- * --   new URLSearchParams(window.location.search).get('group') on mount
- * --   and pre-select that group in the RecipientBuilder.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
@@ -67,15 +49,6 @@ var TrashIcon = function() {
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
       <path d="M10 11v6"/><path d="M14 11v6"/>
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-    </svg>
-  );
-};
-
-var ChevronRightIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6"/>
     </svg>
   );
 };
@@ -149,6 +122,24 @@ var LinkIcon = function() {
   );
 };
 
+var ChevronRightIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 18 15 12 9 6"/>
+    </svg>
+  );
+};
+
+var ChevronLeftIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  );
+};
+
 var UsersIcon = function(props) {
   var size = props.size || 16;
   return (
@@ -205,18 +196,20 @@ var AlertCircleIcon = function(props) {
   );
 };
 
+var AlertTriangleIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  );
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 var TYPE_LABELS = {
   committee: 'Committee', board: 'Board', team: 'Team', volunteer: 'Volunteer', other: 'Other',
-};
-
-var ROLE_LABELS = { chair: 'Chair', co_chair: 'Co-Chair', member: 'Member' };
-
-var ROLE_STYLES = {
-  chair:    { background: '#EDE9FE', color: '#3b0764' },
-  co_chair: { background: '#DBEAFE', color: '#1e3a8a' },
-  member:   { background: '#F1F5F9', color: '#475569' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -277,6 +270,7 @@ var PageSkeleton = function() {
   return (
     <main className="min-h-screen bg-[#F8FAFC]">
       <div className="px-6 py-6 animate-pulse">
+        <div className="h-4 w-32 bg-slate-100 rounded mb-5" />
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="space-y-2">
             <div className="h-8 w-52 bg-slate-200 rounded" />
@@ -288,7 +282,7 @@ var PageSkeleton = function() {
           </div>
         </div>
         <div className="flex gap-3 mb-5">
-          {[1,2,3,4].map(function(i) {
+          {[1,2,3].map(function(i) {
             return <div key={i} className="h-14 w-32 bg-slate-100 rounded-xl" />;
           })}
         </div>
@@ -304,6 +298,57 @@ var PageSkeleton = function() {
         </div>
       </div>
     </main>
+  );
+};
+
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
+
+var ConfirmModal = function(props) {
+  var title = props.title;
+  var message = props.message;
+  var confirmLabel = props.confirmLabel || 'Delete';
+  var onConfirm = props.onConfirm;
+  var onCancel = props.onCancel;
+
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] p-4"
+      role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+            <AlertTriangleIcon />
+          </div>
+          <div>
+            <h2 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h2>
+            <p className="text-sm text-[#475569]">{message}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            autoFocus
+            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -465,16 +510,47 @@ var AddMemberModal = function(props) {
 
   useEffect(function() {
     async function load() {
-      var res = await supabase
-        .from('memberships')
-        .select('member_id, members:member_id(user_id, full_name)')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active');
-      var available = (res.data || []).filter(function(m) {
-        return existingMemberIds.indexOf(m.member_id) === -1;
-      });
-      setOrgMembers(available);
-      setLoading(false);
+      try {
+        // Step 1: get all active membership member_ids for this org
+        var memRes = await supabase
+          .from('memberships')
+          .select('member_id')
+          .eq('organization_id', organizationId)
+          .eq('status', 'active');
+        if (memRes.error) throw memRes.error;
+
+        var allIds = (memRes.data || []).map(function(m) { return m.member_id; });
+        var availableIds = allIds.filter(function(id) {
+          return existingMemberIds.indexOf(id) === -1;
+        });
+
+        if (availableIds.length === 0) {
+          setOrgMembers([]);
+          setLoading(false);
+          return;
+        }
+
+        // Step 2: get names from members table
+        var namesRes = await supabase
+          .from('members')
+          .select('user_id, first_name, last_name')
+          .in('user_id', availableIds);
+        if (namesRes.error) throw namesRes.error;
+
+        var available = (namesRes.data || []).map(function(m) {
+          return {
+            member_id: m.user_id,
+            full_name: ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id,
+          };
+        }).sort(function(a, b) { return a.full_name.localeCompare(b.full_name); });
+
+        setOrgMembers(available);
+      } catch (e) {
+        console.error('AddMemberModal load error:', e);
+        mascotErrorToast('Failed to load members', e.message);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, [groupId, organizationId, existingMemberIds]);
@@ -483,14 +559,11 @@ var AddMemberModal = function(props) {
     if (!selected) { toast.error('Select a member'); return; }
     setSaving(true);
     try {
-      var userRes = await supabase.auth.getUser();
       var res = await supabase.from('org_group_members').insert({
         group_id: groupId,
         member_id: selected,
         organization_id: organizationId,
-        role: role,
-        status: 'active',
-        assigned_by: userRes.data.user.id,
+        role: role.trim() || 'Member',
       });
       if (res.error) throw res.error;
       mascotSuccessToast('Member added');
@@ -543,7 +616,7 @@ var AddMemberModal = function(props) {
                   {orgMembers.map(function(m) {
                     return (
                       <option key={m.member_id} value={m.member_id}>
-                        {m.members ? m.members.full_name : m.member_id}
+                        {m.full_name}
                       </option>
                     );
                   })}
@@ -551,13 +624,26 @@ var AddMemberModal = function(props) {
               </div>
               <div>
                 <label htmlFor="am-role" className="block text-sm font-medium text-[#0E1523] mb-1">Role</label>
-                <select id="am-role" value={role}
+                <input
+                  id="am-role"
+                  type="text"
+                  value={role}
                   onChange={function(e) { setRole(e.target.value); }}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="member">Member</option>
-                  <option value="chair">Chair</option>
-                  <option value="co_chair">Co-Chair</option>
-                </select>
+                  list="am-role-suggestions"
+                  placeholder="e.g. Member, Chair, Treasurer..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <datalist id="am-role-suggestions">
+                  <option value="Member" />
+                  <option value="Chair" />
+                  <option value="Co-Chair" />
+                  <option value="Vice Chair" />
+                  <option value="Secretary" />
+                  <option value="Treasurer" />
+                  <option value="President" />
+                  <option value="Vice President" />
+                  <option value="Coordinator" />
+                </datalist>
               </div>
             </>
           )}
@@ -714,6 +800,7 @@ var MembersTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showAddModal, setShowAddModal] = useState(false);
   var [search, setSearch] = useState('');
+  var [confirmRemove, setConfirmRemove] = useState(null); // { id, name }
 
   var fetchMembers = useCallback(async function() {
     setLoading(true);
@@ -721,23 +808,48 @@ var MembersTab = function(props) {
       var [activeRes, pendingRes] = await Promise.all([
         supabase
           .from('org_group_members')
-          .select('id, member_id, role, status, created_at, members:member_id(user_id, full_name)')
+          .select('id, member_id, role, status, created_at')
           .eq('group_id', groupId)
           .eq('status', 'active')
-          .order('role')
           .order('created_at'),
         supabase
           .from('org_group_members')
-          .select('id, member_id, created_at, members:member_id(user_id, full_name)')
+          .select('id, member_id, created_at')
           .eq('group_id', groupId)
           .eq('status', 'pending'),
       ]);
+
       var activeData = activeRes.data || [];
       var pendingData = pendingRes.data || [];
-      setMembers(activeData);
-      setPending(pendingData);
-      if (onCountChange) onCountChange(activeData.length);
-    } catch (_err) {
+
+      // Fetch member names separately
+      var allMemberIds = activeData.map(function(r) { return r.member_id; })
+        .concat(pendingData.map(function(r) { return r.member_id; }));
+
+      var nameMap = {};
+      if (allMemberIds.length > 0) {
+        var namesRes = await supabase
+          .from('members')
+          .select('user_id, first_name, last_name')
+          .in('user_id', allMemberIds);
+        (namesRes.data || []).forEach(function(m) {
+          nameMap[m.user_id] = ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id;
+        });
+      }
+
+      var normalize = function(rows) {
+        return rows.map(function(r) {
+          return Object.assign({}, r, { members: { full_name: nameMap[r.member_id] || r.member_id } });
+        });
+      };
+
+      var normalizedActive = normalize(activeData);
+      var normalizedPending = normalize(pendingData);
+      setMembers(normalizedActive);
+      setPending(normalizedPending);
+      if (onCountChange) onCountChange(normalizedActive.length);
+    } catch (err) {
+      console.error('fetchMembers error:', err);
       mascotErrorToast('Failed to load members');
     } finally {
       setLoading(false);
@@ -746,11 +858,12 @@ var MembersTab = function(props) {
 
   useEffect(function() { fetchMembers(); }, [fetchMembers]);
 
-  var handleRemove = async function(gm) {
-    var name = gm.members ? gm.members.full_name : 'this member';
-    if (!window.confirm('Remove ' + name + ' from this group?')) return;
+  var handleRemoveConfirmed = async function() {
+    if (!confirmRemove) return;
+    var gmId = confirmRemove.id;
+    setConfirmRemove(null);
     try {
-      var res = await supabase.from('org_group_members').delete().eq('id', gm.id);
+      var res = await supabase.from('org_group_members').delete().eq('id', gmId);
       if (res.error) throw res.error;
       mascotSuccessToast('Member removed');
       fetchMembers();
@@ -803,7 +916,7 @@ var MembersTab = function(props) {
 
   return (
     <div>
-      {/* Pending requests (admin only) */}
+      {/* Pending requests */}
       {isAdmin && pending.length > 0 && (
         <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-sm font-semibold text-amber-800 mb-3">
@@ -824,8 +937,7 @@ var MembersTab = function(props) {
                     <button onClick={function() { handleApprove(row); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
                       aria-label={'Approve ' + name}>
-                      <CheckIcon />
-                      Approve
+                      <CheckIcon />Approve
                     </button>
                     <button onClick={function() { handleDeny(row); }}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-transparent border border-slate-300 text-[#475569] rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -842,7 +954,6 @@ var MembersTab = function(props) {
 
       {/* Header row */}
       <div className="flex items-center justify-between gap-3 mb-4">
-        {/* Search */}
         <div className="relative flex-1 max-w-xs">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#94A3B8]">
             <SearchIcon />
@@ -861,8 +972,7 @@ var MembersTab = function(props) {
             <button onClick={function() { setShowAddModal(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               aria-label="Add member to group">
-              <PlusIcon />
-              Add Member
+              <PlusIcon />Add Member
             </button>
           )}
         </div>
@@ -882,8 +992,7 @@ var MembersTab = function(props) {
           {isAdmin && members.length === 0 && (
             <button onClick={function() { setShowAddModal(true); }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />
-              Add First Member
+              <PlusIcon />Add First Member
             </button>
           )}
         </div>
@@ -892,7 +1001,7 @@ var MembersTab = function(props) {
           {filtered.map(function(gm) {
             var name = (gm.members && gm.members.full_name) || 'Unknown';
             var bg = getAvatarColor(name);
-            var roleStyle = ROLE_STYLES[gm.role] || ROLE_STYLES.member;
+            var roleLabel = gm.role || 'Member';
             return (
               <li key={gm.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -904,21 +1013,37 @@ var MembersTab = function(props) {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {isAdmin ? (
-                    <select value={gm.role}
-                      onChange={function(e) { handleRoleChange(gm, e.target.value); }}
-                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-[#475569] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label={'Role for ' + name}>
-                      <option value="member">Member</option>
-                      <option value="chair">Chair</option>
-                      <option value="co_chair">Co-Chair</option>
-                    </select>
+                    <input
+                      type="text"
+                      defaultValue={roleLabel}
+                      onBlur={function(e) {
+                        var newRole = e.target.value.trim() || 'Member';
+                        if (newRole !== roleLabel) handleRoleChange(gm, newRole);
+                      }}
+                      list={'role-suggestions-' + gm.id}
+                      placeholder="Role"
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-[#475569] focus:outline-none focus:ring-2 focus:ring-blue-500 w-32"
+                      aria-label={'Role for ' + name}
+                    />
                   ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={roleStyle}>
-                      {ROLE_LABELS[gm.role] || gm.role}
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-[#475569]">
+                      {roleLabel}
                     </span>
                   )}
+                  <datalist id={'role-suggestions-' + gm.id}>
+                    <option value="Member" />
+                    <option value="Chair" />
+                    <option value="Co-Chair" />
+                    <option value="Vice Chair" />
+                    <option value="Secretary" />
+                    <option value="Treasurer" />
+                    <option value="President" />
+                    <option value="Vice President" />
+                    <option value="Coordinator" />
+                  </datalist>
                   {isAdmin && (
-                    <button onClick={function() { handleRemove(gm); }}
+                    <button
+                      onClick={function() { setConfirmRemove({ id: gm.id, name: name }); }}
                       className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                       aria-label={'Remove ' + name}>
                       <TrashIcon />
@@ -940,6 +1065,16 @@ var MembersTab = function(props) {
           onSaved={function() { setShowAddModal(false); fetchMembers(); }}
         />
       )}
+
+      {confirmRemove && (
+        <ConfirmModal
+          title={'Remove ' + confirmRemove.name + '?'}
+          message={'They will be removed from this group. They can be re-added at any time.'}
+          confirmLabel="Remove"
+          onConfirm={handleRemoveConfirmed}
+          onCancel={function() { setConfirmRemove(null); }}
+        />
+      )}
     </div>
   );
 };
@@ -957,6 +1092,7 @@ var EventsTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showCreateEvent, setShowCreateEvent] = useState(false);
   var [showLinkModal, setShowLinkModal] = useState(false);
+  var [confirmUnlink, setConfirmUnlink] = useState(null); // { id, title }
 
   var fetchEvents = useCallback(async function() {
     setLoading(true);
@@ -980,12 +1116,14 @@ var EventsTab = function(props) {
 
   useEffect(function() { fetchEvents(); }, [fetchEvents]);
 
-  var handleUnlink = async function(event) {
-    if (!window.confirm('Remove "' + event.title + '" from this group?')) return;
+  var handleUnlinkConfirmed = async function() {
+    if (!confirmUnlink) return;
+    var eventId = confirmUnlink.id;
+    setConfirmUnlink(null);
     try {
       var res = await supabase.from('event_groups')
         .delete()
-        .eq('event_id', event.id)
+        .eq('event_id', eventId)
         .eq('group_id', groupId);
       if (res.error) throw res.error;
       mascotSuccessToast('Event removed from group');
@@ -1009,14 +1147,12 @@ var EventsTab = function(props) {
               <button onClick={function() { setShowLinkModal(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
                 aria-label="Link existing event to group">
-                <LinkIcon />
-                Link Event
+                <LinkIcon />Link Event
               </button>
               <button onClick={function() { setShowCreateEvent(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 aria-label="Create new event for group">
-                <PlusIcon />
-                Create Event
+                <PlusIcon />Create Event
               </button>
             </>
           )}
@@ -1038,13 +1174,11 @@ var EventsTab = function(props) {
             <div className="flex justify-center gap-2">
               <button onClick={function() { setShowLinkModal(true); }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                <LinkIcon />
-                Link Event
+                <LinkIcon />Link Event
               </button>
               <button onClick={function() { setShowCreateEvent(true); }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <PlusIcon />
-                Create Event
+                <PlusIcon />Create Event
               </button>
             </div>
           )}
@@ -1053,7 +1187,7 @@ var EventsTab = function(props) {
         <ul className="space-y-2" role="list" aria-label="Group events">
           {events.map(function(event) {
             return (
-              <li key={event.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 group">
+              <li key={event.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <Link
                   to={'/organizations/' + organizationId + '/events/' + event.id}
                   className="flex-1 min-w-0 focus:outline-none focus:underline"
@@ -1066,7 +1200,8 @@ var EventsTab = function(props) {
                 </Link>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {isAdmin && (
-                    <button onClick={function() { handleUnlink(event); }}
+                    <button
+                      onClick={function() { setConfirmUnlink({ id: event.id, title: event.title }); }}
                       className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                       aria-label={'Remove ' + event.title + ' from group'}>
                       <TrashIcon />
@@ -1099,6 +1234,16 @@ var EventsTab = function(props) {
           onClose={function() { setShowLinkModal(false); }}
           onSaved={function() { setShowLinkModal(false); fetchEvents(); }} />
       )}
+
+      {confirmUnlink && (
+        <ConfirmModal
+          title={'Remove "' + confirmUnlink.title + '" from this group?'}
+          message="The event itself won't be deleted — it will just be unlinked from this group."
+          confirmLabel="Remove"
+          onConfirm={handleUnlinkConfirmed}
+          onCancel={function() { setConfirmUnlink(null); }}
+        />
+      )}
     </div>
   );
 };
@@ -1114,7 +1259,7 @@ var DocumentsTab = function(props) {
   var [documents, setDocuments] = useState([]);
   var [loading, setLoading] = useState(true);
   var [showUpload, setShowUpload] = useState(false);
-  var [deletingId, setDeletingId] = useState(null);
+  var [confirmDelete, setConfirmDelete] = useState(null); // { id, title, storage_path }
 
   var fetchDocs = useCallback(async function() {
     setLoading(true);
@@ -1148,9 +1293,10 @@ var DocumentsTab = function(props) {
     }
   };
 
-  var handleDelete = async function(doc) {
-    if (!window.confirm('Delete "' + doc.title + '"? This cannot be undone.')) return;
-    setDeletingId(doc.id);
+  var handleDeleteConfirmed = async function() {
+    if (!confirmDelete) return;
+    var doc = confirmDelete;
+    setConfirmDelete(null);
     try {
       if (doc.storage_path) {
         await supabase.storage.from('documents').remove([doc.storage_path]);
@@ -1161,8 +1307,6 @@ var DocumentsTab = function(props) {
       fetchDocs();
     } catch (e) {
       mascotErrorToast('Failed to delete document', e.message);
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -1177,8 +1321,7 @@ var DocumentsTab = function(props) {
             <button onClick={function() { setShowUpload(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               aria-label="Upload document for group">
-              <PlusIcon />
-              Upload
+              <PlusIcon />Upload
             </button>
           )}
           <Link to={'/organizations/' + organizationId + '/documents'}
@@ -1200,8 +1343,7 @@ var DocumentsTab = function(props) {
           {isAdmin && (
             <button onClick={function() { setShowUpload(true); }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />
-              Upload Document
+              <PlusIcon />Upload Document
             </button>
           )}
         </div>
@@ -1224,13 +1366,12 @@ var DocumentsTab = function(props) {
                   <button onClick={function() { handleDownload(doc); }}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#475569] border border-slate-300 rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                     aria-label={'Download ' + doc.title}>
-                    <DownloadIcon />
-                    Download
+                    <DownloadIcon />Download
                   </button>
                   {isAdmin && (
-                    <button onClick={function() { handleDelete(doc); }}
-                      disabled={deletingId === doc.id}
-                      className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors disabled:opacity-50"
+                    <button
+                      onClick={function() { setConfirmDelete({ id: doc.id, title: doc.title, storage_path: doc.storage_path }); }}
+                      className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                       aria-label={'Delete ' + doc.title}>
                       <TrashIcon />
                     </button>
@@ -1249,6 +1390,16 @@ var DocumentsTab = function(props) {
           organizationId={organizationId}
           folderId={null}
           groupId={groupId} />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={'Delete "' + confirmDelete.title + '"?'}
+          message="This document will be permanently deleted and cannot be recovered."
+          confirmLabel="Delete Document"
+          onConfirm={handleDeleteConfirmed}
+          onCancel={function() { setConfirmDelete(null); }}
+        />
       )}
     </div>
   );
@@ -1324,7 +1475,6 @@ var GroupAnnouncementModal = function(props) {
             <XIcon />
           </button>
         </div>
-
         <div className="p-6 space-y-4">
           <div>
             <label htmlFor="ann-title" className="block text-sm font-medium text-[#0E1523] mb-1">
@@ -1335,7 +1485,6 @@ var GroupAnnouncementModal = function(props) {
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Announcement title" maxLength={200} aria-required="true" />
           </div>
-
           <div>
             <label htmlFor="ann-content" className="block text-sm font-medium text-[#0E1523] mb-1">
               Content <span className="text-red-500" aria-hidden="true">*</span>
@@ -1345,7 +1494,6 @@ var GroupAnnouncementModal = function(props) {
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               rows={4} placeholder="Write your announcement..." aria-required="true" />
           </div>
-
           <div className="flex items-center gap-3">
             <input id="ann-pinned" type="checkbox" checked={form.is_pinned}
               onChange={function(e) { updateForm('is_pinned', e.target.checked); }}
@@ -1355,7 +1503,6 @@ var GroupAnnouncementModal = function(props) {
             </label>
           </div>
         </div>
-
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
           <button onClick={onClose}
             className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
@@ -1390,7 +1537,7 @@ var AnnouncementsTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showModal, setShowModal] = useState(false);
   var [editAnn, setEditAnn] = useState(null);
-  var [deletingId, setDeletingId] = useState(null);
+  var [confirmDelete, setConfirmDelete] = useState(null); // { id, title }
 
   var fetchAnnouncements = useCallback(async function() {
     setLoading(true);
@@ -1412,18 +1559,17 @@ var AnnouncementsTab = function(props) {
 
   useEffect(function() { fetchAnnouncements(); }, [fetchAnnouncements]);
 
-  var handleDelete = async function(ann) {
-    if (!window.confirm('Delete "' + ann.title + '"? This cannot be undone.')) return;
-    setDeletingId(ann.id);
+  var handleDeleteConfirmed = async function() {
+    if (!confirmDelete) return;
+    var annId = confirmDelete.id;
+    setConfirmDelete(null);
     try {
-      var res = await supabase.from('announcements').delete().eq('id', ann.id);
+      var res = await supabase.from('announcements').delete().eq('id', annId);
       if (res.error) throw res.error;
       mascotSuccessToast('Announcement deleted');
       fetchAnnouncements();
     } catch (e) {
       mascotErrorToast('Failed to delete announcement', e.message);
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -1440,23 +1586,20 @@ var AnnouncementsTab = function(props) {
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-sm text-[#64748B]">
-          {loading ? '' : announcements.length + ' ' + (announcements.length === 1 ? 'announcement' : 'announcements') + ' for this group'}
+          {loading ? '' : announcements.length + ' ' + (announcements.length === 1 ? 'announcement' : 'announcements')}
         </p>
         {isAdmin && (
           <button
             onClick={function() { setEditAnn(null); setShowModal(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             aria-label="Create new announcement for this group">
-            <PlusIcon />
-            New Announcement
+            <PlusIcon />New Announcement
           </button>
         )}
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-busy="true">
           {[1,2,3].map(function(i) { return <AnnCardSkeleton key={i} />; })}
@@ -1472,22 +1615,17 @@ var AnnouncementsTab = function(props) {
             <button
               onClick={function() { setEditAnn(null); setShowModal(true); }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />
-              Post First Announcement
+              <PlusIcon />Post First Announcement
             </button>
           )}
         </div>
       ) : (
-        <ul
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          role="list"
-          aria-label="Group announcements">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Group announcements">
           {announcements.map(function(ann) {
             return (
               <li key={ann.id}
                 className={'rounded-xl border flex flex-col ' + (ann.is_pinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200')}>
                 <div className="p-4 flex-1">
-                  {/* Title row */}
                   <div className="flex items-start gap-2 mb-2">
                     <p className="font-semibold text-[#0E1523] text-sm flex-1 leading-snug">{ann.title}</p>
                     {ann.is_pinned && (
@@ -1496,14 +1634,10 @@ var AnnouncementsTab = function(props) {
                       </span>
                     )}
                   </div>
-
-                  {/* Content */}
                   {ann.content && (
                     <p className="text-sm text-[#475569] leading-relaxed line-clamp-3">{ann.content}</p>
                   )}
                 </div>
-
-                {/* Footer */}
                 <div className={'flex items-center justify-between px-4 py-2.5 border-t ' + (ann.is_pinned ? 'border-amber-200' : 'border-slate-100')}>
                   <span className="text-xs text-[#64748B]">
                     {new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1517,9 +1651,8 @@ var AnnouncementsTab = function(props) {
                         <EditIcon />
                       </button>
                       <button
-                        onClick={function() { handleDelete(ann); }}
-                        disabled={deletingId === ann.id}
-                        className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors disabled:opacity-50"
+                        onClick={function() { setConfirmDelete({ id: ann.id, title: ann.title }); }}
+                        className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                         aria-label={'Delete ' + ann.title}>
                         <TrashIcon />
                       </button>
@@ -1540,6 +1673,16 @@ var AnnouncementsTab = function(props) {
           onClose={function() { setShowModal(false); setEditAnn(null); }}
           onSaved={function() { setShowModal(false); setEditAnn(null); fetchAnnouncements(); }} />
       )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={'Delete "' + confirmDelete.title + '"?'}
+          message="This announcement will be permanently deleted."
+          confirmLabel="Delete"
+          onConfirm={handleDeleteConfirmed}
+          onCancel={function() { setConfirmDelete(null); }}
+        />
+      )}
     </div>
   );
 };
@@ -1549,37 +1692,27 @@ var AnnouncementsTab = function(props) {
 function GroupDetail() {
   var { organizationId, groupId } = useParams();
   var navigate = useNavigate();
+  var context = useOutletContext();
+  var isAdmin = context ? context.isAdmin : false;
 
   var [group, setGroup] = useState(null);
   var [orgName, setOrgName] = useState('');
   var [loading, setLoading] = useState(true);
-  var [isAdmin, setIsAdmin] = useState(false);
   var [activeTab, setActiveTab] = useState('members');
   var [showEditModal, setShowEditModal] = useState(false);
 
-  // Stats for header strip
   var [memberCount, setMemberCount] = useState(0);
   var [eventCount, setEventCount] = useState(0);
   var [docCount, setDocCount] = useState(0);
 
   var fetchGroup = useCallback(async function() {
     try {
-      var userRes = await supabase.auth.getUser();
-      var userId = userRes.data.user.id;
-
-      var [groupRes, orgRes, memRes] = await Promise.all([
+      var [groupRes, orgRes] = await Promise.all([
         supabase.from('org_groups').select('*').eq('id', groupId).single(),
         supabase.from('organizations').select('name').eq('id', organizationId).single(),
-        supabase.from('memberships').select('role')
-          .eq('organization_id', organizationId)
-          .eq('member_id', userId)
-          .eq('status', 'active')
-          .single(),
       ]);
-
       setGroup(groupRes.data);
       setOrgName(orgRes.data ? orgRes.data.name : '');
-      setIsAdmin(memRes.data ? memRes.data.role === 'admin' : false);
     } catch (_err) {
       mascotErrorToast('Failed to load group', 'Please try refreshing.');
     } finally {
@@ -1590,13 +1723,11 @@ function GroupDetail() {
   useEffect(function() { fetchGroup(); }, [fetchGroup]);
 
   var tabs = [
-    { id: 'members',       label: 'Members',       icon: <UsersIcon size={15} /> },
-    { id: 'events',        label: 'Events',         icon: <CalendarIcon size={15} /> },
-    { id: 'documents',     label: 'Documents',      icon: <FolderIcon size={15} /> },
-    { id: 'announcements', label: 'Announcements',  icon: <MegaphoneIcon size={15} /> },
+    { id: 'members',       label: 'Members',      icon: <UsersIcon size={15} /> },
+    { id: 'events',        label: 'Events',        icon: <CalendarIcon size={15} /> },
+    { id: 'documents',     label: 'Documents',     icon: <FolderIcon size={15} /> },
+    { id: 'announcements', label: 'Announcements', icon: <MegaphoneIcon size={15} /> },
   ];
-
-  var typeStyle = group ? ({ background: '#F1F5F9', color: '#475569' }) : {};
 
   if (loading) return <PageSkeleton />;
 
@@ -1614,6 +1745,8 @@ function GroupDetail() {
     </main>
   );
 
+  var typeStyle = { background: '#F1F5F9', color: '#475569' };
+
   return (
     <main className="min-h-screen bg-[#F8FAFC]" aria-label={group.name + ' detail'}>
       <div className="px-6 py-6">
@@ -1625,46 +1758,42 @@ function GroupDetail() {
             className="flex items-center gap-1.5 text-sm text-[#64748B] hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
             aria-label="Back to Groups and Committees"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
+            <ChevronLeftIcon />
             Groups &amp; Committees
           </button>
         </div>
 
-        {/* ── Header ── */}
+        {/* ── Page Header (standard: 30px/800, count-based subtitle) ── */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: group.color || '#3B82F6' }} aria-hidden="true" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-[#0E1523]">{group.name}</h1>
+                <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
+                  {group.name}
+                </h1>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={typeStyle}>
                   {TYPE_LABELS[group.type] || group.type}
                 </span>
               </div>
-              {group.description && (
-                <p className="text-sm text-[#475569] mt-0.5">{group.description}</p>
-              )}
+              <p className="text-sm text-[#64748B] mt-1">
+                {memberCount + ' ' + (memberCount === 1 ? 'member' : 'members')}
+              </p>
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={function() { navigate('/organizations/' + organizationId + '/email-blasts?group=' + groupId); }}
               className="flex items-center gap-1.5 px-3 py-2 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
               aria-label={'Email ' + group.name}>
-              <MailIcon />
-              Email Group
+              <MailIcon />Email Group
             </button>
             {isAdmin && (
               <button onClick={function() { setShowEditModal(true); }}
                 className="flex items-center gap-1.5 px-3 py-2 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
                 aria-label={'Edit ' + group.name}>
-                <EditIcon />
-                Edit Group
+                <EditIcon />Edit Group
               </button>
             )}
           </div>
