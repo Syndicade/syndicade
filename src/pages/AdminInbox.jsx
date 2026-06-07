@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { AlertTriangle } from 'lucide-react';
 
 function IconInbox({ size }) {
   return (
@@ -117,6 +118,16 @@ function IconCheckAll({ size }) {
     </svg>
   );
 }
+function IconTrash({ size }) {
+  return (
+    <svg width={size || 16} height={size || 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+    </svg>
+  );
+}
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
 var t = {
@@ -135,6 +146,59 @@ var t = {
   selectedBg:    '#EFF6FF',
   unreadBg:      'rgba(59,130,246,0.04)',
 };
+
+// ── ConfirmModal ──────────────────────────────────────────────────────────────
+function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel }) {
+  useEffect(function() {
+    if (!isOpen) return;
+    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70, padding: '16px' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-inbox-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' }}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangle size={20} style={{ color: '#EF4444' }} aria-hidden="true" />
+          </div>
+          <div>
+            <h2 id="confirm-inbox-title" style={{ fontSize: '16px', fontWeight: 800, color: '#0E1523', margin: '0 0 4px' }}>{title}</h2>
+            <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{message}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={onCancel}
+            autoFocus
+            style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'transparent', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#EF4444', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+            className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            {confirmLabel || 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 function SkeletonList() {
@@ -257,9 +321,12 @@ export default function AdminInbox({ organizationId: propOrgId }) {
   var [markingAllRead, setMarkingAllRead] = useState(false);
   var [archivingId, setArchivingId]     = useState(null);
 
+  // ConfirmModal state
+  var [confirmDelete, setConfirmDelete] = useState(false);
+
   // Inquiry filters
   var [searchQuery, setSearchQuery]     = useState('');
-  var [archiveFilter, setArchiveFilter] = useState('active'); // 'active' | 'archived'
+  var [archiveFilter, setArchiveFilter] = useState('active');
 
   // Collaboration
   var [collabItems, setCollabItems]                       = useState([]);
@@ -479,10 +546,9 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
     if (error) {
-      toast.error('Failed to load inquiries');
+      mascotErrorToast('Failed to load inquiries.', 'Please try refreshing the page.');
     } else {
       setInquiries(data || []);
-      // Auto-select first active inquiry
       var firstActive = (data || []).find(function(i) { return !i.is_archived; });
       if (firstActive && !selected) setSelected(firstActive);
     }
@@ -547,7 +613,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
         }
       }
     } catch (err) {
-      toast.error('Failed to load collaboration requests');
+      mascotErrorToast('Failed to load collaboration requests.', 'Please try refreshing the page.');
     } finally {
       setCollabLoading(false);
     }
@@ -569,7 +635,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     if (!selected) return;
     setMarkingRead(true);
     var { error } = await supabase.from('contact_inquiries').update({ is_read: false }).eq('id', selected.id);
-    if (error) { toast.error('Failed to update'); }
+    if (error) { toast.error('Failed to update.'); }
     else {
       setInquiries(function(prev) { return prev.map(function(i) { return i.id === selected.id ? Object.assign({}, i, { is_read: false }) : i; }); });
       setSelected(Object.assign({}, selected, { is_read: false }));
@@ -606,7 +672,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       var { error } = await supabase.from('contact_inquiries').update({ is_archived: true }).eq('id', inquiry.id);
       if (error) throw error;
       setInquiries(function(prev) { return prev.map(function(i) { return i.id === inquiry.id ? Object.assign({}, i, { is_archived: true }) : i; }); });
-      // Move selection to next active inquiry
       var remaining = activeInquiries.filter(function(i) { return i.id !== inquiry.id; });
       setSelected(remaining.length > 0 ? remaining[0] : null);
       mascotSuccessToast('Inquiry archived.');
@@ -631,14 +696,22 @@ export default function AdminInbox({ organizationId: propOrgId }) {
     }
   }
 
-  async function handleDelete() {
+  // ── Delete — uses ConfirmModal instead of window.confirm ──────────────────
+  function handleDeleteClick() {
     if (!selected) return;
-    if (!window.confirm('Delete this inquiry? This cannot be undone.')) return;
-    var { error } = await supabase.from('contact_inquiries').delete().eq('id', selected.id);
-    if (error) { toast.error('Failed to delete'); }
-    else {
+    setConfirmDelete(true);
+  }
+
+  async function handleDeleteConfirm() {
+    setConfirmDelete(false);
+    if (!selected) return;
+    var deletingId = selected.id;
+    var { error } = await supabase.from('contact_inquiries').delete().eq('id', deletingId);
+    if (error) {
+      mascotErrorToast('Failed to delete inquiry.', 'Please try again.');
+    } else {
       mascotSuccessToast('Inquiry deleted.');
-      var remaining = inquiries.filter(function(i) { return i.id !== selected.id; });
+      var remaining = inquiries.filter(function(i) { return i.id !== deletingId; });
       setInquiries(remaining);
       var nextActive = remaining.find(function(i) { return !i.is_archived; });
       setSelected(nextActive || null);
@@ -671,7 +744,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       setCollabItems(function(prev) { return prev.map(function(c) { return c.id === item.id ? Object.assign({}, c, { status: action }) : c; }); });
       setSelectedCollab(function(prev) { return prev && prev.id === item.id ? Object.assign({}, prev, { status: action }) : prev; });
       setCollabRespondExpanded(false); setCollabRespondMessage(''); setCollabRespondAction(null);
-    } catch (err) { mascotErrorToast('Could not update request.'); }
+    } catch (err) { mascotErrorToast('Could not update request.', err.message); }
     finally { setCollabActionLoading(false); }
   }
 
@@ -683,7 +756,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       mascotSuccessToast('Request withdrawn.');
       setCollabItems(function(prev) { return prev.map(function(c) { return c.id === item.id ? Object.assign({}, c, { status: 'withdrawn' }) : c; }); });
       setSelectedCollab(function(prev) { return prev && prev.id === item.id ? Object.assign({}, prev, { status: 'withdrawn' }) : prev; });
-    } catch (err) { mascotErrorToast('Could not withdraw request.'); }
+    } catch (err) { mascotErrorToast('Could not withdraw request.', err.message); }
     finally { setCollabActionLoading(false); }
   }
 
@@ -704,7 +777,7 @@ export default function AdminInbox({ organizationId: propOrgId }) {
       window.dispatchEvent(new CustomEvent('notificationCreated'));
       setCollabItems(function(prev) { return prev.map(function(c) { return c.id === item.id ? Object.assign({}, c, { status: 'pending' }) : c; }); });
       setSelectedCollab(function(prev) { return prev && prev.id === item.id ? Object.assign({}, prev, { status: 'pending' }) : prev; });
-    } catch (err) { mascotErrorToast('Could not re-send request.'); }
+    } catch (err) { mascotErrorToast('Could not re-send request.', err.message); }
     finally { setCollabActionLoading(false); }
   }
 
@@ -860,7 +933,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
     return (
       <div style={{ padding: '28px 32px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '50%', flexShrink: 0, background: dirBg, border: '1px solid ' + dirColor + '50', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: dirColor }}>
             {orgName.charAt(0).toUpperCase()}
@@ -885,7 +957,6 @@ export default function AdminInbox({ organizationId: propOrgId }) {
           </div>
         )}
 
-        {/* Event Info */}
         <div style={{ background: t.bgCard, border: '1px solid ' + t.border, borderRadius: '12px', padding: '16px 20px', marginBottom: '20px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '10px' }}>Event</div>
           <div style={{ fontSize: '15px', fontWeight: 700, color: t.textPrimary, marginBottom: '6px' }}>{eventTitle}</div>
@@ -987,281 +1058,295 @@ export default function AdminInbox({ organizationId: propOrgId }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: t.bgPage, height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+    <>
+      <div style={{ background: t.bgPage, height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
-      {/* ── Page Header (standard: 30px / 800 / no icon) ── */}
-      <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, padding: '24px 24px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontSize: '30px', fontWeight: 800, color: t.textPrimary, margin: 0 }}>Inbox</h1>
-            <p style={{ fontSize: '14px', color: t.textMuted, margin: '4px 0 0' }}>
-              {(function() {
-                var total = unreadCount + unreadCollabCount;
-                var totalInquiries = activeInquiries.length;
-                if (total > 0) return total + ' unread · ' + totalInquiries + ' total';
-                return totalInquiries + ' total · all caught up';
-              })()}
-            </p>
+        {/* Page Header */}
+        <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, padding: '24px 24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <h1 style={{ fontSize: '30px', fontWeight: 800, color: t.textPrimary, margin: 0 }}>Inbox</h1>
+              <p style={{ fontSize: '14px', color: t.textMuted, margin: '4px 0 0' }}>
+                {(function() {
+                  var total = unreadCount + unreadCollabCount;
+                  var totalInquiries = activeInquiries.length;
+                  if (total > 0) return total + ' unread · ' + totalInquiries + ' total';
+                  return totalInquiries + ' total · all caught up';
+                })()}
+              </p>
+            </div>
+            {activeTab === 'inquiries' && unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                disabled={markingAllRead}
+                aria-label={'Mark all ' + unreadCount + ' inquiries as read'}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'transparent', border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: t.textMuted, cursor: markingAllRead ? 'not-allowed' : 'pointer', opacity: markingAllRead ? 0.6 : 1, flexShrink: 0 }}
+                className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <IconCheckAll size={14} />
+                {markingAllRead ? 'Marking...' : 'Mark all read'}
+              </button>
+            )}
           </div>
-          {/* Mark all read — only shown on inquiries tab when there are unread */}
-          {activeTab === 'inquiries' && unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              disabled={markingAllRead}
-              aria-label={'Mark all ' + unreadCount + ' inquiries as read'}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'transparent', border: '1px solid ' + t.border, borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: t.textMuted, cursor: markingAllRead ? 'not-allowed' : 'pointer', opacity: markingAllRead ? 0.6 : 1, flexShrink: 0 }}
-              className="hover:border-blue-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <IconCheckAll size={14} />
-              {markingAllRead ? 'Marking...' : 'Mark all read'}
-            </button>
-          )}
         </div>
-      </div>
 
-      {/* ── Tab Bar ── */}
-      <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, display: 'flex', padding: '0 24px' }} role="tablist" aria-label="Inbox sections">
-        {tabs.map(function(tab) {
-          var isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={'panel-' + tab.key}
-              onClick={function() { setActiveTab(tab.key); setSelected(null); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 16px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? '#3B82F6' : t.textTertiary, borderBottom: isActive ? '2px solid #3B82F6' : '2px solid transparent', marginBottom: '-1px', whiteSpace: 'nowrap', outline: 'none' }}
-              className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-            >
-              {tab.icon}
-              {tab.label}
-              {tab.count > 0 && (
-                <span style={{ background: '#EF4444', color: '#FFFFFF', fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '99px', minWidth: '18px', textAlign: 'center' }} aria-label={tab.count + ' unread'}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Two-Panel Layout (flex: 1 eliminates magic number) ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-        {/* Left Panel */}
-        <div role="tabpanel" id={'panel-' + activeTab} style={{ width: '320px', flexShrink: 0, borderRight: '1px solid ' + t.border, overflowY: 'auto', background: t.bgPage, display: 'flex', flexDirection: 'column' }}>
-
-          {activeTab === 'inquiries' && (
-            <>
-              {/* Search + archive toggle toolbar */}
-              <div style={{ padding: '10px 12px', borderBottom: '1px solid ' + t.border, background: t.bgHeader, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {/* Search */}
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: t.textTertiary, pointerEvents: 'none' }}>
-                    <IconSearch size={14} />
+        {/* Tab Bar */}
+        <div style={{ background: t.bgHeader, borderBottom: '1px solid ' + t.border, display: 'flex', padding: '0 24px' }} role="tablist" aria-label="Inbox sections">
+          {tabs.map(function(tab) {
+            var isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={'panel-' + tab.key}
+                onClick={function() { setActiveTab(tab.key); setSelected(null); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 16px', border: 'none', background: 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: isActive ? '#3B82F6' : t.textTertiary, borderBottom: isActive ? '2px solid #3B82F6' : '2px solid transparent', marginBottom: '-1px', whiteSpace: 'nowrap', outline: 'none' }}
+                className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.count > 0 && (
+                  <span style={{ background: '#EF4444', color: '#FFFFFF', fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '99px', minWidth: '18px', textAlign: 'center' }} aria-label={tab.count + ' unread'}>
+                    {tab.count}
                   </span>
-                  <input
-                    type="text"
-                    placeholder="Search inquiries..."
-                    value={searchQuery}
-                    onChange={function(e) { setSearchQuery(e.target.value); }}
-                    aria-label="Search inquiries by name, email, or message"
-                    style={{ width: '100%', paddingLeft: '30px', paddingRight: searchQuery ? '28px' : '10px', paddingTop: '7px', paddingBottom: '7px', background: t.bgElevated, border: '1px solid ' + t.border, borderRadius: '7px', fontSize: '12px', color: t.textPrimary, outline: 'none', boxSizing: 'border-box' }}
-                    className="focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={function() { setSearchQuery(''); }}
-                      aria-label="Clear search"
-                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.textTertiary, padding: '2px', display: 'flex', alignItems: 'center' }}
-                      className="focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
-                    >
-                      <IconX size={12} />
-                    </button>
-                  )}
-                </div>
-                {/* Archive toggle */}
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {['active', 'archived'].map(function(filter) {
-                    var isActive = archiveFilter === filter;
-                    var label = filter === 'active' ? 'Inbox' : 'Archived';
-                    var count = filter === 'active' ? activeInquiries.length : inquiries.filter(function(i) { return i.is_archived; }).length;
-                    return (
-                      <button
-                        key={filter}
-                        onClick={function() { setArchiveFilter(filter); setSelected(null); }}
-                        aria-pressed={isActive}
-                        style={{ flex: 1, padding: '5px 8px', border: '1px solid ' + (isActive ? '#3B82F6' : t.border), borderRadius: '6px', background: isActive ? '#EFF6FF' : 'transparent', color: isActive ? '#3B82F6' : t.textMuted, fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
-                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {filter === 'archived' && <IconArchive size={11} />}
-                        {label}
-                        {count > 0 && (
-                          <span style={{ background: isActive ? '#3B82F6' : t.bgElevated, color: isActive ? '#fff' : t.textMuted, fontSize: '10px', fontWeight: 700, padding: '0 5px', borderRadius: '99px' }}>
-                            {count}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* List */}
-              {loading ? <SkeletonList /> : displayedInquiries.length === 0 ? (
-                <EmptyState
-                  icon={searchQuery ? <IconSearch size={24} /> : archiveFilter === 'archived' ? <IconArchive size={24} /> : <IconMail size={24} />}
-                  title={searchQuery ? 'No results' : archiveFilter === 'archived' ? 'No archived inquiries' : 'No inquiries yet'}
-                  description={searchQuery ? 'No inquiries match "' + searchQuery + '".' : archiveFilter === 'archived' ? 'Archived inquiries will appear here.' : 'When someone submits your public Join Us form, their message will appear here.'}
-                />
-              ) : (
-                <div role="list" aria-label="Contact inquiries" style={{ flex: 1 }}>
-                  {displayedInquiries.map(function(inq) {
-                    var isSelected = selected && selected.id === inq.id;
-                    return (
-                      <button
-                        key={inq.id}
-                        role="listitem"
-                        onClick={function() { handleSelect(inq); }}
-                        aria-label={'Inquiry from ' + inq.name + (inq.is_read ? '' : ', unread') + (inq.is_archived ? ', archived' : '')}
-                        style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: '14px 16px', background: isSelected ? t.selectedBg : 'transparent', borderBottom: '1px solid ' + t.border, borderLeft: isSelected ? '3px solid #3B82F6' : '3px solid transparent', display: 'block' }}
-                        className="focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: t.bgElevated, border: '1px solid ' + t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: t.textMuted }}>
-                            {getInitials(inq.name)}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: inq.is_read ? 600 : 700, color: t.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.name}</span>
-                              <span style={{ fontSize: '11px', color: t.textTertiary, flexShrink: 0, marginLeft: '8px' }}>{formatTime(inq.created_at)}</span>
-                            </div>
-                            <div style={{ fontSize: '12px', color: t.textTertiary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.email}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                              {!inq.is_read && <span style={{ color: '#3B82F6', display: 'flex', alignItems: 'center' }}><IconCircle size={7} /></span>}
-                              <span style={{ fontSize: '12px', color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {inq.message ? inq.message.substring(0, 60) + (inq.message.length > 60 ? '…' : '') : ''}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-
-          {activeTab === 'members' && <EmptyState icon={<IconUsers size={24} />} title="Member messaging coming soon" description="Direct messages between members will appear here once the chat feature is live." />}
-
-          {activeTab === 'collab' && (
-            <>
-              {collabLoading ? <SkeletonList /> : collabItems.length === 0 ? (
-                <EmptyState icon={<IconHandshake size={24} />} title="No collaboration requests" description="Co-host requests you send or receive will appear here." />
-              ) : (
-                <div role="list" aria-label="Collaboration requests">
-                  {sortedCollabItems.map(function(item) { return renderCollabListItem(item); })}
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Right Panel */}
-        <div style={{ flex: 1, overflowY: 'auto', background: t.bgPage }}>
-          {activeTab === 'inquiries' && !selected && !loading && (
-            <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." />
-          )}
+        {/* Two-Panel Layout */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-          {activeTab === 'inquiries' && selected && (
-            <div style={{ padding: '28px 32px', maxWidth: '680px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: t.bgElevated, border: '1px solid ' + t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: t.textMuted }}>
-                    {getInitials(selected.name)}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '17px', fontWeight: 700, color: t.textPrimary }}>{selected.name}</div>
-                    <a href={'mailto:' + selected.email} style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}>{selected.email}</a>
-                  </div>
-                </div>
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {selected.is_read && (
-                    <button onClick={handleMarkUnread} disabled={markingRead} aria-label="Mark as unread" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }} className="hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      Mark unread
-                    </button>
-                  )}
-                  {!selected.is_archived ? (
-                    <button
-                      onClick={function() { handleArchive(selected); }}
-                      disabled={archivingId === selected.id}
-                      aria-label="Archive inquiry"
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
-                      className="hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    >
-                      <IconArchive size={13} />
-                      {archivingId === selected.id ? 'Archiving...' : 'Archive'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={function() { handleUnarchive(selected); }}
-                      disabled={archivingId === selected.id}
-                      aria-label="Restore inquiry to inbox"
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid #3B82F6', color: '#3B82F6', cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
-                      className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <IconArchive size={13} />
-                      {archivingId === selected.id ? 'Restoring...' : 'Restore'}
-                    </button>
-                  )}
-                  <a href={'mailto:' + selected.email} aria-label={'Reply to ' + selected.name + ' by email'} style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#3B82F6', border: '1px solid #3B82F6', color: '#FFFFFF', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <IconMail size={13} />Reply via Email
-                  </a>
-                  <button onClick={handleDelete} aria-label="Delete inquiry" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: '#EF4444', cursor: 'pointer' }} className="hover:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500">Delete</button>
-                </div>
-              </div>
+          {/* Left Panel */}
+          <div role="tabpanel" id={'panel-' + activeTab} style={{ width: '320px', flexShrink: 0, borderRight: '1px solid ' + t.border, overflowY: 'auto', background: t.bgPage, display: 'flex', flexDirection: 'column' }}>
 
-              <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: t.textTertiary }}>
-                  <span>Received:</span>
-                  <span style={{ color: t.textSecondary }}>{new Date(selected.created_at).toLocaleString()}</span>
+            {activeTab === 'inquiries' && (
+              <>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid ' + t.border, background: t.bgHeader, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: t.textTertiary, pointerEvents: 'none' }}>
+                      <IconSearch size={14} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Search inquiries..."
+                      value={searchQuery}
+                      onChange={function(e) { setSearchQuery(e.target.value); }}
+                      aria-label="Search inquiries by name, email, or message"
+                      style={{ width: '100%', paddingLeft: '30px', paddingRight: searchQuery ? '28px' : '10px', paddingTop: '7px', paddingBottom: '7px', background: t.bgElevated, border: '1px solid ' + t.border, borderRadius: '7px', fontSize: '12px', color: t.textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                      className="focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={function() { setSearchQuery(''); }}
+                        aria-label="Clear search"
+                        style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: t.textTertiary, padding: '2px', display: 'flex', alignItems: 'center' }}
+                        className="focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                      >
+                        <IconX size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {['active', 'archived'].map(function(filter) {
+                      var isActive = archiveFilter === filter;
+                      var label = filter === 'active' ? 'Inbox' : 'Archived';
+                      var count = filter === 'active' ? activeInquiries.length : inquiries.filter(function(i) { return i.is_archived; }).length;
+                      return (
+                        <button
+                          key={filter}
+                          onClick={function() { setArchiveFilter(filter); setSelected(null); }}
+                          aria-pressed={isActive}
+                          style={{ flex: 1, padding: '5px 8px', border: '1px solid ' + (isActive ? '#3B82F6' : t.border), borderRadius: '6px', background: isActive ? '#EFF6FF' : 'transparent', color: isActive ? '#3B82F6' : t.textMuted, fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {filter === 'archived' && <IconArchive size={11} />}
+                          {label}
+                          {count > 0 && (
+                            <span style={{ background: isActive ? '#3B82F6' : t.bgElevated, color: isActive ? '#fff' : t.textMuted, fontSize: '10px', fontWeight: 700, padding: '0 5px', borderRadius: '99px' }}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {selected.is_read
-                    ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#22C55E' }}><IconCheck size={12} />Read</span>
-                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3B82F6' }}><IconCircle size={7} />Unread</span>
-                  }
-                </div>
-                {selected.is_archived && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: t.textTertiary }}>
-                    <IconArchive size={12} />Archived
+
+                {loading ? <SkeletonList /> : displayedInquiries.length === 0 ? (
+                  <EmptyState
+                    icon={searchQuery ? <IconSearch size={24} /> : archiveFilter === 'archived' ? <IconArchive size={24} /> : <IconMail size={24} />}
+                    title={searchQuery ? 'No results' : archiveFilter === 'archived' ? 'No archived inquiries' : 'No inquiries yet'}
+                    description={searchQuery ? 'No inquiries match "' + searchQuery + '".' : archiveFilter === 'archived' ? 'Archived inquiries will appear here.' : 'When someone submits your public Join Us form, their message will appear here.'}
+                  />
+                ) : (
+                  <div role="list" aria-label="Contact inquiries" style={{ flex: 1 }}>
+                    {displayedInquiries.map(function(inq) {
+                      var isSelected = selected && selected.id === inq.id;
+                      return (
+                        <button
+                          key={inq.id}
+                          role="listitem"
+                          onClick={function() { handleSelect(inq); }}
+                          aria-label={'Inquiry from ' + inq.name + (inq.is_read ? '' : ', unread') + (inq.is_archived ? ', archived' : '')}
+                          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: '14px 16px', background: isSelected ? t.selectedBg : 'transparent', borderBottom: '1px solid ' + t.border, borderLeft: isSelected ? '3px solid #3B82F6' : '3px solid transparent', display: 'block' }}
+                          className="focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: t.bgElevated, border: '1px solid ' + t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: t.textMuted }}>
+                              {getInitials(inq.name)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: inq.is_read ? 600 : 700, color: t.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.name}</span>
+                                <span style={{ fontSize: '11px', color: t.textTertiary, flexShrink: 0, marginLeft: '8px' }}>{formatTime(inq.created_at)}</span>
+                              </div>
+                              <div style={{ fontSize: '12px', color: t.textTertiary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.email}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                {!inq.is_read && <span style={{ color: '#3B82F6', display: 'flex', alignItems: 'center' }}><IconCircle size={7} /></span>}
+                                <span style={{ fontSize: '12px', color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {inq.message ? inq.message.substring(0, 60) + (inq.message.length > 60 ? '…' : '') : ''}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
+              </>
+            )}
 
-              <div style={{ borderTop: '1px solid ' + t.border, marginBottom: '24px' }} />
+            {activeTab === 'members' && <EmptyState icon={<IconUsers size={24} />} title="Member messaging coming soon" description="Direct messages between members will appear here once the chat feature is live." />}
 
-              <div style={{ background: t.bgCard, border: '1px solid ' + t.border, borderRadius: '12px', padding: '20px 24px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Message</div>
-                <p style={{ fontSize: '15px', color: t.textSecondary, lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{selected.message}</p>
-              </div>
+            {activeTab === 'collab' && (
+              <>
+                {collabLoading ? <SkeletonList /> : collabItems.length === 0 ? (
+                  <EmptyState icon={<IconHandshake size={24} />} title="No collaboration requests" description="Co-host requests you send or receive will appear here." />
+                ) : (
+                  <div role="list" aria-label="Collaboration requests">
+                    {sortedCollabItems.map(function(item) { return renderCollabListItem(item); })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
-              <div style={{ marginTop: '24px', padding: '16px', background: t.bgSecondary, borderRadius: '8px', border: '1px dashed ' + t.border }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: t.textTertiary, fontSize: '12px' }}>
-                  <IconMessage size={14} />
-                  Reply threading coming with the chat feature — use the email button above to respond for now.
+          {/* Right Panel */}
+          <div style={{ flex: 1, overflowY: 'auto', background: t.bgPage }}>
+            {activeTab === 'inquiries' && !selected && !loading && (
+              <EmptyState icon={<IconInbox size={28} />} title="Select an inquiry" description="Choose a message from the list to read it here." />
+            )}
+
+            {activeTab === 'inquiries' && selected && (
+              <div style={{ padding: '28px 32px', maxWidth: '680px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: t.bgElevated, border: '1px solid ' + t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: t.textMuted }}>
+                      {getInitials(selected.name)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '17px', fontWeight: 700, color: t.textPrimary }}>{selected.name}</div>
+                      <a href={'mailto:' + selected.email} style={{ fontSize: '13px', color: '#3B82F6', textDecoration: 'none' }}>{selected.email}</a>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {selected.is_read && (
+                      <button onClick={handleMarkUnread} disabled={markingRead} aria-label="Mark as unread" style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: 'pointer' }} className="hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        Mark unread
+                      </button>
+                    )}
+                    {!selected.is_archived ? (
+                      <button
+                        onClick={function() { handleArchive(selected); }}
+                        disabled={archivingId === selected.id}
+                        aria-label="Archive inquiry"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: t.textMuted, cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
+                        className="hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      >
+                        <IconArchive size={13} />
+                        {archivingId === selected.id ? 'Archiving...' : 'Archive'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={function() { handleUnarchive(selected); }}
+                        disabled={archivingId === selected.id}
+                        aria-label="Restore inquiry to inbox"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid #3B82F6', color: '#3B82F6', cursor: archivingId === selected.id ? 'not-allowed' : 'pointer', opacity: archivingId === selected.id ? 0.6 : 1 }}
+                        className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <IconArchive size={13} />
+                        {archivingId === selected.id ? 'Restoring...' : 'Restore'}
+                      </button>
+                    )}
+                    <a href={'mailto:' + selected.email} aria-label={'Reply to ' + selected.name + ' by email'} style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#3B82F6', border: '1px solid #3B82F6', color: '#FFFFFF', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <IconMail size={13} />Reply via Email
+                    </a>
+                    <button
+                      onClick={handleDeleteClick}
+                      aria-label="Delete inquiry"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'transparent', border: '1px solid ' + t.border, color: '#EF4444', cursor: 'pointer' }}
+                      className="hover:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <IconTrash size={13} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: t.textTertiary }}>
+                    <span>Received:</span>
+                    <span style={{ color: t.textSecondary }}>{new Date(selected.created_at).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {selected.is_read
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#22C55E' }}><IconCheck size={12} />Read</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3B82F6' }}><IconCircle size={7} />Unread</span>
+                    }
+                  </div>
+                  {selected.is_archived && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: t.textTertiary }}>
+                      <IconArchive size={12} />Archived
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: '1px solid ' + t.border, marginBottom: '24px' }} />
+
+                <div style={{ background: t.bgCard, border: '1px solid ' + t.border, borderRadius: '12px', padding: '20px 24px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Message</div>
+                  <p style={{ fontSize: '15px', color: t.textSecondary, lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{selected.message}</p>
+                </div>
+
+                <div style={{ marginTop: '24px', padding: '16px', background: t.bgSecondary, borderRadius: '8px', border: '1px dashed ' + t.border }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: t.textTertiary, fontSize: '12px' }}>
+                    <IconMessage size={14} />
+                    Reply threading coming with the chat feature — use the email button above to respond for now.
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'members' && <EmptyState icon={<IconMessage size={28} />} title="Coming soon" description="This will be wired up as part of the chat feature in the next build session." />}
+            {activeTab === 'members' && <EmptyState icon={<IconMessage size={28} />} title="Coming soon" description="This will be wired up as part of the chat feature in the next build session." />}
 
-          {activeTab === 'collab' && renderCollabDetail()}
+            {activeTab === 'collab' && renderCollabDetail()}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* ConfirmModal for inquiry delete */}
+      <ConfirmModal
+        isOpen={confirmDelete}
+        title="Delete this inquiry?"
+        message="This will permanently remove the message and cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDeleteConfirm}
+        onCancel={function() { setConfirmDelete(false); }}
+      />
+    </>
   );
 }

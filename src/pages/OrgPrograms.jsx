@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { AlertTriangle } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
 var PAGE_BG  = '#F8FAFC';
@@ -113,6 +114,59 @@ function Toggle(props) {
   );
 }
 
+// ── ConfirmModal ──────────────────────────────────────────────────────────────
+function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel }) {
+  useEffect(function() {
+    if (!isOpen) return;
+    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-prog-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' }}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangle size={20} style={{ color: '#EF4444' }} aria-hidden="true" />
+          </div>
+          <div>
+            <h2 id="confirm-prog-title" style={{ fontSize: '16px', fontWeight: 800, color: '#0E1523', margin: '0 0 4px' }}>{title}</h2>
+            <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{message}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={onCancel}
+            autoFocus
+            style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'transparent', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#EF4444', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+            className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            {confirmLabel || 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 function OrgPrograms() {
   var params = useParams();
@@ -130,6 +184,16 @@ function OrgPrograms() {
   var [form, setForm]                   = useState(EMPTY_FORM);
   var [saving, setSaving]               = useState(false);
   var [newTagInput, setNewTagInput]     = useState('');
+
+  // ConfirmModal
+  var [confirmModal, setConfirmModal]   = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+
+  function openConfirm(title, message, confirmLabel, onConfirm) {
+    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirm });
+  }
+  function closeConfirm() {
+    setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+  }
 
   // Card UI
   var [expandedId, setExpandedId]       = useState(null);
@@ -167,7 +231,7 @@ function OrgPrograms() {
       await fetchPrograms();
     } catch (err) {
       console.error('OrgPrograms init error:', err);
-      toast.error('Failed to load page');
+      mascotErrorToast('Failed to load programs.', 'Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -178,7 +242,10 @@ function OrgPrograms() {
       .from('org_programs').select('*')
       .eq('organization_id', organizationId)
       .order('sort_order').order('created_at');
-    if (result.error) { toast.error('Failed to load programs'); return; }
+    if (result.error) {
+      mascotErrorToast('Failed to load programs.', 'Please try refreshing the page.');
+      return;
+    }
     setPrograms(result.data || []);
   }
 
@@ -236,8 +303,8 @@ function OrgPrograms() {
       ? await supabase.from('org_programs').update(payload).eq('id', editingProgram.id)
       : await supabase.from('org_programs').insert(payload);
     setSaving(false);
-if (result.error) { mascotErrorToast('Failed to save program', 'Check your connection and try again.'); return; }
-    mascotSuccessToast(editingProgram ? 'Program updated' : 'Program created');
+    if (result.error) { mascotErrorToast('Failed to save program.', 'Check your connection and try again.'); return; }
+    mascotSuccessToast(editingProgram ? 'Program updated!' : 'Program created!');
     setShowModal(false);
     fetchPrograms();
     if (!editingProgram) {
@@ -258,12 +325,20 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     }
   }
 
-  async function deleteProgram(id) {
-    if (!window.confirm('Delete this program? This cannot be undone.')) return;
-    var result = await supabase.from('org_programs').delete().eq('id', id);
-    if (result.error) { mascotErrorToast('Failed to delete program'); return; }
-    mascotSuccessToast('Program deleted');
-    fetchPrograms();
+  // ── deleteProgram — uses ConfirmModal ─────────────────────────────────────
+  function deleteProgram(id, name) {
+    openConfirm(
+      'Delete "' + name + '"?',
+      'This program will be permanently deleted and cannot be recovered.',
+      'Delete Program',
+      async function() {
+        closeConfirm();
+        var result = await supabase.from('org_programs').delete().eq('id', id);
+        if (result.error) { mascotErrorToast('Failed to delete program.', result.error.message); return; }
+        mascotSuccessToast('Program deleted.');
+        fetchPrograms();
+      }
+    );
   }
 
   async function copyProgram(program) {
@@ -288,8 +363,8 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
       updated_at:           new Date().toISOString(),
     };
     var result = await supabase.from('org_programs').insert(payload);
-    if (result.error) { mascotErrorToast('Failed to copy program'); return; }
-    mascotSuccessToast('Program copied — it is hidden until you publish it');
+    if (result.error) { mascotErrorToast('Failed to copy program.', result.error.message); return; }
+    mascotSuccessToast('Program copied — it is hidden until you publish it.');
     fetchPrograms();
   }
 
@@ -298,7 +373,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     var updates = { is_public: !program.is_public };
     if (!updates.is_public) updates.publish_to_discovery = false;
     var result = await supabase.from('org_programs').update(updates).eq('id', program.id);
-    if (result.error) { toast.error('Failed to update program'); return; }
+    if (result.error) { mascotErrorToast('Failed to update visibility.', result.error.message); return; }
     setPrograms(function(prev) {
       return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, updates) : p; });
     });
@@ -308,11 +383,11 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     if (!program.is_public) { toast.error('Enable "Show on org page" first'); return; }
     var newVal = !program.publish_to_discovery;
     var result = await supabase.from('org_programs').update({ publish_to_discovery: newVal }).eq('id', program.id);
-    if (result.error) { toast.error('Failed to update program'); return; }
+    if (result.error) { mascotErrorToast('Failed to update Discover visibility.', result.error.message); return; }
     setPrograms(function(prev) {
       return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, { publish_to_discovery: newVal }) : p; });
     });
-    mascotSuccessToast(newVal ? 'Added to Discover' : 'Removed from Discover');
+    mascotSuccessToast(newVal ? 'Added to Discover.' : 'Removed from Discover.');
   }
 
   // ── Tags ──────────────────────────────────────────────────────────────────
@@ -343,7 +418,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     });
   }
 
-  // ── Form field helper ─────────────────────────────────────────────────────
   function setField(key, value) {
     setForm(function(prev) {
       var update = {};
@@ -390,7 +464,11 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     var results = await Promise.all(promises);
     setSavingOrder(false);
     var failed = results.some(function(r) { return r.error; });
-    if (failed) toast.error('Failed to save order — try again');
+    if (failed) {
+      toast.error('Failed to save order — try again');
+    } else {
+      mascotSuccessToast('Order saved.');
+    }
   }
 
   // ── Computed view ─────────────────────────────────────────────────────────
@@ -398,10 +476,10 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
   var isDragEnabled = isAdmin && sortBy === 'custom' && statusFilter === 'all' && !searchQuery.trim();
 
   var statusCounts = {
-    all:     programs.length,
-    active:  programs.filter(function(p) { return p.status === 'active'; }).length,
+    all:      programs.length,
+    active:   programs.filter(function(p) { return p.status === 'active'; }).length,
     upcoming: programs.filter(function(p) { return p.status === 'upcoming'; }).length,
-    closed:  programs.filter(function(p) { return p.status === 'closed'; }).length,
+    closed:   programs.filter(function(p) { return p.status === 'closed'; }).length,
   };
 
   var displayPrograms = programs
@@ -429,7 +507,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
       return (a.sort_order || 0) - (b.sort_order || 0);
     });
 
-  // ── Input style helper ────────────────────────────────────────────────────
   var inputStyle = { width: '100%', padding: '8px 12px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT, outline: 'none', boxSizing: 'border-box' };
   var labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' };
 
@@ -438,11 +515,11 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     return (
       <div style={{ minHeight: '100vh', background: PAGE_BG, padding: '32px 24px', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
-          <div style={{ height: '28px', width: '160px', background: BDR, borderRadius: '8px' }} className="animate-pulse" />
+          <div style={{ height: '36px', width: '180px', background: BDR, borderRadius: '8px' }} className="animate-pulse" />
           <div style={{ height: '36px', width: '120px', background: BDR, borderRadius: '8px' }} className="animate-pulse" />
         </div>
         <div style={{ height: '44px', background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', marginBottom: '20px' }} className="animate-pulse" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
           {[1,2,3,4,5,6].map(function(i) {
             return (
               <div key={i} style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '12px', padding: '20px' }} className="animate-pulse">
@@ -463,11 +540,13 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
     <>
       <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", padding: '32px 24px' }}>
 
-        {/* Page header */}
+        {/* Page header — standard 30px/800 */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: TEXT, margin: 0 }}>Programs</h1>
-            {organization && <p style={{ fontSize: '13px', color: MUTED, margin: '4px 0 0' }}>{organization.name}</p>}
+            <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, margin: 0 }}>Programs</h1>
+            <p style={{ fontSize: '14px', color: MUTED, margin: '4px 0 0' }}>
+              {programs.length + ' program' + (programs.length !== 1 ? 's' : '')}
+            </p>
           </div>
           {isAdmin && (
             <button
@@ -484,8 +563,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
         {/* Filter / sort bar */}
         {programs.length > 0 && (
           <div style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-
-            {/* Search */}
             <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '160px' }}>
               <Icon path={ICONS.search} className="h-4 w-4" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: MUTED, pointerEvents: 'none' }} />
               <input
@@ -499,7 +576,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
               />
             </div>
 
-            {/* Status pills */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {[
                 { key: 'all',      label: 'All' },
@@ -512,11 +588,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                   <button
                     key={f.key}
                     onClick={function() { setStatusFilter(f.key); }}
-                    style={{
-                      padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
-                      background: active ? '#0E1523' : ELEVATED,
-                      color:      active ? '#FFFFFF' : TEXT2,
-                    }}
+                    style={{ padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#0E1523' : ELEVATED, color: active ? '#FFFFFF' : TEXT2 }}
                     className="focus:outline-none focus:ring-2 focus:ring-slate-400"
                     aria-pressed={active}
                   >
@@ -527,7 +599,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
               })}
             </div>
 
-            {/* Sort */}
             <select
               value={sortBy}
               onChange={function(e) { setSortBy(e.target.value); }}
@@ -540,22 +611,14 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
               <option value="start_date">Start Date</option>
             </select>
 
-            {/* Saving order indicator */}
-            {savingOrder && (
-              <span style={{ fontSize: '12px', color: MUTED }}>Saving order...</span>
-            )}
-            {isDragEnabled && !savingOrder && (
-              <span style={{ fontSize: '12px', color: MUTED }}>Drag cards to reorder</span>
-            )}
+            {savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Saving order...</span>}
+            {isDragEnabled && !savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Drag cards to reorder</span>}
           </div>
         )}
 
         {/* Empty state */}
         {programs.length === 0 ? (
-          <div
-            style={{ textAlign: 'center', padding: '80px 24px', background: CARD_BG, border: '2px dashed ' + BDR, borderRadius: '12px' }}
-            role="region" aria-label="No programs"
-          >
+          <div style={{ textAlign: 'center', padding: '80px 24px', background: CARD_BG, border: '2px dashed ' + BDR, borderRadius: '12px' }} role="region" aria-label="No programs">
             <div style={{ color: MUTED, marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
               <Icon path={ICONS.programs} className="h-14 w-14" sw={1} />
             </div>
@@ -583,7 +646,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
           </div>
         ) : (
           <div
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
             role="list"
             aria-label="Programs"
           >
@@ -623,7 +686,6 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                     transition:    'opacity 0.2s, border-color 0.15s',
                   }}
                 >
-                  {/* Drag handle hint */}
                   {isDragEnabled && (
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '-4px', color: MUTED, opacity: 0.4 }} aria-hidden="true">
                       <Icon path={ICONS.grip} className="h-4 w-4" />
@@ -652,7 +714,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                           <Icon path={ICONS.copy} className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={function(e) { e.stopPropagation(); deleteProgram(program.id); }}
+                          onClick={function(e) { e.stopPropagation(); deleteProgram(program.id, program.name); }}
                           style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
                           className="hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                           aria-label={'Delete ' + program.name}
@@ -718,7 +780,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                     </div>
                   )}
 
-                  {/* Description (clamped when collapsed) */}
+                  {/* Description */}
                   {program.description && (
                     <p style={{
                       fontSize: '13px', color: TEXT2, lineHeight: 1.6, margin: 0,
@@ -775,12 +837,7 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                               <Icon path={ICONS.user} className="h-3.5 w-3.5" />
                               <span>Contact: {program.contact_name}</span>
                               {program.contact_email && (
-                                <a
-                                  href={'mailto:' + program.contact_email}
-                                  style={{ color: '#3B82F6', display: 'flex', marginLeft: '2px' }}
-                                  className="hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
-                                  aria-label={'Email ' + program.contact_name}
-                                >
+                                <a href={'mailto:' + program.contact_email} style={{ color: '#3B82F6', display: 'flex', marginLeft: '2px' }} className="hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded" aria-label={'Email ' + program.contact_name}>
                                   <Icon path={ICONS.mail} className="h-3.5 w-3.5" />
                                 </a>
                               )}
@@ -843,152 +900,67 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
             style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}
             onClick={function(e) { e.stopPropagation(); }}
           >
-            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + BDR }}>
               <h2 id="prog-modal-title" style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: 0 }}>
                 {editingProgram ? 'Edit Program' : 'Add Program'}
               </h2>
-              <button
-                onClick={function() { setShowModal(false); }}
-                style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
-                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                aria-label="Close modal"
-              >
+              <button onClick={function() { setShowModal(false); }} style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label="Close modal">
                 <Icon path={ICONS.x} className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Body */}
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-              {/* Name */}
               <div>
-                <label htmlFor="prog-name" style={labelStyle}>
-                  Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="prog-name" type="text" value={form.name}
-                  onChange={function(e) { setField('name', e.target.value); }}
-                  placeholder="e.g. After School Tutoring"
-                  style={inputStyle} className="focus:ring-2 focus:ring-blue-500" aria-required="true"
-                />
+                <label htmlFor="prog-name" style={labelStyle}>Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
+                <input id="prog-name" type="text" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="e.g. After School Tutoring" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
               </div>
-
-              {/* Description */}
               <div>
                 <label htmlFor="prog-desc" style={labelStyle}>Description</label>
-                <textarea
-                  id="prog-desc" value={form.description} rows={3}
-                  onChange={function(e) { setField('description', e.target.value); }}
-                  placeholder="What does this program do?"
-                  style={Object.assign({}, inputStyle, { resize: 'none' })}
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <textarea id="prog-desc" value={form.description} rows={3} onChange={function(e) { setField('description', e.target.value); }} placeholder="What does this program do?" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
               </div>
-
-              {/* Start / End dates */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label htmlFor="prog-start" style={labelStyle}>Start Date</label>
-                  <input
-                    id="prog-start" type="date" value={form.start_date}
-                    onChange={function(e) { setField('start_date', e.target.value); }}
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-start" type="date" value={form.start_date} onChange={function(e) { setField('start_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label htmlFor="prog-end" style={labelStyle}>End Date</label>
-                  <input
-                    id="prog-end" type="date" value={form.end_date}
-                    onChange={function(e) { setField('end_date', e.target.value); }}
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-end" type="date" value={form.end_date} onChange={function(e) { setField('end_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-
-              {/* Capacity / Enrolled */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label htmlFor="prog-capacity" style={labelStyle}>Capacity (Max Spots)</label>
-                  <input
-                    id="prog-capacity" type="number" min="0" value={form.capacity}
-                    onChange={function(e) { setField('capacity', e.target.value); }}
-                    placeholder="e.g. 30"
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-capacity" type="number" min="0" value={form.capacity} onChange={function(e) { setField('capacity', e.target.value); }} placeholder="e.g. 30" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label htmlFor="prog-enrolled" style={labelStyle}>Currently Enrolled</label>
-                  <input
-                    id="prog-enrolled" type="number" min="0" value={form.enrolled_count}
-                    onChange={function(e) { setField('enrolled_count', e.target.value); }}
-                    placeholder="e.g. 12"
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-enrolled" type="number" min="0" value={form.enrolled_count} onChange={function(e) { setField('enrolled_count', e.target.value); }} placeholder="e.g. 12" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-
-              {/* Tags */}
               <div>
                 <label style={labelStyle}>Tags</label>
-                {/* Predefined tags */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                   {PROGRAM_TAGS.map(function(tag) {
                     var sel = (form.tags || []).indexOf(tag) !== -1;
                     return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={function() { toggleTag(tag); }}
-                        style={{
-                          padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                          border: sel ? 'none' : '1px solid ' + BDR,
-                          background: sel ? '#3B82F6' : 'transparent',
-                          color:      sel ? '#FFFFFF' : TEXT2,
-                        }}
-                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-pressed={sel}
-                      >
+                      <button key={tag} type="button" onClick={function() { toggleTag(tag); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: sel ? 'none' : '1px solid ' + BDR, background: sel ? '#3B82F6' : 'transparent', color: sel ? '#FFFFFF' : TEXT2 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={sel}>
                         {tag}
                       </button>
                     );
                   })}
                 </div>
-
-                {/* Custom tag input */}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text" value={newTagInput}
-                    onChange={function(e) { setNewTagInput(e.target.value); }}
-                    onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
-                    placeholder="Custom tag — press Enter to add"
-                    aria-label="Add custom tag"
-                    style={Object.assign({}, inputStyle, { flex: 1 })}
-                    className="focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button" onClick={addCustomTag}
-                    style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  >
-                    Add
-                  </button>
+                  <input type="text" value={newTagInput} onChange={function(e) { setNewTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }} placeholder="Custom tag — press Enter to add" aria-label="Add custom tag" style={Object.assign({}, inputStyle, { flex: 1 })} className="focus:ring-2 focus:ring-blue-500" />
+                  <button type="button" onClick={addCustomTag} style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
                 </div>
-
-                {/* Custom tags (not in predefined list) */}
                 {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                     {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).map(function(tag) {
                       return (
                         <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: '#0E1523', color: '#FFFFFF' }}>
                           {tag}
-                          <button
-                            type="button"
-                            onClick={function() { removeTag(tag); }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', color: 'rgba(255,255,255,0.7)' }}
-                            className="hover:text-white focus:outline-none"
-                            aria-label={'Remove tag ' + tag}
-                          >
+                          <button type="button" onClick={function() { removeTag(tag); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', color: 'rgba(255,255,255,0.7)' }} className="hover:text-white focus:outline-none" aria-label={'Remove tag ' + tag}>
                             <Icon path={ICONS.x} className="h-3 w-3" />
                           </button>
                         </span>
@@ -997,100 +969,46 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
                   </div>
                 )}
               </div>
-
-              {/* Audience */}
               <div>
                 <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>
-                <input
-                  id="prog-audience" type="text" value={form.audience}
-                  onChange={function(e) { setField('audience', e.target.value); }}
-                  placeholder="e.g. Youth ages 6–18"
-                  style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                />
+                <input id="prog-audience" type="text" value={form.audience} onChange={function(e) { setField('audience', e.target.value); }} placeholder="e.g. Youth ages 6–18" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
               </div>
-
-              {/* Schedule */}
               <div>
                 <label htmlFor="prog-schedule" style={labelStyle}>Schedule</label>
-                <input
-                  id="prog-schedule" type="text" value={form.schedule}
-                  onChange={function(e) { setField('schedule', e.target.value); }}
-                  placeholder="e.g. Every Monday 3–5pm"
-                  style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                />
+                <input id="prog-schedule" type="text" value={form.schedule} onChange={function(e) { setField('schedule', e.target.value); }} placeholder="e.g. Every Monday 3–5pm" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
               </div>
-
-              {/* How to apply */}
               <div>
                 <label htmlFor="prog-apply" style={labelStyle}>How To Apply / Sign Up</label>
-                <textarea
-                  id="prog-apply" value={form.how_to_apply} rows={2}
-                  onChange={function(e) { setField('how_to_apply', e.target.value); }}
-                  placeholder="e.g. Fill out form at front desk or call us"
-                  style={Object.assign({}, inputStyle, { resize: 'none' })}
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <textarea id="prog-apply" value={form.how_to_apply} rows={2} onChange={function(e) { setField('how_to_apply', e.target.value); }} placeholder="e.g. Fill out form at front desk or call us" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
               </div>
-
-              {/* Contact */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label htmlFor="prog-cname" style={labelStyle}>Contact Name</label>
-                  <input
-                    id="prog-cname" type="text" value={form.contact_name}
-                    onChange={function(e) { setField('contact_name', e.target.value); }}
-                    placeholder="Jane Smith"
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-cname" type="text" value={form.contact_name} onChange={function(e) { setField('contact_name', e.target.value); }} placeholder="Jane Smith" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label htmlFor="prog-cemail" style={labelStyle}>Contact Email</label>
-                  <input
-                    id="prog-cemail" type="email" value={form.contact_email}
-                    onChange={function(e) { setField('contact_email', e.target.value); }}
-                    placeholder="jane@org.org"
-                    style={inputStyle} className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input id="prog-cemail" type="email" value={form.contact_email} onChange={function(e) { setField('contact_email', e.target.value); }} placeholder="jane@org.org" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-
-              {/* Status */}
               <div>
                 <label htmlFor="prog-status" style={labelStyle}>Status</label>
-                <select
-                  id="prog-status" value={form.status}
-                  onChange={function(e) { setField('status', e.target.value); }}
-                  style={Object.assign({}, inputStyle, { width: '100%' })}
-                  className="focus:ring-2 focus:ring-blue-500"
-                >
+                <select id="prog-status" value={form.status} onChange={function(e) { setField('status', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500">
                   <option value="active">Active</option>
                   <option value="upcoming">Upcoming</option>
                   <option value="closed">Closed</option>
                 </select>
               </div>
-
-              {/* Visibility toggles */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
-                  <Toggle
-                    checked={form.is_public}
-                    onClick={function() { setField('is_public', !form.is_public); }}
-                    label="Toggle visibility on org page"
-                  />
+                  <Toggle checked={form.is_public} onClick={function() { setField('is_public', !form.is_public); }} label="Toggle visibility on org page" />
                   <div>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on org page</p>
                     <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>Visitors to your public page will see this program</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR, opacity: form.is_public ? 1 : 0.5, transition: 'opacity 0.2s' }}>
-                  <Toggle
-                    checked={form.publish_to_discovery}
-                    disabled={!form.is_public}
-                    onClick={function() { setField('publish_to_discovery', !form.publish_to_discovery); }}
-                    label="Toggle visibility on Discover page"
-                    color="#8B5CF6"
-                    ringColor="focus:ring-purple-500"
-                  />
+                  <Toggle checked={form.publish_to_discovery} disabled={!form.is_public} onClick={function() { setField('publish_to_discovery', !form.publish_to_discovery); }} label="Toggle visibility on Discover page" color="#8B5CF6" ringColor="focus:ring-purple-500" />
                   <div>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on Discover</p>
                     <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>
@@ -1101,26 +1019,25 @@ if (result.error) { mascotErrorToast('Failed to save program', 'Check your conne
               </div>
             </div>
 
-            {/* Footer */}
             <div style={{ display: 'flex', gap: '12px', padding: '16px 24px', borderTop: '1px solid ' + BDR }}>
-              <button
-                onClick={function() { setShowModal(false); }}
-                style={{ flex: 1, padding: '10px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
-                className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveProgram} disabled={saving}
-                style={{ flex: 1, padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
-                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <button onClick={function() { setShowModal(false); }} style={{ flex: 1, padding: '10px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
+              <button onClick={saveProgram} disabled={saving} style={{ flex: 1, padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ConfirmModal */}
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        onConfirm={confirmModal.onConfirm || function() {}}
+        onCancel={closeConfirm}
+      />
     </>
   );
 }

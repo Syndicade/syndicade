@@ -12,7 +12,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import CreatePoll from '../components/CreatePoll';
 import CreateSignupForm from '../components/CreateSignupForm';
 import GuidedTour from '../components/GuidedTour';
-import { Lock } from 'lucide-react';
+import { Lock, AlertTriangle } from 'lucide-react';
 import usePlanLimits from '../hooks/usePlanLimits';
 import StorageMeter from '../components/StorageMeter';
 
@@ -39,6 +39,59 @@ function LockedNavBadge({ requiredPlan }) {
     <span style={{ background: c.bg, border: '1px solid ' + c.border, color: c.text, fontSize: '8px', fontWeight: 700, padding: '1px 5px', borderRadius: '99px', marginLeft: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: 1, flexShrink: 0 }} aria-hidden="true">
       {label}
     </span>
+  );
+}
+
+// ── ConfirmModal ──────────────────────────────────────────────────────────────
+function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel }) {
+  useEffect(function() {
+    if (!isOpen) return;
+    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 55, padding: '16px' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-od-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' }}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangle size={20} style={{ color: '#EF4444' }} aria-hidden="true" />
+          </div>
+          <div>
+            <h2 id="confirm-od-title" style={{ fontSize: '16px', fontWeight: 800, color: '#0E1523', margin: '0 0 4px' }}>{title}</h2>
+            <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{message}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={onCancel}
+            autoFocus
+            style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'transparent', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#EF4444', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+            className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -170,6 +223,16 @@ function OrganizationDashboard() {
   var [showCelebration, setShowCelebration]   = useState(false);
   var [showCreateDropdown, setShowCreateDropdown] = useState(false);
   var [hoveredStatCard, setHoveredStatCard] = useState(null);
+
+  // ── ConfirmModal state ─────────────────────────────────────────────────────
+  var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+
+  function openConfirm(title, message, confirmLabel, onConfirm) {
+    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirm });
+  }
+  function closeConfirm() {
+    setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+  }
 
   // ── Overview data ──────────────────────────────────────────────────────────
   var [overviewEvents, setOverviewEvents]             = useState([]);
@@ -640,15 +703,22 @@ function OrganizationDashboard() {
     } catch (err) { toast.error('Could not approve: ' + err.message); }
   }
 
-  async function handleReject(item) {
-    if (!window.confirm('Reject this ' + item.type.toLowerCase() + '?')) return;
-    try {
-      var r = await supabase.from(item.table).update({ approval_status: 'rejected' }).eq('id', item.id);
-      if (r.error) throw r.error;
-      setPendingApprovals(function(prev) { return prev.filter(function(i) { return !(i.id === item.id && i.type === item.type); }); });
-      setPendingApprovalsCount(function(p) { return Math.max(0, p - 1); });
-      mascotSuccessToast(item.type + ' rejected.');
-    } catch (err) { toast.error('Could not reject: ' + err.message); }
+function handleReject(item) {
+    openConfirm(
+      'Reject ' + item.type + '?',
+      '"' + item.title + '" will be rejected. This cannot be undone.',
+      'Reject',
+      async function() {
+        closeConfirm();
+        try {
+          var r = await supabase.from(item.table).update({ approval_status: 'rejected' }).eq('id', item.id);
+          if (r.error) throw r.error;
+          setPendingApprovals(function(prev) { return prev.filter(function(i) { return !(i.id === item.id && i.type === item.type); }); });
+          setPendingApprovalsCount(function(p) { return Math.max(0, p - 1); });
+          mascotSuccessToast(item.type + ' rejected.');
+        } catch (err) { toast.error('Could not reject: ' + err.message); }
+      }
+    );
   }
 
   async function handleMarkInquiryRead(id) {
@@ -660,16 +730,23 @@ function OrganizationDashboard() {
     } catch (err) { toast.error('Could not update.'); }
   }
 
-  async function handleDeleteInquiry(id) {
-    if (!window.confirm('Delete this message?')) return;
-    try {
-      var deleted = inquiries.find(function(i) { return i.id === id; });
-      var r = await supabase.from('contact_inquiries').delete().eq('id', id);
-      if (r.error) throw r.error;
-      setInquiries(function(prev) { return prev.filter(function(i) { return i.id !== id; }); });
-      if (deleted && !deleted.is_read) setUnreadInquiriesCount(function(p) { return Math.max(0, p - 1); });
-      mascotSuccessToast('Message deleted.');
-    } catch (err) { toast.error('Could not delete.'); }
+function handleDeleteInquiry(id) {
+    openConfirm(
+      'Delete this message?',
+      'This will permanently remove the inquiry and cannot be undone.',
+      'Delete',
+      async function() {
+        closeConfirm();
+        try {
+          var deleted = inquiries.find(function(i) { return i.id === id; });
+          var r = await supabase.from('contact_inquiries').delete().eq('id', id);
+          if (r.error) throw r.error;
+          setInquiries(function(prev) { return prev.filter(function(i) { return i.id !== id; }); });
+          if (deleted && !deleted.is_read) setUnreadInquiriesCount(function(p) { return Math.max(0, p - 1); });
+          mascotSuccessToast('Message deleted.');
+        } catch (err) { toast.error('Could not delete.'); }
+      }
+    );
   }
 
   async function handlePhotoUpload(e) {
@@ -706,18 +783,25 @@ function OrganizationDashboard() {
     finally { setPhotoUploading(false); }
   }
 
-  async function handleDeletePhoto(photo) {
-    if (!window.confirm('Delete this photo?')) return;
-    try {
-      setDeletingPhotoId(photo.id);
-      var parts = photo.photo_url.split('/organization-images/');
-      if (parts.length === 2) await supabase.storage.from('organization-images').remove([parts[1]]);
-      var r = await supabase.from('org_photos').delete().eq('id', photo.id);
-      if (r.error) throw r.error;
-      setPhotos(function(prev) { return prev.filter(function(p) { return p.id !== photo.id; }); });
-      mascotSuccessToast('Photo deleted.');
-    } catch (err) { mascotErrorToast('Could not delete photo.'); }
-    finally { setDeletingPhotoId(null); }
+function handleDeletePhoto(photo) {
+    openConfirm(
+      'Delete this photo?',
+      (photo.caption ? '"' + photo.caption + '" will be' : 'This photo will be') + ' permanently deleted and cannot be recovered.',
+      'Delete Photo',
+      async function() {
+        closeConfirm();
+        try {
+          setDeletingPhotoId(photo.id);
+          var parts = photo.photo_url.split('/organization-images/');
+          if (parts.length === 2) await supabase.storage.from('organization-images').remove([parts[1]]);
+          var r = await supabase.from('org_photos').delete().eq('id', photo.id);
+          if (r.error) throw r.error;
+          setPhotos(function(prev) { return prev.filter(function(p) { return p.id !== photo.id; }); });
+          mascotSuccessToast('Photo deleted.');
+        } catch (err) { mascotErrorToast('Could not delete photo.'); }
+        finally { setDeletingPhotoId(null); }
+      }
+    );
   }
 
   async function saveProgram() {
@@ -1740,13 +1824,13 @@ function OrganizationDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" role="list" aria-label="Photo gallery">
             {photos.map(function(photo) {
               return (
-                <div key={photo.id} role="listitem" style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#F1F5F9', border: '1px solid #E2E8F0', boxShadow: '3px 4px 14px rgba(0,0,0,0.06)' }} className="group">
+                <div key={photo.id} role="listitem" style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#F1F5F9', border: '1px solid #E2E8F0', boxShadow: '3px 4px 14px rgba(0,0,0,0.06)' }} className="group" onMouseEnter={function(e) { var btn = e.currentTarget.querySelector('[data-delete]'); if (btn) btn.style.display = 'flex'; }} onMouseLeave={function(e) { var btn = e.currentTarget.querySelector('[data-delete]'); if (btn) btn.style.display = 'none'; }}>
                   <button onClick={function() { setLightboxPhoto(photo); }} style={{ display: 'block', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset" aria-label={'View photo' + (photo.caption ? ': ' + photo.caption : '')}>
                     <img src={photo.photo_url} alt={photo.caption || 'Organization photo'} style={{ width: '100%', height: '140px', objectFit: 'cover', display: 'block' }} loading="lazy" />
                   </button>
                   {photo.caption && <div style={{ padding: '6px 10px', background: '#FFFFFF' }}><p style={{ fontSize: '11px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{photo.caption}</p></div>}
                   {isAdmin && (
-                    <button onClick={function() { handleDeletePhoto(photo); }} disabled={deletingPhotoId === photo.id} style={{ position: 'absolute', top: '8px', right: '8px', width: '26px', height: '26px', background: '#EF4444', color: '#fff', borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center', opacity: 0 }} className="group-hover:flex group-hover:opacity-100 focus:flex focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-opacity" aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}>
+                    <button data-delete onClick={function() { handleDeletePhoto(photo); }} disabled={deletingPhotoId === photo.id} style={{ position: 'absolute', top: '8px', right: '8px', width: '26px', height: '26px', background: '#EF4444', color: '#fff', borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'none', alignItems: 'center', justifyContent: 'center' }} className="focus:flex focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Delete photo' + (photo.caption ? ': ' + photo.caption : '')}>
                       <Icon path={ICONS.x} className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </button>
                   )}
@@ -2045,6 +2129,16 @@ function OrganizationDashboard() {
           </div>
         </div>
       )}
+
+      {/* Shared ConfirmModal */}
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        onConfirm={confirmModal.onConfirm || function() {}}
+        onCancel={closeConfirm}
+      />
 
       {showCelebration && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001, padding: '16px' }} role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
