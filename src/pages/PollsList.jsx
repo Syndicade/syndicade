@@ -244,28 +244,21 @@ async function handlePollCreated(newPoll) {
     <div className="min-h-screen bg-[#F8FAFC]">
       <div className="px-6 py-6 space-y-6">
 
-        {/* Page header */}
-        <div className="rounded-xl border p-5 bg-white border-slate-200">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-50">
-                <Icon path={ICONS.chart} className="h-6 w-6 text-blue-500" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-[#0E1523]">Polls</h1>
-                <p className="text-sm text-[#64748B]">
-                  {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' · ' + activeCount + ' active'}
-                </p>
-              </div>
-            </div>
-            {isAdmin && (
-              <button onClick={openCreate}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />
-                Create Poll
-              </button>
-            )}
+{/* Page header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 style={{fontSize:'30px',fontWeight:800,color:'#0E1523',lineHeight:1.2}}>Polls</h1>
+            <p className="text-sm mt-1 text-[#64748B]">
+              {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' · ' + activeCount + ' active'}
+            </p>
           </div>
+          {isAdmin && (
+            <button onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+              <Icon path={ICONS.plus} className="h-4 w-4" />
+              Create Poll
+            </button>
+          )}
         </div>
 
         {/* Stats */}

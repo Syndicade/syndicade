@@ -681,13 +681,12 @@ function AdminContacts() {
   return (
     <div style={{ background:pageBg, minHeight:'100vh' }}>
       <main role="main" aria-label="Admin contacts">
-        {/* Page header */}
+{/* Page header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'12px' }}>
           <div>
-            <p style={{ fontSize:'11px', fontWeight:700, color:'#F5B731', letterSpacing:'4px', textTransform:'uppercase', margin:'0 0 4px' }}>Admin</p>
-            <h1 style={{ fontSize:'22px', fontWeight:800, color:textPrimary, margin:0 }}>Contacts</h1>
-            <p style={{ fontSize:'13px', color:textMuted, marginTop:'2px' }}>
-              {contacts.length} contact{contacts.length !== 1 ? 's' : ''} · visible to admins only
+            <h1 style={{ fontSize:'30px', fontWeight:800, color:textPrimary, margin:0, lineHeight:1.2 }}>Contacts</h1>
+            <p style={{ fontSize:'14px', color:textMuted, marginTop:'4px' }}>
+              {contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '') + ' · visible to admins only'}
             </p>
           </div>
           <button
