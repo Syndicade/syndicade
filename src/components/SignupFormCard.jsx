@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Check, X, Trash2, ClipboardList, Pin, Download, Copy, Lock, Unlock, AlertTriangle } from 'lucide-react';
+import { Calendar, Users, Check, X, Trash2, ClipboardList, Pin, Download, Copy, Lock, Unlock, AlertTriangle, Pencil } from 'lucide-react';
+import EditSignupForm from './EditSignupForm';
 
 var CARD_BG      = '#FFFFFF';
 var CARD_BDR     = '#E2E8F0';
@@ -19,7 +20,7 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
     function handleKey(e) { if (e.key === 'Escape') onCancel(); }
     document.addEventListener('keydown', handleKey);
     return function() { document.removeEventListener('keydown', handleKey); };
-  }, [isOpen]);
+  }, [isOpen, onCancel]);
 
   if (!isOpen) return null;
   return (
@@ -65,35 +66,34 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
   );
 }
 
-function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, memberCount, onDuplicate }) {
-  var [items, setItems] = useState([]);
-  var [responses, setResponses] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [submitting, setSubmitting] = useState(false);
-  var [adminActing, setAdminActing] = useState(false);
+// ── SignupFormCard ─────────────────────────────────────────────────────────────
+function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memberCount, onDuplicate }) {
+  var [items, setItems]               = useState([]);
+  var [responses, setResponses]       = useState([]);
+  var [loading, setLoading]           = useState(true);
+  var [submitting, setSubmitting]     = useState(false);
+  var [adminActing, setAdminActing]   = useState(false);
   var [signupQuantities, setSignupQuantities] = useState({});
+  var [showEditModal, setShowEditModal] = useState(false);
 
-  var pinnedInit = false;
-  if (form !== null && form !== undefined) { pinnedInit = form.is_pinned === true; }
-  var [isPinned, setIsPinned] = useState(pinnedInit);
+  var pinnedInit = form ? form.is_pinned === true : false;
+  var [isPinned, setIsPinned]         = useState(pinnedInit);
 
-  var closedInit = false;
-  if (form !== null && form !== undefined) {
-    closedInit = form.status === 'closed' || !!(form.closes_at && new Date(form.closes_at) < new Date());
-  }
-  var [isClosed, setIsClosed] = useState(closedInit);
+  var closedInit = form
+    ? form.status === 'closed' || !!(form.closes_at && new Date(form.closes_at) < new Date())
+    : false;
+  var [isClosed, setIsClosed]         = useState(closedInit);
 
-  // ConfirmModal state
   var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
 
-  function openConfirm(title, message, confirmLabel, onConfirm) {
-    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirm });
+  function openConfirm(title, message, confirmLabel, onConfirmFn) {
+    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirmFn });
   }
   function closeConfirm() {
     setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   }
 
-  var formId = (form !== null && form !== undefined) ? form.id : null;
+  var formId = form ? form.id : null;
   useEffect(function() { if (form) fetchData(); }, [formId]);
 
   var fetchData = async function() {
@@ -126,6 +126,8 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     }
   };
 
+  // ── Derived helpers ─────────────────────────────────────────────────────────
+
   var hasUserSignedUp = function(itemId) {
     return responses.some(function(r) { return r.item_id === itemId && r.member_id === currentUserId; });
   };
@@ -138,7 +140,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     return item.current_signups >= item.max_slots;
   };
 
-  var totalSlots = items.reduce(function(sum, item) { return sum + (item.max_slots || 0); }, 0);
+  var totalSlots   = items.reduce(function(sum, item) { return sum + (item.max_slots || 0); }, 0);
   var totalSignups = responses.length;
   var responseRate = (memberCount && memberCount > 0)
     ? Math.round((totalSignups / memberCount) * 100)
@@ -172,7 +174,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     return diff > 0 && diff < 86400000 * 3;
   };
 
-  // ── Admin actions ──────────────────────────────────────────────────────────
+  // ── Admin actions ───────────────────────────────────────────────────────────
 
   var handlePinToggle = async function() {
     if (adminActing) return;
@@ -294,7 +296,6 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     URL.revokeObjectURL(url);
   };
 
-  // ── handleDelete — uses ConfirmModal ──────────────────────────────────────
   var handleDelete = function() {
     openConfirm(
       'Delete "' + form.title + '"?',
@@ -317,7 +318,12 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
     );
   };
 
-  // ── Member actions ─────────────────────────────────────────────────────────
+  var handleEditSaved = function() {
+    fetchData();
+    if (onUpdate) onUpdate();
+  };
+
+  // ── Member actions — optimistic updates ────────────────────────────────────
 
   var handleSignUp = async function(itemId) {
     if (submitting) return;
@@ -328,17 +334,36 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
       toast.error('Only ' + available + ' slot' + (available !== 1 ? 's' : '') + ' available.');
       return;
     }
+
+    // Optimistic: bump current_signups and add a placeholder response
+    var optimisticResponse = { id: '__optimistic__' + itemId, item_id: itemId, member_id: currentUserId, quantity: quantity, created_at: new Date().toISOString(), member: null };
+    setItems(function(prev) {
+      return prev.map(function(i) {
+        if (i.id !== itemId) return i;
+        return Object.assign({}, i, { current_signups: i.current_signups + quantity });
+      });
+    });
+    setResponses(function(prev) { return prev.concat([optimisticResponse]); });
+    setSignupQuantities(function(prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
+
     try {
       setSubmitting(true);
       var { error: signupError } = await supabase
         .from('signup_responses')
         .insert({ item_id: itemId, member_id: currentUserId, quantity: quantity });
       if (signupError) throw signupError;
-      setSignupQuantities(function(prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
+      // Refresh to get real DB state (member name etc.)
       await fetchData();
-      if (onUpdate) onUpdate();
       mascotSuccessToast('Signed up!', item.item_name);
     } catch (err) {
+      // Rollback optimistic update
+      setItems(function(prev) {
+        return prev.map(function(i) {
+          if (i.id !== itemId) return i;
+          return Object.assign({}, i, { current_signups: i.current_signups - quantity });
+        });
+      });
+      setResponses(function(prev) { return prev.filter(function(r) { return r.id !== '__optimistic__' + itemId; }); });
       mascotErrorToast('Failed to sign up.', err.message || 'Please try again.');
     } finally {
       setSubmitting(false);
@@ -347,6 +372,20 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
 
   var handleUnsignUp = async function(itemId) {
     if (submitting) return;
+    var existingResponse = responses.find(function(r) { return r.item_id === itemId && r.member_id === currentUserId; });
+    var quantity = existingResponse ? (existingResponse.quantity || 1) : 1;
+
+    // Optimistic: remove response and decrement count
+    setItems(function(prev) {
+      return prev.map(function(i) {
+        if (i.id !== itemId) return i;
+        return Object.assign({}, i, { current_signups: Math.max(0, i.current_signups - quantity) });
+      });
+    });
+    setResponses(function(prev) {
+      return prev.filter(function(r) { return !(r.item_id === itemId && r.member_id === currentUserId); });
+    });
+
     try {
       setSubmitting(true);
       var { error: deleteError } = await supabase
@@ -355,24 +394,26 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
         .eq('item_id', itemId)
         .eq('member_id', currentUserId);
       if (deleteError) throw deleteError;
-      setSignupQuantities(function(prev) { return Object.assign({}, prev, { [itemId]: 1 }); });
-      await fetchData();
-      if (onUpdate) onUpdate();
       mascotSuccessToast('Removed from sign-up.');
     } catch (err) {
+      // Rollback optimistic update
+      await fetchData();
       mascotErrorToast('Failed to remove sign-up.', err.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (!form) return null;
 
   if (loading) {
     return (
-      <div style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', padding: '24px' }}>
+      <div
+        role="listitem"
+        style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', padding: '24px' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ height: '24px', borderRadius: '6px', background: '#E2E8F0', width: '60%' }} className="animate-pulse" />
           <div style={{ height: '16px', borderRadius: '6px', background: '#E2E8F0', width: '40%' }} className="animate-pulse" />
@@ -388,6 +429,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
   return (
     <>
       <article
+        role="listitem"
         style={{
           background: CARD_BG,
           border: isPinned ? '2px solid #F5B731' : '1px solid ' + CARD_BDR,
@@ -399,7 +441,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
         }}
         aria-label={'Sign-up form: ' + form.title}
       >
-        {/* Header */}
+        {/* Card header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + CARD_BDR }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
             <div style={{ flex: 1 }}>
@@ -415,6 +457,11 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                     Closed
                   </span>
                 )}
+                {isClosingSoon() && (
+                  <span style={{ padding: '2px 8px', background: 'rgba(217,119,6,0.1)', color: '#D97706', fontSize: '11px', fontWeight: 700, borderRadius: '99px', border: '1px solid rgba(217,119,6,0.3)' }}>
+                    Closing Soon
+                  </span>
+                )}
               </div>
 
               {form.description && (
@@ -427,7 +474,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                   <span>Created {formatDateShort(form.created_at)}</span>
                 </div>
                 {form.closes_at && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: isClosed ? TEXT_MUTED : (isClosingSoon() ? '#D97706' : '#B45309') }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: isClosed ? TEXT_MUTED : (isClosingSoon() ? '#D97706' : TEXT_MUTED) }}>
                     <Calendar size={13} aria-hidden="true" />
                     <span>{isClosed ? 'Closed' : 'Closes'} {formatDate(form.closes_at)}</span>
                   </div>
@@ -440,9 +487,19 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
           </div>
         </div>
 
-        {/* Admin action bar */}
-        {userRole === 'admin' && (
+        {/* Admin action bar — only rendered for admins */}
+        {isAdmin && (
           <div style={{ padding: '10px 24px', borderBottom: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={function() { setShowEditModal(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+              aria-label={'Edit form: ' + form.title}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 hover:bg-slate-50"
+            >
+              <Pencil size={13} aria-hidden="true" />
+              Edit
+            </button>
+
             <button
               onClick={handlePinToggle}
               disabled={adminActing}
@@ -491,7 +548,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                 onClick={handleDelete}
                 style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                 aria-label={'Delete form: ' + form.title}
-                className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 hover:bg-red-50"
               >
                 <Trash2 size={13} aria-hidden="true" />
                 Delete
@@ -500,7 +557,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
           </div>
         )}
 
-        {/* Items */}
+        {/* Items list */}
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -510,10 +567,13 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
             </div>
           ) : (
             items.map(function(item) {
-              var itemResponses = getItemResponses(item.id);
-              var userSignedUp = hasUserSignedUp(item.id);
-              var itemFull = isItemFull(item);
-              var spotsRemaining = item.max_slots - item.current_signups;
+              var itemResponses   = getItemResponses(item.id);
+              var userSignedUp    = hasUserSignedUp(item.id);
+              var itemFull        = isItemFull(item);
+              var spotsRemaining  = item.max_slots - item.current_signups;
+
+              // show_responses: always true for admins, otherwise respect form setting
+              var showResponses = isAdmin || form.show_responses;
 
               return (
                 <div key={item.id} style={{ background: ITEM_BG, border: '1px solid ' + CARD_BDR, borderRadius: '10px', padding: '16px' }}>
@@ -523,7 +583,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                       {item.description && (
                         <p style={{ fontSize: '13px', color: TEXT_SEC, marginBottom: '8px' }}>{item.description}</p>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: itemResponses.length > 0 ? '8px' : 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: itemResponses.length > 0 && showResponses ? '8px' : 0 }}>
                         <Users size={14} style={{ color: itemFull ? '#EF4444' : '#3B82F6', flexShrink: 0 }} aria-hidden="true" />
                         <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : TEXT_SEC, fontWeight: itemFull ? 600 : 400 }}>
                           {item.current_signups} of {item.max_slots} {item.max_slots === 1 ? 'spot' : 'spots'} filled
@@ -532,7 +592,9 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                           <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>({spotsRemaining} left)</span>
                         )}
                       </div>
-                      {form.show_responses && itemResponses.length > 0 && (
+
+                      {/* Responses — always shown to admins, gated by show_responses for members */}
+                      {showResponses && itemResponses.length > 0 && (
                         <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
                           <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -541,12 +603,12 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                                 <div key={response.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
                                   <Check size={13} style={{ color: '#22C55E', flexShrink: 0 }} aria-hidden="true" />
                                   <span style={{ color: TEXT_SEC }}>
-                                    {response.member?.first_name} {response.member?.last_name}
+                                    {response.member ? (response.member.first_name + ' ' + response.member.last_name) : '(loading)'}
                                     {response.quantity > 1 && (
                                       <span style={{ color: '#3B82F6', fontWeight: 600 }}> &times;{response.quantity}</span>
                                     )}
                                   </span>
-                                  {response.member?.user_id === currentUserId && (
+                                  {response.member_id === currentUserId && (
                                     <span style={{ fontSize: '11px', color: '#3B82F6', fontWeight: 600 }}>(You)</span>
                                   )}
                                 </div>
@@ -557,7 +619,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
                       )}
                     </div>
 
-                    {/* Sign-up action column */}
+                    {/* Sign-up action column — hidden when closed */}
                     {!isClosed && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '120px' }}>
                         {userSignedUp ? (
@@ -616,7 +678,7 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — response summary */}
         {totalSignups > 0 && (
           <div style={{ padding: '12px 24px', borderTop: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <span style={{ fontSize: '13px', color: TEXT_MUTED }}>
@@ -632,6 +694,17 @@ function SignupFormCard({ form, currentUserId, userRole, onDelete, onUpdate, mem
         )}
       </article>
 
+      {/* Edit modal */}
+      {showEditModal && (
+        <EditSignupForm
+          form={form}
+          items={items}
+          onClose={function() { setShowEditModal(false); }}
+          onSaved={handleEditSaved}
+        />
+      )}
+
+      {/* Delete confirm modal */}
       <ConfirmModal
         isOpen={confirmModal.open}
         title={confirmModal.title}
