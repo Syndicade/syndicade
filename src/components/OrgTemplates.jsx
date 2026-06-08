@@ -170,7 +170,7 @@ export function ContactBlock({ org, compact, themeVars }) {
 }
 
 // ─── JoinFormSection ────────────────────────────────────────────────
-export function JoinFormSection({ org, joinForm, joinLoading, joinError, joinSuccess, onChange, onSubmit, onReset, themeVars, isPreview }) {
+export function JoinFormSection({ org, joinForm, joinLoading, joinError, joinSuccess, joinCooldownSeconds, onChange, onSubmit, onReset, themeVars, isPreview }) {
   var form = joinForm || { name: '', email: '', message: '' };
   return (
     <section id="join" aria-labelledby="join-heading">
@@ -181,10 +181,20 @@ export function JoinFormSection({ org, joinForm, joinLoading, joinError, joinSuc
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <p className="text-green-800 font-bold">Message sent!</p>
           <p className="text-green-700 text-sm mt-1">{org.name} will get back to you soon.</p>
-          <button onClick={onReset} className="mt-3 px-4 py-2 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all">Send another message</button>
+          {joinCooldownSeconds > 0
+            ? <p className="text-green-600 text-sm mt-3">You can send another message in {joinCooldownSeconds}s</p>
+            : <button onClick={onReset} className="mt-3 px-4 py-2 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all">Send another message</button>
+          }
         </div>
       ) : (
         <form onSubmit={isPreview ? function(e) { e.preventDefault(); } : onSubmit} noValidate aria-label={'Contact form for ' + org.name} className="space-y-4">
+          {/* Honeypot — hidden from real users, filled only by bots */}
+          {!isPreview && (
+            <div style={{ position: 'static', width: 'auto', height: 'auto', overflow: 'visible' }} aria-hidden="true">
+              <label htmlFor="legacy-join-website">Website</label>
+              <input id="legacy-join-website" type="text" name="website" value={form.website || ''} onChange={onChange || function() {}} tabIndex={-1} autoComplete="off" />
+            </div>
+          )}
           {joinError && <div className="bg-red-50 border border-red-200 rounded-lg p-3" role="alert"><p className="text-red-700 text-sm">{joinError}</p></div>}
           <div>
             <label htmlFor={isPreview ? 'p-join-name' : 'join-name'} className="block text-sm font-semibold text-gray-900 mb-1">Your Name <span aria-hidden="true">*</span></label>

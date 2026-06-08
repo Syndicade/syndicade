@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { renderBlock } from '../components/BlockRenderer';
@@ -27,6 +27,84 @@ function getContrastColor(hex) {
   var L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
   return L > 0.179 ? '#111827' : '#ffffff';
 }
+
+// ── Shared contact inquiry submit utility ─────────────────────────────────────
+// Used by both JoinForm (new page path) and handleJoinSubmit (legacy path).
+//
+// RLS NOTE (Rec B): Supabase `contact_inquiries` must allow anon INSERT only.
+// Verify in Supabase Studio: no anon SELECT / UPDATE / DELETE policies on this table.
+//
+// Edge function NOTE (Rec C): send-email is called fire-and-forget after the
+// insert succeeds. Errors are caught and logged but never surface to the user,
+// so a rate-limited or failed email delivery never blocks the form submission.
+//
+// Returns { success: true } or throws on DB insert failure.
+async function submitContactInquiry({ orgId, orgContactEmail, orgName, name, email, message, honeypot }) {
+  // Rec A / D — silently reject if honeypot is filled (bot)
+  if (honeypot) return { success: true };
+
+  // Rec B — only insert; no SELECT/UPDATE/DELETE. Anon key is intentionally
+  // exposed here — this is a public contact form. RLS must restrict to INSERT.
+  var result = await supabase.from('contact_inquiries').insert([{
+    organization_id: orgId,
+    name: name.trim(),
+    email: email.trim(),
+    message: message.trim(),
+    created_at: new Date().toISOString(),
+  }]);
+  if (result.error) throw result.error;
+
+  // Rec C — fire-and-forget; never blocks the success state
+  if (orgContactEmail) {
+    var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+    fetch(SUPABASE_URL + '/functions/v1/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        type: 'contact_inquiry',
+        data: {
+          adminEmail: orgContactEmail,
+          orgName: orgName,
+          senderName: name.trim(),
+          senderEmail: email.trim(),
+          message: message.trim(),
+          inboxUrl: window.location.origin + '/organizations/' + orgId + '/inbox',
+        },
+      }),
+    }).catch(function(err) { console.error('send-email failed (non-blocking):', err); });
+  }
+
+  // Notification — also fire-and-forget; never blocks success state
+  import('../lib/notificationService').then(function(notifModule) {
+    return supabase
+      .from('memberships')
+      .select('member_id')
+      .eq('organization_id', orgId)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+      .then(function(res) {
+        var admins = res.data || [];
+        if (admins.length > 0) {
+          return notifModule.notifyUsers({
+            userIds: admins.map(function(a) { return a.member_id; }),
+            organizationId: orgId,
+            type: 'inbox_message',
+            title: 'New Inquiry from ' + name.trim(),
+            message: name.trim() + ' sent a message via your public page.',
+            link: '/organizations/' + orgId + '/inbox',
+          }).then(function() {
+            window.dispatchEvent(new CustomEvent('notificationCreated'));
+          });
+        }
+      });
+  }).catch(function(ne) { console.error('Inbox notification failed (non-blocking):', ne); });
+
+  return { success: true };
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function PublicPageSkeleton() {
   return (
@@ -92,85 +170,124 @@ function PageNotFound({ org, slug, primary, borderRadius }) {
   );
 }
 
+// ── Photo Lightbox ────────────────────────────────────────────────────────────
+function PhotoLightbox({ photos, lightboxPhoto, lightboxIndex, onClose, onNavigate }) {
+  if (!lightboxPhoto) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo lightbox"
+      onClick={onClose}
+    >
+      <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
+        <button
+          onClick={onClose}
+          className="absolute -top-12 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-1"
+          aria-label="Close photo lightbox"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <img
+          src={lightboxPhoto.photo_url}
+          alt={lightboxPhoto.caption || ('Photo ' + (lightboxIndex + 1) + ' from organization')}
+          className="w-full object-contain rounded-lg"
+          style={{ maxHeight: '75vh' }}
+        />
+        {lightboxPhoto.caption && (
+          <p className="text-white text-center mt-4 text-sm">{lightboxPhoto.caption}</p>
+        )}
+        <div className="flex justify-between items-center mt-4">
+          <button
+            onClick={function() { onNavigate(-1); }}
+            disabled={lightboxIndex === 0}
+            className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30"
+            aria-label="Previous photo"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <p className="text-gray-400 text-sm" aria-live="polite">{lightboxIndex + 1} / {photos.length}</p>
+          <button
+            onClick={function() { onNavigate(1); }}
+            disabled={lightboxIndex === photos.length - 1}
+            className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30"
+            aria-label="Next photo"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Join Us Form ──────────────────────────────────────────────────────────────
+// Rec A: 60-second cooldown after successful submit.
+// Rec D: Honeypot hidden field included — also passed to submitContactInquiry.
 function JoinForm({ org, primary, borderRadius }) {
-  var [form, setForm] = useState({ name: '', email: '', message: '' });
+  var [form, setForm] = useState({ name: '', email: '', message: '', website: '' });
   var [loading, setLoading] = useState(false);
   var [success, setSuccess] = useState(false);
   var [error, setError] = useState(null);
+  // Rec A — cooldown state
+  var [cooldownUntil, setCooldownUntil] = useState(null);
+  var [cooldownSeconds, setCooldownSeconds] = useState(0);
+  var cooldownRef = useRef(null);
+
+  // Rec A — countdown ticker
+  useEffect(function() {
+    if (!cooldownUntil) return;
+    cooldownRef.current = setInterval(function() {
+      var remaining = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setCooldownSeconds(0);
+        setCooldownUntil(null);
+        clearInterval(cooldownRef.current);
+      } else {
+        setCooldownSeconds(remaining);
+      }
+    }, 1000);
+    return function() { clearInterval(cooldownRef.current); };
+  }, [cooldownUntil]);
 
   function handleChange(e) {
     var n = e.target.name; var v = e.target.value;
     setForm(function(p) { return Object.assign({}, p, { [n]: v }); });
   }
 
-async function handleSubmit(e) {
-  e.preventDefault();
-  setError(null);
-  setLoading(true);
-  try {
-    var result = await supabase.from('contact_inquiries').insert([{
-      organization_id: org.id,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      message: form.message.trim(),
-      created_at: new Date().toISOString(),
-    }]);
-    if (result.error) throw result.error;
-
-    // Fetch org admin email
-if (org.contact_email) {
-  var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
-  await fetch(SUPABASE_URL + '/functions/v1/send-email', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
-    },
-    body: JSON.stringify({
-      type: 'contact_inquiry',
-      data: {
-        adminEmail: org.contact_email,
-        orgName: org.name,
-        senderName: form.name.trim(),
-        senderEmail: form.email.trim(),
-        message: form.message.trim(),
-        inboxUrl: window.location.origin + '/organizations/' + org.id + '/inbox',
-      },
-    }),
-  });
-}
-
-// Notify org admins of new inquiry
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (cooldownUntil && Date.now() < cooldownUntil) return;
+    setError(null);
+    setLoading(true);
     try {
-      var notifModule = await import('../lib/notificationService');
-      var { data: admins } = await supabase
-        .from('memberships')
-        .select('member_id')
-        .eq('organization_id', org.id)
-        .eq('role', 'admin')
-        .eq('status', 'active');
-      if (admins && admins.length > 0) {
-        await notifModule.notifyUsers({
-          userIds: admins.map(function(a) { return a.member_id; }),
-          organizationId: org.id,
-          type: 'inbox_message',
-          title: 'New Inquiry from ' + form.name.trim(),
-          message: form.name.trim() + ' sent a message via your public page.',
-          link: '/organizations/' + org.id + '/inbox',
-        });
-        window.dispatchEvent(new CustomEvent('notificationCreated'));
-      }
-    } catch(ne){ console.error('Inbox notification failed:', ne); }
-
-    setSuccess(true);
-    setForm({ name: '', email: '', message: '' });
-  } catch (err) {
-    setError('Something went wrong. Please try again or contact us directly.');
-  } finally {
-    setLoading(false);
+      await submitContactInquiry({
+        orgId: org.id,
+        orgContactEmail: org.contact_email,
+        orgName: org.name,
+        name: form.name,
+        email: form.email,
+        message: form.message,
+        honeypot: form.website,
+      });
+      setSuccess(true);
+      setForm({ name: '', email: '', message: '', website: '' });
+      // Rec A — start 60s cooldown
+      setCooldownUntil(Date.now() + 60000);
+      setCooldownSeconds(60);
+    } catch (err) {
+      setError('Something went wrong. Please try again or contact us directly.');
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   if (success) {
     return (
@@ -182,37 +299,86 @@ if (org.contact_email) {
         </div>
         <h3 className="text-xl font-bold text-gray-900 mb-2">Message Sent!</h3>
         <p className="text-gray-500 mb-4">Thank you for reaching out to {org.name}. We'll be in touch soon.</p>
-        <button onClick={function() { setSuccess(false); }} className="text-sm font-semibold focus:outline-none focus:underline" style={{ color: primary }}>
-          Send another message
-        </button>
+        {/* Rec A — only show "send another" after cooldown expires */}
+        {cooldownSeconds > 0 ? (
+          <p className="text-sm text-gray-400">You can send another message in {cooldownSeconds}s</p>
+        ) : (
+          <button
+            onClick={function() { setSuccess(false); }}
+            className="text-sm font-semibold focus:outline-none focus:underline"
+            style={{ color: primary }}
+          >
+            Send another message
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4" aria-label="Contact form">
+{/* Rec D — Honeypot: hidden from real users, filled only by bots */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 'auto', width: '1px', height: '1px', overflow: 'hidden' }}>
+        <label htmlFor="join-website" style={{ fontSize: '13px', color: '#374151' }}>Website</label>
+        <input
+          id="join-website"
+          type="text"
+          name="website"
+          value={form.website}
+          onChange={handleChange}
+          tabIndex={-1}
+          autoComplete="off"
+          style={{ display: 'block', width: '200px', border: '1px solid #ccc', padding: '4px' }}
+        />
+      </div>
+
       <div>
         <label htmlFor="join-name" className="block text-sm font-semibold text-gray-700 mb-1">Your Name</label>
-        <input id="join-name" type="text" name="name" value={form.name} onChange={handleChange} required
+        <input
+          id="join-name"
+          type="text"
+          name="name"
+          value={form.name}
+          onChange={handleChange}
+          required
+          aria-required="true"
           className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-1"
-          placeholder="Jane Smith" />
+          placeholder="Jane Smith"
+        />
       </div>
       <div>
         <label htmlFor="join-email" className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
-        <input id="join-email" type="email" name="email" value={form.email} onChange={handleChange} required
+        <input
+          id="join-email"
+          type="email"
+          name="email"
+          value={form.email}
+          onChange={handleChange}
+          required
+          aria-required="true"
           className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-1"
-          placeholder="jane@example.com" />
+          placeholder="jane@example.com"
+        />
       </div>
       <div>
         <label htmlFor="join-message" className="block text-sm font-semibold text-gray-700 mb-1">Message</label>
-        <textarea id="join-message" name="message" value={form.message} onChange={handleChange} rows={4}
+        <textarea
+          id="join-message"
+          name="message"
+          value={form.message}
+          onChange={handleChange}
+          rows={4}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-1 resize-none"
-          placeholder={"Tell us why you'd like to connect with " + org.name + '...'} />
+          placeholder={"Tell us why you'd like to connect with " + org.name + '...'}
+        />
       </div>
-      {error && <p className="text-red-600 text-sm" role="alert">{error}</p>}
-      <button type="submit" disabled={loading || !form.name || !form.email}
+      {error && <p className="text-red-600 text-sm" role="alert" id="join-form-error">{error}</p>}
+      <button
+        type="submit"
+        disabled={loading || !form.name || !form.email || (cooldownUntil && Date.now() < cooldownUntil)}
         className="w-full py-3 font-bold text-white text-sm transition-opacity disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2"
-        style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+        style={{ backgroundColor: primary, borderRadius: borderRadius }}
+      >
         {loading ? 'Sending...' : 'Send Message'}
       </button>
     </form>
@@ -241,35 +407,29 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
   var navTextColor = headerDark ? '#d1d5db' : '#374151';
   var logoTextColor = headerDark ? '#ffffff' : '#111827';
 
-  // Non-footer enabled pages only
   var enabledPages = pages.filter(function(p) {
     return p.is_enabled && p.page_key !== '__footer__';
   });
 
-  // Build nav items
   var enabledNavItems = navItems.length > 0
     ? navItems
     : enabledPages.filter(function(p) { return p.is_visible_in_nav; }).map(function(p) {
         return { label: p.nav_label || p.title, page_key: p.page_key, id: p.id };
       });
 
-  // Multi-page mode = has enabled pages beyond home
   var nonHomePages = enabledPages.filter(function(p) { return p.page_key !== 'home'; });
   var isMultiPage = nonHomePages.length > 0;
 
-  // Active page object
   var activePage = activePageSlug
     ? enabledPages.find(function(p) { return p.page_key === activePageSlug; })
     : enabledPages.find(function(p) { return p.page_key === 'home'; }) || enabledPages[0];
 
-  // Group blocks by page_id
   var blocksByPage = {};
   (blocks || []).forEach(function(b) {
     if (!blocksByPage[b.page_id]) blocksByPage[b.page_id] = [];
     blocksByPage[b.page_id].push(b);
   });
 
-  // Build nav href
   function navHref(item) {
     if (!isMultiPage) return '#section-' + (item.page_key || item.id);
     if (item.url && item.url.startsWith('http')) return item.url;
@@ -277,11 +437,9 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     return '/org/' + slug + '/' + item.page_key;
   }
 
-  // Contact destination
   var contactPage = enabledPages.find(function(p) { return p.page_key === 'contact' || p.page_key === 'involved'; });
   var contactHref = contactPage && isMultiPage ? '/org/' + slug + '/' + contactPage.page_key : '#section-contact';
 
-  // ── Nav bar ───────────────────────────────────────────────────────────────
   var navBar = (
     <nav
       style={{ backgroundColor: navBg, borderBottom: '1px solid ' + navBorder }}
@@ -330,17 +488,18 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           <Link to="/login" className="text-sm font-semibold focus:outline-none focus:underline" style={{ color: navTextColor }}>
             Member Login
           </Link>
-          <Link to={contactHref}
+          <Link
+            to={contactHref}
             className="text-white text-sm font-bold px-4 py-2 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-opacity hover:opacity-90"
-            style={{ backgroundColor: primary, borderRadius: borderRadius, color: getContrastColor(primary) }}>
-  Join Us
+            style={{ backgroundColor: primary, borderRadius: borderRadius, color: getContrastColor(primary) }}
+          >
+            Join Us
           </Link>
         </div>
       </div>
     </nav>
   );
 
-  // ── Footer ────────────────────────────────────────────────────────────────
   var footerPage = pages.find(function(p) { return p.page_key === '__footer__'; });
   var footerBlocks = footerPage ? (blocksByPage[footerPage.id] || []) : [];
 
@@ -357,8 +516,10 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           })}
         </div>
       )}
-      <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4"
-        style={{ borderTop: footerBlocks.length > 0 ? '1px solid ' + (headerDark ? '#374151' : '#e5e7eb') : 'none' }}>
+      <div
+        className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4"
+        style={{ borderTop: footerBlocks.length > 0 ? '1px solid ' + (headerDark ? '#374151' : '#e5e7eb') : 'none' }}
+      >
         <div className="flex items-center gap-3">
           {org.logo_url && <img src={org.logo_url} alt="" className="h-8 w-8 rounded-full object-cover" aria-hidden="true" />}
           <span style={{ color: headerDark ? '#ffffff' : '#111827', fontWeight: 700 }}>{org.name}</span>
@@ -369,27 +530,28 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           </a>
         )}
         <p style={{ color: headerDark ? '#6b7280' : '#9ca3af', fontSize: '13px' }}>
-  {'© ' + new Date().getFullYear() + ' ' + org.name + '.'}
-</p>
+          {'© ' + new Date().getFullYear() + ' ' + org.name + '.'}
+        </p>
       </div>
       {brandingVisible && (
-  <div style={{ borderTop: '1px solid ' + (headerDark ? '#374151' : '#e5e7eb'), padding: '12px', textAlign: 'center' }}>
-    <a
-      href="https://syndicade.org"
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ fontSize: '18px', color: '#9ca3af', textDecoration: 'none' }}
-      aria-label="Powered by Syndicade - opens in new tab"
-      className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-    >
-      Powered by <span style={{ color: headerDark ? '#ffffff' : '#111827', fontWeight: 700 }}>Syndi</span><span style={{ color: '#F5B731', fontWeight: 700 }}>cade</span>
-    </a>
-  </div>
-)}
+        <div style={{ borderTop: '1px solid ' + (headerDark ? '#374151' : '#e5e7eb'), padding: '12px', textAlign: 'center' }}>
+          <a
+            href="https://syndicade.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: '18px', color: '#9ca3af', textDecoration: 'none' }}
+            aria-label="Powered by Syndicade - opens in new tab"
+            className="hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+          >
+            Powered by{' '}
+            <span style={{ color: headerDark ? '#ffffff' : '#111827', fontWeight: 700 }}>Syndi</span>
+            <span style={{ color: '#F5B731', fontWeight: 700 }}>cade</span>
+          </a>
+        </div>
+      )}
     </footer>
   );
 
-  // ── Render blocks for a page ──────────────────────────────────────────────
   function renderPageBlocks(page) {
     var pageBlocks = blocksByPage[page.id] || [];
     if (pageBlocks.length === 0) return null;
@@ -406,7 +568,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // ── Hardcoded fallback content for known page types ───────────────────────
   function renderFallbackContent(page) {
     var key = page.page_key;
 
@@ -516,9 +677,11 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
           <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: primary }}>{page.title}</p>
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Become a Member</h1>
           <p className="text-gray-500 mb-8">Join our community and make a difference.</p>
-          <Link to={contactHref}
+          <Link
+            to={contactHref}
             className="inline-block text-white font-bold px-8 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: primary, borderRadius: borderRadius }}>
+            style={{ backgroundColor: primary, borderRadius: borderRadius }}
+          >
             Apply for Membership
           </Link>
         </div>
@@ -534,7 +697,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // ── Render a single sub-page ──────────────────────────────────────────────
   function renderSubPage(page) {
     var pageBlocks = blocksByPage[page.id] || [];
     return (
@@ -547,7 +709,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // ── Hero ──────────────────────────────────────────────────────────────────
   function renderHero() {
     if (template === 'classic') {
       return (
@@ -598,7 +759,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
       );
     }
 
-    // Default: modern
     return (
       <section id="section-home" className="px-6 py-20 text-center" style={{ background: 'linear-gradient(135deg, ' + primary + '15 0%, ' + secondary + '08 100%)' }} aria-label="Hero">
         <div className="max-w-3xl mx-auto">
@@ -618,19 +778,17 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // ── Home page ─────────────────────────────────────────────────────────────
   function renderHomePage() {
     var homePage = enabledPages.find(function(p) { return p.page_key === 'home'; });
     var homeBlocks = homePage ? (blocksByPage[homePage.id] || []) : [];
-
     var hasHeroBlock = homeBlocks.some(function(b) { return b.block_type === 'hero'; });
 
     return (
       <main id="main-content" style={{ fontFamily: fontFamily }}>
         {!hasHeroBlock && renderHero()}
-{org.enable_donations && (
-  <DonationSection org={org} primary={primary} borderRadius={borderRadius} />
-)}
+        {org.enable_donations && (
+          <DonationSection org={org} primary={primary} borderRadius={borderRadius} />
+        )}
         {homeBlocks.length > 0 && (
           <div style={{ backgroundColor: '#ffffff' }}>
             <div className="max-w-5xl mx-auto px-6 py-16 space-y-12">
@@ -644,8 +802,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
             </div>
           </div>
         )}
-
-        {/* Single-page mode: render all other pages inline as stacked sections */}
         {!isMultiPage && enabledPages
           .filter(function(p) { return p.page_key !== 'home'; })
           .map(function(page, i) {
@@ -665,9 +821,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // ── Route decision ────────────────────────────────────────────────────────
-
-  // 404: slug given but page not found
   if (activePageSlug && !activePage) {
     return (
       <div style={{ fontFamily: fontFamily }}>
@@ -678,7 +831,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // Sub-page
   if (activePageSlug && activePage && activePage.page_key !== 'home') {
     return (
       <div style={{ fontFamily: fontFamily }}>
@@ -689,7 +841,6 @@ function NewPublicPage({ org, slug, siteConfig, pages, navItems, events, announc
     );
   }
 
-  // Home
   return (
     <div style={{ fontFamily: fontFamily }}>
       {navBar}
@@ -714,18 +865,38 @@ export default function PublicOrganizationPage() {
   var [lightboxIndex, setLightboxIndex] = useState(null);
   var [loading, setLoading] = useState(true);
   var [error, setError] = useState(null);
-  var [joinForm, setJoinForm] = useState({ name: '', email: '', message: '' });
+  // Rec D/E — website field initialized for honeypot on legacy path
+  var [joinForm, setJoinForm] = useState({ name: '', email: '', message: '', website: '' });
   var [joinLoading, setJoinLoading] = useState(false);
   var [joinError, setJoinError] = useState(null);
   var [joinSuccess, setJoinSuccess] = useState(false);
   var [brandingVisible, setBrandingVisible] = useState(true);
+  // Rec A — cooldown for legacy join path
+  var [joinCooldownUntil, setJoinCooldownUntil] = useState(null);
+  var [joinCooldownSeconds, setJoinCooldownSeconds] = useState(0);
+  var joinCooldownRef = useRef(null);
+
+  // Rec A — countdown ticker for legacy path
+  useEffect(function() {
+    if (!joinCooldownUntil) return;
+    joinCooldownRef.current = setInterval(function() {
+      var remaining = Math.ceil((joinCooldownUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setJoinCooldownSeconds(0);
+        setJoinCooldownUntil(null);
+        clearInterval(joinCooldownRef.current);
+      } else {
+        setJoinCooldownSeconds(remaining);
+      }
+    }, 1000);
+    return function() { clearInterval(joinCooldownRef.current); };
+  }, [joinCooldownUntil]);
 
   useEffect(function() { fetchAll(); }, [slug]);
 
   async function fetchAll() {
     try {
       setLoading(true);
-
       var { data: org, error: orgError } = await supabase
         .from('organizations')
         .select('*')
@@ -733,18 +904,18 @@ export default function PublicOrganizationPage() {
         .single();
       if (orgError) throw orgError;
       setOrganization(org);
-      // Check branding visibility
-supabase
-  .from('subscriptions')
-  .select('plan')
-  .eq('organization_id', org.id)
-  .eq('status', 'active')
-  .maybeSingle()
-  .then(function(result) {
-    var plan = result.data ? result.data.plan : 'starter';
-    var noBranding = plan === 'pro' || org.branding_removed === true;
-    setBrandingVisible(!noBranding);
-  });
+
+      supabase
+        .from('subscriptions')
+        .select('plan')
+        .eq('organization_id', org.id)
+        .eq('status', 'active')
+        .maybeSingle()
+        .then(function(result) {
+          var plan = result.data ? result.data.plan : 'starter';
+          var noBranding = plan === 'pro' || org.branding_removed === true;
+          setBrandingVisible(!noBranding);
+        });
 
       var [configRes, pagesRes, navRes, eventsRes, announcementsRes, photosRes, blocksRes] = await Promise.allSettled([
         supabase.from('org_site_config').select('*').eq('organization_id', org.id).maybeSingle(),
@@ -760,43 +931,37 @@ supabase
       if (pagesRes.status === 'fulfilled') setSitePages(pagesRes.value.data || []);
       if (navRes.status === 'fulfilled' && navRes.value.data) setSiteNav(navRes.value.data.items || []);
       if (eventsRes.status === 'fulfilled') {
-  var ownEvents = eventsRes.value.data || [];
-
-  // Also fetch events where this org is an accepted co-host
-  var { data: collabRows } = await supabase
-    .from('event_collaborators')
-    .select('event_id')
-    .eq('requesting_org_id', org.id)
-    .eq('status', 'accepted');
-
-  if (collabRows && collabRows.length > 0) {
-    var coHostEventIds = collabRows.map(function(r) { return r.event_id; });
-    var { data: coHostEvents } = await supabase
-      .from('events')
-      .select('*')
-      .in('id', coHostEventIds)
-      .eq('publish_to_website', true)
-      .gte('start_time', new Date().toISOString())
-      .order('start_time', { ascending: true });
-
-    // Merge and deduplicate by id, then sort and cap at 6
-    var merged = ownEvents.concat(coHostEvents || []);
-    var seen = {};
-    var deduped = merged.filter(function(e) {
-      if (seen[e.id]) return false;
-      seen[e.id] = true;
-      return true;
-    });
-    deduped.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
-    setEvents(deduped.slice(0, 6));
-  } else {
-    setEvents(ownEvents);
-  }
-}
+        var ownEvents = eventsRes.value.data || [];
+        var { data: collabRows } = await supabase
+          .from('event_collaborators')
+          .select('event_id')
+          .eq('requesting_org_id', org.id)
+          .eq('status', 'accepted');
+        if (collabRows && collabRows.length > 0) {
+          var coHostEventIds = collabRows.map(function(r) { return r.event_id; });
+          var { data: coHostEvents } = await supabase
+            .from('events')
+            .select('*')
+            .in('id', coHostEventIds)
+            .eq('publish_to_website', true)
+            .gte('start_time', new Date().toISOString())
+            .order('start_time', { ascending: true });
+          var merged = ownEvents.concat(coHostEvents || []);
+          var seen = {};
+          var deduped = merged.filter(function(e) {
+            if (seen[e.id]) return false;
+            seen[e.id] = true;
+            return true;
+          });
+          deduped.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+          setEvents(deduped.slice(0, 6));
+        } else {
+          setEvents(ownEvents);
+        }
+      }
       if (announcementsRes.status === 'fulfilled') setAnnouncements(announcementsRes.value.data || []);
       if (photosRes.status === 'fulfilled') setPhotos(photosRes.value.data || []);
       if (blocksRes.status === 'fulfilled') setBlocks(blocksRes.value.data || []);
-
     } catch (err) {
       setError('Organization not found');
     } finally {
@@ -828,65 +993,27 @@ supabase
     setJoinForm(function(p) { return Object.assign({}, p, { [n]: v }); });
   }
 
-async function handleJoinSubmit(e) {
+  async function handleJoinSubmit(e) {
     e.preventDefault();
+    // Rec A — enforce cooldown on legacy path
+    if (joinCooldownUntil && Date.now() < joinCooldownUntil) return;
     setJoinError(null);
     setJoinLoading(true);
     try {
-      var { error: err } = await supabase.from('contact_inquiries').insert([{
-        organization_id: organization.id,
-        name: joinForm.name.trim(),
-        email: joinForm.email.trim(),
-        message: joinForm.message.trim(),
-        created_at: new Date().toISOString(),
-      }]);
-      if (err) throw err;
-
-      if (organization.contact_email) {
-        var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
-        await fetch(SUPABASE_URL + '/functions/v1/send-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdG1ocXJ5Z2tua29keWRidW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0Nzc0NjksImV4cCI6MjA4NDA1MzQ2OX0.B7DsLVNZuG1l39ABXDk1Km_737tCvbWAZGhqVCC3ddE',
-          },
-          body: JSON.stringify({
-            type: 'contact_inquiry',
-            data: {
-              adminEmail: organization.contact_email,
-              orgName: organization.name,
-              senderName: joinForm.name.trim(),
-              senderEmail: joinForm.email.trim(),
-              message: joinForm.message.trim(),
-              inboxUrl: window.location.origin + '/organizations/' + organization.id + '/inbox',
-            },
-          }),
-        });
-      }
-
-try {
-        var notifModule2 = await import('../lib/notificationService');
-        var { data: admins2 } = await supabase
-          .from('memberships')
-          .select('member_id')
-          .eq('organization_id', organization.id)
-          .eq('role', 'admin')
-          .eq('status', 'active');
-        if (admins2 && admins2.length > 0) {
-          await notifModule2.notifyUsers({
-            userIds: admins2.map(function(a) { return a.member_id; }),
-            organizationId: organization.id,
-            type: 'inbox_message',
-            title: 'New Inquiry from ' + joinForm.name.trim(),
-            message: joinForm.name.trim() + ' sent a message via your public page.',
-            link: '/organizations/' + organization.id + '/inbox',
-          });
-          window.dispatchEvent(new CustomEvent('notificationCreated'));
-        }
-      } catch(ne){ console.error('Inbox notification failed:', ne); }
-
+      await submitContactInquiry({
+        orgId: organization.id,
+        orgContactEmail: organization.contact_email,
+        orgName: organization.name,
+        name: joinForm.name,
+        email: joinForm.email,
+        message: joinForm.message,
+        honeypot: joinForm.website,
+      });
       setJoinSuccess(true);
-      setJoinForm({ name: '', email: '', message: '' });
+      setJoinForm({ name: '', email: '', message: '', website: '' });
+      // Rec A — start 60s cooldown
+      setJoinCooldownUntil(Date.now() + 60000);
+      setJoinCooldownSeconds(60);
     } catch (err) {
       setJoinError('Something went wrong. Please try again or contact us directly.');
     } finally {
@@ -913,7 +1040,6 @@ try {
     );
   }
 
-  // ── Use new block-based renderer if site is configured and published ───────
   var effectiveSiteConfig = siteConfig || (organization.settings ? {
     primary_color: (organization.settings.theme && organization.settings.theme.customColors && organization.settings.theme.customColors[0]) || '#3B82F6',
     secondary_color: '#1E40AF',
@@ -939,26 +1065,13 @@ try {
           activePageSlug={pageSlug || null}
           brandingVisible={brandingVisible}
         />
-        {lightboxPhoto && (
-          <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Photo lightbox" onClick={closeLightbox}>
-            <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
-              <button onClick={closeLightbox} className="absolute -top-12 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-1" aria-label="Close photo lightbox">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              <img src={lightboxPhoto.photo_url} alt={lightboxPhoto.caption || ('Photo ' + (lightboxIndex + 1) + ' from ' + organization.name)} className="w-full object-contain rounded-lg" style={{ maxHeight: '75vh' }} />
-              {lightboxPhoto.caption && <p className="text-white text-center mt-4 text-sm">{lightboxPhoto.caption}</p>}
-              <div className="flex justify-between items-center mt-4">
-                <button onClick={function() { navigateLightbox(-1); }} disabled={lightboxIndex === 0} className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30" aria-label="Previous photo">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                </button>
-                <p className="text-gray-400 text-sm" aria-live="polite">{lightboxIndex + 1} / {photos.length}</p>
-                <button onClick={function() { navigateLightbox(1); }} disabled={lightboxIndex === photos.length - 1} className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30" aria-label="Next photo">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <PhotoLightbox
+          photos={photos}
+          lightboxPhoto={lightboxPhoto}
+          lightboxIndex={lightboxIndex}
+          onClose={closeLightbox}
+          onNavigate={navigateLightbox}
+        />
       </>
     );
   }
@@ -972,8 +1085,11 @@ try {
     organization.page_sections || {}
   );
 
+  // Rec D — pass honeypot field + cooldown state into legacy templates via joinProps
   var joinProps = {
     joinForm, joinLoading, joinError, joinSuccess,
+    joinCooldownSeconds,
+    joinCooldownUntil,
     onChange: handleJoinChange,
     onSubmit: handleJoinSubmit,
     onReset: function() { setJoinSuccess(false); },
@@ -990,26 +1106,13 @@ try {
       {template === 'featured' && <FeaturedTemplate {...templateProps} />}
       {template !== 'classic' && template !== 'modern' && template !== 'banner' && template !== 'sidebar' && template !== 'featured' && <ClassicTemplate {...templateProps} />}
 
-      {lightboxPhoto && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Photo lightbox" onClick={closeLightbox}>
-          <div className="relative max-w-4xl w-full" onClick={function(e) { e.stopPropagation(); }}>
-            <button onClick={closeLightbox} className="absolute -top-12 right-0 text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-1" aria-label="Close photo lightbox">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <img src={lightboxPhoto.photo_url} alt={lightboxPhoto.caption || ('Photo ' + (lightboxIndex + 1) + ' from ' + organization.name)} className="w-full object-contain rounded-lg" style={{ maxHeight: '75vh' }} />
-            {lightboxPhoto.caption && <p className="text-white text-center mt-4 text-sm">{lightboxPhoto.caption}</p>}
-            <div className="flex justify-between items-center mt-4">
-              <button onClick={function() { navigateLightbox(-1); }} disabled={lightboxIndex === 0} className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30" aria-label="Previous photo">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <p className="text-gray-400 text-sm" aria-live="polite">{lightboxIndex + 1} / {photos.length}</p>
-              <button onClick={function() { navigateLightbox(1); }} disabled={lightboxIndex === photos.length - 1} className="text-white hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-white rounded p-2 disabled:opacity-30" aria-label="Next photo">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PhotoLightbox
+        photos={photos}
+        lightboxPhoto={lightboxPhoto}
+        lightboxIndex={lightboxIndex}
+        onClose={closeLightbox}
+        onNavigate={navigateLightbox}
+      />
     </>
   );
 }
