@@ -62,17 +62,17 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
 
 // ── EditAnnouncementModal ─────────────────────────────────────────────────────
 function EditAnnouncementModal({ announcement, onClose, onSaved }) {
-  var [title, setTitle]       = useState(announcement.title || '');
-  var [content, setContent]   = useState(announcement.content || '');
-  var [priority, setPriority] = useState(announcement.priority || 'normal');
-  var [isPinned, setIsPinned] = useState(announcement.is_pinned || false);
+  var [title, setTitle]         = useState(announcement.title || '');
+  var [content, setContent]     = useState(announcement.content || '');
+  var [priority, setPriority]   = useState(announcement.priority || 'normal');
+  var [isPinned, setIsPinned]   = useState(announcement.is_pinned || false);
   var [expiresAt, setExpiresAt] = useState(
     announcement.expires_at
       ? new Date(announcement.expires_at).toISOString().slice(0, 16)
       : ''
   );
-  var [saving, setSaving]     = useState(false);
-  var [errors, setErrors]     = useState({});
+  var [saving, setSaving]   = useState(false);
+  var [errors, setErrors]   = useState({});
 
   var validate = function() {
     var errs = {};
@@ -182,7 +182,7 @@ function EditAnnouncementModal({ announcement, onClose, onSaved }) {
             )}
           </div>
 
-          {/* Priority + Pinned row */}
+          {/* Priority + Expiry row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <label htmlFor="ean-priority" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>Priority</label>
@@ -259,13 +259,13 @@ function EditAnnouncementModal({ announcement, onClose, onSaved }) {
 }
 
 // ── AnnouncementCard ──────────────────────────────────────────────────────────
-function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, showOrganization }) {
-  var [isRead, setIsRead]         = useState(announcement.is_read || false);
-  var [isPinned, setIsPinned]     = useState(announcement.is_pinned || false);
-  var [marking, setMarking]       = useState(false);
-  var [pinning, setPinning]       = useState(false);
+function AnnouncementCard({ announcement, onRead, onUnread, onDelete, onUpdate, isAdmin, showOrganization }) {
+  var [isRead, setIsRead]           = useState(announcement.is_read || false);
+  var [isPinned, setIsPinned]       = useState(announcement.is_pinned || false);
+  var [marking, setMarking]         = useState(false);
+  var [pinning, setPinning]         = useState(false);
   var [showConfirm, setShowConfirm] = useState(false);
-  var [showEdit, setShowEdit]     = useState(false);
+  var [showEdit, setShowEdit]       = useState(false);
 
   var daysSinceCreated = differenceInDays(new Date(), new Date(announcement.created_at));
   var isNew     = !isRead && daysSinceCreated <= 7;
@@ -291,6 +291,29 @@ function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, s
     } catch (err) {
       console.error('Error marking as read:', err);
       toast.error('Could not mark as read. Please try again.');
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  var handleMarkAsUnread = async function() {
+    if (!isRead || marking) return;
+    setMarking(true);
+    try {
+      var authRes = await supabase.auth.getUser();
+      var user = authRes.data.user;
+      if (!user) throw new Error('Not authenticated');
+      var res = await supabase
+        .from('announcement_reads')
+        .delete()
+        .eq('announcement_id', announcement.id)
+        .eq('member_id', user.id);
+      if (res.error) throw res.error;
+      setIsRead(false);
+      if (onUnread) onUnread(announcement.id);
+    } catch (err) {
+      console.error('Error marking as unread:', err);
+      toast.error('Could not mark as unread. Please try again.');
     } finally {
       setMarking(false);
     }
@@ -347,13 +370,13 @@ function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, s
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
-          opacity: isRead ? 0.65 : 1,
-          transition: 'opacity 0.2s',
+          // No opacity fade — read state indicated by outline in feed, not card dimming
+          transition: 'box-shadow 0.15s',
           height: '100%',
           boxSizing: 'border-box',
           boxShadow: CARD_SHADOW,
         }}
-        aria-label={announcement.title + ' announcement'}
+        aria-label={announcement.title + ' announcement' + (isRead ? ', read' : ', unread')}
       >
         {/* Badge row + actions */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
@@ -408,17 +431,29 @@ function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, s
           {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
 
-            {/* Mark as read — all users */}
-            {!isRead && !isExpired && (
-              <button
-                onClick={handleMarkAsRead}
-                disabled={marking}
-                style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'transparent', border: 'none', borderRadius: '6px', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.5 : 1, whiteSpace: 'nowrap' }}
-                className="hover:bg-blue-500 hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Mark announcement as read"
-              >
-                {marking ? 'Saving...' : 'Mark Read'}
-              </button>
+            {/* Mark Read / Mark Unread — members only (admins use Edit modal for this) */}
+            {!isAdmin && !isExpired && (
+              isRead ? (
+                <button
+                  onClick={handleMarkAsUnread}
+                  disabled={marking}
+                  style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#64748B', background: 'transparent', border: 'none', borderRadius: '6px', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                  className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  aria-label="Mark announcement as unread"
+                >
+                  {marking ? 'Saving...' : 'Mark Unread'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleMarkAsRead}
+                  disabled={marking}
+                  style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'transparent', border: 'none', borderRadius: '6px', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                  className="hover:bg-blue-500 hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Mark announcement as read"
+                >
+                  {marking ? 'Saving...' : 'Mark Read'}
+                </button>
+              )
             )}
 
             {/* Admin-only actions */}

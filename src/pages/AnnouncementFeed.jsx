@@ -5,7 +5,7 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
-import { AlertTriangle, GripVertical, Plus, Check } from 'lucide-react';
+import { AlertTriangle, GripVertical, Plus, Check, CalendarClock } from 'lucide-react';
 
 var TITLE_COLOR    = '#0E1523';
 var SUBTITLE_COLOR = '#6B7280';
@@ -78,10 +78,88 @@ function getExpiryInfo(expiresAt) {
   var diffMs = exp - now;
   var diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays <= 0) return null;
-  if (diffDays <= 1) return { label: 'Expires today',                                                                   color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
+  if (diffDays <= 1) return { label: 'Expires today',                                                                    color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
   if (diffDays <= 3) return { label: 'Expires in ' + diffDays + ' day' + (diffDays !== 1 ? 's' : ''), color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
-  if (diffDays <= 7) return { label: 'Expires in ' + diffDays + ' days',                                               color: '#D97706', bg: '#FFFBEB', border: 'rgba(217,119,6,0.3)'  };
+  if (diffDays <= 7) return { label: 'Expires in ' + diffDays + ' days',                                                color: '#D97706', bg: '#FFFBEB', border: 'rgba(217,119,6,0.3)'  };
   return null;
+}
+
+// ── Inline Extend Widget ──────────────────────────────────────────────────────
+function ExtendWidget({ announcementId, currentExpiresAt, onExtended, onCancel }) {
+  // Default to 7 days from now, or 7 days from current expiry if still in future
+  var baseDate = currentExpiresAt && new Date(currentExpiresAt) > new Date()
+    ? new Date(currentExpiresAt)
+    : new Date();
+  baseDate.setDate(baseDate.getDate() + 7);
+  var defaultVal = baseDate.toISOString().slice(0, 16);
+
+  var [newDate, setNewDate] = useState(defaultVal);
+  var [saving, setSaving]   = useState(false);
+
+  // Min = tomorrow at current time
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var minDate = tomorrow.toISOString().slice(0, 16);
+
+  var handleSave = async function() {
+    if (!newDate) { toast.error('Please select a date.'); return; }
+    if (new Date(newDate) <= new Date()) { toast.error('New expiry must be in the future.'); return; }
+    setSaving(true);
+    try {
+      var r = await supabase
+        .from('announcements')
+        .update({ expires_at: new Date(newDate).toISOString() })
+        .eq('id', announcementId);
+      if (r.error) throw r.error;
+      mascotSuccessToast('Expiry extended.');
+      onExtended(announcementId, new Date(newDate).toISOString());
+    } catch (err) {
+      mascotErrorToast('Failed to extend expiry.', err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 10px', background: '#FFFBEB', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '8px', marginTop: '4px' }}
+      role="group"
+      aria-label="Extend announcement expiry"
+    >
+      <CalendarClock size={14} style={{ color: '#D97706', flexShrink: 0 }} aria-hidden="true" />
+      <label htmlFor={'extend-date-' + announcementId} style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', whiteSpace: 'nowrap' }}>
+        New expiry:
+      </label>
+      <input
+        id={'extend-date-' + announcementId}
+        type="datetime-local"
+        value={newDate}
+        min={minDate}
+        onChange={function(e) { setNewDate(e.target.value); }}
+        style={{ padding: '4px 8px', border: '1px solid rgba(217,119,6,0.4)', borderRadius: '6px', fontSize: '12px', color: '#0E1523', background: '#FFFFFF', cursor: 'pointer' }}
+        className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
+        aria-required="true"
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        style={{ padding: '4px 12px', background: saving ? '#FCD34D' : '#F5B731', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, color: '#78350F', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, whiteSpace: 'nowrap' }}
+        className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+        aria-busy={saving}
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+      <button
+        onClick={onCancel}
+        disabled={saving}
+        style={{ padding: '4px 10px', background: 'transparent', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#92400E', cursor: saving ? 'not-allowed' : 'pointer' }}
+        className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+        aria-label="Cancel extend"
+      >
+        Cancel
+      </button>
+    </div>
+  );
 }
 
 // ── AnnouncementFeed ──────────────────────────────────────────────────────────
@@ -91,7 +169,6 @@ function AnnouncementFeed() {
 
   var [announcements, setAnnouncements]                 = useState([]);
   var [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
-  var [organization, setOrganization]                   = useState(null);
   var [loading, setLoading]                             = useState(true);
   var [error, setError]                                 = useState(null);
   var [searchTerm, setSearchTerm]                       = useState('');
@@ -105,10 +182,13 @@ function AnnouncementFeed() {
   var [selectedIds, setSelectedIds]                     = useState([]);
   var [bulkDeleting, setBulkDeleting]                   = useState(false);
   var [bulkMarkingRead, setBulkMarkingRead]             = useState(false);
-  var [togglingPinId, setTogglingPinId]                 = useState(null);
+  // Track which card has the extend widget open (one at a time)
+  var [extendingId, setExtendingId]                     = useState(null);
 
   // Drag state
-  var dragIndex     = useRef(null);
+  var dragIndex        = useRef(null);
+  // Preserve manual drag order so filter useEffect doesn't clobber it
+  var manualOrder      = useRef(null);
   var [dragOver, setDragOver] = useState(null);
 
   // ConfirmModal state
@@ -121,26 +201,14 @@ function AnnouncementFeed() {
     setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   }
 
-  // ── Fetch org ───────────────────────────────────────────────────────────────
-  useEffect(function() {
-    async function fetchOrganization() {
-      try {
-        var orgRes = await supabase.from('organizations').select('*').eq('id', organizationId).single();
-        if (orgRes.error) throw orgRes.error;
-        setOrganization(orgRes.data);
-      } catch (err) {
-        console.error('Error fetching organization:', err);
-      }
-    }
-    if (organizationId) fetchOrganization();
-  }, [organizationId]);
-
   // ── Fetch announcements ─────────────────────────────────────────────────────
   useEffect(function() {
     fetchAnnouncements();
   }, [organizationId]);
 
   async function fetchAnnouncements() {
+    // Reset manual order on full refetch
+    manualOrder.current = null;
     try {
       var authRes = await supabase.auth.getUser();
       var user = authRes.data.user;
@@ -177,30 +245,31 @@ function AnnouncementFeed() {
 
   // ── Filter logic ────────────────────────────────────────────────────────────
   useEffect(function() {
-    var filtered = announcements.slice();
+    // If admin has manually reordered, start from that order instead of announcements
+    var base = manualOrder.current ? manualOrder.current.slice() : announcements.slice();
 
     if (searchTerm.trim()) {
       var term = searchTerm.toLowerCase();
-      filtered = filtered.filter(function(a) {
+      base = base.filter(function(a) {
         return a.title.toLowerCase().includes(term) || a.content.toLowerCase().includes(term);
       });
     }
 
     if (priorityFilter !== 'all') {
-      filtered = filtered.filter(function(a) { return a.priority === priorityFilter; });
+      base = base.filter(function(a) { return a.priority === priorityFilter; });
     }
 
     if (unreadOnly) {
-      filtered = filtered.filter(function(a) { return !a.is_read; });
+      base = base.filter(function(a) { return !a.is_read; });
     }
 
     if (pinnedOnly) {
-      filtered = filtered.filter(function(a) { return a.is_pinned; });
+      base = base.filter(function(a) { return a.is_pinned; });
     }
 
-    // Only auto-sort when no drag reorder has happened (i.e. not in drag mode)
-    if (!dragIndex.current) {
-      filtered.sort(function(a, b) {
+    // Only auto-sort when no manual order has been set
+    if (!manualOrder.current) {
+      base.sort(function(a, b) {
         if (a.is_pinned && !b.is_pinned) return -1;
         if (!a.is_pinned && b.is_pinned) return 1;
         var order = { urgent: 0, normal: 1, low: 2 };
@@ -210,14 +279,13 @@ function AnnouncementFeed() {
       });
     }
 
-    setFilteredAnnouncements(filtered);
+    setFilteredAnnouncements(base);
   }, [announcements, searchTerm, priorityFilter, unreadOnly, pinnedOnly]);
 
   // ── Drag handlers ───────────────────────────────────────────────────────────
   var handleDragStart = function(e, index) {
     dragIndex.current = index;
     e.dataTransfer.effectAllowed = 'move';
-    // Required for Firefox
     e.dataTransfer.setData('text/plain', String(index));
   };
 
@@ -236,6 +304,8 @@ function AnnouncementFeed() {
       var next = prev.slice();
       var dragged = next.splice(from, 1)[0];
       next.splice(index, 0, dragged);
+      // Persist manual order so filter useEffect respects it
+      manualOrder.current = next.slice();
       return next;
     });
   };
@@ -257,33 +327,86 @@ function AnnouncementFeed() {
         return a.id === announcementId ? Object.assign({}, a, { is_read: true }) : a;
       });
     });
+    if (manualOrder.current) {
+      manualOrder.current = manualOrder.current.map(function(a) {
+        return a.id === announcementId ? Object.assign({}, a, { is_read: true }) : a;
+      });
+    }
     setUnreadCount(function(prev) { return Math.max(0, prev - 1); });
+  }
+
+  function handleAnnouncementUnread(announcementId) {
+    setAnnouncements(function(prev) {
+      return prev.map(function(a) {
+        return a.id === announcementId ? Object.assign({}, a, { is_read: false }) : a;
+      });
+    });
+    if (manualOrder.current) {
+      manualOrder.current = manualOrder.current.map(function(a) {
+        return a.id === announcementId ? Object.assign({}, a, { is_read: false }) : a;
+      });
+    }
+    setUnreadCount(function(prev) { return prev + 1; });
   }
 
   function handleAnnouncementDelete(announcementId) {
     setAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
     setFilteredAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
+    if (manualOrder.current) {
+      manualOrder.current = manualOrder.current.filter(function(a) { return a.id !== announcementId; });
+    }
   }
 
-  // onUpdate — called by AnnouncementCard after edit or pin toggle inside the card
   function handleAnnouncementUpdate() {
     fetchAnnouncements();
   }
 
-  async function handleAnnouncementCreated(newAnnouncement) {
+  // Task 28 — extend confirmed: patch expires_at optimistically in state
+  function handleExtended(announcementId, newExpiresAt) {
+    setExtendingId(null);
     setAnnouncements(function(prev) {
-      return [Object.assign({}, newAnnouncement, { is_read: false }), ...prev];
+      return prev.map(function(a) {
+        return a.id === announcementId ? Object.assign({}, a, { expires_at: newExpiresAt }) : a;
+      });
     });
-    setUnreadCount(function(prev) { return prev + 1; });
+    if (manualOrder.current) {
+      manualOrder.current = manualOrder.current.map(function(a) {
+        return a.id === announcementId ? Object.assign({}, a, { expires_at: newExpiresAt }) : a;
+      });
+    }
+  }
+
+  async function handleAnnouncementCreated(newAnnouncement) {
+    var authRes = await supabase.auth.getUser();
+    var user = authRes.data.user;
+
+    // Creator shouldn't see their own post as unread
+    var isOwnPost = user && newAnnouncement.created_by === user.id;
+
+    setAnnouncements(function(prev) {
+      return [Object.assign({}, newAnnouncement, { is_read: isOwnPost }), ...prev];
+    });
+    // Reset manual order so new post sorts correctly to top
+    manualOrder.current = null;
+
+    if (!isOwnPost) {
+      setUnreadCount(function(prev) { return prev + 1; });
+    }
+
     try {
       var notifModule = await import('../lib/notificationService');
-      var authRes = await supabase.auth.getUser();
-      var user = authRes.data.user;
+      // Lazy-fetch org name only when needed for the notification
+      var orgName = 'Your organization';
+      try {
+        var orgRes = await supabase.from('organizations').select('name').eq('id', organizationId).single();
+        if (!orgRes.error && orgRes.data) orgName = orgRes.data.name;
+      } catch (_) {}
+
       await notifModule.notifyOrganizationMembers({
         organizationId: organizationId,
         type: 'new_announcement',
         title: newAnnouncement.title || 'New Announcement',
-        message: (organization ? organization.name : 'Your organization') + ' posted a new announcement.',
+        message: orgName + ' posted a new announcement.',
         link: '/organizations/' + organizationId + '/announcements',
         excludeUserId: user ? user.id : null,
       });
@@ -308,6 +431,9 @@ function AnnouncementFeed() {
       setAnnouncements(function(prev) {
         return prev.map(function(a) { return Object.assign({}, a, { is_read: true }); });
       });
+      if (manualOrder.current) {
+        manualOrder.current = manualOrder.current.map(function(a) { return Object.assign({}, a, { is_read: true }); });
+      }
       setUnreadCount(0);
       toast.dismiss(loadingToast);
       mascotSuccessToast('All caught up!', 'All announcements marked as read.');
@@ -316,25 +442,6 @@ function AnnouncementFeed() {
       mascotErrorToast('Failed to mark as read.', 'Please try again.');
     } finally {
       setMarkingAllRead(false);
-    }
-  }
-
-  async function handlePinToggle(ann) {
-    if (togglingPinId) return;
-    setTogglingPinId(ann.id);
-    try {
-      var r = await supabase.from('announcements').update({ is_pinned: !ann.is_pinned }).eq('id', ann.id);
-      if (r.error) throw r.error;
-      setAnnouncements(function(prev) {
-        return prev.map(function(a) {
-          return a.id === ann.id ? Object.assign({}, a, { is_pinned: !ann.is_pinned }) : a;
-        });
-      });
-      mascotSuccessToast(ann.is_pinned ? 'Unpinned.' : 'Pinned to top!');
-    } catch (err) {
-      mascotErrorToast('Could not update pin status.', err.message);
-    } finally {
-      setTogglingPinId(null);
     }
   }
 
@@ -373,6 +480,11 @@ function AnnouncementFeed() {
           return selectedIds.indexOf(a.id) !== -1 ? Object.assign({}, a, { is_read: true }) : a;
         });
       });
+      if (manualOrder.current) {
+        manualOrder.current = manualOrder.current.map(function(a) {
+          return selectedIds.indexOf(a.id) !== -1 ? Object.assign({}, a, { is_read: true }) : a;
+        });
+      }
       setUnreadCount(function(prev) { return Math.max(0, prev - unreadSelected.length); });
       setSelectedIds([]);
       setBulkMode(false);
@@ -399,6 +511,9 @@ function AnnouncementFeed() {
           if (r.error) throw r.error;
           setAnnouncements(function(prev) { return prev.filter(function(a) { return ids.indexOf(a.id) === -1; }); });
           setFilteredAnnouncements(function(prev) { return prev.filter(function(a) { return ids.indexOf(a.id) === -1; }); });
+          if (manualOrder.current) {
+            manualOrder.current = manualOrder.current.filter(function(a) { return ids.indexOf(a.id) === -1; });
+          }
           setSelectedIds([]);
           setBulkMode(false);
           mascotSuccessToast(count + ' announcement' + (count !== 1 ? 's' : '') + ' deleted.');
@@ -714,10 +829,10 @@ function AnnouncementFeed() {
               aria-atomic="false"
             >
               {filteredAnnouncements.map(function(ann, index) {
-                var expiryInfo  = getExpiryInfo(ann.expires_at);
-                var isSelected  = selectedIds.indexOf(ann.id) !== -1;
-                var isPinToggling = togglingPinId === ann.id;
+                var expiryInfo    = getExpiryInfo(ann.expires_at);
+                var isSelected    = selectedIds.indexOf(ann.id) !== -1;
                 var isDragTarget  = dragOver === index;
+                var isExtending   = extendingId === ann.id;
 
                 return (
                   <div
@@ -731,10 +846,9 @@ function AnnouncementFeed() {
                     onDragEnd={isAdmin && !bulkMode ? handleDragEnd : undefined}
                     style={{ display: 'flex', flexDirection: 'column', gap: '4px', opacity: isDragTarget ? 0.7 : 1, transition: 'opacity 0.15s' }}
                   >
-                    {/* Per-card meta row */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '22px', paddingLeft: '2px', paddingRight: '2px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {/* Drag handle — admin only */}
+                    {/* Per-card meta row — drag handle + bulk checkbox only */}
+                    {(isAdmin || bulkMode) && (
+                      <div style={{ display: 'flex', alignItems: 'center', minHeight: '22px', paddingLeft: '2px', paddingRight: '2px', gap: '8px' }}>
                         {isAdmin && !bulkMode && !hasActiveFilters && (
                           <span style={{ color: '#CBD5E1', cursor: 'grab', display: 'flex', alignItems: 'center' }} aria-hidden="true">
                             <GripVertical size={14} />
@@ -750,30 +864,14 @@ function AnnouncementFeed() {
                           />
                         )}
                       </div>
+                    )}
 
-                      {/* Pin toggle — admin only */}
-                      {isAdmin && (
-                        <button
-                          onClick={function() { handlePinToggle(ann); }}
-                          disabled={isPinToggling}
-                          style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: ann.is_pinned ? 'rgba(59,130,246,0.08)' : 'transparent', border: '1px solid ' + (ann.is_pinned ? 'rgba(59,130,246,0.3)' : 'transparent'), borderRadius: '99px', color: ann.is_pinned ? '#1D4ED8' : '#94A3B8', fontSize: '10px', fontWeight: 700, cursor: isPinToggling ? 'not-allowed' : 'pointer', opacity: isPinToggling ? 0.5 : 1, letterSpacing: '0.3px' }}
-                          className="hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                          aria-label={(ann.is_pinned ? 'Unpin: ' : 'Pin to top: ') + ann.title}
-                          aria-pressed={ann.is_pinned}
-                        >
-                          <svg width="10" height="10" fill={ann.is_pinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" style={{ flexShrink: 0 }}>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                          </svg>
-                          {ann.is_pinned ? 'Pinned' : 'Pin'}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Card with unread outline */}
-                    <div style={{ borderRadius: '13px', outline: !ann.is_read ? '2px solid rgba(245,183,49,0.4)' : '2px solid transparent', outlineOffset: '1px' }}>
+                    {/* Pinned cards get yellow outline; member read cards fade slightly */}
+                    <div style={{ borderRadius: '13px', outline: ann.is_pinned ? '2px solid rgba(245,183,49,0.4)' : '2px solid transparent', outlineOffset: '1px', opacity: (!isAdmin && ann.is_read) ? 0.72 : 1, transition: 'opacity 0.2s' }}>
                       <AnnouncementCard
                         announcement={ann}
                         onRead={handleAnnouncementRead}
+                        onUnread={handleAnnouncementUnread}
                         onDelete={handleAnnouncementDelete}
                         onUpdate={handleAnnouncementUpdate}
                         isAdmin={isAdmin}
@@ -781,15 +879,40 @@ function AnnouncementFeed() {
                       />
                     </div>
 
-                    {/* Expiry badge */}
+                    {/* Expiry badge row — with Extend button for admins */}
                     {expiryInfo && (
                       <div style={{ paddingLeft: '4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 700, color: expiryInfo.color, background: expiryInfo.bg, border: '1px solid ' + expiryInfo.border, padding: '2px 8px', borderRadius: '99px' }}>
-                          <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {expiryInfo.label}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 700, color: expiryInfo.color, background: expiryInfo.bg, border: '1px solid ' + expiryInfo.border, padding: '2px 8px', borderRadius: '99px' }}>
+                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {expiryInfo.label}
+                          </span>
+
+                          {/* Extend button — admin only, hidden when widget is open */}
+                          {isAdmin && !isExtending && (
+                            <button
+                              onClick={function() { setExtendingId(ann.id); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 700, color: '#D97706', background: 'transparent', border: '1px solid rgba(217,119,6,0.3)', padding: '2px 8px', borderRadius: '99px', cursor: 'pointer' }}
+                              className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+                              aria-label={'Extend expiry for: ' + ann.title}
+                            >
+                              <CalendarClock size={10} aria-hidden="true" />
+                              Extend
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Inline extend widget */}
+                        {isAdmin && isExtending && (
+                          <ExtendWidget
+                            announcementId={ann.id}
+                            currentExpiresAt={ann.expires_at}
+                            onExtended={handleExtended}
+                            onCancel={function() { setExtendingId(null); }}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -808,7 +931,7 @@ function AnnouncementFeed() {
           onClose={function() { setShowCreateModal(false); }}
           onSuccess={handleAnnouncementCreated}
           organizationId={organizationId}
-          organizationName={organization ? organization.name : 'Organization'}
+          organizationName={'Organization'}
         />
       </main>
 
