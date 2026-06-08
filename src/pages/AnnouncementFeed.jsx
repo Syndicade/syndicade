@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, GripVertical, Plus, Check } from 'lucide-react';
 
 var TITLE_COLOR    = '#0E1523';
 var SUBTITLE_COLOR = '#6B7280';
@@ -78,14 +78,16 @@ function getExpiryInfo(expiresAt) {
   var diffMs = exp - now;
   var diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays <= 0) return null;
-  if (diffDays <= 1) return { label: 'Expires today',                                                                  color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
+  if (diffDays <= 1) return { label: 'Expires today',                                                                   color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
   if (diffDays <= 3) return { label: 'Expires in ' + diffDays + ' day' + (diffDays !== 1 ? 's' : ''), color: '#DC2626', bg: '#FEF2F2', border: 'rgba(239,68,68,0.3)' };
-  if (diffDays <= 7) return { label: 'Expires in ' + diffDays + ' days',                                              color: '#D97706', bg: '#FFFBEB', border: 'rgba(217,119,6,0.3)'  };
+  if (diffDays <= 7) return { label: 'Expires in ' + diffDays + ' days',                                               color: '#D97706', bg: '#FFFBEB', border: 'rgba(217,119,6,0.3)'  };
   return null;
 }
 
+// ── AnnouncementFeed ──────────────────────────────────────────────────────────
 function AnnouncementFeed() {
   var { organizationId } = useParams();
+  var { isAdmin } = useOutletContext();
 
   var [announcements, setAnnouncements]                 = useState([]);
   var [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
@@ -97,7 +99,6 @@ function AnnouncementFeed() {
   var [unreadOnly, setUnreadOnly]                       = useState(false);
   var [pinnedOnly, setPinnedOnly]                       = useState(false);
   var [unreadCount, setUnreadCount]                     = useState(0);
-  var [isAdmin, setIsAdmin]                             = useState(false);
   var [showCreateModal, setShowCreateModal]             = useState(false);
   var [markingAllRead, setMarkingAllRead]               = useState(false);
   var [bulkMode, setBulkMode]                           = useState(false);
@@ -105,6 +106,10 @@ function AnnouncementFeed() {
   var [bulkDeleting, setBulkDeleting]                   = useState(false);
   var [bulkMarkingRead, setBulkMarkingRead]             = useState(false);
   var [togglingPinId, setTogglingPinId]                 = useState(null);
+
+  // Drag state
+  var dragIndex     = useRef(null);
+  var [dragOver, setDragOver] = useState(null);
 
   // ConfirmModal state
   var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
@@ -116,24 +121,15 @@ function AnnouncementFeed() {
     setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   }
 
-  // ── Fetch org + role ────────────────────────────────────────────────────────
+  // ── Fetch org ───────────────────────────────────────────────────────────────
   useEffect(function() {
     async function fetchOrganization() {
       try {
-        var authRes = await supabase.auth.getUser();
-        var user = authRes.data.user;
-        if (!user) throw new Error('Not authenticated');
-
         var orgRes = await supabase.from('organizations').select('*').eq('id', organizationId).single();
         if (orgRes.error) throw orgRes.error;
         setOrganization(orgRes.data);
-
-        var memberRes = await supabase.from('memberships').select('role').eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').single();
-        if (memberRes.error && memberRes.error.code !== 'PGRST116') throw memberRes.error;
-        setIsAdmin(memberRes.data && memberRes.data.role === 'admin');
       } catch (err) {
         console.error('Error fetching organization:', err);
-        setError(err.message);
       }
     }
     if (organizationId) fetchOrganization();
@@ -141,42 +137,43 @@ function AnnouncementFeed() {
 
   // ── Fetch announcements ─────────────────────────────────────────────────────
   useEffect(function() {
-    async function fetchAnnouncements() {
-      try {
-        var authRes = await supabase.auth.getUser();
-        var user = authRes.data.user;
-        if (!user) throw new Error('Not authenticated');
-
-        var annRes = await supabase
-          .from('announcements')
-          .select('*, announcement_reads!left(id, member_id)')
-          .eq('organization_id', organizationId)
-          .order('is_pinned', { ascending: false })
-          .order('created_at', { ascending: false });
-        if (annRes.error) throw annRes.error;
-
-        var processed = annRes.data.map(function(a) {
-          return Object.assign({}, a, {
-            is_read: a.announcement_reads && a.announcement_reads.some(function(r) { return r.member_id === user.id; }) || false
-          });
-        });
-
-        var active = processed.filter(function(a) {
-          return !a.expires_at || new Date(a.expires_at) > new Date();
-        });
-
-        setAnnouncements(active);
-        setFilteredAnnouncements(active);
-        setUnreadCount(active.filter(function(a) { return !a.is_read; }).length);
-      } catch (err) {
-        console.error('Error fetching announcements:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (organizationId) fetchAnnouncements();
+    fetchAnnouncements();
   }, [organizationId]);
+
+  async function fetchAnnouncements() {
+    try {
+      var authRes = await supabase.auth.getUser();
+      var user = authRes.data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      var annRes = await supabase
+        .from('announcements')
+        .select('*, announcement_reads!left(id, member_id)')
+        .eq('organization_id', organizationId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (annRes.error) throw annRes.error;
+
+      var processed = annRes.data.map(function(a) {
+        return Object.assign({}, a, {
+          is_read: a.announcement_reads && a.announcement_reads.some(function(r) { return r.member_id === user.id; }) || false
+        });
+      });
+
+      var active = processed.filter(function(a) {
+        return !a.expires_at || new Date(a.expires_at) > new Date();
+      });
+
+      setAnnouncements(active);
+      setFilteredAnnouncements(active);
+      setUnreadCount(active.filter(function(a) { return !a.is_read; }).length);
+    } catch (err) {
+      console.error('Error fetching announcements:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // ── Filter logic ────────────────────────────────────────────────────────────
   useEffect(function() {
@@ -201,17 +198,57 @@ function AnnouncementFeed() {
       filtered = filtered.filter(function(a) { return a.is_pinned; });
     }
 
-    filtered.sort(function(a, b) {
-      if (a.is_pinned && !b.is_pinned) return -1;
-      if (!a.is_pinned && b.is_pinned) return 1;
-      var order = { urgent: 0, normal: 1, low: 2 };
-      var diff = (order[a.priority] || 0) - (order[b.priority] || 0);
-      if (diff !== 0) return diff;
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
+    // Only auto-sort when no drag reorder has happened (i.e. not in drag mode)
+    if (!dragIndex.current) {
+      filtered.sort(function(a, b) {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        var order = { urgent: 0, normal: 1, low: 2 };
+        var diff = (order[a.priority] || 0) - (order[b.priority] || 0);
+        if (diff !== 0) return diff;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    }
 
     setFilteredAnnouncements(filtered);
   }, [announcements, searchTerm, priorityFilter, unreadOnly, pinnedOnly]);
+
+  // ── Drag handlers ───────────────────────────────────────────────────────────
+  var handleDragStart = function(e, index) {
+    dragIndex.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+    // Required for Firefox
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  var handleDragEnter = function(e) {
+    e.preventDefault();
+  };
+
+  var handleDragOver = function(e, index) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIndex.current === null || dragIndex.current === index) return;
+    var from = dragIndex.current;
+    dragIndex.current = index;
+    setDragOver(index);
+    setFilteredAnnouncements(function(prev) {
+      var next = prev.slice();
+      var dragged = next.splice(from, 1)[0];
+      next.splice(index, 0, dragged);
+      return next;
+    });
+  };
+
+  var handleDrop = function(e) {
+    e.preventDefault();
+    setDragOver(null);
+  };
+
+  var handleDragEnd = function() {
+    dragIndex.current = null;
+    setDragOver(null);
+  };
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleAnnouncementRead(announcementId) {
@@ -225,6 +262,12 @@ function AnnouncementFeed() {
 
   function handleAnnouncementDelete(announcementId) {
     setAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
+    setFilteredAnnouncements(function(prev) { return prev.filter(function(a) { return a.id !== announcementId; }); });
+  }
+
+  // onUpdate — called by AnnouncementCard after edit or pin toggle inside the card
+  function handleAnnouncementUpdate() {
+    fetchAnnouncements();
   }
 
   async function handleAnnouncementCreated(newAnnouncement) {
@@ -245,7 +288,7 @@ function AnnouncementFeed() {
         excludeUserId: user ? user.id : null,
       });
       window.dispatchEvent(new CustomEvent('notificationCreated'));
-    } catch(ne){ console.error('Announcement notification failed:', ne); }
+    } catch (ne) { console.error('Announcement notification failed:', ne); }
   }
 
   async function handleMarkAllAsRead() {
@@ -258,7 +301,6 @@ function AnnouncementFeed() {
 
     setMarkingAllRead(true);
     var loadingToast = toast.loading('Marking all as read...');
-
     try {
       var records = unread.map(function(a) { return { announcement_id: a.id, member_id: user.id }; });
       var res = await supabase.from('announcement_reads').insert(records);
@@ -277,7 +319,6 @@ function AnnouncementFeed() {
     }
   }
 
-  // ── handlePinToggle — mascotErrorToast on failure ─────────────────────────
   async function handlePinToggle(ann) {
     if (togglingPinId) return;
     setTogglingPinId(ann.id);
@@ -320,7 +361,6 @@ function AnnouncementFeed() {
     var unreadSelected = announcements.filter(function(a) {
       return selectedIds.indexOf(a.id) !== -1 && !a.is_read;
     });
-
     if (unreadSelected.length === 0) { toast.error('Selected items are already read.'); return; }
 
     setBulkMarkingRead(true);
@@ -344,7 +384,6 @@ function AnnouncementFeed() {
     }
   }
 
-  // ── handleBulkDelete — uses ConfirmModal ──────────────────────────────────
   function handleBulkDelete() {
     var count = selectedIds.length;
     openConfirm(
@@ -358,9 +397,8 @@ function AnnouncementFeed() {
           var ids = selectedIds.slice();
           var r = await supabase.from('announcements').delete().in('id', ids);
           if (r.error) throw r.error;
-          setAnnouncements(function(prev) {
-            return prev.filter(function(a) { return ids.indexOf(a.id) === -1; });
-          });
+          setAnnouncements(function(prev) { return prev.filter(function(a) { return ids.indexOf(a.id) === -1; }); });
+          setFilteredAnnouncements(function(prev) { return prev.filter(function(a) { return ids.indexOf(a.id) === -1; }); });
           setSelectedIds([]);
           setBulkMode(false);
           mascotSuccessToast(count + ' announcement' + (count !== 1 ? 's' : '') + ' deleted.');
@@ -382,7 +420,6 @@ function AnnouncementFeed() {
 
   var hasActiveFilters = searchTerm || priorityFilter !== 'all' || unreadOnly || pinnedOnly;
   var allSelected = filteredAnnouncements.length > 0 && selectedIds.length === filteredAnnouncements.length;
-  var someSelected = selectedIds.length > 0 && !allSelected;
 
   // ── Loading skeleton ────────────────────────────────────────────────────────
   if (loading) {
@@ -426,9 +463,7 @@ function AnnouncementFeed() {
       <main style={{ padding: '24px' }}>
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px', padding: '48px 32px', textAlign: 'center', maxWidth: '480px', margin: '0 auto' }} role="alert">
           <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#FEE2E2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#EF4444" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
+            <AlertTriangle size={28} style={{ color: '#EF4444' }} aria-hidden="true" />
           </div>
           <p style={{ color: '#0E1523', fontWeight: 700, fontSize: '18px', marginBottom: '8px' }}>Failed to Load Announcements</p>
           <p style={{ color: '#6B7280', marginBottom: '24px', fontSize: '14px' }}>{error}</p>
@@ -461,9 +496,7 @@ function AnnouncementFeed() {
               aria-label="Create a new announcement"
               style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
             >
-              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus size={16} aria-hidden="true" />
               Create Announcement
             </button>
           )}
@@ -546,9 +579,7 @@ function AnnouncementFeed() {
                 className="focus:outline-none focus:ring-2 focus:ring-green-500"
                 aria-label={'Mark all ' + unreadCount + ' announcements as read'}
               >
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                <Check size={14} aria-hidden="true" />
                 Mark All Read ({unreadCount})
               </button>
             )}
@@ -611,9 +642,7 @@ function AnnouncementFeed() {
                   className="focus:outline-none focus:ring-2 focus:ring-green-500"
                   aria-label="Mark selected as read"
                 >
-                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check size={12} aria-hidden="true" />
                   {bulkMarkingRead ? 'Marking...' : 'Mark Read'}
                 </button>
                 <button
@@ -630,6 +659,14 @@ function AnnouncementFeed() {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* Drag hint — admin only, only when not filtering */}
+        {isAdmin && filteredAnnouncements.length > 1 && !hasActiveFilters && !bulkMode && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#94A3B8', fontSize: '12px' }} aria-live="polite">
+            <GripVertical size={14} aria-hidden="true" />
+            Drag cards to reorder. Order resets on next page load.
           </div>
         )}
 
@@ -653,9 +690,7 @@ function AnnouncementFeed() {
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus size={18} aria-hidden="true" />
                 Create First Announcement
               </button>
             )}
@@ -678,16 +713,33 @@ function AnnouncementFeed() {
               aria-live="polite"
               aria-atomic="false"
             >
-              {filteredAnnouncements.map(function(ann) {
-                var expiryInfo = getExpiryInfo(ann.expires_at);
-                var isSelected = selectedIds.indexOf(ann.id) !== -1;
+              {filteredAnnouncements.map(function(ann, index) {
+                var expiryInfo  = getExpiryInfo(ann.expires_at);
+                var isSelected  = selectedIds.indexOf(ann.id) !== -1;
                 var isPinToggling = togglingPinId === ann.id;
+                var isDragTarget  = dragOver === index;
 
                 return (
-                  <div key={ann.id} role="listitem" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div
+                    key={ann.id}
+                    role="listitem"
+                    draggable={isAdmin && !bulkMode && !hasActiveFilters}
+                    onDragStart={isAdmin && !bulkMode ? function(e) { handleDragStart(e, index); } : undefined}
+                    onDragEnter={isAdmin && !bulkMode ? handleDragEnter : undefined}
+                    onDragOver={isAdmin && !bulkMode ? function(e) { handleDragOver(e, index); } : undefined}
+                    onDrop={isAdmin && !bulkMode ? handleDrop : undefined}
+                    onDragEnd={isAdmin && !bulkMode ? handleDragEnd : undefined}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '4px', opacity: isDragTarget ? 0.7 : 1, transition: 'opacity 0.15s' }}
+                  >
                     {/* Per-card meta row */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '22px', paddingLeft: '2px', paddingRight: '2px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Drag handle — admin only */}
+                        {isAdmin && !bulkMode && !hasActiveFilters && (
+                          <span style={{ color: '#CBD5E1', cursor: 'grab', display: 'flex', alignItems: 'center' }} aria-hidden="true">
+                            <GripVertical size={14} />
+                          </span>
+                        )}
                         {bulkMode && (
                           <input
                             type="checkbox"
@@ -697,11 +749,6 @@ function AnnouncementFeed() {
                             aria-label={'Select: ' + ann.title}
                           />
                         )}
-                        {!ann.is_read && (
-                          <span style={{ fontSize: '9px', fontWeight: 700, color: '#B45309', background: 'rgba(245,183,49,0.12)', border: '1px solid rgba(245,183,49,0.3)', padding: '1px 7px', borderRadius: '99px', letterSpacing: '0.5px', textTransform: 'uppercase', lineHeight: 1.6 }}>
-                            New
-                          </span>
-                        )}
                       </div>
 
                       {/* Pin toggle — admin only */}
@@ -710,7 +757,7 @@ function AnnouncementFeed() {
                           onClick={function() { handlePinToggle(ann); }}
                           disabled={isPinToggling}
                           style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: ann.is_pinned ? 'rgba(59,130,246,0.08)' : 'transparent', border: '1px solid ' + (ann.is_pinned ? 'rgba(59,130,246,0.3)' : 'transparent'), borderRadius: '99px', color: ann.is_pinned ? '#1D4ED8' : '#94A3B8', fontSize: '10px', fontWeight: 700, cursor: isPinToggling ? 'not-allowed' : 'pointer', opacity: isPinToggling ? 0.5 : 1, letterSpacing: '0.3px' }}
-                          className="hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
+                          className="hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-400"
                           aria-label={(ann.is_pinned ? 'Unpin: ' : 'Pin to top: ') + ann.title}
                           aria-pressed={ann.is_pinned}
                         >
@@ -728,6 +775,7 @@ function AnnouncementFeed() {
                         announcement={ann}
                         onRead={handleAnnouncementRead}
                         onDelete={handleAnnouncementDelete}
+                        onUpdate={handleAnnouncementUpdate}
                         isAdmin={isAdmin}
                         showOrganization={false}
                       />

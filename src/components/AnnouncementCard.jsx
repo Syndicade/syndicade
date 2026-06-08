@@ -406,14 +406,14 @@ function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, s
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
 
             {/* Mark as read — all users */}
             {!isRead && !isExpired && (
               <button
                 onClick={handleMarkAsRead}
                 disabled={marking}
-                style={{ padding: '3px 10px', fontSize: '12px', fontWeight: 600, color: '#3B82F6', background: 'transparent', border: 'none', borderRadius: '6px', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.5 : 1 }}
+                style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'transparent', border: 'none', borderRadius: '6px', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.5 : 1, whiteSpace: 'nowrap' }}
                 className="hover:bg-blue-500 hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Mark announcement as read"
               >
@@ -426,32 +426,32 @@ function AnnouncementCard({ announcement, onRead, onDelete, onUpdate, isAdmin, s
               <>
                 <button
                   onClick={function() { setShowEdit(true); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', fontSize: '12px', fontWeight: 600, color: '#475569', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#475569', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
                   aria-label={'Edit announcement: ' + announcement.title}
                 >
-                  <Pencil size={13} aria-hidden="true" />
+                  <Pencil size={12} aria-hidden="true" />
                   Edit
                 </button>
 
                 <button
                   onClick={handlePinToggle}
                   disabled={pinning}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', fontSize: '12px', fontWeight: 600, color: isPinned ? '#D97706' : '#475569', background: isPinned ? 'rgba(245,183,49,0.08)' : 'transparent', border: 'none', borderRadius: '6px', cursor: pinning ? 'not-allowed' : 'pointer', opacity: pinning ? 0.5 : 1 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: isPinned ? '#D97706' : '#475569', background: isPinned ? 'rgba(245,183,49,0.08)' : 'transparent', border: 'none', borderRadius: '6px', cursor: pinning ? 'not-allowed' : 'pointer', opacity: pinning ? 0.5 : 1, whiteSpace: 'nowrap' }}
                   className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   aria-label={isPinned ? 'Unpin announcement' : 'Pin announcement'}
                 >
-                  <Pin size={13} aria-hidden="true" />
+                  <Pin size={12} aria-hidden="true" />
                   {isPinned ? 'Unpin' : 'Pin'}
                 </button>
 
                 <button
                   onClick={function() { setShowConfirm(true); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', fontSize: '12px', fontWeight: 600, color: '#EF4444', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#EF4444', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                   aria-label={'Delete announcement: ' + announcement.title}
                 >
-                  <Trash2 size={13} aria-hidden="true" />
+                  <Trash2 size={12} aria-hidden="true" />
                   Delete
                 </button>
               </>
