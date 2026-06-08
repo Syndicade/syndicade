@@ -1,83 +1,70 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
-import { Plus, Search, Filter, ClipboardList, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, Filter, ClipboardList, ArrowUpDown, X } from 'lucide-react';
 import CreateSignupForm from '../components/CreateSignupForm';
 import SignupFormCard from '../components/SignupFormCard';
 
 function SignupFormsList() {
   var { organizationId } = useParams();
-  var [forms, setForms] = useState([]);
+  var { isAdmin } = useOutletContext();
+
+  var [forms, setForms]               = useState([]);
   var [filteredForms, setFilteredForms] = useState([]);
-  var [loading, setLoading] = useState(true);
-  var [error, setError] = useState(null);
+  var [loading, setLoading]           = useState(true);
+  var [error, setError]               = useState(null);
   var [showCreateModal, setShowCreateModal] = useState(false);
-  var [searchTerm, setSearchTerm] = useState('');
+  var [searchTerm, setSearchTerm]     = useState('');
   var [statusFilter, setStatusFilter] = useState('all');
-  var [sortBy, setSortBy] = useState('recent');
-  var [currentUser, setCurrentUser] = useState(null);
-  var [userRole, setUserRole] = useState(null);
-  var [memberCount, setMemberCount] = useState(0);
+  var [sortBy, setSortBy]             = useState('recent');
+  var [currentUser, setCurrentUser]   = useState(null);
+  var [memberCount, setMemberCount]   = useState(0);
 
+  // Single load on mount
   useEffect(function() {
-    fetchUserRole();
-    fetchMemberCount();
+    loadData();
   }, [organizationId]);
 
-  useEffect(function() {
-    if (organizationId) fetchForms();
-  }, [organizationId]);
-
+  // Re-filter whenever forms or filter state changes
   useEffect(function() {
     applyFilters();
   }, [forms, searchTerm, statusFilter, sortBy]);
 
-  var fetchUserRole = async function() {
-    try {
-      var { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setCurrentUser(user);
-      var { data: membership } = await supabase
-        .from('memberships')
-        .select('role')
-        .eq('member_id', user.id)
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
-        .single();
-      setUserRole(membership?.role || 'member');
-    } catch (err) {
-      console.error('Error fetching user role:', err);
-    }
-  };
-
-  var fetchMemberCount = async function() {
-    try {
-      var { count } = await supabase
-        .from('memberships')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .eq('status', 'active');
-      setMemberCount(count || 0);
-    } catch (err) {
-      console.error('Error fetching member count:', err);
-    }
-  };
-
-  var fetchForms = async function() {
+  var loadData = async function() {
     try {
       setLoading(true);
       setError(null);
-      var { data, error: fetchError } = await supabase
-        .from('signup_forms')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false });
-      if (fetchError) throw fetchError;
-      setForms(data || []);
+
+      var results = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+          .from('signup_forms')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('memberships')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organizationId)
+          .eq('status', 'active')
+      ]);
+
+      var authResult   = results[0];
+      var formsResult  = results[1];
+      var countResult  = results[2];
+
+      if (authResult.data && authResult.data.user) {
+        setCurrentUser(authResult.data.user);
+      }
+
+      if (formsResult.error) throw formsResult.error;
+      setForms(formsResult.data || []);
+      setMemberCount(countResult.count || 0);
+
     } catch (err) {
-      console.error('Error fetching forms:', err);
+      console.error('Error loading signup forms:', err);
       setError(err.message);
       mascotErrorToast('Failed to load sign-up forms.', 'Please refresh and try again.');
     } finally {
@@ -126,8 +113,16 @@ function SignupFormsList() {
     setFilteredForms(filtered);
   };
 
-var handleFormCreated = async function(newForm) {
-    fetchForms();
+  var clearFilters = function() {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setSortBy('recent');
+  };
+
+  var hasActiveFilters = searchTerm.trim() !== '' || statusFilter !== 'all' || sortBy !== 'recent';
+
+  var handleFormCreated = async function(newForm) {
+    loadData();
     setShowCreateModal(false);
     try {
       var notifModule = await import('../lib/notificationService');
@@ -140,32 +135,27 @@ var handleFormCreated = async function(newForm) {
         excludeUserId: currentUser ? currentUser.id : null,
       });
       window.dispatchEvent(new CustomEvent('notificationCreated'));
-    } catch(ne){ console.error('Signup form notification failed:', ne); }
+    } catch (ne) {
+      console.error('Signup form notification failed:', ne);
+    }
   };
 
-  var handleFormUpdated = function() {
-    fetchForms();
-  };
+  var activeForms  = forms.filter(function(f) { return !isFormClosed(f); }).length;
+  var closedForms  = forms.filter(function(f) { return isFormClosed(f); }).length;
+  var pinnedForms  = forms.filter(function(f) { return f.is_pinned; }).length;
 
-  var handleDuplicate = function() {
-    fetchForms();
-  };
-
-  var activeForms = forms.filter(function(f) { return !isFormClosed(f); }).length;
-  var closedForms = forms.filter(function(f) { return isFormClosed(f); }).length;
-  var pinnedForms = forms.filter(function(f) { return f.is_pinned; }).length;
+  // ── Loading skeleton ────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms">
+      <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms" aria-busy="true">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ height: '12px', width: '120px', borderRadius: '6px', background: '#E2E8F0', marginBottom: '10px' }} className="animate-pulse" />
-              <div style={{ height: '28px', width: '200px', borderRadius: '6px', background: '#E2E8F0', marginBottom: '8px' }} className="animate-pulse" />
-              <div style={{ height: '16px', width: '280px', borderRadius: '6px', background: '#E2E8F0' }} className="animate-pulse" />
+              <div style={{ height: '32px', width: '220px', borderRadius: '6px', background: '#E2E8F0', marginBottom: '8px' }} className="animate-pulse" />
+              <div style={{ height: '16px', width: '160px', borderRadius: '6px', background: '#E2E8F0' }} className="animate-pulse" />
             </div>
-            <div style={{ height: '44px', width: '140px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
+            <div style={{ height: '40px', width: '130px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
             {[1, 2, 3].map(function(n) {
@@ -183,24 +173,21 @@ var handleFormCreated = async function(newForm) {
     );
   }
 
+  // ── Main render ─────────────────────────────────────────────────────────────
+
   return (
     <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms">
 
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '24px' }}>
         <div>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
-            Sign-Up Forms
-          </p>
-          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0E1523', margin: 0 }}>
-            Manage Sign-Ups
-          </h1>
+          <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', margin: 0, lineHeight: 1.2 }}>Sign-Up Forms</h1>
           <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px' }}>
-            Volunteer slots, potluck items, time sign-ups, and more.
+            {forms.length + ' form' + (forms.length !== 1 ? 's' : '') + ' · ' + activeForms + ' active'}
           </p>
         </div>
 
-        {userRole === 'admin' && (
+        {isAdmin && (
           <button
             onClick={function() { setShowCreateModal(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
@@ -231,7 +218,7 @@ var handleFormCreated = async function(newForm) {
 
       {/* Search + Filter bar */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', alignItems: 'center' }}>
           <div style={{ position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <input
@@ -244,6 +231,7 @@ var handleFormCreated = async function(newForm) {
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Filter size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <select
@@ -258,6 +246,7 @@ var handleFormCreated = async function(newForm) {
               <option value="closed">Closed</option>
             </select>
           </div>
+
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <ArrowUpDown size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
             <select
@@ -272,9 +261,24 @@ var handleFormCreated = async function(newForm) {
               <option value="closing">Closing Soon</option>
             </select>
           </div>
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '9px 14px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              aria-label="Clear all filters"
+              className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            >
+              <X size={14} aria-hidden="true" />
+              Clear
+            </button>
+          )}
         </div>
+
         <p style={{ fontSize: '13px', color: '#64748B', marginTop: '10px' }}>
           Showing {filteredForms.length} of {forms.length} form{forms.length !== 1 ? 's' : ''}
+          {hasActiveFilters && <span style={{ color: '#3B82F6', fontWeight: 600 }}> — filters active</span>}
         </p>
       </div>
 
@@ -294,22 +298,33 @@ var handleFormCreated = async function(newForm) {
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '64px 24px', textAlign: 'center' }}>
           <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-            {forms.length === 0 ? 'No Sign-Up Forms Yet' : 'No Forms Match Your Search'}
+            {hasActiveFilters ? 'No Forms Match Your Filters' : 'No Sign-Up Forms Yet'}
           </h2>
           <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '360px', margin: '0 auto 24px', lineHeight: '1.6' }}>
-            {forms.length === 0
-              ? 'Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.'
-              : 'Try adjusting your search or status filter.'}
+            {hasActiveFilters
+              ? 'Try adjusting your search or filters.'
+              : 'Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.'}
           </p>
-          {userRole === 'admin' && forms.length === 0 && (
+          {hasActiveFilters ? (
             <button
-              onClick={function() { setShowCreateModal(true); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+              onClick={clearFilters}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+              className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
             >
-              <Plus size={18} aria-hidden="true" />
-              Create Your First Form
+              <X size={16} aria-hidden="true" />
+              Clear Filters
             </button>
+          ) : (
+            isAdmin && (
+              <button
+                onClick={function() { setShowCreateModal(true); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+              >
+                <Plus size={18} aria-hidden="true" />
+                Create Your First Form
+              </button>
+            )
           )}
         </div>
       ) : (
@@ -323,12 +338,12 @@ var handleFormCreated = async function(newForm) {
               <SignupFormCard
                 key={form.id}
                 form={form}
-                currentUserId={currentUser?.id}
-                userRole={userRole}
+                currentUserId={currentUser ? currentUser.id : null}
+                isAdmin={isAdmin}
                 memberCount={memberCount}
-                onDelete={fetchForms}
-                onUpdate={handleFormUpdated}
-                onDuplicate={handleDuplicate}
+                onDelete={loadData}
+                onUpdate={loadData}
+                onDuplicate={loadData}
               />
             );
           })}
