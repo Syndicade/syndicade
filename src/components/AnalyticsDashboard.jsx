@@ -495,17 +495,13 @@ export default function AnalyticsDashboard({ organizationId, onNavigate }) {
     <div style={{ background: BG }} className="min-h-screen" aria-label="Analytics dashboard">
       <div className="space-y-6 p-6">
 
-        {/* ── Header ─────────────────────────────────────────────── */}
+{/* ── Header ─────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <p style={{ color: YELLOW, letterSpacing: '4px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
-              Reporting
+            <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, lineHeight: 1.2, margin: 0 }}>Analytics</h1>
+            <p style={{ color: MUTED, fontSize: '14px', marginTop: '4px' }}>
+              {'Overview of your organization activity'}
             </p>
-            <h1 style={{ color: TEXT }} className="text-2xl font-extrabold flex items-center gap-2">
-              <TrendingUp className="w-6 h-6 text-blue-500" aria-hidden="true" />
-              Analytics
-            </h1>
-            <p style={{ color: MUTED }} className="text-sm mt-0.5">Overview of your organization activity</p>
           </div>
           <button
             onClick={function() { fetchAnalytics(true); }}
@@ -518,7 +514,6 @@ export default function AnalyticsDashboard({ organizationId, onNavigate }) {
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
-
         {/* ── Date range filter ──────────────────────────────────── */}
         <div className="space-y-3">
           {/* Preset pills */}
