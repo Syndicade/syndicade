@@ -48,7 +48,7 @@ var PURPLE = '#8B5CF6'
 var RED    = '#EF4444'
 var GREEN  = '#22C55E'
 
-// ─── Post-it note color presets ───────────────────────────────────────────
+// ─── Post-it note color presets (kept for feed bg rotation) ───────────────
 var NOTE_PRESETS = [
   '#FEF9C3','#DCFCE7','#FFEDD5','#FCE7F3',
   '#E0F2FE','#F3E8FF','#FFF7ED','#ECFDF5',
@@ -57,6 +57,19 @@ var NOTE_PRESETS = [
 // ─── Sidebar colors ───────────────────────────────────────────────────────
 var AVATAR_COLORS = ['#3B82F6','#8B5CF6','#F5B731','#22C55E','#EF4444','#EC4899']
 var GROUP_COLORS  = ['#6366F1','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6']
+
+// ─── localStorage cap helper ──────────────────────────────────────────────
+var LS_CAP = 200
+function lsWrite(key, arr) {
+  try {
+    var capped = arr.slice(-LS_CAP)
+    localStorage.setItem(key, JSON.stringify(capped))
+    return capped
+  } catch(e) { return arr }
+}
+function lsRead(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]') } catch { return [] }
+}
 
 // ─── Available widgets ────────────────────────────────────────────────────
 var WIDGET_DEFS = [
@@ -107,6 +120,13 @@ function formatDateShort(ds) {
   if (!ds) return ''
   var d = new Date(ds + (ds.includes('T') ? '' : 'T00:00:00'))
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+function toInputDate(date) {
+  // Returns YYYY-MM-DD string for date input value
+  var d = date instanceof Date ? date : new Date(date)
+  var mm = String(d.getMonth() + 1).padStart(2, '0')
+  var dd = String(d.getDate()).padStart(2, '0')
+  return d.getFullYear() + '-' + mm + '-' + dd
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────
@@ -163,6 +183,18 @@ function IcoDoc() {
 }
 function IcoCalSmall() {
   return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+}
+function IcoCheck() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+}
+function IcoTrash() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+}
+function IcoEye() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+}
+function IcoEyeOff() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────
@@ -226,7 +258,7 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange }) {
   )
 }
 
-// ─── OrgColorPicker ───────────────────────────────────────────────────────
+// ─── OrgColorPicker — unified with PALETTE ────────────────────────────────
 function OrgColorPicker({ orgId, currentColor, onSelect }) {
   var [open, setOpen] = useState(false)
   var ref = useRef(null)
@@ -235,17 +267,19 @@ function OrgColorPicker({ orgId, currentColor, onSelect }) {
     document.addEventListener('mousedown', handler)
     return function() { document.removeEventListener('mousedown', handler) }
   }, [])
+  // Rec #4: show card swatch (not accent color) so picker preview matches feed cards
+  var currentCard = (PALETTE.find(function(p) { return p.color === currentColor }) || { card: currentColor }).card
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v }) }} aria-label="Change note color for this organization" title="Change note color" style={{ width: '18px', height: '18px', borderRadius: '50%', background: currentColor, border: '2px solid ' + BDR, cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v }) }} aria-label="Change note color for this organization" title="Change note color" style={{ width: '18px', height: '18px', borderRadius: '50%', background: currentCard, border: '2px solid ' + BDR, cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
         <span style={{ color: 'rgba(0,0,0,0.3)', lineHeight: 1, fontSize: '8px' }}><IcoPalette /></span>
       </button>
       {open && (
-        <div role="dialog" aria-label="Pick a note color" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px', zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', width: '120px' }}>
-          {NOTE_PRESETS.map(function(color) {
-            var isSelected = currentColor === color
+        <div role="dialog" aria-label="Pick a note color" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px', zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', width: '136px' }}>
+          {PALETTE.map(function(p) {
+            var isSelected = currentColor === p.color
             return (
-              <button key={color} aria-label={'Select color ' + color + (isSelected ? ', currently selected' : '')} onClick={function() { onSelect(orgId, color); setOpen(false) }} style={{ width: '22px', height: '22px', borderRadius: '50%', background: color, border: isSelected ? '2px solid ' + TEXT : '2px solid transparent', cursor: 'pointer', padding: 0, outline: isSelected ? '2px solid white' : 'none', outlineOffset: '-4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button key={p.color} aria-label={'Select color ' + p.color + (isSelected ? ', currently selected' : '')} onClick={function() { onSelect(orgId, p.color); setOpen(false) }} style={{ width: '22px', height: '22px', borderRadius: '5px', background: p.card, border: isSelected ? '3px solid ' + TEXT : '2px solid ' + p.color, cursor: 'pointer', padding: 0 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" />
             )
           })}
         </div>
@@ -416,21 +450,21 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
     setSavedEventsList(res.data || [])
   }
 
-  async function unsaveProgram(saveId, programName) {
+  async function unsaveProgram(saveId) {
     var res = await supabase.from('program_saves').delete().eq('id', saveId)
     if (res.error) { mascotErrorToast('Failed to remove bookmark.'); return }
     setSavedPrograms(function(prev) { return prev.filter(function(s) { return s.id !== saveId }) })
     mascotSuccessToast('Bookmark removed.')
   }
 
-  async function unsaveEvent(saveId, eventTitle) {
+  async function unsaveEvent(saveId) {
     var res = await supabase.from('event_saves').delete().eq('id', saveId)
     if (res.error) { mascotErrorToast('Failed to remove bookmark.'); return }
     setSavedEventsList(function(prev) { return prev.filter(function(s) { return s.id !== saveId }) })
     mascotSuccessToast('Bookmark removed.')
   }
 
-  function statusBadge(status, type) {
+  function statusBadge(status) {
     var cfg = {
       going:    { bg: 'rgba(34,197,94,0.1)',   color: '#22C55E', label: 'Going'    },
       maybe:    { bg: 'rgba(245,183,49,0.15)',  color: '#B45309', label: 'Maybe'   },
@@ -469,7 +503,6 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
 
   return (
     <div>
-      {/* Sub-tabs */}
       <div role="tablist" aria-label="My programs and events sections" style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
         {[
           { key: 'registered', label: 'RSVPs & Registrations', count: totalRegistered },
@@ -496,7 +529,6 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
         })}
       </div>
 
-      {/* RSVPs & Registrations */}
       {activeSubTab === 'registered' && (
         <div>
           {totalRegistered === 0 ? (
@@ -510,24 +542,17 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
             </div>
           ) : (
             <div role="list" aria-label="Your RSVPs and registrations" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Event RSVPs */}
               {myRsvps.map(function(rsvp) {
                 var evt = rsvp.events
                 if (!evt) return null
                 var d = fmtDate(evt.start_time)
                 var org = evt.organizations
                 return (
-                  <div
-                    key={'rsvp-' + rsvp.id}
-                    role="listitem"
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
-                  >
-                    {/* Date chip */}
+                  <div key={'rsvp-' + rsvp.id} role="listitem" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}>
                     <div style={{ flexShrink: 0, width: '44px', textAlign: 'center', background: '#EFF6FF', borderRadius: '8px', padding: '6px 0' }}>
                       <div style={{ fontSize: '9px', fontWeight: 700, color: BLUE, textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
                       <div style={{ fontSize: '18px', fontWeight: 800, color: BLUE, lineHeight: 1 }}>{d.day}</div>
                     </div>
-                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{evt.title}</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -535,37 +560,23 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
                         {org && <span style={{ fontSize: '11px', color: MUTED }}>{org.name}</span>}
                       </div>
                     </div>
-                    {/* Status + link */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                      {statusBadge(rsvp.status, 'event')}
-                      <button
-                        onClick={function() { navigate('/events/' + evt.id) }}
-                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
-                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={'View event: ' + evt.title}
-                      >View</button>
+                      {statusBadge(rsvp.status)}
+                      <button onClick={function() { navigate('/events/' + evt.id) }} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'View event: ' + evt.title}>View</button>
                     </div>
                   </div>
                 )
               })}
-
-              {/* Program registrations */}
               {myRegistrations.map(function(reg) {
                 var prog = reg.org_programs
                 if (!prog) return null
                 var org = prog.organizations
                 var startFmt = prog.start_date ? formatDateShort(prog.start_date) : null
                 return (
-                  <div
-                    key={'reg-' + reg.id}
-                    role="listitem"
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
-                  >
-                    {/* Program icon chip */}
+                  <div key={'reg-' + reg.id} role="listitem" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}>
                     <div style={{ flexShrink: 0, width: '44px', height: '44px', background: '#EDE9FE', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <ClipboardList size={20} style={{ color: PURPLE }} aria-hidden="true" />
                     </div>
-                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prog.name}</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -574,10 +585,7 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
                         {startFmt && <span style={{ fontSize: '11px', color: MUTED }}>Starts {startFmt}</span>}
                       </div>
                     </div>
-                    {/* Status */}
-                    <div style={{ flexShrink: 0 }}>
-                      {statusBadge(reg.status, 'program')}
-                    </div>
+                    <div style={{ flexShrink: 0 }}>{statusBadge(reg.status)}</div>
                   </div>
                 )
               })}
@@ -586,7 +594,6 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
         </div>
       )}
 
-      {/* Saved */}
       {activeSubTab === 'saved' && (
         <div>
           {totalSaved === 0 ? (
@@ -600,18 +607,13 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
             </div>
           ) : (
             <div role="list" aria-label="Your saved events and programs" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Saved events */}
               {savedEventsList.map(function(save) {
                 var evt = save.events
                 if (!evt) return null
                 var d = fmtDate(evt.start_time)
                 var org = evt.organizations
                 return (
-                  <div
-                    key={'sevt-' + save.id}
-                    role="listitem"
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
-                  >
+                  <div key={'sevt-' + save.id} role="listitem" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}>
                     <div style={{ flexShrink: 0, width: '44px', textAlign: 'center', background: 'rgba(245,183,49,0.1)', borderRadius: '8px', padding: '6px 0' }}>
                       <div style={{ fontSize: '9px', fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
                       <div style={{ fontSize: '18px', fontWeight: 800, color: '#B45309', lineHeight: 1 }}>{d.day}</div>
@@ -624,37 +626,20 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                      <button
-                        onClick={function() { unsaveEvent(save.id, evt.title) }}
-                        style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }}
-                        className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        aria-label={'Remove bookmark for ' + evt.title}
-                        title="Remove bookmark"
-                      >
+                      <button onClick={function() { unsaveEvent(save.id) }} style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }} className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400" aria-label={'Remove bookmark for ' + evt.title} title="Remove bookmark">
                         <BookmarkCheck size={16} aria-hidden="true" />
                       </button>
-                      <button
-                        onClick={function() { navigate('/events/' + evt.id) }}
-                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
-                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={'View event: ' + evt.title}
-                      >View</button>
+                      <button onClick={function() { navigate('/events/' + evt.id) }} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'View event: ' + evt.title}>View</button>
                     </div>
                   </div>
                 )
               })}
-
-              {/* Saved programs */}
               {savedPrograms.map(function(save) {
                 var prog = save.org_programs
                 if (!prog) return null
                 var org = prog.organizations
                 return (
-                  <div
-                    key={'sprog-' + save.id}
-                    role="listitem"
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
-                  >
+                  <div key={'sprog-' + save.id} role="listitem" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}>
                     <div style={{ flexShrink: 0, width: '44px', height: '44px', background: '#EDE9FE', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <ClipboardList size={20} style={{ color: PURPLE }} aria-hidden="true" />
                     </div>
@@ -669,21 +654,10 @@ function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                      <button
-                        onClick={function() { unsaveProgram(save.id, prog.name) }}
-                        style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }}
-                        className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        aria-label={'Remove bookmark for ' + prog.name}
-                        title="Remove bookmark"
-                      >
+                      <button onClick={function() { unsaveProgram(save.id) }} style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }} className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400" aria-label={'Remove bookmark for ' + prog.name} title="Remove bookmark">
                         <BookmarkCheck size={16} aria-hidden="true" />
                       </button>
-                      <button
-                        onClick={function() { navigate('/organizations/' + prog.organization_id + '/programs') }}
-                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
-                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={'View program: ' + prog.name}
-                      >View</button>
+                      <button onClick={function() { navigate('/organizations/' + prog.organization_id + '/programs') }} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'View program: ' + prog.name}>View</button>
                     </div>
                   </div>
                 )
@@ -702,6 +676,7 @@ function TourOverlay({ step, refs, onNext, onSkip }) {
   var [pos, setPos] = useState({ top: '50%', left: '50%', transform: 'translate(-50%,-50%)' })
   useEffect(function() {
     if (!current) return
+    // Rec #6: guard — only highlight if element exists
     var el = refs[step] && refs[step].current
     if (!el) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -722,6 +697,7 @@ function TourOverlay({ step, refs, onNext, onSkip }) {
     }, 450)
     return function() {
       clearTimeout(timer)
+      if (!el) return
       el.style.boxShadow    = origBox
       el.style.zIndex       = origZ
       el.style.borderRadius = origRad
@@ -875,20 +851,46 @@ function getActivityConfig(type) {
   return { bg:'#F1F5F9', color:'#64748B', label:'Activity' }
 }
 
-function RecentActivityFeed({ items, loading, orgColors, organizations }) {
+// ─── Task 41 — RecentActivityFeed with read state, bulk actions, checkboxes ─
+function RecentActivityFeed({ items, loading, orgColors, organizations, readActivityIds, onMarkRead, onMarkUnread, onMarkAllRead, onDeleteAll }) {
   var [actOrgFilter, setActOrgFilter] = useState('all')
+  var [selectedIds,  setSelectedIds]  = useState([])   // checkbox selection
+
   var orgs = []
   var seen = {}
   ;(items || []).forEach(function(item) {
     if (item.orgId && !seen[item.orgId]) { seen[item.orgId] = true; orgs.push({ id: item.orgId, name: item.orgName }) }
   })
   var filtered = actOrgFilter === 'all' ? (items || []) : (items || []).filter(function(i) { return i.orgId === actOrgFilter })
+
+  // Clear selection when filter changes so counts stay accurate
+  function setOrgFilter(id) { setActOrgFilter(id); setSelectedIds([]) }
+
+  var filteredIds    = filtered.map(function(i) { return i.id })
+  var allSelected    = filteredIds.length > 0 && filteredIds.every(function(id) { return selectedIds.includes(id) })
+  var someSelected   = selectedIds.length > 0 && !allSelected
+
+  function toggleSelectAll() {
+    if (allSelected) { setSelectedIds([]) }
+    else { setSelectedIds(filteredIds) }
+  }
+  function toggleSelectOne(id) {
+    setSelectedIds(function(prev) {
+      return prev.includes(id) ? prev.filter(function(i) { return i !== id }) : prev.concat([id])
+    })
+  }
+  function handleDeleteSelected() {
+    onDeleteAll(selectedIds)   // pass selected IDs — parent deletes only those
+    setSelectedIds([])
+  }
+
   if (loading) {
     return (
       <div aria-busy="true" aria-label="Loading recent activity">
         {[1,2,3,4,5].map(function(i) {
           return (
             <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'12px 0', borderBottom:'1px solid ' + BDR }}>
+              <div style={{ width:'16px', height:'16px', borderRadius:'4px', background:'#E2E8F0', flexShrink:0 }} />
               <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'#E2E8F0', flexShrink:0 }} />
               <div style={{ flex:1 }}>
                 <div style={{ width:'55%', height:'13px', background:'#E2E8F0', borderRadius:'4px', marginBottom:'6px' }} />
@@ -912,46 +914,124 @@ function RecentActivityFeed({ items, loading, orgColors, organizations }) {
       </div>
     )
   }
+
+  var unreadCount = filtered.filter(function(i) { return !readActivityIds.includes(i.id) }).length
+
   return (
     <div>
+      {/* Bulk actions row */}
       <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px', flexWrap:'wrap' }}>
         {orgs.length > 1 && (
           <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
             {[{ id:'all', name:'All Orgs' }].concat(orgs).map(function(org) {
               var isActive = actOrgFilter === org.id
               return (
-                <button key={org.id} onClick={function() { setActOrgFilter(org.id) }} aria-pressed={isActive} style={{ padding:'4px 11px', borderRadius:'99px', fontSize:'12px', fontWeight: isActive ? 700 : 500, border:'1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent', color: isActive ? BLUE : MUTED, cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{org.name}</button>
+                <button key={org.id} onClick={function() { setOrgFilter(org.id) }} aria-pressed={isActive} style={{ padding:'4px 11px', borderRadius:'99px', fontSize:'12px', fontWeight: isActive ? 700 : 500, border:'1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent', color: isActive ? BLUE : MUTED, cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{org.name}</button>
               )
             })}
           </div>
         )}
-        <div style={{ marginLeft:'auto', fontSize:'12px', color:MUTED }}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</div>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
+          {/* Delete selected — only shown when items are checked */}
+          {selectedIds.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              aria-label={'Delete ' + selectedIds.length + ' selected items'}
+              style={{ display:'flex', alignItems:'center', gap:'5px', padding:'5px 11px', borderRadius:'8px', border:'1px solid rgba(239,68,68,0.35)', background:'rgba(239,68,68,0.06)', color:RED, fontSize:'12px', fontWeight:700, cursor:'pointer' }}
+              className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              <IcoTrash /> Delete selected ({selectedIds.length})
+            </button>
+          )}
+          {unreadCount > 0 && (
+            <button
+              onClick={onMarkAllRead}
+              aria-label={'Mark all ' + unreadCount + ' items as read'}
+              style={{ display:'flex', alignItems:'center', gap:'5px', padding:'5px 11px', borderRadius:'8px', border:'1px solid ' + BDR, background:'transparent', color:TEXT2, fontSize:'12px', fontWeight:600, cursor:'pointer' }}
+              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <IcoCheck /> Mark all read
+            </button>
+          )}
+          {items.length > 0 && (
+            <button
+              onClick={function() { onDeleteAll(null); setSelectedIds([]) }}
+              aria-label="Clear all recent activity"
+              style={{ display:'flex', alignItems:'center', gap:'5px', padding:'5px 11px', borderRadius:'8px', border:'1px solid rgba(239,68,68,0.25)', background:'transparent', color:RED, fontSize:'12px', fontWeight:600, cursor:'pointer' }}
+              className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              <IcoTrash /> Clear all
+            </button>
+          )}
+          <span style={{ fontSize:'12px', color:MUTED }}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
+
       {filtered.length === 0 ? (
         <p style={{ textAlign:'center', fontSize:'13px', color:MUTED, padding:'24px 0' }}>No activity for this organization yet.</p>
       ) : (
         <div role="list" aria-label="Recent activity">
+          {/* Select-all header row */}
+          <div style={{ display:'flex', alignItems:'center', gap:'12px', padding:'6px 0 10px', borderBottom:'1px solid ' + BDR, marginBottom:'2px' }}>
+            <input
+              type="checkbox"
+              id="act-select-all"
+              checked={allSelected}
+              ref={function(el) { if (el) el.indeterminate = someSelected }}
+              onChange={toggleSelectAll}
+              aria-label={allSelected ? 'Deselect all items' : 'Select all items'}
+              style={{ width:'15px', height:'15px', accentColor:BLUE, cursor:'pointer', flexShrink:0 }}
+            />
+            <label htmlFor="act-select-all" style={{ fontSize:'11px', fontWeight:600, color:MUTED, cursor:'pointer', userSelect:'none' }}>
+              {allSelected ? 'Deselect all' : someSelected ? selectedIds.length + ' selected' : 'Select all'}
+            </label>
+          </div>
+
           {filtered.map(function(item, idx) {
-            var cfg = getActivityConfig(item.type)
+            var cfg       = getActivityConfig(item.type)
+            var isRead    = readActivityIds.includes(item.id)
+            var isChecked = selectedIds.includes(item.id)
+            var org       = (organizations || []).find(function(o) { return o.id === item.orgId })
+            var orgIdx    = (organizations || []).findIndex(function(o) { return o.id === item.orgId })
+            var fallbackBg = AVATAR_COLORS[orgIdx >= 0 ? orgIdx % AVATAR_COLORS.length : 0]
             return (
-              <div key={item.id} role="listitem" style={{ display:'flex', alignItems:'flex-start', gap:'12px', padding:'12px 0', borderBottom: idx < filtered.length - 1 ? '1px solid ' + BDR : 'none' }}>
-                {function() {
-                  var org = (organizations || []).find(function(o) { return o.id === item.orgId })
-                  var orgIdx = (organizations || []).findIndex(function(o) { return o.id === item.orgId })
-                  var fallbackBg = AVATAR_COLORS[orgIdx >= 0 ? orgIdx % AVATAR_COLORS.length : 0]
-                  if (org && org.logo_url) {
-                    return <img src={org.logo_url} alt={org.name + ' logo'} style={{ width:'36px', height:'36px', borderRadius:'50%', objectFit:'cover', flexShrink:0, border:'1px solid ' + BDR }} />
-                  }
-                  return <div style={{ width:'36px', height:'36px', borderRadius:'50%', flexShrink:0, background: fallbackBg, color:'#FFFFFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700 }}>{getInitials(item.orgName)}</div>
-                }()}
+              <div
+                key={item.id}
+                role="listitem"
+                style={{ display:'flex', alignItems:'flex-start', gap:'12px', padding:'12px 0', borderBottom: idx < filtered.length - 1 ? '1px solid ' + BDR : 'none', opacity: isRead ? 0.55 : 1, transition: 'opacity 0.15s', background: isChecked ? 'rgba(59,130,246,0.04)' : 'transparent', borderRadius: isChecked ? '6px' : 0 }}
+              >
+                {/* Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={function() { toggleSelectOne(item.id) }}
+                  aria-label={'Select: ' + item.title}
+                  style={{ width:'15px', height:'15px', accentColor:BLUE, cursor:'pointer', flexShrink:0, marginTop:'10px' }}
+                />
+                {/* Org avatar */}
+                {org && org.logo_url
+                  ? <img src={org.logo_url} alt={org.name + ' logo'} style={{ width:'36px', height:'36px', borderRadius:'50%', objectFit:'cover', flexShrink:0, border:'1px solid ' + BDR }} />
+                  : <div style={{ width:'36px', height:'36px', borderRadius:'50%', flexShrink:0, background: fallbackBg, color:'#FFFFFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700 }}>{getInitials(item.orgName)}</div>
+                }
                 <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontSize:'13px', fontWeight:600, color:TEXT, margin:'0 0 3px', lineHeight:1.4 }}>{item.title}</p>
+                  <p style={{ fontSize:'13px', fontWeight: isRead ? 400 : 600, color: isRead ? TEXT2 : TEXT, margin:'0 0 3px', lineHeight:1.4 }}>{item.title}</p>
                   <div style={{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
                     {item.orgName && <span style={{ fontSize:'11px', fontWeight:600, color:BLUE }}>{item.orgName}</span>}
                     <span style={{ fontSize:'11px', color:MUTED }}>{timeAgo(item.timestamp)}</span>
                   </div>
                 </div>
-                <span style={{ flexShrink:0, fontSize:'11px', fontWeight:500, color:MUTED }}>{cfg.label}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
+                  <span style={{ fontSize:'11px', fontWeight:500, color:MUTED }}>{cfg.label}</span>
+                  <button
+                    onClick={function() { isRead ? onMarkUnread(item.id) : onMarkRead(item.id) }}
+                    aria-label={isRead ? 'Mark ' + item.title + ' as unread' : 'Mark ' + item.title + ' as read'}
+                    title={isRead ? 'Mark unread' : 'Mark read'}
+                    style={{ width:'26px', height:'26px', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid ' + BDR, borderRadius:'6px', background: isRead ? '#F1F5F9' : 'transparent', color: isRead ? MUTED : GREEN, cursor:'pointer', flexShrink:0 }}
+                    className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {isRead ? <IcoEyeOff /> : <IcoEye />}
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -1060,32 +1140,74 @@ function InlineDashboardCalendar({ events, organizations, orgColors, onColorChan
   )
 }
 
-// ─── InlineDashboardEventList ─────────────────────────────────────────────
+// ─── Task 40 — InlineDashboardEventList with date range filter ────────────
+var DATE_RANGE_PRESETS = [
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'thisweek', label: 'This week' },
+  { key: 'thismonth', label: 'This month' },
+  { key: 'past', label: 'Past' },
+  { key: 'all', label: 'All' },
+  { key: 'custom', label: 'Custom range' },
+]
+
 function InlineDashboardEventList({ events, organizations, orgColors, onColorChange }) {
   var navigate = useNavigate()
-  var [listSearch,     setListSearch]     = useState('')
-  var [listDateFilter, setListDateFilter] = useState('upcoming')
-  var [listOrgFilter,  setListOrgFilter]  = useState('all')
-  var [listSort,       setListSort]       = useState('asc')
+  var [listSearch,    setListSearch]    = useState('')
+  var [listDateRange, setListDateRange] = useState('upcoming')   // replaces listDateFilter
+  var [customFrom,    setCustomFrom]    = useState('')
+  var [customTo,      setCustomTo]      = useState('')
+  var [listOrgFilter, setListOrgFilter] = useState('all')
+  var [listSort,      setListSort]      = useState('asc')
+
   function getScheme(orgId, fallbackIdx) {
     var saved = orgColors[orgId]
     if (saved) { var match = PALETTE.find(function(p) { return p.color === saved }); if (match) return { card: match.card, tag: match.color, tagText: match.tagText } }
     var p = PALETTE[fallbackIdx % PALETTE.length]
     return { card: p.card, tag: p.color, tagText: p.tagText }
   }
+
   var now = new Date()
+
+  // Build date bounds from preset or custom
+  function getDateBounds() {
+    if (listDateRange === 'upcoming') return { from: now, to: null }
+    if (listDateRange === 'past')     return { from: null, to: now }
+    if (listDateRange === 'all')      return { from: null, to: null }
+    if (listDateRange === 'thisweek') {
+      var startOfWk = new Date(now); startOfWk.setDate(now.getDate() - now.getDay()); startOfWk.setHours(0,0,0,0)
+      var endOfWk   = new Date(startOfWk); endOfWk.setDate(startOfWk.getDate() + 6); endOfWk.setHours(23,59,59,999)
+      return { from: startOfWk, to: endOfWk }
+    }
+    if (listDateRange === 'thismonth') {
+      var startOfMo = new Date(now.getFullYear(), now.getMonth(), 1)
+      var endOfMo   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+      return { from: startOfMo, to: endOfMo }
+    }
+    if (listDateRange === 'custom') {
+      return {
+        from: customFrom ? new Date(customFrom + 'T00:00:00') : null,
+        to:   customTo   ? new Date(customTo   + 'T23:59:59') : null,
+      }
+    }
+    return { from: null, to: null }
+  }
+
+  var bounds   = getDateBounds()
   var filtered = events.slice()
-  if (listSearch) filtered = filtered.filter(function(ev) { return ev.title.toLowerCase().includes(listSearch.toLowerCase()) || (ev.location && ev.location.toLowerCase().includes(listSearch.toLowerCase())) })
+  if (listSearch)              filtered = filtered.filter(function(ev) { return ev.title.toLowerCase().includes(listSearch.toLowerCase()) || (ev.location && ev.location.toLowerCase().includes(listSearch.toLowerCase())) })
   if (listOrgFilter !== 'all') filtered = filtered.filter(function(ev) { return (ev.organization_id || (ev.organization && ev.organization.id)) === listOrgFilter })
-  if (listDateFilter === 'upcoming') filtered = filtered.filter(function(ev) { return new Date(ev.start_time) >= now })
-  else if (listDateFilter === 'past') filtered = filtered.filter(function(ev) { return new Date(ev.start_time) < now })
+  if (bounds.from)             filtered = filtered.filter(function(ev) { return new Date(ev.start_time) >= bounds.from })
+  if (bounds.to)               filtered = filtered.filter(function(ev) { return new Date(ev.start_time) <= bounds.to })
   filtered.sort(function(a, b) { var da = new Date(a.start_time), db = new Date(b.start_time); return listSort === 'asc' ? da - db : db - da })
+
   var inpStyle = { width: '100%', padding: '7px 10px', fontSize: '13px', background: '#FFFFFF', border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, outline: 'none' }
   var lblStyle = { display: 'block', fontSize: '10px', fontWeight: 700, color: MUTED, marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.5px' }
+
   return (
     <div>
+      {/* Filter panel */}
       <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: _cardShadow }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '12px', marginBottom: listDateRange === 'custom' ? '12px' : 0 }}>
           <div>
             <label htmlFor="il-search" style={lblStyle}>Search</label>
             <input id="il-search" type="text" placeholder="Name, location..." value={listSearch} onChange={function(e) { setListSearch(e.target.value) }} style={inpStyle} className="focus:ring-2 focus:ring-blue-500" />
@@ -1100,14 +1222,6 @@ function InlineDashboardEventList({ events, organizations, orgColors, onColorCha
             </div>
           )}
           <div>
-            <label htmlFor="il-date" style={lblStyle}>Time Period</label>
-            <select id="il-date" value={listDateFilter} onChange={function(e) { setListDateFilter(e.target.value) }} style={inpStyle} className="focus:ring-2 focus:ring-blue-500">
-              <option value="upcoming">Upcoming</option>
-              <option value="past">Past</option>
-              <option value="all">All Events</option>
-            </select>
-          </div>
-          <div>
             <label htmlFor="il-sort" style={lblStyle}>Sort</label>
             <select id="il-sort" value={listSort} onChange={function(e) { setListSort(e.target.value) }} style={inpStyle} className="focus:ring-2 focus:ring-blue-500">
               <option value="asc">Earliest First</option>
@@ -1115,8 +1229,45 @@ function InlineDashboardEventList({ events, organizations, orgColors, onColorCha
             </select>
           </div>
         </div>
+
+        {/* Date range preset chips — replaces "Time Period" dropdown */}
+        <div style={{ marginTop: '12px' }}>
+          <p style={lblStyle}>Date Range</p>
+          <div role="group" aria-label="Date range filter" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {DATE_RANGE_PRESETS.map(function(preset) {
+              var isActive = listDateRange === preset.key
+              return (
+                <button
+                  key={preset.key}
+                  onClick={function() { setListDateRange(preset.key) }}
+                  aria-pressed={isActive}
+                  style={{ padding: '5px 13px', borderRadius: '99px', border: '1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.1)' : 'transparent', color: isActive ? BLUE : MUTED, fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Custom date inputs — only shown when custom is selected */}
+        {listDateRange === 'custom' && (
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '130px' }}>
+              <label htmlFor="il-from" style={lblStyle}>From</label>
+              <input id="il-from" type="date" value={customFrom} onChange={function(e) { setCustomFrom(e.target.value) }} style={inpStyle} className="focus:ring-2 focus:ring-blue-500" aria-label="Start date" />
+            </div>
+            <div style={{ flex: 1, minWidth: '130px' }}>
+              <label htmlFor="il-to" style={lblStyle}>To</label>
+              <input id="il-to" type="date" value={customTo} min={customFrom} onChange={function(e) { setCustomTo(e.target.value) }} style={inpStyle} className="focus:ring-2 focus:ring-blue-500" aria-label="End date" />
+            </div>
+          </div>
+        )}
       </div>
+
       <OrgColorLegend organizations={organizations} orgColors={orgColors} onColorChange={onColorChange} />
+
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 24px', border: '1px dashed ' + BDR, borderRadius: '12px', color: MUTED }}>
           <p style={{ fontSize: '14px', fontWeight: 600, color: TEXT, marginBottom: '4px' }}>No events found</p>
@@ -1160,27 +1311,27 @@ function UnifiedDashboard() {
   var [followedOrgs,        setFollowedOrgs]         = useState([])
   var [followedEvents,      setFollowedEvents]       = useState([])
   var [myGroups,            setMyGroups]             = useState([])
+  var [calendarEvents,      setCalendarEvents]       = useState([])
+  var [recentActivity,      setRecentActivity]       = useState([])
   var [loading,             setLoading]              = useState(true)
   var [error,               setError]                = useState(null)
   var [currentUserId,       setCurrentUserId]        = useState(null)
   var [memberName,          setMemberName]           = useState('')
   var [removingSaved,       setRemovingSaved]        = useState(null)
   var [unfollowingId,       setUnfollowingId]        = useState(null)
+  var [activityLoading,     setActivityLoading]      = useState(false)
 
   // ── UI state ──
   var [activeTab,           setActiveTab]            = useState('all')
   var [eventsView,          setEventsView]           = useState('list')
-  var [recentActivity,      setRecentActivity]       = useState([])
-  var [activityLoading,     setActivityLoading]      = useState(false)
-  var [calendarEvents,      setCalendarEvents]       = useState([])
   var [orgFilter,           setOrgFilter]            = useState('all')
   var [dateFilter,          setDateFilter]           = useState('2weeks')
-  var [dismissedActivities, setDismissedActivities]  = useState(function() {
-    try { return JSON.parse(localStorage.getItem('dismissedActivities') || '[]') } catch { return [] }
-  })
-  var [importantActivities, setImportantActivities]  = useState(function() {
-    try { return JSON.parse(localStorage.getItem('importantActivities') || '[]') } catch { return [] }
-  })
+
+  // ── localStorage state (Rec #2: capped at LS_CAP) ──
+  var [dismissedActivities, setDismissedActivities]  = useState(function() { return lsRead('dismissedActivities') })
+  var [importantActivities, setImportantActivities]  = useState(function() { return lsRead('importantActivities') })
+  // Task 41 — read activity ids
+  var [readActivityIds,     setReadActivityIds]      = useState(function() { return lsRead('readActivityIds') })
 
   // ── Preferences state ──
   var [activeWidgets,       setActiveWidgets]        = useState(['orgs', 'chats'])
@@ -1241,7 +1392,7 @@ function UnifiedDashboard() {
     }
   }, [loading])
 
-  // ── Load preferences ──
+  // ── Preferences ──
   async function loadPreferences(userId) {
     var res = await supabase.from('dashboard_preferences').select('widgets, org_colors').eq('user_id', userId).single()
     if (res.data) {
@@ -1255,19 +1406,162 @@ function UnifiedDashboard() {
     setPrefLoaded(true)
   }
 
-  // ── Save preferences ──
   async function savePreferences(widgets, colors) {
     if (!currentUserId) return
     await supabase.from('dashboard_preferences').upsert({ user_id: currentUserId, widgets: widgets, org_colors: colors, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
   }
 
-  // ── Fetch recent activity ──
-  async function fetchRecentActivity(orgIds) {
+  // ── Rec #3: Split fetch functions ─────────────────────────────────────────
+
+  async function loadProfile(userId) {
+    var res = await supabase.from('members').select('first_name, last_name').eq('user_id', userId).single()
+    if (res.data) setMemberName((res.data.first_name + ' ' + (res.data.last_name || '')).trim())
+  }
+
+  async function loadOrgs(userId) {
+    var res = await supabase
+      .from('memberships')
+      .select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)')
+      .eq('member_id', userId)
+      .eq('status', 'active')
+      .order('joined_date', { ascending: false })
+    if (res.error) throw res.error
+    var orgsWithStats = await Promise.all((res.data || []).map(async function(membership) {
+      var orgId = membership.organization.id
+      var annRes = await supabase.from('announcements').select('id').eq('organization_id', orgId).in('visibility', ['public', 'members'])
+      var announcementIds = (annRes.data || []).map(function(a) { return a.id })
+      var unreadCount = 0
+      if (announcementIds.length > 0) {
+        var reads = (await supabase.from('announcement_reads').select('announcement_id').eq('member_id', userId).in('announcement_id', announcementIds)).data
+        var readIds = new Set((reads || []).map(function(r) { return r.announcement_id }))
+        unreadCount = announcementIds.length - readIds.size
+      }
+      var eventCount = (await supabase.from('events').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members'])).count
+      return Object.assign({}, membership.organization, { role: membership.role, custom_title: membership.custom_title, eventCount: eventCount || 0, unreadCount: unreadCount })
+    }))
+    setOrganizations(orgsWithStats)
+    return orgsWithStats
+  }
+
+  async function loadGroups(userId) {
+    try {
+      var res = await supabase
+        .from('org_group_members')
+        .select('group:org_groups (id, name, organization_id, type, organizations(name))')
+        .eq('member_id', userId)
+        .eq('status', 'active')
+      if (res.data) setMyGroups(res.data.map(function(gm) { return gm.group }).filter(Boolean))
+    } catch(e) { console.error('loadGroups error:', e); setMyGroups([]) }
+  }
+
+  async function loadFollowed(userId) {
+    var followRes = await supabase
+      .from('org_followers')
+      .select('org_id, organizations (id, name, logo_url, type)')
+      .eq('user_id', userId)
+    var followedOrgData = (followRes.data || []).map(function(f) { return f.organizations }).filter(Boolean)
+    setFollowedOrgs(followedOrgData)
+    if (followedOrgData.length > 0) {
+      var followedOrgIds = followedOrgData.map(function(o) { return o.id })
+      var evtRes = await supabase
+        .from('events')
+        .select('id, title, start_time, location, organization:organizations (id, name)')
+        .in('organization_id', followedOrgIds)
+        .gte('start_time', new Date().toISOString())
+        .eq('visibility', 'public')
+        .order('start_time', { ascending: true })
+        .limit(12)
+      setFollowedEvents(evtRes.data || [])
+    }
+  }
+
+  async function loadSaved(userId) {
+    var res = await supabase
+      .from('event_saves')
+      .select('id, events(id, title, start_time, location, organizations(id, name))')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(12)
+    setSavedEvents(res.data || [])
+  }
+
+  async function loadChats() {
+    var res = await supabase
+      .from('chat_messages')
+      .select('id, content, created_at, chat_channels(name, organization_id, organizations(name))')
+      .order('created_at', { ascending: false })
+      .limit(4)
+    if (res.data) setRecentChats(res.data)
+  }
+
+  // Task 42: include start_time in event feed query
+  async function loadFeed(orgIds) {
+    var evtUpcoming = await supabase
+      .from('events')
+      .select('id, title, start_time, location, organization:organizations (id, name, type)')
+      .in('organization_id', orgIds)
+      .gte('start_time', new Date().toISOString())
+      .in('visibility', ['public', 'members'])
+      .order('start_time', { ascending: true })
+      .limit(5)
+    setUpcomingEvents(evtUpcoming.data || [])
+
+    var annFeed = await supabase
+      .from('announcements')
+      .select('id, title, created_at, priority, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .in('visibility', ['public', 'members'])
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+    // Task 42: fetch start_time alongside events in the feed
+    var evtFeed = await supabase
+      .from('events')
+      .select('id, title, start_time, created_at, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .in('visibility', ['public', 'members'])
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+    var docFeed = await supabase
+      .from('documents')
+      .select('id, title, created_at, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+    var all = [
+      ...(annFeed.data || []).map(function(item) {
+        return { id: 'announcement-' + item.id, type: 'announcement', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, priority: item.priority, time: timeAgo(item.created_at) }
+      }),
+      ...(evtFeed.data || []).map(function(item) {
+        // Task 42: store start_time so we can filter past events
+        return { id: 'event-' + item.id, type: 'event', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, startTime: item.start_time, time: timeAgo(item.created_at) }
+      }),
+      ...(docFeed.data || []).map(function(item) {
+        return { id: 'document-' + item.id, type: 'document', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) }
+      }),
+    ]
+    all.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
+    setActivities(all)
+  }
+
+  async function loadCalendar(orgIds) {
+    var res = await supabase
+      .from('events')
+      .select('id, title, start_time, location, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .in('visibility', ['public', 'members'])
+      .order('start_time', { ascending: true })
+      .limit(200)
+    setCalendarEvents(res.data || [])
+  }
+
+  async function loadRecentActivity(orgIds) {
     if (!orgIds || orgIds.length === 0) return
     setActivityLoading(true)
     try {
       var cutoff = new Date(Date.now() - 90 * 86400000).toISOString()
-      // Fix: members uses first_name + last_name, joined via memberships
       var membersRes  = await supabase.from('memberships').select('id, joined_date, role, members(first_name, last_name), organizations(id, name)').in('organization_id', orgIds).eq('status', 'active').gte('joined_date', cutoff).order('joined_date', { ascending: false }).limit(30)
       var docsRes     = await supabase.from('documents').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
       var pollsRes    = await supabase.from('polls').select('id, question, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
@@ -1279,18 +1573,18 @@ function UnifiedDashboard() {
         var mn = m.members ? (m.members.first_name + ' ' + m.members.last_name).trim() : 'A new member'
         items.push({ id: 'member-' + m.id, type: 'member_joined', title: (mn || 'Someone') + ' joined as ' + (m.role || 'member'), orgName: m.organizations ? m.organizations.name : '', orgId: m.organizations ? m.organizations.id : null, timestamp: m.joined_date })
       })
-      ;(docsRes.data || []).forEach(function(d) { items.push({ id: 'doc-' + d.id, type: 'document', title: d.title, orgName: d.organizations ? d.organizations.name : '', orgId: d.organizations ? d.organizations.id : null, timestamp: d.created_at }) })
-      ;(pollsRes.data || []).forEach(function(p) { items.push({ id: 'poll-' + p.id, type: 'poll', title: p.question, orgName: p.organizations ? p.organizations.name : '', orgId: p.organizations ? p.organizations.id : null, timestamp: p.created_at }) })
-      ;(surveysRes.data || []).forEach(function(s) { items.push({ id: 'survey-' + s.id, type: 'survey', title: s.title, orgName: s.organizations ? s.organizations.name : '', orgId: s.organizations ? s.organizations.id : null, timestamp: s.created_at }) })
-      ;(formsRes.data || []).forEach(function(f) { items.push({ id: 'form-' + f.id, type: 'signup_form', title: f.title, orgName: f.organizations ? f.organizations.name : '', orgId: f.organizations ? f.organizations.id : null, timestamp: f.created_at }) })
-      ;(programsRes.data || []).forEach(function(pr) { items.push({ id: 'program-' + pr.id, type: 'program', title: pr.name, orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at }) })
+      ;(docsRes.data     || []).forEach(function(d)  { items.push({ id: 'doc-'     + d.id,  type: 'document',    title: d.title,    orgName: d.organizations  ? d.organizations.name  : '', orgId: d.organizations  ? d.organizations.id  : null, timestamp: d.created_at  }) })
+      ;(pollsRes.data    || []).forEach(function(p)  { items.push({ id: 'poll-'    + p.id,  type: 'poll',        title: p.question, orgName: p.organizations  ? p.organizations.name  : '', orgId: p.organizations  ? p.organizations.id  : null, timestamp: p.created_at  }) })
+      ;(surveysRes.data  || []).forEach(function(s)  { items.push({ id: 'survey-'  + s.id,  type: 'survey',      title: s.title,    orgName: s.organizations  ? s.organizations.name  : '', orgId: s.organizations  ? s.organizations.id  : null, timestamp: s.created_at  }) })
+      ;(formsRes.data    || []).forEach(function(f)  { items.push({ id: 'form-'    + f.id,  type: 'signup_form', title: f.title,    orgName: f.organizations  ? f.organizations.name  : '', orgId: f.organizations  ? f.organizations.id  : null, timestamp: f.created_at  }) })
+      ;(programsRes.data || []).forEach(function(pr) { items.push({ id: 'program-' + pr.id, type: 'program',     title: pr.name,    orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at }) })
       items.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
       setRecentActivity(items)
-    } catch (err) { console.error('fetchRecentActivity error:', err) }
+    } catch(err) { console.error('loadRecentActivity error:', err) }
     finally { setActivityLoading(false) }
   }
 
-  // ── Main data fetch ──
+  // ── Rec #3: fetchAll now orchestrates the split loaders ──────────────────
   async function fetchAll() {
     try {
       setLoading(true); setError(null)
@@ -1299,79 +1593,27 @@ function UnifiedDashboard() {
       var user = userRes.data.user
       if (!user) { setLoading(false); return }
       setCurrentUserId(user.id)
-      await loadPreferences(user.id)
 
-      // Fix: members.user_id (not id), first_name + last_name (not full_name)
-      var profileRes = await supabase.from('members').select('first_name, last_name').eq('user_id', user.id).single()
-      if (profileRes.data) setMemberName((profileRes.data.first_name + ' ' + (profileRes.data.last_name || '')).trim())
+      await Promise.all([
+        loadPreferences(user.id),
+        loadProfile(user.id),
+        loadFollowed(user.id),
+        loadSaved(user.id),
+        loadChats(),
+        loadGroups(user.id),
+      ])
 
-      // Orgs + unread counts
-      var orgsRes = await supabase.from('memberships').select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)').eq('member_id', user.id).eq('status', 'active').order('joined_date', { ascending: false })
-      if (orgsRes.error) throw orgsRes.error
-      var orgsWithStats = await Promise.all((orgsRes.data || []).map(async function(membership) {
-        var orgId = membership.organization.id
-        var annRes = await supabase.from('announcements').select('id').eq('organization_id', orgId).in('visibility', ['public', 'members'])
-        var announcementIds = (annRes.data || []).map(function(a) { return a.id })
-        var unreadCount = 0
-        if (announcementIds.length > 0) {
-          var reads = (await supabase.from('announcement_reads').select('announcement_id').eq('member_id', user.id).in('announcement_id', announcementIds)).data
-          var readIds = new Set((reads || []).map(function(r) { return r.announcement_id }))
-          unreadCount = announcementIds.length - readIds.size
-        }
-        var eventCount = (await supabase.from('events').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members'])).count
-        return Object.assign({}, membership.organization, { role: membership.role, custom_title: membership.custom_title, eventCount: eventCount || 0, unreadCount: unreadCount })
-      }))
-      setOrganizations(orgsWithStats)
-
-      // Fix: org_group_members + org_groups (not group_members + groups)
-      try {
-        var groupsRes = await supabase.from('org_group_members').select('group:org_groups (id, name, organization_id, type, organizations(name))').eq('member_id', user.id).eq('status', 'active')
-        if (groupsRes.data) setMyGroups(groupsRes.data.map(function(gm) { return gm.group }).filter(Boolean))
-      } catch(e) { console.error('groups fetch error:', e); setMyGroups([]) }
-
-      // Followed orgs
-      var followRes = await supabase.from('org_followers').select('org_id, organizations (id, name, logo_url, type)').eq('user_id', user.id)
-      var followedOrgData = (followRes.data || []).map(function(f) { return f.organizations }).filter(Boolean)
-      setFollowedOrgs(followedOrgData)
-      if (followedOrgData.length > 0) {
-        var followedOrgIds = followedOrgData.map(function(o) { return o.id })
-        var followedEvtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name)').in('organization_id', followedOrgIds).gte('start_time', new Date().toISOString()).eq('visibility', 'public').order('start_time', { ascending: true }).limit(12)
-        setFollowedEvents(followedEvtRes.data || [])
-      }
-
-      // Saved events
-      var savesRes = await supabase.from('event_saves').select('id, events(id, title, start_time, location, organizations(id, name))').eq('user_id', user.id).order('created_at', { ascending: false }).limit(12)
-      setSavedEvents(savesRes.data || [])
-
+      var orgsWithStats = await loadOrgs(user.id)
       var orgIds = orgsWithStats.map(function(o) { return o.id })
+
       if (orgIds.length > 0) {
-        // Upcoming events
-        var evtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name, type)').in('organization_id', orgIds).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members']).order('start_time', { ascending: true }).limit(5)
-        setUpcomingEvents(evtRes.data || [])
-
-        // Activity feed
-        var annFeed = await supabase.from('announcements').select('id, title, created_at, priority, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('created_at', { ascending: false }).limit(30)
-        var evtFeed = await supabase.from('events').select('id, title, created_at, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('created_at', { ascending: false }).limit(30)
-        var docFeed = await supabase.from('documents').select('id, title, created_at, organization:organizations (id, name)').in('organization_id', orgIds).order('created_at', { ascending: false }).limit(30)
-        var all = [
-          ...(annFeed.data || []).map(function(item) { return { id: 'announcement-' + item.id, type: 'announcement', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, priority: item.priority, time: timeAgo(item.created_at) } }),
-          ...(evtFeed.data  || []).map(function(item) { return { id: 'event-' + item.id,        type: 'event',        title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) } }),
-          ...(docFeed.data  || []).map(function(item) { return { id: 'document-' + item.id,     type: 'document',     title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) } }),
-        ]
-        all.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
-        setActivities(all)
-
-        // Calendar events
-        var calEvtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('start_time', { ascending: true }).limit(200)
-        setCalendarEvents(calEvtRes.data || [])
-
-        // Chats
-        var chatRes = await supabase.from('chat_messages').select('id, content, created_at, chat_channels(name, organization_id, organizations(name))').order('created_at', { ascending: false }).limit(4)
-        if (chatRes.data) setRecentChats(chatRes.data)
-
-        await fetchRecentActivity(orgIds)
+        await Promise.all([
+          loadFeed(orgIds),
+          loadCalendar(orgIds),
+          loadRecentActivity(orgIds),
+        ])
       }
-    } catch (err) {
+    } catch(err) {
       console.error(err); setError(err.message)
       toast.error('Failed to load dashboard.')
     } finally {
@@ -1381,19 +1623,45 @@ function UnifiedDashboard() {
 
   // ── Handlers ──
   function handleDismiss(id) {
-    var updated = dismissedActivities.concat([id])
+    var updated = lsWrite('dismissedActivities', dismissedActivities.concat([id]))
     setDismissedActivities(updated)
-    localStorage.setItem('dismissedActivities', JSON.stringify(updated))
     mascotSuccessToast('Removed from board.')
   }
   function handleToggleImportant(id) {
     var updated = importantActivities.includes(id)
       ? importantActivities.filter(function(i) { return i !== id })
       : importantActivities.concat([id])
+    updated = lsWrite('importantActivities', updated)
     setImportantActivities(updated)
-    localStorage.setItem('importantActivities', JSON.stringify(updated))
     mascotSuccessToast(updated.includes(id) ? 'Starred.' : 'Star removed.')
   }
+
+  // Task 41 handlers
+  function handleMarkRead(id) {
+    var updated = lsWrite('readActivityIds', readActivityIds.concat([id]))
+    setReadActivityIds(updated)
+  }
+  function handleMarkUnread(id) {
+    var updated = lsWrite('readActivityIds', readActivityIds.filter(function(i) { return i !== id }))
+    setReadActivityIds(updated)
+  }
+  function handleMarkAllRead() {
+    var allIds = recentActivity.map(function(i) { return i.id })
+    var merged = Array.from(new Set(readActivityIds.concat(allIds)))
+    var updated = lsWrite('readActivityIds', merged)
+    setReadActivityIds(updated)
+    mascotSuccessToast('All activity marked as read.')
+  }
+  function handleDeleteAllActivity(idsToDelete) {
+    // idsToDelete = array of specific IDs (delete selected), or null (clear all)
+    var toRemove = idsToDelete ? new Set(idsToDelete) : new Set(recentActivity.map(function(i) { return i.id }))
+    setRecentActivity(function(prev) { return prev.filter(function(i) { return !toRemove.has(i.id) }) })
+    var updated = lsWrite('readActivityIds', readActivityIds.filter(function(i) { return !toRemove.has(i) }))
+    setReadActivityIds(updated)
+    var count = toRemove.size
+    mascotSuccessToast(idsToDelete ? count + ' item' + (count !== 1 ? 's' : '') + ' deleted.' : 'Activity cleared.')
+  }
+
   async function handleUnfollow(orgId, orgName) {
     var userRes = await supabase.auth.getUser()
     var user = userRes.data.user
@@ -1443,6 +1711,8 @@ function UnifiedDashboard() {
   organizations.forEach(function(org, idx) { orgIndexMap[org.id] = idx })
   var totalUnread = organizations.reduce(function(sum, org) { return sum + (org.unreadCount || 0) }, 0)
   var visibleActivities = activities.filter(function(a) { return !dismissedActivities.includes(a.id) })
+  var now = new Date()
+
   var DATE_FILTER_OPTIONS = [
     { key: 'week',    label: 'This week'     },
     { key: '2weeks',  label: 'Last 2 weeks'  },
@@ -1455,6 +1725,7 @@ function UnifiedDashboard() {
     if (!days[filter]) return null
     return new Date(Date.now() - days[filter] * 86400000)
   }
+
   function getFilteredFeed(typeFilter) {
     var cutoff = getDateCutoff(dateFilter)
     return visibleActivities
@@ -1462,6 +1733,8 @@ function UnifiedDashboard() {
         var typeMatch = typeFilter === 'all' || a.type === typeFilter
         var orgMatch  = orgFilter === 'all' || a.organizationId === orgFilter
         var dateMatch = !cutoff || new Date(a.timestamp) >= cutoff
+        // Task 42: auto-hide event cards where start_time is in the past
+        if (a.type === 'event' && a.startTime && new Date(a.startTime) < now) return false
         return typeMatch && orgMatch && dateMatch
       })
       .slice()
@@ -1472,9 +1745,10 @@ function UnifiedDashboard() {
         return new Date(b.timestamp) - new Date(a.timestamp)
       })
   }
+
   var sevenDaysAgo = new Date(Date.now() - 7 * 86400000)
   var tabCounts = {
-    events:        visibleActivities.filter(function(a) { return a.type === 'event'        && new Date(a.timestamp) >= sevenDaysAgo }).length,
+    events:        visibleActivities.filter(function(a) { return a.type === 'event'        && new Date(a.timestamp) >= sevenDaysAgo && !(a.startTime && new Date(a.startTime) < now) }).length,
     announcements: visibleActivities.filter(function(a) { return a.type === 'announcement' && new Date(a.timestamp) >= sevenDaysAgo }).length,
   }
   var TABS = [
@@ -1508,7 +1782,19 @@ function UnifiedDashboard() {
       )
     }
     if (activeTab === 'activity') {
-      return <RecentActivityFeed items={recentActivity} loading={activityLoading} orgColors={orgColors} organizations={organizations} />
+      return (
+        <RecentActivityFeed
+          items={recentActivity}
+          loading={activityLoading}
+          orgColors={orgColors}
+          organizations={organizations}
+          readActivityIds={readActivityIds}
+          onMarkRead={handleMarkRead}
+          onMarkUnread={handleMarkUnread}
+          onMarkAllRead={handleMarkAllRead}
+          onDeleteAll={handleDeleteAllActivity}
+        />
+      )
     }
     if (activeTab === 'events' && eventsView === 'list') {
       return <InlineDashboardEventList events={calendarEvents} organizations={organizations} orgColors={orgColors} onColorChange={handleOrgColorChange} />
@@ -1545,7 +1831,7 @@ function UnifiedDashboard() {
           <p style={{ fontSize: '14px', fontWeight: 600, color: TEXT, marginBottom: '4px' }}>Nothing here</p>
           <p style={{ fontSize: '12px' }}>Try a different filter, or check back when your orgs post updates.</p>
           {dismissedActivities.length > 0 && (
-            <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ marginTop: '12px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+            <button onClick={function() { var u = lsWrite('dismissedActivities', []); setDismissedActivities(u); mascotSuccessToast('Board restored.') }} style={{ marginTop: '12px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
               Restore {dismissedActivities.length} dismissed items
             </button>
           )}
@@ -1558,7 +1844,7 @@ function UnifiedDashboard() {
         <NoteGrid items={feed} orgColors={orgColors} orgIndexMap={orgIndexMap} onDismiss={handleDismiss} onToggleImportant={handleToggleImportant} importantActivities={importantActivities} />
         {dismissedActivities.length > 0 && (
           <div style={{ textAlign: 'center', marginTop: '8px' }}>
-            <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+            <button onClick={function() { var u = lsWrite('dismissedActivities', []); setDismissedActivities(u); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
               Restore {dismissedActivities.length} dismissed
             </button>
           </div>
@@ -1607,9 +1893,18 @@ function UnifiedDashboard() {
           {loading ? (
             [1,2].map(function(i) { return <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}><Skel w="26px" h="26px" radius="50%" /><div style={{ flex: 1 }}><Skel w="60%" h="11px" /><div style={{ marginTop: '4px' }}><Skel w="85%" h="10px" /></div></div></div> })
           ) : recentChats.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '8px 0', color: MUTED }}>
-              <p style={{ fontSize: '12px', marginBottom: '10px' }}>No messages yet.</p>
-              {organizations.length > 0 && <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} style={{ padding: '6px 14px', background: BLUE, color: '#FFF', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Start chatting</button>}
+            // Rec #5: more helpful empty state
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: BLUE }}>
+                <IcoChat />
+              </div>
+              <p style={{ fontSize: '12px', color: TEXT, fontWeight: 600, marginBottom: '4px' }}>No messages yet</p>
+              <p style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5, marginBottom: '10px' }}>Chat channels live inside each organization. Head to your org to start a conversation.</p>
+              {organizations.length > 0 && (
+                <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} style={{ padding: '6px 14px', background: BLUE, color: '#FFF', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  Open Chat
+                </button>
+              )}
             </div>
           ) : (
             recentChats.map(function(msg) {
@@ -1667,7 +1962,7 @@ function UnifiedDashboard() {
           ) : followedOrgs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '6px 0', color: MUTED }}>
               <div style={{ opacity: 0.3, margin: '0 auto 8px', width: 'fit-content' }}><IcoCompass /></div>
-              <p style={{ fontSize: '12px', lineHeight: 1.55, marginBottom: '10px' }}>Follow organizations to see their public events.</p>
+              <p style={{ fontSize: '12px', lineHeight: 1.55, marginBottom: '10px' }}>Follow local nonprofits and see their public events here, even without being a member.</p>
               <Link to="/explore" style={{ display: 'inline-block', padding: '5px 12px', background: 'rgba(139,92,246,0.1)', color: PURPLE, border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }} className="focus:outline-none focus:ring-2 focus:ring-purple-500">Find organizations</Link>
             </div>
           ) : (
@@ -1831,7 +2126,7 @@ function UnifiedDashboard() {
               </div>
             )}
 
-            {/* Filter row */}
+            {/* Filter row — only for feed tabs */}
             {isFeedTab && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderBottom: '1px solid ' + BDR, flexWrap: 'wrap' }}>
                 <OrgFilterDropdown organizations={organizations} selectedOrgId={orgFilter} onChange={setOrgFilter} />
@@ -1844,7 +2139,7 @@ function UnifiedDashboard() {
                 </div>
                 <div style={{ flex: 1 }} />
                 {dismissedActivities.length > 0 && (
-                  <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                  <button onClick={function() { var u = lsWrite('dismissedActivities', []); setDismissedActivities(u); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                     Restore {dismissedActivities.length} hidden
                   </button>
                 )}
