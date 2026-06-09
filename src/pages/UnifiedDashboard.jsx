@@ -13,13 +13,13 @@ import MySignups from '../components/MySignups'
 import TasksWidget from '../components/TasksWidget';
 import InviteMemberModal from '../components/InviteMemberModal'
 import InviteOrgModal from '../components/InviteOrgModal'
-import { UserPlus, Building2 } from 'lucide-react'
+import { UserPlus, Building2, BookmarkCheck, Bookmark, CalendarCheck, ClipboardList } from 'lucide-react'
 
 // ─── react-big-calendar localizer ─────────────────────────────────────────
 var _locales = { 'en-US': enUS }
 var _localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales: _locales })
 
-// ─── Post-it color palette (matches EventCalendar + EventList) ────────────
+// ─── Post-it color palette ────────────────────────────────────────────────
 var PALETTE = [
   { color:'#3B82F6', card:'#DBEAFE', tagText:'#1e3a8a' },
   { color:'#10B981', card:'#D1FAE5', tagText:'#064e3b' },
@@ -48,13 +48,13 @@ var PURPLE = '#8B5CF6'
 var RED    = '#EF4444'
 var GREEN  = '#22C55E'
 
-// ─── Post-it note color presets (for org announcements) ──────────────────
+// ─── Post-it note color presets ───────────────────────────────────────────
 var NOTE_PRESETS = [
   '#FEF9C3','#DCFCE7','#FFEDD5','#FCE7F3',
   '#E0F2FE','#F3E8FF','#FFF7ED','#ECFDF5',
 ]
 
-// ─── Sidebar org/group avatar colors ─────────────────────────────────────
+// ─── Sidebar colors ───────────────────────────────────────────────────────
 var AVATAR_COLORS = ['#3B82F6','#8B5CF6','#F5B731','#22C55E','#EF4444','#EC4899']
 var GROUP_COLORS  = ['#6366F1','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6']
 
@@ -64,7 +64,7 @@ var WIDGET_DEFS = [
   { key: 'chats',     label: 'Recent Chats',      desc: 'Latest channel messages'     },
   { key: 'saved',     label: 'Saved Events',      desc: 'Events you bookmarked'       },
   { key: 'following', label: 'Following',          desc: 'Orgs you follow publicly'   },
-  { key: 'tasks', label: 'My Tasks', desc: 'Tasks assigned to you across orgs' },
+  { key: 'tasks',     label: 'My Tasks',           desc: 'Tasks assigned to you across orgs' },
   { key: 'signups',   label: 'My Sign-Ups',        desc: 'Volunteer sign-up slots'    },
   { key: 'groups',    label: 'My Groups',          desc: 'Committees and teams'       },
 ]
@@ -73,7 +73,7 @@ var WIDGET_DEFS = [
 var TOUR_STEPS = [
   { title: 'Stats at a glance',   desc: 'See your org count, upcoming events, and unread announcements right here.' },
   { title: 'Your activity board', desc: 'Announcements, events, and documents appear as color-coded Post-it cards. Use the tabs to filter by type.' },
-  { title: 'My Organizations',    desc: 'Quick access to every org you belong to. Red badges show unread announcements. Tap the color dot to choose a note color.' },
+  { title: 'My Organizations',    desc: 'Quick access to every org you belong to. Red badges show unread announcements.' },
   { title: 'Customize widgets',   desc: 'Add or remove sidebar widgets — your choices are saved to your account.' },
 ]
 
@@ -87,7 +87,6 @@ function timeAgo(dateStr) {
   if (diff < 604800) return Math.floor(diff / 86400) + 'd ago'
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
-
 function getInitials(name) {
   if (!name) return '?'
   var parts = name.trim().split(' ')
@@ -95,7 +94,6 @@ function getInitials(name) {
     ? parts[0].substring(0, 2).toUpperCase()
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
-
 function fmtDate(iso) {
   if (!iso) return { mon: '—', day: '—', time: '' }
   var d = new Date(iso)
@@ -104,6 +102,11 @@ function fmtDate(iso) {
     day:  d.getDate(),
     time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
   }
+}
+function formatDateShort(ds) {
+  if (!ds) return ''
+  var d = new Date(ds + (ds.includes('T') ? '' : 'T00:00:00'))
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────
@@ -170,11 +173,7 @@ function Skel({ w, h, radius }) {
 // ─── StatCard ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, Icon, accentColor, loading }) {
   return (
-    <div
-      role="region"
-      aria-label={label + ': ' + value}
-      style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '14px 16px' }}
-    >
+    <div role="region" aria-label={label + ': ' + value} style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
         <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: MUTED }}>{label}</span>
         <span style={{ color: accentColor, opacity: 0.7 }}><Icon /></span>
@@ -195,60 +194,30 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange }) {
   var selectedName = isFiltered
     ? ((organizations.find(function(o) { return o.id === selectedOrgId }) || {}).name || 'Org')
     : 'All Orgs'
-
   useEffect(function() {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', handler)
     return function() { document.removeEventListener('mousedown', handler) }
   }, [])
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={function() { setOpen(function(v) { return !v }) }}
-        aria-haspopup="listbox"
-        aria-expanded={open}
+        aria-haspopup="listbox" aria-expanded={open}
         aria-label={'Filter by organization: ' + selectedName}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '5px',
-          padding: '5px 11px', borderRadius: '99px',
-          border: '1px solid ' + (isFiltered ? BLUE : BDR),
-          background: isFiltered ? 'rgba(59,130,246,0.08)' : 'transparent',
-          cursor: 'pointer', fontSize: '12px',
-          fontWeight: isFiltered ? 700 : 500,
-          color: isFiltered ? BLUE : MUTED, whiteSpace: 'nowrap',
-        }}
+        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 11px', borderRadius: '99px', border: '1px solid ' + (isFiltered ? BLUE : BDR), background: isFiltered ? 'rgba(59,130,246,0.08)' : 'transparent', cursor: 'pointer', fontSize: '12px', fontWeight: isFiltered ? 700 : 500, color: isFiltered ? BLUE : MUTED, whiteSpace: 'nowrap' }}
         className="focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <IcoOrgs />{selectedName}<IcoChevronDown />
       </button>
       {open && (
-        <div
-          role="listbox"
-          style={{
-            position: 'absolute', top: 'calc(100% + 5px)', left: 0,
-            background: CARD, border: '1px solid ' + BDR,
-            borderRadius: '10px', padding: '5px', minWidth: '190px',
-            zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
-          }}
-        >
+        <div role="listbox" style={{ position: 'absolute', top: 'calc(100% + 5px)', left: 0, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '5px', minWidth: '190px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
           {[{ id: 'all', name: 'All Organizations' }, ...organizations].map(function(org) {
             var isSel = selectedOrgId === org.id
             return (
-              <button
-                key={org.id}
-                role="option"
-                aria-selected={isSel}
-                onClick={function() { onChange(org.id); setOpen(false) }}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '7px 10px', borderRadius: '6px', border: 'none',
-                  background: isSel ? 'rgba(59,130,246,0.1)' : 'transparent',
-                  color: isSel ? BLUE : TEXT, fontSize: '13px',
-                  fontWeight: isSel ? 700 : 400, cursor: 'pointer',
-                }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >{org.name}</button>
+              <button key={org.id} role="option" aria-selected={isSel} onClick={function() { onChange(org.id); setOpen(false) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: '6px', border: 'none', background: isSel ? 'rgba(59,130,246,0.1)' : 'transparent', color: isSel ? BLUE : TEXT, fontSize: '13px', fontWeight: isSel ? 700 : 400, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {org.name}
+              </button>
             )
           })}
         </div>
@@ -261,60 +230,22 @@ function OrgFilterDropdown({ organizations, selectedOrgId, onChange }) {
 function OrgColorPicker({ orgId, currentColor, onSelect }) {
   var [open, setOpen] = useState(false)
   var ref = useRef(null)
-
   useEffect(function() {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', handler)
     return function() { document.removeEventListener('mousedown', handler) }
   }, [])
-
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <button
-        onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v }) }}
-        aria-label="Change note color for this organization"
-        title="Change note color"
-        style={{
-          width: '18px', height: '18px', borderRadius: '50%',
-          background: currentColor, border: '2px solid ' + BDR,
-          cursor: 'pointer', padding: 0, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <span style={{ color: 'rgba(0,0,0,0.3)', lineHeight: 1, fontSize: '8px' }}>
-          <IcoPalette />
-        </span>
+      <button onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v }) }} aria-label="Change note color for this organization" title="Change note color" style={{ width: '18px', height: '18px', borderRadius: '50%', background: currentColor, border: '2px solid ' + BDR, cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <span style={{ color: 'rgba(0,0,0,0.3)', lineHeight: 1, fontSize: '8px' }}><IcoPalette /></span>
       </button>
       {open && (
-        <div
-          role="dialog"
-          aria-label="Pick a note color"
-          style={{
-            position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-            background: CARD, border: '1px solid ' + BDR,
-            borderRadius: '10px', padding: '10px', zIndex: 200,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-            display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px',
-            width: '120px',
-          }}
-        >
+        <div role="dialog" aria-label="Pick a note color" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px', zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', width: '120px' }}>
           {NOTE_PRESETS.map(function(color) {
             var isSelected = currentColor === color
             return (
-              <button
-                key={color}
-                aria-label={'Select color ' + color + (isSelected ? ', currently selected' : '')}
-                onClick={function() { onSelect(orgId, color); setOpen(false) }}
-                style={{
-                  width: '22px', height: '22px', borderRadius: '50%',
-                  background: color, border: isSelected ? '2px solid ' + TEXT : '2px solid transparent',
-                  cursor: 'pointer', padding: 0,
-                  outline: isSelected ? '2px solid white' : 'none',
-                  outlineOffset: '-4px',
-                }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <button key={color} aria-label={'Select color ' + color + (isSelected ? ', currently selected' : '')} onClick={function() { onSelect(orgId, color); setOpen(false) }} style={{ width: '22px', height: '22px', borderRadius: '50%', background: color, border: isSelected ? '2px solid ' + TEXT : '2px solid transparent', cursor: 'pointer', padding: 0, outline: isSelected ? '2px solid white' : 'none', outlineOffset: '-4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" />
             )
           })}
         </div>
@@ -326,7 +257,6 @@ function OrgColorPicker({ orgId, currentColor, onSelect }) {
 // ─── PostItCard ───────────────────────────────────────────────────────────
 function PostItCard({ item, orgNoteBg, onDismiss, onToggleImportant, isImportant }) {
   var bg, accentColor, tagBgColor, tagTxtColor, tagLabel, TagIcon
-
   if (item.type === 'event') {
     bg = '#DBEAFE'; accentColor = '#1D4ED8'
     tagBgColor = 'rgba(59,130,246,0.2)'; tagTxtColor = '#1E40AF'
@@ -344,150 +274,425 @@ function PostItCard({ item, orgNoteBg, onDismiss, onToggleImportant, isImportant
     tagBgColor = 'rgba(0,0,0,0.1)'; tagTxtColor = '#374151'
     tagLabel = 'Announcement'; TagIcon = IcoMegaphone
   }
-
   return (
     <article
       aria-label={tagLabel + ' from ' + item.organizationName + (isImportant ? ', starred' : '')}
       className="postit-card"
-style={{
-        background: (orgNoteBg && item.priority !== 'urgent') ? orgNoteBg : bg,
-        borderRadius: '12px',
-        padding: '14px',
-        minHeight: '150px',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: isImportant
-          ? '3px 4px 14px rgba(0,0,0,0.12), inset 0 0 0 2px ' + YELLOW
-          : '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
-        position: 'relative',
-      }}
+      style={{ background: (orgNoteBg && item.priority !== 'urgent') ? orgNoteBg : bg, borderRadius: '12px', padding: '14px', minHeight: '150px', display: 'flex', flexDirection: 'column', boxShadow: isImportant ? '3px 4px 14px rgba(0,0,0,0.12), inset 0 0 0 2px ' + YELLOW : '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)', position: 'relative' }}
     >
-      {/* Tag + action buttons */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px', marginBottom: '8px' }}>
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '3px',
-            padding: '2px 7px', borderRadius: '4px',
-            fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-            background: tagBgColor, color: tagTxtColor,
-          }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', background: tagBgColor, color: tagTxtColor }}>
             <TagIcon />{tagLabel}
           </span>
           {isImportant && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '2px',
-              padding: '2px 6px', borderRadius: '4px',
-              fontSize: '9px', fontWeight: 700,
-              background: 'rgba(245,183,49,0.25)', color: '#92400E',
-            }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, background: 'rgba(245,183,49,0.25)', color: '#92400E' }}>
               <IcoStar filled={true} /> Starred
             </span>
           )}
         </div>
         <div className="card-actions" style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
-          <button
-            onClick={function(e) { e.stopPropagation(); onToggleImportant(item.id) }}
-            aria-label={isImportant ? 'Remove star' : 'Star this item'}
-            title={isImportant ? 'Remove star' : 'Star'}
-            style={{
-              width: '22px', height: '22px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: 'none', borderRadius: '4px', cursor: 'pointer',
-              background: isImportant ? 'rgba(245,183,49,0.3)' : 'rgba(0,0,0,0.07)',
-              color: isImportant ? '#D97706' : '#9CA3AF',
-            }}
-            className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
-          ><IcoStar filled={isImportant} /></button>
-          <button
-            onClick={function(e) { e.stopPropagation(); onDismiss(item.id) }}
-            aria-label={'Dismiss: ' + item.title}
-            title="Dismiss"
-            style={{
-              width: '22px', height: '22px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: 'none', borderRadius: '4px', cursor: 'pointer',
-              background: 'rgba(0,0,0,0.07)', color: '#9CA3AF',
-            }}
-            className="focus:outline-none focus:ring-2 focus:ring-red-400"
-          ><IcoX /></button>
+          <button onClick={function(e) { e.stopPropagation(); onToggleImportant(item.id) }} aria-label={isImportant ? 'Remove star' : 'Star this item'} title={isImportant ? 'Remove star' : 'Star'} style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: '4px', cursor: 'pointer', background: isImportant ? 'rgba(245,183,49,0.3)' : 'rgba(0,0,0,0.07)', color: isImportant ? '#D97706' : '#9CA3AF' }} className="focus:outline-none focus:ring-2 focus:ring-yellow-400"><IcoStar filled={isImportant} /></button>
+          <button onClick={function(e) { e.stopPropagation(); onDismiss(item.id) }} aria-label={'Dismiss: ' + item.title} title="Dismiss" style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: '4px', cursor: 'pointer', background: 'rgba(0,0,0,0.07)', color: '#9CA3AF' }} className="focus:outline-none focus:ring-2 focus:ring-red-400"><IcoX /></button>
         </div>
       </div>
-
-      {/* Body text — Patrick Hand */}
-      <p style={{
-        fontFamily: "'Patrick Hand', sans-serif",
-        fontSize: '17px',
-        fontWeight: 400,
-        color: '#374151',
-        lineHeight: 1.5,
-        flex: 1,
-        margin: '0 0 10px',
-        wordBreak: 'break-word',
-      }}>{item.title}</p>
-
-      {/* Footer */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.07)',
-      }}>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, color: accentColor,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          flex: 1, marginRight: '6px',
-        }}>{item.organizationName}</span>
+      <p style={{ fontFamily: "'Patrick Hand', sans-serif", fontSize: '17px', fontWeight: 400, color: '#374151', lineHeight: 1.5, flex: 1, margin: '0 0 10px', wordBreak: 'break-word' }}>{item.title}</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+        <span style={{ fontSize: '10px', fontWeight: 700, color: accentColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '6px' }}>{item.organizationName}</span>
         <span style={{ fontSize: '10px', color: MUTED, flexShrink: 0 }}>{item.time}</span>
       </div>
     </article>
   )
 }
 
-// ─── 2-column note grid ────────────────────────────────────────────────────
+// ─── 3-column note grid ───────────────────────────────────────────────────
 function NoteGrid({ items, orgColors, orgIndexMap, onDismiss, onToggleImportant, importantActivities }) {
-var col0 = [], col1 = [], col2 = []
-items.forEach(function(item, i) {
-  if (i % 3 === 0) col0.push(item)
-  else if (i % 3 === 1) col1.push(item)
-  else col2.push(item)
-})
-
-function getNoteBg(item) {
-    // Urgent always stays red — never override
+  var col0 = [], col1 = [], col2 = []
+  items.forEach(function(item, i) {
+    if (i % 3 === 0) col0.push(item)
+    else if (i % 3 === 1) col1.push(item)
+    else col2.push(item)
+  })
+  function getNoteBg(item) {
     if (item.priority === 'urgent') return null
-    // If org has a saved color, return the pastel card version for ALL types
     if (orgColors[item.organizationId]) {
       var match = PALETTE.find(function(p) { return p.color === orgColors[item.organizationId] })
       return match ? match.card : null
     }
-    // No saved color — only override for regular announcements (events/docs use type defaults)
     if (item.type !== 'announcement') return null
     var idx = orgIndexMap[item.organizationId] || 0
     return NOTE_PRESETS[idx % NOTE_PRESETS.length]
   }
-
   function renderCol(colItems) {
     return colItems.map(function(item) {
       return (
         <div key={item.id} className="postit-wrap" style={{ marginBottom: '14px' }}>
-          <PostItCard
-            item={item}
-            orgNoteBg={getNoteBg(item)}
-            onDismiss={onDismiss}
-            onToggleImportant={onToggleImportant}
-            isImportant={importantActivities.includes(item.id)}
-          />
+          <PostItCard item={item} orgNoteBg={getNoteBg(item)} onDismiss={onDismiss} onToggleImportant={onToggleImportant} isImportant={importantActivities.includes(item.id)} />
         </div>
       )
     })
   }
-
   var colStyle = { flex: '1 1 0', minWidth: 0, paddingTop: '10px', display: 'flex', flexDirection: 'column' }
+  return (
+    <div role="list" aria-label="Activity feed" style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+      <div style={colStyle}>{renderCol(col0)}</div>
+      <div style={colStyle}>{renderCol(col1)}</div>
+      <div style={colStyle}>{renderCol(col2)}</div>
+    </div>
+  )
+}
+
+// ─── MyProgramsEvents tab ─────────────────────────────────────────────────
+function MyProgramsEvents({ currentUserId, organizations, loading: parentLoading }) {
+  var navigate = useNavigate()
+  var [myRsvps,          setMyRsvps]          = useState([])
+  var [myRegistrations,  setMyRegistrations]  = useState([])
+  var [savedPrograms,    setSavedPrograms]     = useState([])
+  var [savedEventsList,  setSavedEventsList]   = useState([])
+  var [loading,          setLoading]          = useState(true)
+  var [activeSubTab,     setActiveSubTab]     = useState('registered')
+
+  useEffect(function() {
+    if (!currentUserId) return
+    loadAll()
+  }, [currentUserId])
+
+  async function loadAll() {
+    setLoading(true)
+    try {
+      await Promise.all([
+        loadRsvps(),
+        loadRegistrations(),
+        loadSavedPrograms(),
+        loadSavedEvents(),
+      ])
+    } catch(e) { console.error('MyProgramsEvents loadAll error:', e) }
+    finally { setLoading(false) }
+  }
+
+  async function loadRsvps() {
+    var res = await supabase
+      .from('event_rsvps')
+      .select('id, status, guest_count, events(id, title, start_time, location, organization_id, organizations(id, name))')
+      .eq('member_id', currentUserId)
+      .in('status', ['going', 'maybe'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (res.error) { console.error('loadRsvps error:', res.error); return }
+    setMyRsvps(res.data || [])
+  }
+
+  async function loadRegistrations() {
+    var res = await supabase
+      .from('program_registrations')
+      .select('id, status, created_at, org_programs(id, name, start_date, end_date, organization_id, organizations(id, name))')
+      .eq('user_id', currentUserId)
+      .in('status', ['enrolled', 'pending'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (res.error) { console.error('loadRegistrations error:', res.error); return }
+    setMyRegistrations(res.data || [])
+  }
+
+  async function loadSavedPrograms() {
+    var res = await supabase
+      .from('program_saves')
+      .select('id, program_id, org_programs(id, name, start_date, status, organization_id, organizations(id, name))')
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (res.error) { console.error('loadSavedPrograms error:', res.error); return }
+    setSavedPrograms(res.data || [])
+  }
+
+  async function loadSavedEvents() {
+    var res = await supabase
+      .from('event_saves')
+      .select('id, events(id, title, start_time, location, organizations(id, name))')
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (res.error) { console.error('loadSavedEvents error:', res.error); return }
+    setSavedEventsList(res.data || [])
+  }
+
+  async function unsaveProgram(saveId, programName) {
+    var res = await supabase.from('program_saves').delete().eq('id', saveId)
+    if (res.error) { mascotErrorToast('Failed to remove bookmark.'); return }
+    setSavedPrograms(function(prev) { return prev.filter(function(s) { return s.id !== saveId }) })
+    mascotSuccessToast('Bookmark removed.')
+  }
+
+  async function unsaveEvent(saveId, eventTitle) {
+    var res = await supabase.from('event_saves').delete().eq('id', saveId)
+    if (res.error) { mascotErrorToast('Failed to remove bookmark.'); return }
+    setSavedEventsList(function(prev) { return prev.filter(function(s) { return s.id !== saveId }) })
+    mascotSuccessToast('Bookmark removed.')
+  }
+
+  function statusBadge(status, type) {
+    var cfg = {
+      going:    { bg: 'rgba(34,197,94,0.1)',   color: '#22C55E', label: 'Going'    },
+      maybe:    { bg: 'rgba(245,183,49,0.15)',  color: '#B45309', label: 'Maybe'   },
+      enrolled: { bg: 'rgba(34,197,94,0.1)',    color: '#22C55E', label: 'Enrolled' },
+      pending:  { bg: 'rgba(245,183,49,0.15)',  color: '#B45309', label: 'Pending approval' },
+    }
+    var c = cfg[status] || { bg: 'rgba(100,116,139,0.1)', color: '#64748B', label: status }
+    return (
+      <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: c.bg, color: c.color, whiteSpace: 'nowrap' }}>
+        {c.label}
+      </span>
+    )
+  }
+
+  var totalRegistered = myRsvps.length + myRegistrations.length
+  var totalSaved      = savedPrograms.length + savedEventsList.length
+
+  if (loading || parentLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px 0' }} aria-busy="true" aria-label="Loading your programs and events">
+        {[1,2,3,4].map(function(i) {
+          return (
+            <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#F8FAFC', borderRadius: '10px' }} className="animate-pulse">
+              <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: BDR, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ height: '13px', width: '55%', background: BDR, borderRadius: '4px', marginBottom: '6px' }} />
+                <div style={{ height: '11px', width: '35%', background: '#F1F5F9', borderRadius: '4px' }} />
+              </div>
+              <div style={{ width: '70px', height: '22px', background: '#F1F5F9', borderRadius: '99px' }} />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
-<div role="list" aria-label="Activity feed" style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-  <div style={colStyle}>{renderCol(col0)}</div>
-  <div style={colStyle}>{renderCol(col1)}</div>
-  <div style={colStyle}>{renderCol(col2)}</div>
-</div>
+    <div>
+      {/* Sub-tabs */}
+      <div role="tablist" aria-label="My programs and events sections" style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+        {[
+          { key: 'registered', label: 'RSVPs & Registrations', count: totalRegistered },
+          { key: 'saved',      label: 'Saved',                 count: totalSaved      },
+        ].map(function(tab) {
+          var isActive = activeSubTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={isActive}
+              onClick={function() { setActiveSubTab(tab.key) }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '99px', border: '1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.1)' : 'transparent', color: isActive ? BLUE : MUTED, fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: 'pointer' }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '99px', fontSize: '10px', fontWeight: 700, background: isActive ? BLUE : '#E2E8F0', color: isActive ? '#FFFFFF' : MUTED }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* RSVPs & Registrations */}
+      {activeSubTab === 'registered' && (
+        <div>
+          {totalRegistered === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed ' + BDR, borderRadius: '12px' }}>
+              <CalendarCheck size={36} style={{ color: MUTED, opacity: 0.4, margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
+              <p style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>No RSVPs or registrations yet</p>
+              <p style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>Events you RSVP to and programs you register for will appear here.</p>
+              <button onClick={function() { navigate('/discover') }} style={{ padding: '9px 18px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                Discover Events
+              </button>
+            </div>
+          ) : (
+            <div role="list" aria-label="Your RSVPs and registrations" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Event RSVPs */}
+              {myRsvps.map(function(rsvp) {
+                var evt = rsvp.events
+                if (!evt) return null
+                var d = fmtDate(evt.start_time)
+                var org = evt.organizations
+                return (
+                  <div
+                    key={'rsvp-' + rsvp.id}
+                    role="listitem"
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
+                  >
+                    {/* Date chip */}
+                    <div style={{ flexShrink: 0, width: '44px', textAlign: 'center', background: '#EFF6FF', borderRadius: '8px', padding: '6px 0' }}>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: BLUE, textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: BLUE, lineHeight: 1 }}>{d.day}</div>
+                    </div>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{evt.title}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '99px', background: 'rgba(59,130,246,0.1)', color: BLUE }}>Event</span>
+                        {org && <span style={{ fontSize: '11px', color: MUTED }}>{org.name}</span>}
+                      </div>
+                    </div>
+                    {/* Status + link */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {statusBadge(rsvp.status, 'event')}
+                      <button
+                        onClick={function() { navigate('/events/' + evt.id) }}
+                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
+                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label={'View event: ' + evt.title}
+                      >View</button>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Program registrations */}
+              {myRegistrations.map(function(reg) {
+                var prog = reg.org_programs
+                if (!prog) return null
+                var org = prog.organizations
+                var startFmt = prog.start_date ? formatDateShort(prog.start_date) : null
+                return (
+                  <div
+                    key={'reg-' + reg.id}
+                    role="listitem"
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
+                  >
+                    {/* Program icon chip */}
+                    <div style={{ flexShrink: 0, width: '44px', height: '44px', background: '#EDE9FE', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ClipboardList size={20} style={{ color: PURPLE }} aria-hidden="true" />
+                    </div>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prog.name}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '99px', background: 'rgba(139,92,246,0.1)', color: PURPLE }}>Program</span>
+                        {org && <span style={{ fontSize: '11px', color: MUTED }}>{org.name}</span>}
+                        {startFmt && <span style={{ fontSize: '11px', color: MUTED }}>Starts {startFmt}</span>}
+                      </div>
+                    </div>
+                    {/* Status */}
+                    <div style={{ flexShrink: 0 }}>
+                      {statusBadge(reg.status, 'program')}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Saved */}
+      {activeSubTab === 'saved' && (
+        <div>
+          {totalSaved === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed ' + BDR, borderRadius: '12px' }}>
+              <Bookmark size={36} style={{ color: MUTED, opacity: 0.4, margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
+              <p style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>Nothing saved yet</p>
+              <p style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>Bookmark events and programs to find them here.</p>
+              <button onClick={function() { navigate('/discover') }} style={{ padding: '9px 18px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                Discover Events
+              </button>
+            </div>
+          ) : (
+            <div role="list" aria-label="Your saved events and programs" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Saved events */}
+              {savedEventsList.map(function(save) {
+                var evt = save.events
+                if (!evt) return null
+                var d = fmtDate(evt.start_time)
+                var org = evt.organizations
+                return (
+                  <div
+                    key={'sevt-' + save.id}
+                    role="listitem"
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
+                  >
+                    <div style={{ flexShrink: 0, width: '44px', textAlign: 'center', background: 'rgba(245,183,49,0.1)', borderRadius: '8px', padding: '6px 0' }}>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#B45309', lineHeight: 1 }}>{d.day}</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{evt.title}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '99px', background: 'rgba(245,183,49,0.1)', color: '#B45309' }}>Event</span>
+                        {org && <span style={{ fontSize: '11px', color: MUTED }}>{org.name}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <button
+                        onClick={function() { unsaveEvent(save.id, evt.title) }}
+                        style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }}
+                        className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        aria-label={'Remove bookmark for ' + evt.title}
+                        title="Remove bookmark"
+                      >
+                        <BookmarkCheck size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={function() { navigate('/events/' + evt.id) }}
+                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
+                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label={'View event: ' + evt.title}
+                      >View</button>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Saved programs */}
+              {savedPrograms.map(function(save) {
+                var prog = save.org_programs
+                if (!prog) return null
+                var org = prog.organizations
+                return (
+                  <div
+                    key={'sprog-' + save.id}
+                    role="listitem"
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px' }}
+                  >
+                    <div style={{ flexShrink: 0, width: '44px', height: '44px', background: '#EDE9FE', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ClipboardList size={20} style={{ color: PURPLE }} aria-hidden="true" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prog.name}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '99px', background: 'rgba(139,92,246,0.1)', color: PURPLE }}>Program</span>
+                        {org && <span style={{ fontSize: '11px', color: MUTED }}>{org.name}</span>}
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '99px', background: prog.status === 'active' ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.1)', color: prog.status === 'active' ? '#22C55E' : MUTED }}>
+                          {prog.status ? prog.status.charAt(0).toUpperCase() + prog.status.slice(1) : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <button
+                        onClick={function() { unsaveProgram(save.id, prog.name) }}
+                        style={{ padding: '5px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: YELLOW }}
+                        className="hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        aria-label={'Remove bookmark for ' + prog.name}
+                        title="Remove bookmark"
+                      >
+                        <BookmarkCheck size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={function() { navigate('/organizations/' + prog.organization_id + '/programs') }}
+                        style={{ padding: '5px 10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
+                        className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label={'View program: ' + prog.name}
+                      >View</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -495,7 +700,6 @@ function getNoteBg(item) {
 function TourOverlay({ step, refs, onNext, onSkip }) {
   var current = TOUR_STEPS[step]
   var [pos, setPos] = useState({ top: '50%', left: '50%', transform: 'translate(-50%,-50%)' })
-
   useEffect(function() {
     if (!current) return
     var el = refs[step] && refs[step].current
@@ -523,29 +727,14 @@ function TourOverlay({ step, refs, onNext, onSkip }) {
       el.style.borderRadius = origRad
     }
   }, [step])
-
   if (!current) return null
   var isLast = step === TOUR_STEPS.length - 1
-
   return (
     <>
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(14,21,35,0.55)', pointerEvents: 'none' }} />
-      <div
-        role="dialog"
-        aria-modal="false"
-        aria-label={'Tour step ' + (step + 1) + ' of ' + TOUR_STEPS.length + ': ' + current.title}
-        style={{
-          position: 'fixed', zIndex: 1002, width: '300px',
-          background: CARD, border: '1px solid ' + BDR,
-          borderRadius: '12px', padding: '20px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-          top: pos.top, left: pos.left, transform: pos.transform || 'none',
-        }}
-      >
+      <div role="dialog" aria-modal="false" aria-label={'Tour step ' + (step + 1) + ' of ' + TOUR_STEPS.length + ': ' + current.title} style={{ position: 'fixed', zIndex: 1002, width: '300px', background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '20px', boxShadow: '0 12px 40px rgba(0,0,0,0.15)', top: pos.top, left: pos.left, transform: pos.transform || 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-          <span style={{ fontSize: '10px', fontWeight: 700, color: YELLOW, letterSpacing: '3px', textTransform: 'uppercase' }}>
-            Step {step + 1} of {TOUR_STEPS.length}
-          </span>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: YELLOW, letterSpacing: '3px', textTransform: 'uppercase' }}>Step {step + 1} of {TOUR_STEPS.length}</span>
           <button onClick={onSkip} aria-label="Skip tour" style={{ background: 'none', border: 'none', color: MUTED, cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Skip</button>
         </div>
         <h3 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '8px' }}>{current.title}</h3>
@@ -556,12 +745,7 @@ function TourOverlay({ step, refs, onNext, onSkip }) {
               return <div key={i} style={{ width: i === step ? '16px' : '5px', height: '5px', borderRadius: '99px', background: i === step ? YELLOW : BDR, transition: 'all 0.2s ease' }} />
             })}
           </div>
-          <button
-            onClick={onNext}
-            autoFocus
-            style={{ padding: '8px 20px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >{isLast ? 'Finish' : 'Next'}</button>
+          <button onClick={onNext} autoFocus style={{ padding: '8px 20px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{isLast ? 'Finish' : 'Next'}</button>
         </div>
       </div>
     </>
@@ -571,133 +755,55 @@ function TourOverlay({ step, refs, onNext, onSkip }) {
 // ─── TourEndModal ─────────────────────────────────────────────────────────
 function TourEndModal({ onClose }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="tour-end-title"
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1050,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(14,21,35,0.55)', padding: '24px',
-      }}
-    >
+    <div role="dialog" aria-modal="true" aria-labelledby="tour-end-title" style={{ position: 'fixed', inset: 0, zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(14,21,35,0.55)', padding: '24px' }}>
       <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '16px', padding: '40px 36px', maxWidth: '380px', width: '100%', textAlign: 'center' }}>
         <img src="/mascot-onboarding.png" alt="" aria-hidden="true" style={{ width: '160px', height: 'auto', margin: '0 auto 20px', display: 'block' }} />
         <h2 id="tour-end-title" style={{ fontSize: '20px', fontWeight: 800, color: TEXT, marginBottom: '8px' }}>You're all set!</h2>
-        <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.65, marginBottom: '24px' }}>
-          You know your way around the board. Explore your organizations, follow new ones, and stay on top of what matters.
-        </p>
-        <button
-          onClick={onClose}
-          autoFocus
-          style={{ padding: '11px 32px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >Get Started</button>
+        <p style={{ fontSize: '13px', color: TEXT2, lineHeight: 1.65, marginBottom: '24px' }}>You know your way around the board. Explore your organizations, follow new ones, and stay on top of what matters.</p>
+        <button onClick={onClose} autoFocus style={{ padding: '11px 32px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Get Started</button>
       </div>
     </div>
   )
 }
 
-// ─── Event list row (used in Events tab + Upcoming section) ──────────────
+// ─── EventRow ─────────────────────────────────────────────────────────────
 function EventRow({ event, to }) {
   var d = fmtDate(event.start_time)
   return (
-    <Link
-      to={to || ('/organizations/' + (event.organization && event.organization.id) + '/events')}
-      aria-label={'Event: ' + event.title}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '14px',
-        background: CARD, border: '1px solid ' + BDR,
-        borderRadius: '10px', padding: '10px 14px', textDecoration: 'none',
-        marginBottom: '6px',
-      }}
-      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
+    <Link to={to || ('/organizations/' + (event.organization && event.organization.id) + '/events')} aria-label={'Event: ' + event.title} style={{ display: 'flex', alignItems: 'center', gap: '14px', background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px 14px', textDecoration: 'none', marginBottom: '6px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
       <div style={{ flexShrink: 0, width: '42px', textAlign: 'center', background: '#EFF6FF', borderRadius: '8px', padding: '5px 0' }}>
         <div style={{ fontSize: '9px', fontWeight: 700, color: BLUE, textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
         <div style={{ fontSize: '18px', fontWeight: 800, color: BLUE, lineHeight: 1 }}>{d.day}</div>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: '13px', fontWeight: 600, color: TEXT, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</p>
-        <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>
-          {event.organization ? event.organization.name : ''}{event.location ? ' · ' + event.location : ''}
-        </p>
+        <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>{event.organization ? event.organization.name : ''}{event.location ? ' · ' + event.location : ''}</p>
       </div>
       <span style={{ fontSize: '11px', color: MUTED, flexShrink: 0 }}>{d.time}</span>
     </Link>
   )
 }
 
-// ─── SavedRow ─────────────────────────────────────────────────────────────
-function SavedRow({ evt }) {
-  if (!evt) return null
-  var d = fmtDate(evt.start_time)
-  return (
-    <Link
-      to={'/events/' + evt.id}
-      aria-label={'Saved event: ' + evt.title}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '14px',
-        background: CARD, border: '1px solid ' + BDR,
-        borderRadius: '10px', padding: '10px 14px', textDecoration: 'none',
-        marginBottom: '6px',
-      }}
-      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <div style={{ flexShrink: 0, width: '42px', textAlign: 'center', background: 'rgba(245,183,49,0.1)', borderRadius: '8px', padding: '5px 0' }}>
-        <div style={{ fontSize: '9px', fontWeight: 700, color: '#B45309', textTransform: 'uppercase', letterSpacing: '1px' }}>{d.mon}</div>
-        <div style={{ fontSize: '18px', fontWeight: 800, color: '#B45309', lineHeight: 1 }}>{d.day}</div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '13px', fontWeight: 600, color: TEXT, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{evt.title}</p>
-        <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>
-          {evt.organizations ? evt.organizations.name : ''}{evt.location ? ' · ' + evt.location : ''}
-        </p>
-      </div>
-      <span style={{ color: '#B45309', opacity: 0.6 }}><IcoBookmark /></span>
-    </Link>
-  )
-}
+// ─── SavedEventCard ───────────────────────────────────────────────────────
+var _cardShadow = '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'
 
 function SavedEventCard({ save, onUnsave, removing }) {
   var navigate = useNavigate()
   var evt = save.events
   if (!evt) return null
   var org = evt.organizations
-  var orgInitials = org && org.name
-    ? org.name.split(' ').map(function(w) { return w[0] }).join('').slice(0,2).toUpperCase()
-    : '?'
+  var orgInitials = org && org.name ? org.name.split(' ').map(function(w) { return w[0] }).join('').slice(0,2).toUpperCase() : '?'
   var d = fmtDate(evt.start_time)
   return (
-    <article
-      role="listitem"
-      style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: _cardShadow }}
-      aria-label={evt.title + ' saved event'}
-    >
-      <div
-        style={{ height: '120px', background: '#F1F5F9', position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={function() { navigate('/events/' + evt.id) }}
-        role="link"
-        tabIndex={0}
-        aria-label={'View ' + evt.title}
-        onKeyDown={function(e) { if (e.key === 'Enter') navigate('/events/' + evt.id) }}
-      >
+    <article role="listitem" style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: _cardShadow }} aria-label={evt.title + ' saved event'}>
+      <div style={{ height: '120px', background: '#F1F5F9', position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={function() { navigate('/events/' + evt.id) }} role="link" tabIndex={0} aria-label={'View ' + evt.title} onKeyDown={function(e) { if (e.key === 'Enter') navigate('/events/' + evt.id) }}>
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <button
-          onClick={function(e) { e.stopPropagation(); onUnsave(save.id, evt.title) }}
-          disabled={removing === save.id}
-          aria-label={'Remove ' + evt.title + ' from saved events'}
-          style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '6px', padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: removing === save.id ? 0.5 : 1 }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
+        <button onClick={function(e) { e.stopPropagation(); onUnsave(save.id, evt.title) }} disabled={removing === save.id} aria-label={'Remove ' + evt.title + ' from saved events'} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '6px', padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: removing === save.id ? 0.5 : 1 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="#F5B731" stroke="#F5B731" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
       </div>
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        <p
-          style={{ fontSize: '13px', fontWeight: 700, color: TEXT, marginBottom: '8px', lineHeight: 1.35, cursor: 'pointer' }}
-          onClick={function() { navigate('/events/' + evt.id) }}
-        >{evt.title}</p>
+        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, marginBottom: '8px', lineHeight: 1.35, cursor: 'pointer' }} onClick={function() { navigate('/events/' + evt.id) }}>{evt.title}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
           {org && org.logo_url
             ? <img src={org.logo_url} alt="" aria-hidden="true" style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -709,18 +815,9 @@ function SavedEventCard({ save, onUnsave, removing }) {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style={{ fontSize: '11px', color: MUTED }}>{d.mon} {d.day}{d.time ? ' · ' + d.time : ''}</span>
         </div>
-        {evt.location && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <span style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{evt.location}</span>
-          </div>
-        )}
+        {evt.location && <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{evt.location}</span></div>}
         <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
-          <button
-            onClick={function() { navigate('/events/' + evt.id) }}
-            style={{ width: '100%', padding: '6px 12px', background: BLUE, color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
-            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
+          <button onClick={function() { navigate('/events/' + evt.id) }} style={{ width: '100%', padding: '6px 12px', background: BLUE, color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             View Event
           </button>
@@ -730,7 +827,7 @@ function SavedEventCard({ save, onUnsave, removing }) {
   )
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────
+// ─── EmptyState ───────────────────────────────────────────────────────────
 function EmptyState({ icon, title, desc, actionLabel, onAction }) {
   return (
     <div role="status" style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed ' + BDR, borderRadius: '12px' }}>
@@ -738,39 +835,26 @@ function EmptyState({ icon, title, desc, actionLabel, onAction }) {
       <p style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>{title}</p>
       <p style={{ fontSize: '13px', color: MUTED, marginBottom: onAction ? '20px' : 0 }}>{desc}</p>
       {onAction && (
-        <button
-          onClick={onAction}
-          style={{ padding: '9px 18px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >{actionLabel}</button>
+        <button onClick={onAction} style={{ padding: '9px 18px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{actionLabel}</button>
       )}
     </div>
   )
 }
 
-// ─── WidgetShell ─────────────────────────────────────────────────────────
+// ─── WidgetShell ──────────────────────────────────────────────────────────
 function WidgetShell({ id, label, onRemove, children }) {
   return (
-    <section
-      aria-labelledby={id + '-heading'}
-      style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '16px 18px', marginBottom: '14px' }}
-    >
+    <section aria-labelledby={id + '-heading'} style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '16px 18px', marginBottom: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
         <h2 id={id + '-heading'} style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: YELLOW, margin: 0 }}>{label}</h2>
-        <button
-          onClick={onRemove}
-          aria-label={'Remove ' + label + ' widget'}
-          title="Remove widget"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CBD5E1', padding: '2px', borderRadius: '4px', display: 'flex' }}
-          className="focus:outline-none focus:ring-2 focus:ring-gray-400"
-        ><IcoX /></button>
+        <button onClick={onRemove} aria-label={'Remove ' + label + ' widget'} title="Remove widget" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CBD5E1', padding: '2px', borderRadius: '4px', display: 'flex' }} className="focus:outline-none focus:ring-2 focus:ring-gray-400"><IcoX /></button>
       </div>
       {children}
     </section>
   )
 }
 
-// ─── RecentActivityFeed ───────────────────────────────────────────────────
+// ─── ActivityIcon + RecentActivityFeed ───────────────────────────────────
 function ActivityIcon({ type }) {
   var s = { width:'16px', height:'16px', flexShrink:0 }
   if (type === 'member_joined') return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -781,7 +865,6 @@ function ActivityIcon({ type }) {
   if (type === 'program')       return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
   return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 }
-
 function getActivityConfig(type) {
   if (type === 'member_joined') return { bg:'#DBEAFE', color:'#3B82F6', label:'New Member'  }
   if (type === 'document')      return { bg:'#EDE9FE', color:'#8B5CF6', label:'Document'    }
@@ -794,20 +877,12 @@ function getActivityConfig(type) {
 
 function RecentActivityFeed({ items, loading, orgColors, organizations }) {
   var [actOrgFilter, setActOrgFilter] = useState('all')
-
   var orgs = []
   var seen = {}
   ;(items || []).forEach(function(item) {
-    if (item.orgId && !seen[item.orgId]) {
-      seen[item.orgId] = true
-      orgs.push({ id: item.orgId, name: item.orgName })
-    }
+    if (item.orgId && !seen[item.orgId]) { seen[item.orgId] = true; orgs.push({ id: item.orgId, name: item.orgName }) }
   })
-
-  var filtered = actOrgFilter === 'all'
-    ? (items || [])
-    : (items || []).filter(function(i) { return i.orgId === actOrgFilter })
-
+  var filtered = actOrgFilter === 'all' ? (items || []) : (items || []).filter(function(i) { return i.orgId === actOrgFilter })
   if (loading) {
     return (
       <div aria-busy="true" aria-label="Loading recent activity">
@@ -826,7 +901,6 @@ function RecentActivityFeed({ items, loading, orgColors, organizations }) {
       </div>
     )
   }
-
   if (!items || items.length === 0) {
     return (
       <div role="status" style={{ textAlign:'center', padding:'48px 24px', border:'1px dashed ' + BDR, borderRadius:'12px' }}>
@@ -838,39 +912,21 @@ function RecentActivityFeed({ items, loading, orgColors, organizations }) {
       </div>
     )
   }
-
   return (
     <div>
-      {/* Filters */}
       <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px', flexWrap:'wrap' }}>
         {orgs.length > 1 && (
           <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
             {[{ id:'all', name:'All Orgs' }].concat(orgs).map(function(org) {
               var isActive = actOrgFilter === org.id
               return (
-                <button
-                  key={org.id}
-                  onClick={function() { setActOrgFilter(org.id) }}
-                  aria-pressed={isActive}
-                  style={{
-                    padding:'4px 11px', borderRadius:'99px', fontSize:'12px',
-                    fontWeight: isActive ? 700 : 500,
-                    border:'1px solid ' + (isActive ? BLUE : BDR),
-                    background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent',
-                    color: isActive ? BLUE : MUTED, cursor:'pointer',
-                  }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >{org.name}</button>
+                <button key={org.id} onClick={function() { setActOrgFilter(org.id) }} aria-pressed={isActive} style={{ padding:'4px 11px', borderRadius:'99px', fontSize:'12px', fontWeight: isActive ? 700 : 500, border:'1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent', color: isActive ? BLUE : MUTED, cursor:'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{org.name}</button>
               )
             })}
           </div>
         )}
-        <div style={{ marginLeft:'auto', fontSize:'12px', color:MUTED }}>
-          {filtered.length} item{filtered.length !== 1 ? 's' : ''}
-        </div>
+        <div style={{ marginLeft:'auto', fontSize:'12px', color:MUTED }}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</div>
       </div>
-
-      {/* Activity list */}
       {filtered.length === 0 ? (
         <p style={{ textAlign:'center', fontSize:'13px', color:MUTED, padding:'24px 0' }}>No activity for this organization yet.</p>
       ) : (
@@ -878,44 +934,24 @@ function RecentActivityFeed({ items, loading, orgColors, organizations }) {
           {filtered.map(function(item, idx) {
             var cfg = getActivityConfig(item.type)
             return (
-              <div
-                key={item.id}
-                role="listitem"
-                style={{
-                  display:'flex', alignItems:'flex-start', gap:'12px',
-                  padding:'12px 0',
-                  borderBottom: idx < filtered.length - 1 ? '1px solid ' + BDR : 'none',
-                }}
-              >
-{/* Org avatar — logo or initials */}
+              <div key={item.id} role="listitem" style={{ display:'flex', alignItems:'flex-start', gap:'12px', padding:'12px 0', borderBottom: idx < filtered.length - 1 ? '1px solid ' + BDR : 'none' }}>
                 {function() {
-var org      = (organizations || []).find(function(o) { return o.id === item.orgId })
-                  var orgIdx   = (organizations || []).findIndex(function(o) { return o.id === item.orgId })
+                  var org = (organizations || []).find(function(o) { return o.id === item.orgId })
+                  var orgIdx = (organizations || []).findIndex(function(o) { return o.id === item.orgId })
                   var fallbackBg = AVATAR_COLORS[orgIdx >= 0 ? orgIdx % AVATAR_COLORS.length : 0]
                   if (org && org.logo_url) {
                     return <img src={org.logo_url} alt={org.name + ' logo'} style={{ width:'36px', height:'36px', borderRadius:'50%', objectFit:'cover', flexShrink:0, border:'1px solid ' + BDR }} />
                   }
-                  return (
-                    <div style={{ width:'36px', height:'36px', borderRadius:'50%', flexShrink:0, background: fallbackBg, color:'#FFFFFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700 }}>
-                      {getInitials(item.orgName)}
-                    </div>
-                  )
+                  return <div style={{ width:'36px', height:'36px', borderRadius:'50%', flexShrink:0, background: fallbackBg, color:'#FFFFFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700 }}>{getInitials(item.orgName)}</div>
                 }()}
-
-                {/* Content */}
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ fontSize:'13px', fontWeight:600, color:TEXT, margin:'0 0 3px', lineHeight:1.4 }}>{item.title}</p>
                   <div style={{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
-                    {item.orgName && (
-                      <span style={{ fontSize:'11px', fontWeight:600, color:BLUE }}>{item.orgName}</span>
-                    )}
+                    {item.orgName && <span style={{ fontSize:'11px', fontWeight:600, color:BLUE }}>{item.orgName}</span>}
                     <span style={{ fontSize:'11px', color:MUTED }}>{timeAgo(item.timestamp)}</span>
                   </div>
                 </div>
-
-<span style={{ flexShrink:0, fontSize:'11px', fontWeight:500, color:MUTED }}>
-                  {cfg.label}
-                </span>
+                <span style={{ flexShrink:0, fontSize:'11px', fontWeight:500, color:MUTED }}>{cfg.label}</span>
               </div>
             )
           })}
@@ -925,19 +961,16 @@ var org      = (organizations || []).find(function(o) { return o.id === item.org
   )
 }
 
-// ─── OrgColorLegend (shared across All Updates, Calendar, List) ───────────
+// ─── OrgColorLegend ───────────────────────────────────────────────────────
 function OrgColorLegend({ organizations, orgColors, onColorChange }) {
   var [openFor, setOpenFor] = useState(null)
   var ref = useRef(null)
-
   useEffect(function() {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpenFor(null) }
     document.addEventListener('mousedown', handler)
     return function() { document.removeEventListener('mousedown', handler) }
   }, [])
-
   if (!organizations || organizations.length === 0) return null
-
   return (
     <div ref={ref} style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '14px', marginBottom: '14px', boxShadow: _cardShadow }}>
       <p style={{ fontSize: '11px', fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '10px' }}>Card Colors</p>
@@ -945,43 +978,21 @@ function OrgColorLegend({ organizations, orgColors, onColorChange }) {
         {organizations.map(function(org, idx) {
           var savedColor   = orgColors[org.id]
           var paletteMatch = savedColor ? PALETTE.find(function(p) { return p.color === savedColor }) : null
-          var scheme       = paletteMatch
-            ? { card: paletteMatch.card, tag: paletteMatch.color }
-            : { card: PALETTE[idx % PALETTE.length].card, tag: PALETTE[idx % PALETTE.length].color }
+          var scheme       = paletteMatch ? { card: paletteMatch.card, tag: paletteMatch.color } : { card: PALETTE[idx % PALETTE.length].card, tag: PALETTE[idx % PALETTE.length].color }
           var isOpen = openFor === org.id
           return (
             <div key={org.id} style={{ position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 10px', background: BG, borderRadius: '8px', border: '1px solid ' + BDR }}>
                 <div style={{ width: '14px', height: '14px', borderRadius: '4px', background: scheme.card, border: '1px solid ' + scheme.tag, flexShrink: 0 }} aria-hidden="true" />
                 <span style={{ fontSize: '12px', fontWeight: 600, color: TEXT }}>{org.name}</span>
-                <button
-                  onClick={function(e) { e.stopPropagation(); setOpenFor(isOpen ? null : org.id) }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', padding: '2px' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                  aria-label={'Change card color for ' + org.name}
-                >
-                  <IcoPalette />
-                </button>
+                <button onClick={function(e) { e.stopPropagation(); setOpenFor(isOpen ? null : org.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', padding: '2px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label={'Change card color for ' + org.name}><IcoPalette /></button>
               </div>
               {isOpen && (
-                <div
-                  onClick={function(e) { e.stopPropagation() }}
-                  style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: '6px', width: '172px' }}
-                  role="listbox"
-                  aria-label={'Color options for ' + org.name}
-                >
+                <div onClick={function(e) { e.stopPropagation() }} style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', padding: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: '6px', width: '172px' }} role="listbox" aria-label={'Color options for ' + org.name}>
                   {PALETTE.map(function(p) {
                     var selected = (orgColors[org.id] || PALETTE[idx % PALETTE.length].color) === p.color
                     return (
-                      <button
-                        key={p.color}
-                        role="option"
-                        aria-selected={selected}
-                        onClick={function() { onColorChange(org.id, p.color); setOpenFor(null) }}
-                        style={{ width: '22px', height: '22px', borderRadius: '5px', background: p.card, border: selected ? '3px solid ' + TEXT : '2px solid ' + p.color, cursor: 'pointer' }}
-                        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label={p.color}
-                      />
+                      <button key={p.color} role="option" aria-selected={selected} onClick={function() { onColorChange(org.id, p.color); setOpenFor(null) }} style={{ width: '22px', height: '22px', borderRadius: '5px', background: p.card, border: selected ? '3px solid ' + TEXT : '2px solid ' + p.color, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={p.color} />
                     )
                   })}
                 </div>
@@ -995,60 +1006,36 @@ function OrgColorLegend({ organizations, orgColors, onColorChange }) {
 }
 
 // ─── InlineDashboardCalendar ──────────────────────────────────────────────
-var _cardShadow = '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)'
-
 function InlineDashboardCalendar({ events, organizations, orgColors, onColorChange, onSelectSlot }) {
   var navigate = useNavigate()
-var [calView,      setCalView]      = useState('month')
-  var [calDate,      setCalDate]      = useState(new Date())
-  var [selectedOrg,  setSelectedOrg]  = useState('all')
-
-  function getOrgColor(orgId, fallbackIdx) {
-    return orgColors[orgId] || PALETTE[fallbackIdx % PALETTE.length].color
-  }
-
+  var [calView,     setCalView]     = useState('month')
+  var [calDate,     setCalDate]     = useState(new Date())
+  var [selectedOrg, setSelectedOrg] = useState('all')
+  function getOrgColor(orgId, fallbackIdx) { return orgColors[orgId] || PALETTE[fallbackIdx % PALETTE.length].color }
   var calEvents = events
     .filter(function(ev) { return selectedOrg === 'all' || (ev.organization_id || (ev.organization && ev.organization.id)) === selectedOrg })
     .map(function(ev) {
-      var orgId    = ev.organization_id || (ev.organization && ev.organization.id)
-      var orgIdx   = organizations.findIndex(function(o) { return o.id === orgId })
-      var color    = getOrgColor(orgId, orgIdx >= 0 ? orgIdx : 0)
-      return {
-        id: ev.id, title: ev.title,
-        start: new Date(ev.start_time),
-        end: ev.end_time ? new Date(ev.end_time) : new Date(ev.start_time),
-        resource: { orgName: ev.organization ? ev.organization.name : '', color: color },
-      }
+      var orgId  = ev.organization_id || (ev.organization && ev.organization.id)
+      var orgIdx = organizations.findIndex(function(o) { return o.id === orgId })
+      var color  = getOrgColor(orgId, orgIdx >= 0 ? orgIdx : 0)
+      return { id: ev.id, title: ev.title, start: new Date(ev.start_time), end: ev.end_time ? new Date(ev.end_time) : new Date(ev.start_time), resource: { orgName: ev.organization ? ev.organization.name : '', color: color } }
     })
-
-  function eventStyleGetter(event) {
-    return { style: { backgroundColor: event.resource.color, borderRadius: '6px', opacity: 0.9, color: 'white', border: '2px solid ' + event.resource.color, fontSize: '0.8rem', fontWeight: '500', padding: '2px 5px' } }
-  }
-
+  function eventStyleGetter(event) { return { style: { backgroundColor: event.resource.color, borderRadius: '6px', opacity: 0.9, color: 'white', border: '2px solid ' + event.resource.color, fontSize: '0.8rem', fontWeight: '500', padding: '2px 5px' } } }
   function handleSelectEvent(event) { navigate('/events/' + event.id) }
-
   function CustomToolbar(toolbar) {
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button onClick={function() { toolbar.onNavigate('TODAY') }} style={{ padding: '6px 14px', background: BLUE, color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Go to today">Today</button>
-          <button onClick={function() { toolbar.onNavigate('PREV') }} style={{ padding: '6px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', color: MUTED, display: 'flex', alignItems: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Previous">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
+          <button onClick={function() { toolbar.onNavigate('PREV') }} style={{ padding: '6px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', color: MUTED, display: 'flex', alignItems: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Previous"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
           <span style={{ fontSize: '16px', fontWeight: 700, color: TEXT, minWidth: '140px', textAlign: 'center' }}>{format(toolbar.date, 'MMMM yyyy')}</span>
-          <button onClick={function() { toolbar.onNavigate('NEXT') }} style={{ padding: '6px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', color: MUTED, display: 'flex', alignItems: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Next">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+          <button onClick={function() { toolbar.onNavigate('NEXT') }} style={{ padding: '6px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', color: MUTED, display: 'flex', alignItems: 'center' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Next"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
             {['month','week','day'].map(function(v) {
               var active = calView === v
-              return (
-                <button key={v} onClick={function() { setCalView(v); toolbar.onView(v) }} style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer', background: active ? '#FFFFFF' : 'transparent', color: active ? TEXT : MUTED, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.12)' : 'none' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={v + ' view'} aria-pressed={active}>
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              )
+              return <button key={v} onClick={function() { setCalView(v); toolbar.onView(v) }} style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer', background: active ? '#FFFFFF' : 'transparent', color: active ? TEXT : MUTED, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.12)' : 'none' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={v + ' view'} aria-pressed={active}>{v.charAt(0).toUpperCase() + v.slice(1)}</button>
             })}
           </div>
           {organizations.length > 1 && (
@@ -1061,32 +1048,12 @@ var [calView,      setCalView]      = useState('month')
       </div>
     )
   }
-
   return (
     <div>
-<OrgColorLegend organizations={organizations} orgColors={orgColors} onColorChange={onColorChange} />
-
-      {/* Calendar */}
+      <OrgColorLegend organizations={organizations} orgColors={orgColors} onColorChange={onColorChange} />
       <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '20px', boxShadow: _cardShadow }}>
         <div style={{ height: '620px' }}>
-          <Calendar
-            localizer={_localizer}
-            events={calEvents}
-            startAccessor="start"
-            endAccessor="end"
-            view={calView}
-            onView={setCalView}
-            date={calDate}
-            onNavigate={setCalDate}
-            onSelectEvent={handleSelectEvent}
-            selectable
-onSelectSlot={onSelectSlot}
-eventPropGetter={eventStyleGetter}
-            components={{ toolbar: CustomToolbar }}
-            popup
-            tooltipAccessor={function(event) { return event.title + ' — ' + event.resource.orgName }}
-            style={{ height: '100%' }}
-          />
+          <Calendar localizer={_localizer} events={calEvents} startAccessor="start" endAccessor="end" view={calView} onView={setCalView} date={calDate} onNavigate={setCalDate} onSelectEvent={handleSelectEvent} selectable onSelectSlot={onSelectSlot} eventPropGetter={eventStyleGetter} components={{ toolbar: CustomToolbar }} popup tooltipAccessor={function(event) { return event.title + ' — ' + event.resource.orgName }} style={{ height: '100%' }} />
         </div>
       </div>
     </div>
@@ -1095,52 +1062,28 @@ eventPropGetter={eventStyleGetter}
 
 // ─── InlineDashboardEventList ─────────────────────────────────────────────
 function InlineDashboardEventList({ events, organizations, orgColors, onColorChange }) {
-  var navigate     = useNavigate()
-var [listSearch,     setListSearch]     = useState('')
+  var navigate = useNavigate()
+  var [listSearch,     setListSearch]     = useState('')
   var [listDateFilter, setListDateFilter] = useState('upcoming')
   var [listOrgFilter,  setListOrgFilter]  = useState('all')
   var [listSort,       setListSort]       = useState('asc')
-
   function getScheme(orgId, fallbackIdx) {
     var saved = orgColors[orgId]
-    if (saved) {
-      var match = PALETTE.find(function(p) { return p.color === saved })
-      if (match) return { card: match.card, tag: match.color, tagText: match.tagText }
-    }
+    if (saved) { var match = PALETTE.find(function(p) { return p.color === saved }); if (match) return { card: match.card, tag: match.color, tagText: match.tagText } }
     var p = PALETTE[fallbackIdx % PALETTE.length]
     return { card: p.card, tag: p.color, tagText: p.tagText }
   }
-
   var now = new Date()
   var filtered = events.slice()
-  if (listSearch) {
-    filtered = filtered.filter(function(ev) {
-      return ev.title.toLowerCase().includes(listSearch.toLowerCase()) ||
-        (ev.location && ev.location.toLowerCase().includes(listSearch.toLowerCase()))
-    })
-  }
-  if (listOrgFilter !== 'all') {
-    filtered = filtered.filter(function(ev) {
-      return (ev.organization_id || (ev.organization && ev.organization.id)) === listOrgFilter
-    })
-  }
-  if (listDateFilter === 'upcoming') {
-    filtered = filtered.filter(function(ev) { return new Date(ev.start_time) >= now })
-  } else if (listDateFilter === 'past') {
-    filtered = filtered.filter(function(ev) { return new Date(ev.start_time) < now })
-  }
-  filtered.sort(function(a, b) {
-    var da = new Date(a.start_time), db = new Date(b.start_time)
-    return listSort === 'asc' ? da - db : db - da
-  })
-
+  if (listSearch) filtered = filtered.filter(function(ev) { return ev.title.toLowerCase().includes(listSearch.toLowerCase()) || (ev.location && ev.location.toLowerCase().includes(listSearch.toLowerCase())) })
+  if (listOrgFilter !== 'all') filtered = filtered.filter(function(ev) { return (ev.organization_id || (ev.organization && ev.organization.id)) === listOrgFilter })
+  if (listDateFilter === 'upcoming') filtered = filtered.filter(function(ev) { return new Date(ev.start_time) >= now })
+  else if (listDateFilter === 'past') filtered = filtered.filter(function(ev) { return new Date(ev.start_time) < now })
+  filtered.sort(function(a, b) { var da = new Date(a.start_time), db = new Date(b.start_time); return listSort === 'asc' ? da - db : db - da })
   var inpStyle = { width: '100%', padding: '7px 10px', fontSize: '13px', background: '#FFFFFF', border: '1px solid ' + BDR, borderRadius: '8px', color: TEXT, outline: 'none' }
   var lblStyle = { display: 'block', fontSize: '10px', fontWeight: 700, color: MUTED, marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.5px' }
-
   return (
     <div>
-
-{/* Filters */}
       <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', padding: '14px', marginBottom: '12px', boxShadow: _cardShadow }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '12px' }}>
           <div>
@@ -1173,10 +1116,7 @@ var [listSearch,     setListSearch]     = useState('')
           </div>
         </div>
       </div>
-
       <OrgColorLegend organizations={organizations} orgColors={orgColors} onColorChange={onColorChange} />
-
-      {/* Event grid */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 24px', border: '1px dashed ' + BDR, borderRadius: '12px', color: MUTED }}>
           <p style={{ fontSize: '14px', fontWeight: 600, color: TEXT, marginBottom: '4px' }}>No events found</p>
@@ -1190,26 +1130,11 @@ var [listSearch,     setListSearch]     = useState('')
             var scheme = getScheme(orgId, orgIdx >= 0 ? orgIdx : index)
             var d      = fmtDate(event.start_time)
             return (
-              <article
-                key={event.id}
-                role="listitem"
-                style={{ background: scheme.card, borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: _cardShadow }}
-                onClick={function() { navigate('/events/' + event.id) }}
-                tabIndex={0}
-                onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/events/' + event.id) } }}
-                aria-label={event.title + ' event'}
-              >
+              <article key={event.id} role="listitem" style={{ background: scheme.card, borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: _cardShadow }} onClick={function() { navigate('/events/' + event.id) }} tabIndex={0} onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/events/' + event.id) } }} aria-label={event.title + ' event'}>
                 <div style={{ fontSize: '17px', fontWeight: 400, color: '#374151', lineHeight: 1.5, marginBottom: '10px', fontFamily: "'Patrick Hand', sans-serif" }}>{event.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#374151', marginBottom: '4px' }}>
-                  <IcoCalendar />
-                  <span>{d.mon} {d.day}{d.time ? ' · ' + d.time : ''}</span>
-                </div>
-                {event.location && event.location !== 'Virtual Event' && (
-                  <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '4px' }}>{event.location}</div>
-                )}
-                {event.organization && (
-                  <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '12px' }}>{event.organization.name}</div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#374151', marginBottom: '4px' }}><IcoCalendar /><span>{d.mon} {d.day}{d.time ? ' · ' + d.time : ''}</span></div>
+                {event.location && event.location !== 'Virtual Event' && <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '4px' }}>{event.location}</div>}
+                {event.organization && <div style={{ fontSize: '11px', color: '#6B7280', marginBottom: '12px' }}>{event.organization.name}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button onClick={function(e) { e.stopPropagation(); navigate('/events/' + event.id) }} style={{ padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer', background: scheme.tag, color: scheme.tagText }} aria-label={'View ' + event.title} className="focus:outline-none focus:ring-2 focus:ring-blue-500">View Event</button>
                 </div>
@@ -1239,13 +1164,13 @@ function UnifiedDashboard() {
   var [error,               setError]                = useState(null)
   var [currentUserId,       setCurrentUserId]        = useState(null)
   var [memberName,          setMemberName]           = useState('')
-  var [removingSaved,       setRemovingSaved]         = useState(null)
-  var [unfollowingId, setUnfollowingId] = useState(null)
+  var [removingSaved,       setRemovingSaved]        = useState(null)
+  var [unfollowingId,       setUnfollowingId]        = useState(null)
 
   // ── UI state ──
   var [activeTab,           setActiveTab]            = useState('all')
   var [eventsView,          setEventsView]           = useState('list')
- var [recentActivity,      setRecentActivity]       = useState([])
+  var [recentActivity,      setRecentActivity]       = useState([])
   var [activityLoading,     setActivityLoading]      = useState(false)
   var [calendarEvents,      setCalendarEvents]       = useState([])
   var [orgFilter,           setOrgFilter]            = useState('all')
@@ -1257,7 +1182,7 @@ function UnifiedDashboard() {
     try { return JSON.parse(localStorage.getItem('importantActivities') || '[]') } catch { return [] }
   })
 
-  // ── Preferences state (saved to DB) ──
+  // ── Preferences state ──
   var [activeWidgets,       setActiveWidgets]        = useState(['orgs', 'chats'])
   var [orgColors,           setOrgColors]            = useState({})
   var [showCustomize,       setShowCustomize]        = useState(false)
@@ -1269,20 +1194,20 @@ function UnifiedDashboard() {
   var [showInviteMember,    setShowInviteMember]     = useState(false)
   var [showInviteOrg,       setShowInviteOrg]        = useState(false)
   var [selectedOrgForEvent, setSelectedOrgForEvent]  = useState(null)
-  var [createEventPrefill, setCreateEventPrefill] = useState(null);
+  var [createEventPrefill,  setCreateEventPrefill]   = useState(null)
 
   // ── Tour state ──
-  var [tourStep,   setTourStep]   = useState(-1)
-  var [showTourEnd,setShowTourEnd]= useState(false)
+  var [tourStep,    setTourStep]    = useState(-1)
+  var [showTourEnd, setShowTourEnd] = useState(false)
 
   // ── Tour refs ──
-  var statsRef    = useRef(null)
-  var feedRef     = useRef(null)
-  var orgsRef     = useRef(null)
-  var customizeRef= useRef(null)
-  var tourRefs    = [statsRef, feedRef, orgsRef, customizeRef]
+  var statsRef     = useRef(null)
+  var feedRef      = useRef(null)
+  var orgsRef      = useRef(null)
+  var customizeRef = useRef(null)
+  var tourRefs     = [statsRef, feedRef, orgsRef, customizeRef]
 
-  // ── Load Caveat font ──
+  // ── Load Patrick Hand font ──
   useEffect(function() {
     var link = document.createElement('link')
     link.href = 'https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap&subset=latin'
@@ -1303,7 +1228,7 @@ function UnifiedDashboard() {
       else setLoading(false)
     }
     check()
-    return function() { sub.data.subscription?.unsubscribe() }
+    return function() { sub.data.subscription && sub.data.subscription.unsubscribe() }
   }, [])
 
   // ── Auto-start tour ──
@@ -1318,80 +1243,51 @@ function UnifiedDashboard() {
 
   // ── Load preferences ──
   async function loadPreferences(userId) {
-    var res = await supabase
-      .from('dashboard_preferences')
-      .select('widgets, org_colors')
-      .eq('user_id', userId)
-      .single()
-if (res.data) {
-  if (res.data.widgets && res.data.widgets.length > 0) {
-    var saved = res.data.widgets;
-    // Auto-inject tasks widget if not already present
-    var withTasks = saved.includes('tasks') ? saved : saved.concat(['tasks']);
-    setActiveWidgets(withTasks);
-  }
-  if (res.data.org_colors) setOrgColors(res.data.org_colors)
-}
+    var res = await supabase.from('dashboard_preferences').select('widgets, org_colors').eq('user_id', userId).single()
+    if (res.data) {
+      if (res.data.widgets && res.data.widgets.length > 0) {
+        var saved = res.data.widgets
+        var withTasks = saved.includes('tasks') ? saved : saved.concat(['tasks'])
+        setActiveWidgets(withTasks)
+      }
+      if (res.data.org_colors) setOrgColors(res.data.org_colors)
+    }
     setPrefLoaded(true)
   }
 
   // ── Save preferences ──
   async function savePreferences(widgets, colors) {
     if (!currentUserId) return
-    await supabase
-      .from('dashboard_preferences')
-      .upsert({
-        user_id:    currentUserId,
-        widgets:    widgets,
-        org_colors: colors,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
+    await supabase.from('dashboard_preferences').upsert({ user_id: currentUserId, widgets: widgets, org_colors: colors, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
   }
 
-  // ── Fetch recent activity (for Activity tab) ──
+  // ── Fetch recent activity ──
   async function fetchRecentActivity(orgIds) {
     if (!orgIds || orgIds.length === 0) return
     setActivityLoading(true)
     try {
       var cutoff = new Date(Date.now() - 90 * 86400000).toISOString()
-
-      var membersRes   = await supabase.from('memberships').select('id, joined_date, role, members(full_name), organizations(id, name)').in('organization_id', orgIds).eq('status', 'active').gte('joined_date', cutoff).order('joined_date', { ascending: false }).limit(30)
-      var docsRes      = await supabase.from('documents').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
-      var pollsRes     = await supabase.from('polls').select('id, question, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
-      var surveysRes   = await supabase.from('surveys').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
-      var formsRes     = await supabase.from('signup_forms').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
-      var programsRes  = await supabase.from('org_programs').select('id, name, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
-
+      // Fix: members uses first_name + last_name, joined via memberships
+      var membersRes  = await supabase.from('memberships').select('id, joined_date, role, members(first_name, last_name), organizations(id, name)').in('organization_id', orgIds).eq('status', 'active').gte('joined_date', cutoff).order('joined_date', { ascending: false }).limit(30)
+      var docsRes     = await supabase.from('documents').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
+      var pollsRes    = await supabase.from('polls').select('id, question, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
+      var surveysRes  = await supabase.from('surveys').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
+      var formsRes    = await supabase.from('signup_forms').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
+      var programsRes = await supabase.from('org_programs').select('id, name, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
       var items = []
-
       ;(membersRes.data || []).forEach(function(m) {
-        var memberName = m.members ? m.members.full_name : 'A new member'
-        var orgName    = m.organizations ? m.organizations.name : ''
-        items.push({ id: 'member-' + m.id, type: 'member_joined', title: (memberName || 'Someone') + ' joined as ' + (m.role || 'member'), orgName: orgName, orgId: m.organizations ? m.organizations.id : null, timestamp: m.joined_date })
+        var mn = m.members ? (m.members.first_name + ' ' + m.members.last_name).trim() : 'A new member'
+        items.push({ id: 'member-' + m.id, type: 'member_joined', title: (mn || 'Someone') + ' joined as ' + (m.role || 'member'), orgName: m.organizations ? m.organizations.name : '', orgId: m.organizations ? m.organizations.id : null, timestamp: m.joined_date })
       })
-      ;(docsRes.data || []).forEach(function(d) {
-        items.push({ id: 'doc-' + d.id, type: 'document', title: d.title, orgName: d.organizations ? d.organizations.name : '', orgId: d.organizations ? d.organizations.id : null, timestamp: d.created_at })
-      })
-      ;(pollsRes.data || []).forEach(function(p) {
-        items.push({ id: 'poll-' + p.id, type: 'poll', title: p.question, orgName: p.organizations ? p.organizations.name : '', orgId: p.organizations ? p.organizations.id : null, timestamp: p.created_at })
-      })
-      ;(surveysRes.data || []).forEach(function(s) {
-        items.push({ id: 'survey-' + s.id, type: 'survey', title: s.title, orgName: s.organizations ? s.organizations.name : '', orgId: s.organizations ? s.organizations.id : null, timestamp: s.created_at })
-      })
-      ;(formsRes.data || []).forEach(function(f) {
-        items.push({ id: 'form-' + f.id, type: 'signup_form', title: f.title, orgName: f.organizations ? f.organizations.name : '', orgId: f.organizations ? f.organizations.id : null, timestamp: f.created_at })
-      })
-      ;(programsRes.data || []).forEach(function(pr) {
-        items.push({ id: 'program-' + pr.id, type: 'program', title: pr.name, orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at })
-      })
-
+      ;(docsRes.data || []).forEach(function(d) { items.push({ id: 'doc-' + d.id, type: 'document', title: d.title, orgName: d.organizations ? d.organizations.name : '', orgId: d.organizations ? d.organizations.id : null, timestamp: d.created_at }) })
+      ;(pollsRes.data || []).forEach(function(p) { items.push({ id: 'poll-' + p.id, type: 'poll', title: p.question, orgName: p.organizations ? p.organizations.name : '', orgId: p.organizations ? p.organizations.id : null, timestamp: p.created_at }) })
+      ;(surveysRes.data || []).forEach(function(s) { items.push({ id: 'survey-' + s.id, type: 'survey', title: s.title, orgName: s.organizations ? s.organizations.name : '', orgId: s.organizations ? s.organizations.id : null, timestamp: s.created_at }) })
+      ;(formsRes.data || []).forEach(function(f) { items.push({ id: 'form-' + f.id, type: 'signup_form', title: f.title, orgName: f.organizations ? f.organizations.name : '', orgId: f.organizations ? f.organizations.id : null, timestamp: f.created_at }) })
+      ;(programsRes.data || []).forEach(function(pr) { items.push({ id: 'program-' + pr.id, type: 'program', title: pr.name, orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at }) })
       items.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
       setRecentActivity(items)
-    } catch (err) {
-      console.error('fetchRecentActivity error:', err)
-    } finally {
-      setActivityLoading(false)
-    }
+    } catch (err) { console.error('fetchRecentActivity error:', err) }
+    finally { setActivityLoading(false) }
   }
 
   // ── Main data fetch ──
@@ -1403,23 +1299,15 @@ if (res.data) {
       var user = userRes.data.user
       if (!user) { setLoading(false); return }
       setCurrentUserId(user.id)
-
-      // Load preferences
       await loadPreferences(user.id)
 
-      // Profile
-      var profileRes = await supabase.from('members').select('full_name').eq('id', user.id).single()
-      if (profileRes.data) setMemberName(profileRes.data.full_name || '')
+      // Fix: members.user_id (not id), first_name + last_name (not full_name)
+      var profileRes = await supabase.from('members').select('first_name, last_name').eq('user_id', user.id).single()
+      if (profileRes.data) setMemberName((profileRes.data.first_name + ' ' + (profileRes.data.last_name || '')).trim())
 
       // Orgs + unread counts
-      var orgsRes = await supabase
-        .from('memberships')
-        .select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)')
-        .eq('member_id', user.id)
-        .eq('status', 'active')
-        .order('joined_date', { ascending: false })
+      var orgsRes = await supabase.from('memberships').select('id, role, status, custom_title, joined_date, organization:organizations (id, name, description, type, logo_url)').eq('member_id', user.id).eq('status', 'active').order('joined_date', { ascending: false })
       if (orgsRes.error) throw orgsRes.error
-
       var orgsWithStats = await Promise.all((orgsRes.data || []).map(async function(membership) {
         var orgId = membership.organization.id
         var annRes = await supabase.from('announcements').select('id').eq('organization_id', orgId).in('visibility', ['public', 'members'])
@@ -1431,67 +1319,40 @@ if (res.data) {
           unreadCount = announcementIds.length - readIds.size
         }
         var eventCount = (await supabase.from('events').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members'])).count
-        return {
-          ...membership.organization,
-          role: membership.role,
-          custom_title: membership.custom_title,
-          eventCount: eventCount || 0,
-          unreadCount,
-        }
+        return Object.assign({}, membership.organization, { role: membership.role, custom_title: membership.custom_title, eventCount: eventCount || 0, unreadCount: unreadCount })
       }))
       setOrganizations(orgsWithStats)
 
-      // Groups
+      // Fix: org_group_members + org_groups (not group_members + groups)
       try {
-        var groupsRes = await supabase.from('group_members').select('group:groups (id, name, organization_id, type, organizations(name))').eq('member_id', user.id).eq('status', 'active')
+        var groupsRes = await supabase.from('org_group_members').select('group:org_groups (id, name, organization_id, type, organizations(name))').eq('member_id', user.id).eq('status', 'active')
         if (groupsRes.data) setMyGroups(groupsRes.data.map(function(gm) { return gm.group }).filter(Boolean))
-      } catch { setMyGroups([]) }
+      } catch(e) { console.error('groups fetch error:', e); setMyGroups([]) }
 
       // Followed orgs
       var followRes = await supabase.from('org_followers').select('org_id, organizations (id, name, logo_url, type)').eq('user_id', user.id)
       var followedOrgData = (followRes.data || []).map(function(f) { return f.organizations }).filter(Boolean)
       setFollowedOrgs(followedOrgData)
-
       if (followedOrgData.length > 0) {
         var followedOrgIds = followedOrgData.map(function(o) { return o.id })
-        var followedEvtRes = await supabase
-          .from('events')
-          .select('id, title, start_time, location, organization:organizations (id, name)')
-          .in('organization_id', followedOrgIds)
-          .gte('start_time', new Date().toISOString())
-          .eq('visibility', 'public')
-          .order('start_time', { ascending: true })
-          .limit(12)
+        var followedEvtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name)').in('organization_id', followedOrgIds).gte('start_time', new Date().toISOString()).eq('visibility', 'public').order('start_time', { ascending: true }).limit(12)
         setFollowedEvents(followedEvtRes.data || [])
       }
 
       // Saved events
-      var savesRes = await supabase
-        .from('event_saves')
-        .select('id, events(id, title, start_time, location, organizations(id, name))')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(12)
+      var savesRes = await supabase.from('event_saves').select('id, events(id, title, start_time, location, organizations(id, name))').eq('user_id', user.id).order('created_at', { ascending: false }).limit(12)
       setSavedEvents(savesRes.data || [])
 
       var orgIds = orgsWithStats.map(function(o) { return o.id })
       if (orgIds.length > 0) {
         // Upcoming events
-        var evtRes = await supabase
-          .from('events')
-          .select('id, title, start_time, location, organization:organizations (id, name, type)')
-          .in('organization_id', orgIds)
-          .gte('start_time', new Date().toISOString())
-          .in('visibility', ['public', 'members'])
-          .order('start_time', { ascending: true })
-          .limit(5)
+        var evtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name, type)').in('organization_id', orgIds).gte('start_time', new Date().toISOString()).in('visibility', ['public', 'members']).order('start_time', { ascending: true }).limit(5)
         setUpcomingEvents(evtRes.data || [])
 
         // Activity feed
         var annFeed = await supabase.from('announcements').select('id, title, created_at, priority, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('created_at', { ascending: false }).limit(30)
         var evtFeed = await supabase.from('events').select('id, title, created_at, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('created_at', { ascending: false }).limit(30)
         var docFeed = await supabase.from('documents').select('id, title, created_at, organization:organizations (id, name)').in('organization_id', orgIds).order('created_at', { ascending: false }).limit(30)
-
         var all = [
           ...(annFeed.data || []).map(function(item) { return { id: 'announcement-' + item.id, type: 'announcement', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, priority: item.priority, time: timeAgo(item.created_at) } }),
           ...(evtFeed.data  || []).map(function(item) { return { id: 'event-' + item.id,        type: 'event',        title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) } }),
@@ -1500,19 +1361,14 @@ if (res.data) {
         all.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
         setActivities(all)
 
-        // Calendar events (broader range for calendar view)
-        var calEvtRes = await supabase
-          .from('events')
-          .select('id, title, start_time, location, organization:organizations (id, name)')
-          .in('organization_id', orgIds)
-          .in('visibility', ['public', 'members'])
-          .order('start_time', { ascending: true })
-          .limit(200)
+        // Calendar events
+        var calEvtRes = await supabase.from('events').select('id, title, start_time, location, organization:organizations (id, name)').in('organization_id', orgIds).in('visibility', ['public', 'members']).order('start_time', { ascending: true }).limit(200)
         setCalendarEvents(calEvtRes.data || [])
 
         // Chats
         var chatRes = await supabase.from('chat_messages').select('id, content, created_at, chat_channels(name, organization_id, organizations(name))').order('created_at', { ascending: false }).limit(4)
         if (chatRes.data) setRecentChats(chatRes.data)
+
         await fetchRecentActivity(orgIds)
       }
     } catch (err) {
@@ -1525,89 +1381,68 @@ if (res.data) {
 
   // ── Handlers ──
   function handleDismiss(id) {
-    var updated = [...dismissedActivities, id]
+    var updated = dismissedActivities.concat([id])
     setDismissedActivities(updated)
     localStorage.setItem('dismissedActivities', JSON.stringify(updated))
     mascotSuccessToast('Removed from board.')
   }
-
   function handleToggleImportant(id) {
     var updated = importantActivities.includes(id)
       ? importantActivities.filter(function(i) { return i !== id })
-      : [...importantActivities, id]
+      : importantActivities.concat([id])
     setImportantActivities(updated)
     localStorage.setItem('importantActivities', JSON.stringify(updated))
     mascotSuccessToast(updated.includes(id) ? 'Starred.' : 'Star removed.')
   }
-
   async function handleUnfollow(orgId, orgName) {
     var userRes = await supabase.auth.getUser()
     var user = userRes.data.user
     if (!user) return
     setUnfollowingId(orgId)
-    var { error: err } = await supabase.from('org_followers').delete().eq('user_id', user.id).eq('org_id', orgId)
+    var res = await supabase.from('org_followers').delete().eq('user_id', user.id).eq('org_id', orgId)
     setUnfollowingId(null)
-    if (err) {
-      toast.error('Failed to unfollow.')
-    } else {
+    if (res.error) { toast.error('Failed to unfollow.') }
+    else {
       setFollowedOrgs(function(prev) { return prev.filter(function(o) { return o.id !== orgId }) })
       setFollowedEvents(function(prev) { return prev.filter(function(e) { return e.organization && e.organization.id !== orgId }) })
       mascotSuccessToast('Unfollowed ' + (orgName || 'organization') + '.')
     }
   }
-
   async function handleUnsave(saveId, eventTitle) {
     setRemovingSaved(saveId)
-    var { error: err } = await supabase.from('event_saves').delete().eq('id', saveId)
+    var res = await supabase.from('event_saves').delete().eq('id', saveId)
     setRemovingSaved(null)
-    if (err) {
-      toast.error('Could not remove event.')
-    } else {
+    if (res.error) { toast.error('Could not remove event.') }
+    else {
       setSavedEvents(function(prev) { return prev.filter(function(e) { return e && e.id !== saveId }) })
       mascotSuccessToast('Removed from saved events.')
     }
   }
-
   function handleToggleWidget(key) {
     var updated = activeWidgets.includes(key)
       ? activeWidgets.filter(function(k) { return k !== key })
-      : [...activeWidgets, key]
+      : activeWidgets.concat([key])
     setActiveWidgets(updated)
     savePreferences(updated, orgColors)
     mascotSuccessToast(activeWidgets.includes(key) ? 'Widget removed.' : 'Widget added.')
   }
-
   function handleOrgColorChange(orgId, color) {
     var updated = Object.assign({}, orgColors)
     updated[orgId] = color
     setOrgColors(updated)
     savePreferences(activeWidgets, updated)
   }
-
   function handleTourNext() {
-    if (tourStep < TOUR_STEPS.length - 1) {
-      setTourStep(function(s) { return s + 1 })
-    } else {
-      setTourStep(-1)
-      setShowTourEnd(true)
-      localStorage.setItem('ud_tour_done', '1')
-    }
+    if (tourStep < TOUR_STEPS.length - 1) { setTourStep(function(s) { return s + 1 }) }
+    else { setTourStep(-1); setShowTourEnd(true); localStorage.setItem('ud_tour_done', '1') }
   }
-
-  function handleTourSkip() {
-    setTourStep(-1)
-    localStorage.setItem('ud_tour_done', '1')
-  }
+  function handleTourSkip() { setTourStep(-1); localStorage.setItem('ud_tour_done', '1') }
 
   // ── Derived data ──
   var orgIndexMap = {}
   organizations.forEach(function(org, idx) { orgIndexMap[org.id] = idx })
-
   var totalUnread = organizations.reduce(function(sum, org) { return sum + (org.unreadCount || 0) }, 0)
-
   var visibleActivities = activities.filter(function(a) { return !dismissedActivities.includes(a.id) })
-
-  // Date filter options
   var DATE_FILTER_OPTIONS = [
     { key: 'week',    label: 'This week'     },
     { key: '2weeks',  label: 'Last 2 weeks'  },
@@ -1615,13 +1450,11 @@ if (res.data) {
     { key: '3months', label: 'Last 3 months' },
     { key: 'all',     label: 'All time'      },
   ]
-
   function getDateCutoff(filter) {
     var days = { week: 7, '2weeks': 14, month: 30, '3months': 90 }
     if (!days[filter]) return null
     return new Date(Date.now() - days[filter] * 86400000)
   }
-
   function getFilteredFeed(typeFilter) {
     var cutoff = getDateCutoff(dateFilter)
     return visibleActivities
@@ -1639,88 +1472,49 @@ if (res.data) {
         return new Date(b.timestamp) - new Date(a.timestamp)
       })
   }
-
-  // Tab badge counts — new items in last 7 days
   var sevenDaysAgo = new Date(Date.now() - 7 * 86400000)
-var tabCounts = {
+  var tabCounts = {
     events:        visibleActivities.filter(function(a) { return a.type === 'event'        && new Date(a.timestamp) >= sevenDaysAgo }).length,
     announcements: visibleActivities.filter(function(a) { return a.type === 'announcement' && new Date(a.timestamp) >= sevenDaysAgo }).length,
   }
-
-var TABS = [
+  var TABS = [
     { key: 'all',           label: 'All Updates'                                   },
     { key: 'events',        label: 'Events',        count: tabCounts.events        },
     { key: 'announcements', label: 'Announcements', count: tabCounts.announcements },
+    { key: 'my_programs',   label: 'My Programs & Events'                          },
     { key: 'activity',      label: 'Recent Activity'                               },
   ]
-
-var isFeedTab = activeTab === 'all' || activeTab === 'announcements'
+  var isFeedTab = activeTab === 'all' || activeTab === 'announcements'
 
   // ── Feed content by tab ──
- function renderFeedContent() {
-// Events — calendar view
-    if (activeTab === 'events' && eventsView === 'calendar') {
-      return (
-<InlineDashboardCalendar
-  events={calendarEvents}
-  organizations={organizations}
-  orgColors={orgColors}
-  onColorChange={handleOrgColorChange}
-/>
-      )
+  function renderFeedContent() {
+    if (activeTab === 'my_programs') {
+      return <MyProgramsEvents currentUserId={currentUserId} organizations={organizations} loading={loading} />
     }
-
-    // Events — saved view
+    if (activeTab === 'events' && eventsView === 'calendar') {
+      return <InlineDashboardCalendar events={calendarEvents} organizations={organizations} orgColors={orgColors} onColorChange={handleOrgColorChange} />
+    }
     if (activeTab === 'events' && eventsView === 'saved') {
       return (
         <div>
           {savedEvents.length === 0 ? (
-            <EmptyState
-              icon={<IcoBookmark />}
-              title="No saved events yet"
-              desc="Bookmark events from the discovery page to find them here."
-              actionLabel="Discover Events"
-              onAction={function() { navigate('/discover') }}
-            />
+            <EmptyState icon={<IcoBookmark />} title="No saved events yet" desc="Bookmark events from the discovery page to find them here." actionLabel="Discover Events" onAction={function() { navigate('/discover') }} />
           ) : (
-<div role="list" aria-label="Saved events" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', marginTop: '8px' }}>
-            {savedEvents.map(function(save) {
-              return (
-                <SavedEventCard
-                  key={save.id}
-                  save={save}
-                  onUnsave={handleUnsave}
-                  removing={removingSaved}
-                />
-              )
-            })}
-          </div>
+            <div role="list" aria-label="Saved events" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', marginTop: '8px' }}>
+              {savedEvents.map(function(save) { return <SavedEventCard key={save.id} save={save} onUnsave={handleUnsave} removing={removingSaved} /> })}
+            </div>
           )}
         </div>
       )
     }
-
-// Recent Activity tab
-if (activeTab === 'activity') {
-     return <RecentActivityFeed items={recentActivity} loading={activityLoading} orgColors={orgColors} organizations={organizations} />
+    if (activeTab === 'activity') {
+      return <RecentActivityFeed items={recentActivity} loading={activityLoading} orgColors={orgColors} organizations={organizations} />
     }
-
-    // Events — list view
     if (activeTab === 'events' && eventsView === 'list') {
-      return (
-        <InlineDashboardEventList
-          events={calendarEvents}
-          organizations={organizations}
-          orgColors={orgColors}
-          onColorChange={handleOrgColorChange}
-        />
-      )
+      return <InlineDashboardEventList events={calendarEvents} organizations={organizations} orgColors={orgColors} onColorChange={handleOrgColorChange} />
     }
-
-    // Feed tabs: all, announcements, events-list
     var typeKey = activeTab === 'all' ? 'all' : activeTab === 'announcements' ? 'announcement' : 'event'
     var feed = getFilteredFeed(typeKey)
-
     if (loading) {
       return (
         <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
@@ -1742,59 +1536,31 @@ if (activeTab === 'activity') {
         </div>
       )
     }
-
     if (organizations.length === 0) {
-      return (
-        <EmptyState
-          icon={<IcoBuilding />}
-          title="No organizations yet"
-          desc="Create or join an organization to see updates here."
-          actionLabel="Create Organization"
-          onAction={function() { setShowCreateModal(true) }}
-        />
-      )
+      return <EmptyState icon={<IcoBuilding />} title="No organizations yet" desc="Create or join an organization to see updates here." actionLabel="Create Organization" onAction={function() { setShowCreateModal(true) }} />
     }
-
     if (feed.length === 0) {
       return (
         <div role="status" style={{ textAlign: 'center', padding: '40px 24px', border: '1px dashed ' + BDR, borderRadius: '12px', marginTop: '8px', color: MUTED }}>
           <p style={{ fontSize: '14px', fontWeight: 600, color: TEXT, marginBottom: '4px' }}>Nothing here</p>
           <p style={{ fontSize: '12px' }}>Try a different filter, or check back when your orgs post updates.</p>
           {dismissedActivities.length > 0 && (
-            <button
-              onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }}
-              style={{ marginTop: '12px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            >Restore {dismissedActivities.length} dismissed items</button>
+            <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ marginTop: '12px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+              Restore {dismissedActivities.length} dismissed items
+            </button>
           )}
         </div>
       )
     }
-
-return (
+    return (
       <div ref={feedRef}>
-        {activeTab === 'all' && (
-          <OrgColorLegend
-            organizations={organizations}
-            orgColors={orgColors}
-            onColorChange={handleOrgColorChange}
-          />
-        )}
-        <NoteGrid
-          items={feed}
-          orgColors={orgColors}
-          orgIndexMap={orgIndexMap}
-          onDismiss={handleDismiss}
-          onToggleImportant={handleToggleImportant}
-          importantActivities={importantActivities}
-        />
+        {activeTab === 'all' && <OrgColorLegend organizations={organizations} orgColors={orgColors} onColorChange={handleOrgColorChange} />}
+        <NoteGrid items={feed} orgColors={orgColors} orgIndexMap={orgIndexMap} onDismiss={handleDismiss} onToggleImportant={handleToggleImportant} importantActivities={importantActivities} />
         {dismissedActivities.length > 0 && (
           <div style={{ textAlign: 'center', marginTop: '8px' }}>
-            <button
-              onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }}
-              style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            >Restore {dismissedActivities.length} dismissed</button>
+            <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+              Restore {dismissedActivities.length} dismissed
+            </button>
           </div>
         )}
       </div>
@@ -1807,55 +1573,34 @@ return (
       return (
         <WidgetShell key="orgs" id="orgs" label="My Organizations" onRemove={function() { handleToggleWidget('orgs') }}>
           {loading ? (
-            [1,2,3].map(function(i) {
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <Skel w="32px" h="32px" radius="8px" />
-                  <div style={{ flex: 1 }}><Skel w="75%" h="12px" /><div style={{ marginTop: '4px' }}><Skel w="45%" h="10px" /></div></div>
-                </div>
-              )
-            })
+            [1,2,3].map(function(i) { return <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Skel w="32px" h="32px" radius="8px" /><div style={{ flex: 1 }}><Skel w="75%" h="12px" /><div style={{ marginTop: '4px' }}><Skel w="45%" h="10px" /></div></div></div> })
           ) : organizations.length === 0 ? (
             <p style={{ fontSize: '12px', color: MUTED, textAlign: 'center', padding: '8px 0' }}>No organizations yet.</p>
           ) : (
             <div ref={orgsRef}>
               {organizations.map(function(org, idx) {
                 var avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                var noteColor   = orgColors[org.id] || NOTE_PRESETS[idx % NOTE_PRESETS.length]
                 return (
                   <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', borderBottom: idx < organizations.length - 1 ? '1px solid ' + BDR : 'none', marginBottom: idx < organizations.length - 1 ? '6px' : 0 }}>
-                    <Link
-                      to={'/organizations/' + org.id}
-                      aria-label={'Go to ' + org.name}
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', flex: 1, minWidth: 0 }}
-                      className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
+                    <Link to={'/organizations/' + org.id} aria-label={'Go to ' + org.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', flex: 1, minWidth: 0 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                       {org.logo_url
                         ? <img src={org.logo_url} alt={org.name + ' logo'} style={{ width: '30px', height: '30px', borderRadius: '7px', objectFit: 'cover', flexShrink: 0 }} />
                         : <div style={{ width: '30px', height: '30px', borderRadius: '7px', flexShrink: 0, background: avatarColor, color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>{getInitials(org.name)}</div>
                       }
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: '12px', fontWeight: 600, color: TEXT, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{org.name}</p>
-                        <p style={{ fontSize: '10px', color: org.unreadCount > 0 ? RED : MUTED, margin: 0 }}>
-                          {org.unreadCount > 0 ? org.unreadCount + ' unread' : (org.custom_title || org.role)}
-                        </p>
+                        <p style={{ fontSize: '10px', color: org.unreadCount > 0 ? RED : MUTED, margin: 0 }}>{org.unreadCount > 0 ? org.unreadCount + ' unread' : (org.custom_title || org.role)}</p>
                       </div>
                     </Link>
                   </div>
                 )
               })}
-              <button
-                onClick={function() { setShowCreateModal(true) }}
-                aria-label="Create a new organization"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '10px', padding: '8px', background: 'transparent', border: '1px dashed ' + BDR, borderRadius: '8px', width: '100%', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: MUTED }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              ><IcoPlus /> New organization</button>
+              <button onClick={function() { setShowCreateModal(true) }} aria-label="Create a new organization" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '10px', padding: '8px', background: 'transparent', border: '1px dashed ' + BDR, borderRadius: '8px', width: '100%', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: MUTED }} className="focus:outline-none focus:ring-2 focus:ring-blue-500"><IcoPlus /> New organization</button>
             </div>
           )}
         </WidgetShell>
       )
     }
-
     if (key === 'chats') {
       return (
         <WidgetShell key="chats" id="chats" label="Recent Chats" onRemove={function() { handleToggleWidget('chats') }}>
@@ -1864,9 +1609,7 @@ return (
           ) : recentChats.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '8px 0', color: MUTED }}>
               <p style={{ fontSize: '12px', marginBottom: '10px' }}>No messages yet.</p>
-              {organizations.length > 0 && (
-                <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} style={{ padding: '6px 14px', background: BLUE, color: '#FFF', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Start chatting</button>
-              )}
+              {organizations.length > 0 && <button onClick={function() { navigate('/organizations/' + organizations[0].id + '/chat') }} style={{ padding: '6px 14px', background: BLUE, color: '#FFF', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Start chatting</button>}
             </div>
           ) : (
             recentChats.map(function(msg) {
@@ -1874,13 +1617,7 @@ return (
               var orgId = msg.chat_channels ? msg.chat_channels.organization_id : null
               var orgName = (msg.chat_channels && msg.chat_channels.organizations) ? msg.chat_channels.organizations.name : ''
               return (
-                <button
-                  key={msg.id}
-                  onClick={function() { if (orgId) navigate('/organizations/' + orgId + '/chat') }}
-                  aria-label={'Open ' + channelName + ' channel'}
-                  style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 0', borderRadius: '6px', textAlign: 'left', marginBottom: '4px' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <button key={msg.id} onClick={function() { if (orgId) navigate('/organizations/' + orgId + '/chat') }} aria-label={'Open ' + channelName + ' channel'} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 0', borderRadius: '6px', textAlign: 'left', marginBottom: '4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <div style={{ width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0, background: '#EFF6FF', color: BLUE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IcoChat /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT, margin: 0 }}>#{channelName}{orgName && <span style={{ fontWeight: 400, color: MUTED }}> · {orgName}</span>}</p>
@@ -1894,7 +1631,6 @@ return (
         </WidgetShell>
       )
     }
-
     if (key === 'saved') {
       return (
         <WidgetShell key="saved" id="saved" label="Saved Events" onRemove={function() { handleToggleWidget('saved') }}>
@@ -1902,12 +1638,12 @@ return (
             ? [1,2].map(function(i) { return <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}><Skel w="36px" h="36px" radius="8px" /><div style={{ flex: 1 }}><Skel w="80%" h="12px" /><div style={{ marginTop: '4px' }}><Skel w="55%" h="10px" /></div></div></div> })
             : savedEvents.length === 0
               ? <p style={{ fontSize: '12px', color: MUTED }}>No saved events yet.</p>
-: savedEvents.slice(0, 3).map(function(save) {
-        var evt = save.events
-        if (!evt) return null
-        var d = fmtDate(evt.start_time)
-        return (
-          <Link key={evt.id} to={'/events/' + evt.id} to={'/events/' + evt.id} aria-label={'Saved: ' + evt.title} style={{ display: 'flex', gap: '8px', alignItems: 'center', textDecoration: 'none', marginBottom: '8px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+              : savedEvents.slice(0, 3).map(function(save) {
+                  var evt = save.events
+                  if (!evt) return null
+                  var d = fmtDate(evt.start_time)
+                  return (
+                    <Link key={evt.id} to={'/events/' + evt.id} aria-label={'Saved: ' + evt.title} style={{ display: 'flex', gap: '8px', alignItems: 'center', textDecoration: 'none', marginBottom: '8px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                       <div style={{ background: 'rgba(245,183,49,0.1)', borderRadius: '6px', padding: '5px 8px', textAlign: 'center', flexShrink: 0 }}>
                         <div style={{ fontSize: '8px', fontWeight: 700, color: '#B45309', textTransform: 'uppercase' }}>{d.mon}</div>
                         <div style={{ fontSize: '14px', fontWeight: 800, color: '#B45309', lineHeight: 1 }}>{d.day}</div>
@@ -1923,7 +1659,6 @@ return (
         </WidgetShell>
       )
     }
-
     if (key === 'following') {
       return (
         <WidgetShell key="following" id="following" label="Following" onRemove={function() { handleToggleWidget('following') }}>
@@ -1942,10 +1677,7 @@ return (
               return (
                 <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <Link to={'/organizations/' + org.id} aria-label={'View ' + org.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, textDecoration: 'none' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
-                    {org.logo_url
-                      ? <img src={org.logo_url} alt={org.name + ' logo'} style={{ width: '28px', height: '28px', borderRadius: '7px', objectFit: 'cover', flexShrink: 0 }} />
-                      : <div style={{ width: '28px', height: '28px', borderRadius: '7px', flexShrink: 0, background: color, color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>{getInitials(org.name)}</div>
-                    }
+                    {org.logo_url ? <img src={org.logo_url} alt={org.name + ' logo'} style={{ width: '28px', height: '28px', borderRadius: '7px', objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: '28px', height: '28px', borderRadius: '7px', flexShrink: 0, background: color, color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>{getInitials(org.name)}</div>}
                     <p style={{ fontSize: '12px', fontWeight: 600, color: TEXT, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{org.name}</p>
                   </Link>
                   <button onClick={function() { handleUnfollow(org.id, org.name) }} disabled={isUnfollowing} aria-label={'Unfollow ' + org.name} style={{ flexShrink: 0, width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid ' + BDR, borderRadius: '6px', background: 'transparent', color: isUnfollowing ? MUTED : RED, cursor: isUnfollowing ? 'not-allowed' : 'pointer', opacity: isUnfollowing ? 0.5 : 1 }} className="focus:outline-none focus:ring-2 focus:ring-red-400"><IcoX /></button>
@@ -1956,7 +1688,6 @@ return (
         </WidgetShell>
       )
     }
-
     if (key === 'signups') {
       return (
         <WidgetShell key="signups" id="signups" label="My Sign-Ups" onRemove={function() { handleToggleWidget('signups') }}>
@@ -1964,7 +1695,6 @@ return (
         </WidgetShell>
       )
     }
-
     if (key === 'groups') {
       return (
         <WidgetShell key="groups" id="groups" label="My Groups" onRemove={function() { handleToggleWidget('groups') }}>
@@ -1992,15 +1722,13 @@ return (
         </WidgetShell>
       )
     }
-
     if (key === 'tasks') {
-  return (
-    <WidgetShell key="tasks" id="tasks" label="My Tasks" onRemove={function() { handleToggleWidget('tasks') }}>
-      <TasksWidget />
-    </WidgetShell>
-  );
-}
-
+      return (
+        <WidgetShell key="tasks" id="tasks" label="My Tasks" onRemove={function() { handleToggleWidget('tasks') }}>
+          <TasksWidget />
+        </WidgetShell>
+      )
+    }
     return null
   }
 
@@ -2021,8 +1749,7 @@ return (
   // ── Render ──
   return (
     <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: TEXT }}>
-
-<style>{`
+      <style>{`
         .postit-wrap .card-actions { opacity: 0; transition: opacity 0.12s; }
         .postit-wrap:hover .card-actions,
         .postit-wrap:focus-within .card-actions { opacity: 1; }
@@ -2045,18 +1772,12 @@ return (
         .rbc-event:focus { outline: 2px solid #3B82F6; outline-offset: 2px; }
       `}</style>
 
-      {tourStep >= 0 && (
-        <TourOverlay step={tourStep} refs={tourRefs} onNext={handleTourNext} onSkip={handleTourSkip} />
-      )}
-      {showTourEnd && (
-        <TourEndModal onClose={function() { setShowTourEnd(false) }} />
-      )}
+      {tourStep >= 0 && <TourOverlay step={tourStep} refs={tourRefs} onNext={handleTourNext} onSkip={handleTourSkip} />}
+      {showTourEnd && <TourEndModal onClose={function() { setShowTourEnd(false) }} />}
 
       <main role="main" style={{ maxWidth: '1300px', margin: '0 auto', padding: '28px 24px', display: 'grid', gridTemplateColumns: '1fr 252px', gap: '28px', alignItems: 'start' }}>
-
         {/* ── Left column ── */}
         <div>
-
           {/* Header */}
           <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
             <div>
@@ -2064,32 +1785,15 @@ return (
               <h1 style={{ fontSize: '24px', fontWeight: 800, color: TEXT, margin: 0 }}>
                 {loading ? 'Loading…' : memberName ? memberName.split(' ')[0] + "'s Board" : 'My Board'}
               </h1>
-              <p style={{ fontSize: '12px', color: MUTED, marginTop: '3px' }}>
-                Updates from your {organizations.length} organization{organizations.length !== 1 ? 's' : ''}
-              </p>
+              <p style={{ fontSize: '12px', color: MUTED, marginTop: '3px' }}>Updates from your {organizations.length} organization{organizations.length !== 1 ? 's' : ''}</p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
-              <button
-                onClick={function() { setTourStep(0) }}
-                aria-label="Take the guided tour"
-                style={{ fontSize: '12px', fontWeight: 600, color: MUTED, background: 'transparent', border: '1px solid ' + BDR, padding: '5px 14px', borderRadius: '8px', cursor: 'pointer' }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >Take the tour</button>
+              <button onClick={function() { setTourStep(0) }} aria-label="Take the guided tour" style={{ fontSize: '12px', fontWeight: 600, color: MUTED, background: 'transparent', border: '1px solid ' + BDR, padding: '5px 14px', borderRadius: '8px', cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Take the tour</button>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={function() { setShowInviteMember(true) }}
-                  aria-label="Invite a member to your organization"
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <button onClick={function() { setShowInviteMember(true) }} aria-label="Invite a member to your organization" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <UserPlus size={13} aria-hidden="true" /> Invite Member
                 </button>
-                <button
-                  onClick={function() { setShowInviteOrg(true) }}
-                  aria-label="Invite an organization"
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: PURPLE, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
+                <button onClick={function() { setShowInviteOrg(true) }} aria-label="Invite an organization" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: PURPLE, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }} className="focus:outline-none focus:ring-2 focus:ring-purple-500">
                   <Building2 size={13} aria-hidden="true" /> Invite Org
                 </button>
               </div>
@@ -2098,87 +1802,36 @@ return (
 
           {/* Stat cards */}
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
-            <StatCard label="Orgs"       value={organizations.length}  Icon={IcoOrgs}     accentColor={PURPLE} loading={loading} />
-            <StatCard label="Upcoming Events" value={upcomingEvents.length} Icon={IcoCalendar} accentColor={BLUE} loading={loading} />
-            <StatCard label="Unread"     value={totalUnread}           Icon={IcoBell}     accentColor={RED}    loading={loading} />
+            <StatCard label="Orgs"            value={organizations.length}  Icon={IcoOrgs}     accentColor={PURPLE} loading={loading} />
+            <StatCard label="Upcoming Events"  value={upcomingEvents.length} Icon={IcoCalendar} accentColor={BLUE}   loading={loading} />
+            <StatCard label="Unread"           value={totalUnread}           Icon={IcoBell}     accentColor={RED}    loading={loading} />
           </div>
 
           {/* Tab bar */}
           <div style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
-            {/* Tabs */}
-            <div
-              role="tablist"
-              aria-label="Dashboard sections"
-              style={{ display: 'flex', borderBottom: '1px solid ' + BDR, paddingLeft: '4px', overflowX: 'auto' }}
-            >
+            <div role="tablist" aria-label="Dashboard sections" style={{ display: 'flex', borderBottom: '1px solid ' + BDR, paddingLeft: '4px', overflowX: 'auto' }}>
               {TABS.map(function(tab) {
                 var isActive = activeTab === tab.key
                 return (
-                  <button
-                    key={tab.key}
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={function() { setActiveTab(tab.key) }}
-                    aria-label={tab.label + (tab.count ? ', ' + tab.count + ' new this week' : '')}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      padding: '12px 16px', fontSize: '13px', fontWeight: isActive ? 700 : 500,
-                      color: isActive ? BLUE : MUTED,
-                      background: 'transparent', border: 'none',
-                      borderBottom: isActive ? '2px solid ' + BLUE : '2px solid transparent',
-                      cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      marginBottom: '-1px',
-                    }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
+                  <button key={tab.key} role="tab" aria-selected={isActive} onClick={function() { setActiveTab(tab.key) }} aria-label={tab.label + (tab.count ? ', ' + tab.count + ' new this week' : '')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 16px', fontSize: '13px', fontWeight: isActive ? 700 : 500, color: isActive ? BLUE : MUTED, background: 'transparent', border: 'none', borderBottom: isActive ? '2px solid ' + BLUE : '2px solid transparent', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginBottom: '-1px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {tab.label}
-                    {tab.count > 0 && (
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          minWidth: '18px', height: '18px', padding: '0 5px',
-                          borderRadius: '99px', fontSize: '10px', fontWeight: 700,
-                          background: isActive ? BLUE : '#E2E8F0',
-                          color: isActive ? '#FFFFFF' : MUTED,
-                        }}
-                      >{tab.count}</span>
-                    )}
+                    {tab.count > 0 && <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '99px', fontSize: '10px', fontWeight: 700, background: isActive ? BLUE : '#E2E8F0', color: isActive ? '#FFFFFF' : MUTED }}>{tab.count}</span>}
                   </button>
                 )
               })}
             </div>
 
-{/* Events sub-bar */}
+            {/* Events sub-bar */}
             {activeTab === 'events' && (
               <div role="group" aria-label="Events view" style={{ display: 'flex', gap: '4px', padding: '10px 16px', borderBottom: '1px solid ' + BDR }}>
-                {[
-                  { key: 'list',     label: 'List'         },
-                  { key: 'calendar', label: 'Calendar'     },
-                  { key: 'saved',    label: 'Saved Events' },
-                ].map(function(view) {
+                {[{ key: 'list', label: 'List' }, { key: 'calendar', label: 'Calendar' }, { key: 'saved', label: 'Saved Events' }].map(function(view) {
                   var isActive = eventsView === view.key
-                  return (
-                    <button
-                      key={view.key}
-                      onClick={function() { setEventsView(view.key) }}
-                      aria-pressed={isActive}
-                      style={{
-                        padding: '5px 14px', borderRadius: '99px',
-                        border: '1px solid ' + (isActive ? BLUE : BDR),
-                        background: isActive ? 'rgba(59,130,246,0.1)' : 'transparent',
-                        color: isActive ? BLUE : MUTED,
-                        fontSize: '12px', fontWeight: isActive ? 700 : 500,
-                        cursor: 'pointer',
-                      }}
-                      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >{view.label}</button>
-                  )
+                  return <button key={view.key} onClick={function() { setEventsView(view.key) }} aria-pressed={isActive} style={{ padding: '5px 14px', borderRadius: '99px', border: '1px solid ' + (isActive ? BLUE : BDR), background: isActive ? 'rgba(59,130,246,0.1)' : 'transparent', color: isActive ? BLUE : MUTED, fontSize: '12px', fontWeight: isActive ? 700 : 500, cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{view.label}</button>
                 })}
               </div>
             )}
 
-            {/* Filter row (all updates, announcements, events list view) */}
+            {/* Filter row */}
             {isFeedTab && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderBottom: '1px solid ' + BDR, flexWrap: 'wrap' }}>
                 <OrgFilterDropdown organizations={organizations} selectedOrgId={orgFilter} onChange={setOrgFilter} />
@@ -2186,30 +1839,14 @@ return (
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   {DATE_FILTER_OPTIONS.map(function(opt) {
                     var isSelected = dateFilter === opt.key
-                    return (
-                      <button
-                        key={opt.key}
-                        onClick={function() { setDateFilter(opt.key) }}
-                        aria-pressed={isSelected}
-                        style={{
-                          padding: '4px 10px', borderRadius: '99px', border: '1px solid ' + (isSelected ? YELLOW : BDR),
-                          background: isSelected ? 'rgba(245,183,49,0.1)' : 'transparent',
-                          color: isSelected ? '#B45309' : MUTED,
-                          fontSize: '11px', fontWeight: isSelected ? 700 : 500,
-                          cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}
-                        className="focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                      >{opt.label}</button>
-                    )
+                    return <button key={opt.key} onClick={function() { setDateFilter(opt.key) }} aria-pressed={isSelected} style={{ padding: '4px 10px', borderRadius: '99px', border: '1px solid ' + (isSelected ? YELLOW : BDR), background: isSelected ? 'rgba(245,183,49,0.1)' : 'transparent', color: isSelected ? '#B45309' : MUTED, fontSize: '11px', fontWeight: isSelected ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }} className="focus:outline-none focus:ring-2 focus:ring-yellow-400">{opt.label}</button>
                   })}
                 </div>
                 <div style={{ flex: 1 }} />
                 {dismissedActivities.length > 0 && (
-                  <button
-                    onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }}
-                    style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                  >Restore {dismissedActivities.length} hidden</button>
+                  <button onClick={function() { setDismissedActivities([]); localStorage.removeItem('dismissedActivities'); mascotSuccessToast('Board restored.') }} style={{ fontSize: '11px', fontWeight: 600, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                    Restore {dismissedActivities.length} hidden
+                  </button>
                 )}
               </div>
             )}
@@ -2220,7 +1857,7 @@ return (
             </div>
           </div>
 
-          {/* Upcoming events (below feed, for All tab) */}
+          {/* Upcoming events */}
           {!loading && activeTab === 'all' && upcomingEvents.length > 0 && (
             <section aria-labelledby="upcoming-heading" style={{ marginTop: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -2253,66 +1890,24 @@ return (
               <button onClick={function() { navigate('/explore') }} style={{ padding: '7px 16px', background: PURPLE, color: '#FFF', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }} className="focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">Explore organizations</button>
             </div>
           )}
-
         </div>
 
         {/* ── Right sidebar ── */}
         <aside role="complementary" aria-label="Dashboard sidebar">
-
-          {/* Active widgets */}
           {activeWidgets.map(function(key) { return renderWidget(key) })}
-
-          {/* Customize button */}
           <div ref={customizeRef}>
-            <button
-              onClick={function() { setShowCustomize(function(v) { return !v }) }}
-              aria-expanded={showCustomize}
-              aria-controls="widget-picker"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                width: '100%', padding: '10px',
-                background: '#F8FAFC', border: '1.5px dashed ' + BDR,
-                borderRadius: '10px', fontSize: '12px', fontWeight: 500, color: MUTED,
-                cursor: 'pointer', marginBottom: '10px',
-              }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <button onClick={function() { setShowCustomize(function(v) { return !v }) }} aria-expanded={showCustomize} aria-controls="widget-picker" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%', padding: '10px', background: '#F8FAFC', border: '1.5px dashed ' + BDR, borderRadius: '10px', fontSize: '12px', fontWeight: 500, color: MUTED, cursor: 'pointer', marginBottom: '10px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
               <IcoSettings /> Customize widgets
             </button>
-
             {showCustomize && (
-              <div
-                id="widget-picker"
-                style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}
-              >
-                <div style={{ padding: '10px 14px', background: BG, borderBottom: '1px solid ' + BDR, fontSize: '12px', fontWeight: 600, color: TEXT2 }}>
-                  Add or remove widgets
-                </div>
+              <div id="widget-picker" style={{ background: CARD, border: '1px solid ' + BDR, borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
+                <div style={{ padding: '10px 14px', background: BG, borderBottom: '1px solid ' + BDR, fontSize: '12px', fontWeight: 600, color: TEXT2 }}>Add or remove widgets</div>
                 {WIDGET_DEFS.map(function(def) {
                   var isOn = activeWidgets.includes(def.key)
                   return (
-                    <button
-                      key={def.key}
-                      onClick={function() { handleToggleWidget(def.key) }}
-                      aria-pressed={isOn}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        width: '100%', padding: '10px 14px',
-                        border: 'none', borderBottom: '1px solid ' + BDR,
-                        background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                      }}
-                      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {/* Checkbox visual */}
-                      <div style={{
-                        width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0,
-                        border: '1.5px solid ' + (isOn ? BLUE : BDR),
-                        background: isOn ? BLUE : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {isOn && (
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                        )}
+                    <button key={def.key} onClick={function() { handleToggleWidget(def.key) }} aria-pressed={isOn} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px', border: 'none', borderBottom: '1px solid ' + BDR, background: 'transparent', cursor: 'pointer', textAlign: 'left' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, border: '1.5px solid ' + (isOn ? BLUE : BDR), background: isOn ? BLUE : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {isOn && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>}
                       </div>
                       <div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: TEXT }}>{def.label}</div>
@@ -2324,29 +1919,16 @@ return (
               </div>
             )}
           </div>
-
         </aside>
       </main>
 
       {/* Modals */}
-      <CreateOrganization
-        isOpen={showCreateModal}
-        onClose={function() { setShowCreateModal(false) }}
-        onSuccess={function() { fetchAll(); setShowCreateModal(false) }}
-      />
+      <CreateOrganization isOpen={showCreateModal} onClose={function() { setShowCreateModal(false) }} onSuccess={function() { fetchAll(); setShowCreateModal(false) }} />
       {selectedOrgForEvent && (
-        <CreateEvent
-          isOpen={showCreateEvent}
-          onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null); setCreateEventPrefill(null); }}
-          onSuccess={fetchAll}
-          organizationId={selectedOrgForEvent.id}
-          organizationName={selectedOrgForEvent.name}
-          prefillData={createEventPrefill}
-        />
+        <CreateEvent isOpen={showCreateEvent} onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null); setCreateEventPrefill(null) }} onSuccess={fetchAll} organizationId={selectedOrgForEvent.id} organizationName={selectedOrgForEvent.name} prefillData={createEventPrefill} />
       )}
       <InviteMemberModal isOpen={showInviteMember} onClose={function() { setShowInviteMember(false) }} />
       <InviteOrgModal    isOpen={showInviteOrg}    onClose={function() { setShowInviteOrg(false) }} />
-
     </div>
   )
 }

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
 var PAGE_BG  = '#F8FAFC';
@@ -23,12 +23,13 @@ var PROGRAM_TAGS = [
   'Disability','Mental Health','Sports','Technology','Financial Aid',
 ];
 
-// ── Icon component ────────────────────────────────────────────────────────────
+// ── SVG Icon ──────────────────────────────────────────────────────────────────
 function Icon(props) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       className={props.className || 'h-5 w-5'}
+      style={props.style}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -61,7 +62,12 @@ var ICONS = {
   chevronDown: 'M19 9l-7 7-7-7',
   chevronUp:   'M5 15l7-7 7 7',
   grip:        'M4 6h16M4 10h16M4 14h16',
+  check:       'M5 13l4 4L19 7',
+  settings:    ['M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', 'M15 12a3 3 0 11-6 0 3 3 0 016 0z'],
+  lock:        ['M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
+  unlock:      ['M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z'],
   xCircle:     ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'],
+  refresh:     ['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'],
 };
 
 var EMPTY_FORM = {
@@ -70,6 +76,7 @@ var EMPTY_FORM = {
   capacity: '', enrolled_count: '',
   how_to_apply: '', contact_name: '', contact_email: '',
   status: 'active', is_public: true, publish_to_discovery: false,
+  requires_approval: false, registration_open: true,
   tags: [],
 };
 
@@ -79,6 +86,32 @@ function formatDate(ds) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Focus trap hook ───────────────────────────────────────────────────────────
+function useFocusTrap(isActive) {
+  var ref = useRef(null);
+  useEffect(function() {
+    if (!isActive || !ref.current) return;
+    var el = ref.current;
+    var focusable = el.querySelectorAll(
+      'button,a[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+    );
+    var first = focusable[0];
+    var last  = focusable[focusable.length - 1];
+    function trap(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    el.addEventListener('keydown', trap);
+    if (first) first.focus();
+    return function() { el.removeEventListener('keydown', trap); };
+  }, [isActive]);
+  return ref;
+}
+
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 function Toggle(props) {
   return (
@@ -86,10 +119,11 @@ function Toggle(props) {
       onClick={props.onClick}
       disabled={props.disabled}
       style={{
-        position: 'relative', display: 'inline-flex', height: props.small ? '20px' : '22px',
-        width: props.small ? '36px' : '40px', flexShrink: 0,
-        alignItems: 'center', borderRadius: '99px', border: 'none',
-        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        position: 'relative', display: 'inline-flex',
+        height: props.small ? '20px' : '22px',
+        width:  props.small ? '36px' : '40px',
+        flexShrink: 0, alignItems: 'center', borderRadius: '99px',
+        border: 'none', cursor: props.disabled ? 'not-allowed' : 'pointer',
         background: props.checked ? (props.color || '#3B82F6') : BDR,
         opacity: props.disabled ? 0.45 : 1, transition: 'background 0.2s',
       }}
@@ -116,24 +150,23 @@ function Toggle(props) {
 
 // ── ConfirmModal ──────────────────────────────────────────────────────────────
 function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel }) {
+  var trapRef = useFocusTrap(isOpen);
   useEffect(function() {
     if (!isOpen) return;
     function handleKey(e) { if (e.key === 'Escape') onCancel(); }
     document.addEventListener('keydown', handleKey);
     return function() { document.removeEventListener('keydown', handleKey); };
   }, [isOpen]);
-
   if (!isOpen) return null;
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-prog-title"
+      role="dialog" aria-modal="true" aria-labelledby="confirm-prog-title"
       onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
     >
       <div
-        style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' }}
+        ref={trapRef}
+        style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12)' }}
         onClick={function(e) { e.stopPropagation(); }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
@@ -148,19 +181,210 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={onCancel}
-            autoFocus
             style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'transparent', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
             className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-          >
-            Cancel
-          </button>
+          >Cancel</button>
           <button
             onClick={onConfirm}
             style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#EF4444', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
             className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-          >
-            {confirmLabel || 'Delete'}
+          >{confirmLabel || 'Delete'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Registrations drawer ──────────────────────────────────────────────────────
+function RegistrationsDrawer({ program, organizationId, onClose }) {
+  var trapRef = useFocusTrap(true);
+  var [registrations, setRegistrations] = useState([]);
+  var [loading, setLoading]             = useState(true);
+
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, []);
+
+  useEffect(function() {
+    loadRegistrations();
+  }, [program.id]);
+
+  async function loadRegistrations() {
+    setLoading(true);
+    var result = await supabase
+      .from('program_registrations')
+      .select('id, status, created_at, notes, user_id')
+      .eq('program_id', program.id)
+      .order('created_at', { ascending: false });
+    if (result.error) { mascotErrorToast('Failed to load registrations.'); setLoading(false); return; }
+
+    var rows = result.data || [];
+    if (rows.length === 0) { setRegistrations([]); setLoading(false); return; }
+
+    // Fetch member names
+    var userIds = rows.map(function(r) { return r.user_id; });
+    var membersResult = await supabase
+      .from('members')
+      .select('user_id, first_name, last_name')
+      .in('user_id', userIds);
+    var membersMap = {};
+    if (membersResult.data) {
+      membersResult.data.forEach(function(m) { membersMap[m.user_id] = m.first_name + ' ' + m.last_name; });
+    }
+
+    setRegistrations(rows.map(function(r) {
+      return Object.assign({}, r, { member_name: membersMap[r.user_id] || 'Unknown member' });
+    }));
+    setLoading(false);
+  }
+
+  async function updateStatus(regId, newStatus) {
+    var authRes = await supabase.auth.getUser();
+    var result = await supabase.from('program_registrations')
+      .update({ status: newStatus, reviewed_by: authRes.data.user.id, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', regId);
+    if (result.error) { mascotErrorToast('Failed to update registration.'); return; }
+    mascotSuccessToast(newStatus === 'enrolled' ? 'Registration approved.' : 'Registration declined.');
+    loadRegistrations();
+  }
+
+  var enrolled = registrations.filter(function(r) { return r.status === 'enrolled'; });
+  var pending  = registrations.filter(function(r) { return r.status === 'pending'; });
+  var declined = registrations.filter(function(r) { return r.status === 'declined'; });
+  var cancelled = registrations.filter(function(r) { return r.status === 'cancelled'; });
+
+  function statusBadge(status) {
+    var cfg = {
+      enrolled:  { bg: 'rgba(34,197,94,0.1)',  color: '#22C55E', label: 'Enrolled' },
+      pending:   { bg: 'rgba(245,183,49,0.15)', color: '#B45309', label: 'Pending' },
+      declined:  { bg: 'rgba(239,68,68,0.1)',   color: '#EF4444', label: 'Declined' },
+      cancelled: { bg: 'rgba(100,116,139,0.1)', color: '#64748B', label: 'Cancelled' },
+    };
+    var c = cfg[status] || cfg.pending;
+    return (
+      <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: c.bg, color: c.color }}>
+        {c.label}
+      </span>
+    );
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 55, display: 'flex', justifyContent: 'flex-end' }}
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true" aria-labelledby="reg-drawer-title"
+    >
+      <div
+        ref={trapRef}
+        style={{ background: CARD_BG, width: '100%', maxWidth: '480px', height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + BDR, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <h2 id="reg-drawer-title" style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: '0 0 2px' }}>Registrations</h2>
+            <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>{program.name}</p>
+          </div>
+          <button onClick={onClose} style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED, flexShrink: 0 }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label="Close registrations">
+            <Icon path={ICONS.x} className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: BDR, borderBottom: '1px solid ' + BDR }}>
+          {[
+            { label: 'Enrolled', count: enrolled.length, color: '#22C55E' },
+            { label: 'Pending',  count: pending.length,  color: '#F59E0B' },
+            { label: 'Declined', count: declined.length, color: '#EF4444' },
+          ].map(function(s) {
+            return (
+              <div key={s.label} style={{ background: CARD_BG, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: s.color }}>{s.count}</div>
+                <div style={{ fontSize: '11px', color: MUTED }}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '16px 24px', flex: 1 }}>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[1,2,3].map(function(i) {
+                return (
+                  <div key={i} style={{ height: '60px', background: ELEVATED, borderRadius: '8px' }} className="animate-pulse" />
+                );
+              })}
+            </div>
+          ) : registrations.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 16px' }}>
+              <Users size={36} style={{ color: MUTED, margin: '0 auto 12px' }} aria-hidden="true" />
+              <p style={{ fontSize: '14px', fontWeight: 700, color: TEXT, margin: '0 0 4px' }}>No registrations yet</p>
+              <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>Members who register will appear here.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {pending.length > 0 && (
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', margin: '0 0 4px' }}>Needs Review</p>
+              )}
+              {pending.map(function(r) {
+                return (
+                  <div key={r.id} style={{ background: 'rgba(245,183,49,0.06)', border: '1px solid rgba(245,183,49,0.25)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px' }}>{r.member_name}</p>
+                      <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button
+                        onClick={function() { updateStatus(r.id, 'enrolled'); }}
+                        style={{ padding: '5px 12px', background: '#22C55E', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                        className="hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        aria-label={'Approve ' + r.member_name}
+                      >Approve</button>
+                      <button
+                        onClick={function() { updateStatus(r.id, 'declined'); }}
+                        style={{ padding: '5px 12px', background: 'transparent', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                        className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        aria-label={'Decline ' + r.member_name}
+                      >Decline</button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {enrolled.length > 0 && (
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', margin: '8px 0 4px' }}>Enrolled</p>
+              )}
+              {enrolled.map(function(r) {
+                return (
+                  <div key={r.id} style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px' }}>{r.member_name}</p>
+                      <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                    {statusBadge(r.status)}
+                  </div>
+                );
+              })}
+
+              {(declined.length > 0 || cancelled.length > 0) && (
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', margin: '8px 0 4px' }}>Other</p>
+              )}
+              {declined.concat(cancelled).map(function(r) {
+                return (
+                  <div key={r.id} style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', opacity: 0.65 }}>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px' }}>{r.member_name}</p>
+                      <p style={{ fontSize: '11px', color: MUTED, margin: 0 }}>{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                    {statusBadge(r.status)}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -169,51 +393,75 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
 
 // ── Main component ────────────────────────────────────────────────────────────
 function OrgPrograms() {
-  var params = useParams();
+  var params         = useParams();
   var organizationId = params.organizationId;
-  var navigate = useNavigate();
+  var navigate       = useNavigate();
+  var outletCtx      = useOutletContext() || {};
+  var isAdmin        = outletCtx.isAdmin === true;
 
-  var [programs, setPrograms]           = useState([]);
-  var [loading, setLoading]             = useState(true);
-  var [organization, setOrganization]   = useState(null);
-  var [effectiveRole, setEffectiveRole] = useState('member');
+  var [programs, setPrograms]         = useState([]);
+  var [loading, setLoading]           = useState(true);
+  var [loadError, setLoadError]       = useState(false);
+  var [organization, setOrganization] = useState(null);
+  var [currentUserId, setCurrentUserId] = useState(null);
+
+  // Saves (bookmarks) — set of program IDs saved by current user
+  var [savedIds, setSavedIds]         = useState(new Set());
+  // Registrations — map of program_id -> registration row for current user
+  var [myRegistrations, setMyRegistrations] = useState({});
 
   // Modal
-  var [showModal, setShowModal]         = useState(false);
+  var [showModal, setShowModal]           = useState(false);
   var [editingProgram, setEditingProgram] = useState(null);
-  var [form, setForm]                   = useState(EMPTY_FORM);
-  var [saving, setSaving]               = useState(false);
-  var [newTagInput, setNewTagInput]     = useState('');
+  var [form, setForm]                     = useState(EMPTY_FORM);
+  var [saving, setSaving]                 = useState(false);
+  var [newTagInput, setNewTagInput]       = useState('');
+  var [showSettingsTab, setShowSettingsTab] = useState(false);
+  var modalTrapRef = useFocusTrap(showModal);
 
   // ConfirmModal
-  var [confirmModal, setConfirmModal]   = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+  var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
 
-  function openConfirm(title, message, confirmLabel, onConfirm) {
-    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirm });
+  // Registrations drawer
+  var [drawerProgram, setDrawerProgram] = useState(null);
+
+  // Card UI
+  var [expandedId, setExpandedId]   = useState(null);
+
+  // Drag & drop
+  var [draggingId, setDraggingId]   = useState(null);
+  var [dragOverId, setDragOverId]   = useState(null);
+  var [savingOrder, setSavingOrder] = useState(false);
+
+  // Filters
+  var [statusFilter, setStatusFilter] = useState('all');
+  var [sortBy, setSortBy]             = useState('custom');
+  var [searchQuery, setSearchQuery]   = useState('');
+
+  function openConfirm(title, message, confirmLabel, onConfirmFn) {
+    setConfirmModal({ open: true, title: title, message: message, confirmLabel: confirmLabel, onConfirm: onConfirmFn });
   }
   function closeConfirm() {
     setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   }
 
-  // Card UI
-  var [expandedId, setExpandedId]       = useState(null);
-
-  // Drag & drop
-  var [draggingId, setDraggingId]       = useState(null);
-  var [dragOverId, setDragOverId]       = useState(null);
-  var [savingOrder, setSavingOrder]     = useState(false);
-
-  // Filters
-  var [statusFilter, setStatusFilter]   = useState('all');
-  var [sortBy, setSortBy]               = useState('custom');
-  var [searchQuery, setSearchQuery]     = useState('');
-
   useEffect(function() { init(); }, [organizationId]);
 
+  // Close modal on Escape
+  useEffect(function() {
+    if (!showModal) return;
+    function handleKey(e) { if (e.key === 'Escape') setShowModal(false); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [showModal]);
+
   async function init() {
+    setLoadError(false);
+    setLoading(true);
     try {
       var authResult = await supabase.auth.getUser();
       if (!authResult.data.user) { navigate('/login'); return; }
+      setCurrentUserId(authResult.data.user.id);
 
       var orgResult = await supabase
         .from('organizations').select('id, name, logo_url')
@@ -221,17 +469,14 @@ function OrgPrograms() {
       if (orgResult.error) throw orgResult.error;
       setOrganization(orgResult.data);
 
-      var memberResult = await supabase
-        .from('memberships').select('role')
-        .eq('organization_id', organizationId)
-        .eq('member_id', authResult.data.user.id)
-        .eq('status', 'active').maybeSingle();
-      if (memberResult.data) setEffectiveRole(memberResult.data.role);
-
-      await fetchPrograms();
+      await Promise.all([
+        fetchPrograms(),
+        fetchSaves(authResult.data.user.id),
+        fetchMyRegistrations(authResult.data.user.id),
+      ]);
     } catch (err) {
       console.error('OrgPrograms init error:', err);
-      mascotErrorToast('Failed to load programs.', 'Please try refreshing the page.');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -242,15 +487,39 @@ function OrgPrograms() {
       .from('org_programs').select('*')
       .eq('organization_id', organizationId)
       .order('sort_order').order('created_at');
-    if (result.error) {
-      mascotErrorToast('Failed to load programs.', 'Please try refreshing the page.');
-      return;
-    }
+    if (result.error) throw result.error;
     setPrograms(result.data || []);
   }
 
+  async function fetchSaves(uid) {
+    var result = await supabase
+      .from('program_saves')
+      .select('program_id')
+      .eq('user_id', uid);
+    if (result.error) return;
+    setSavedIds(new Set((result.data || []).map(function(r) { return r.program_id; })));
+  }
+
+  async function fetchMyRegistrations(uid) {
+    var result = await supabase
+      .from('program_registrations')
+      .select('program_id, id, status')
+      .eq('user_id', uid)
+      .eq('organization_id', organizationId);
+    if (result.error) return;
+    var map = {};
+    (result.data || []).forEach(function(r) { map[r.program_id] = r; });
+    setMyRegistrations(map);
+  }
+
   // ── CRUD ──────────────────────────────────────────────────────────────────
-  function openNew() { setEditingProgram(null); setForm(EMPTY_FORM); setNewTagInput(''); setShowModal(true); }
+  function openNew() {
+    setEditingProgram(null);
+    setForm(EMPTY_FORM);
+    setNewTagInput('');
+    setShowSettingsTab(false);
+    setShowModal(true);
+  }
 
   function openEdit(program) {
     setEditingProgram(program);
@@ -262,16 +531,19 @@ function OrgPrograms() {
       start_date:           program.start_date || '',
       end_date:             program.end_date || '',
       capacity:             program.capacity != null ? String(program.capacity) : '',
-      enrolled_count:       program.enrolled_count != null ? String(program.enrolled_count) : '',
+      enrolled_count:       '',
       how_to_apply:         program.how_to_apply || '',
       contact_name:         program.contact_name || '',
       contact_email:        program.contact_email || '',
       status:               program.status || 'active',
       is_public:            program.is_public !== false,
       publish_to_discovery: program.publish_to_discovery === true,
+      requires_approval:    program.requires_approval === true,
+      registration_open:    program.registration_open !== false,
       tags:                 program.tags || [],
     });
     setNewTagInput('');
+    setShowSettingsTab(false);
     setShowModal(true);
   }
 
@@ -289,13 +561,14 @@ function OrgPrograms() {
       start_date:           safeForm.start_date || null,
       end_date:             safeForm.end_date || null,
       capacity:             safeForm.capacity !== '' ? parseInt(safeForm.capacity, 10) : null,
-      enrolled_count:       safeForm.enrolled_count !== '' ? parseInt(safeForm.enrolled_count, 10) : 0,
       how_to_apply:         safeForm.how_to_apply || null,
       contact_name:         safeForm.contact_name || null,
       contact_email:        safeForm.contact_email || null,
       status:               safeForm.status,
       is_public:            safeForm.is_public,
       publish_to_discovery: safeForm.publish_to_discovery,
+      requires_approval:    safeForm.requires_approval,
+      registration_open:    safeForm.registration_open,
       tags:                 safeForm.tags || [],
       updated_at:           new Date().toISOString(),
     };
@@ -311,21 +584,19 @@ function OrgPrograms() {
       try {
         var notifModule = await import('../lib/notificationService');
         var authRes = await supabase.auth.getUser();
-        var user = authRes.data.user;
         await notifModule.notifyOrganizationMembers({
           organizationId: organizationId,
           type: 'new_program',
           title: form.name.trim(),
           message: (organization ? organization.name : 'Your organization') + ' added a new program.',
           link: '/organizations/' + organizationId + '/programs',
-          excludeUserId: user ? user.id : null,
+          excludeUserId: authRes.data.user ? authRes.data.user.id : null,
         });
         window.dispatchEvent(new CustomEvent('notificationCreated'));
-      } catch(ne){ console.error('Program notification failed:', ne); }
+      } catch(ne) { console.error('Program notification failed:', ne); }
     }
   }
 
-  // ── deleteProgram — uses ConfirmModal ─────────────────────────────────────
   function deleteProgram(id, name) {
     openConfirm(
       'Delete "' + name + '"?',
@@ -351,13 +622,14 @@ function OrgPrograms() {
       start_date:           program.start_date || null,
       end_date:             program.end_date || null,
       capacity:             program.capacity || null,
-      enrolled_count:       0,
       how_to_apply:         program.how_to_apply || null,
       contact_name:         program.contact_name || null,
       contact_email:        program.contact_email || null,
       status:               program.status,
       is_public:            false,
       publish_to_discovery: false,
+      requires_approval:    program.requires_approval,
+      registration_open:    program.registration_open,
       tags:                 program.tags || [],
       sort_order:           programs.length,
       updated_at:           new Date().toISOString(),
@@ -373,7 +645,7 @@ function OrgPrograms() {
     var updates = { is_public: !program.is_public };
     if (!updates.is_public) updates.publish_to_discovery = false;
     var result = await supabase.from('org_programs').update(updates).eq('id', program.id);
-    if (result.error) { mascotErrorToast('Failed to update visibility.', result.error.message); return; }
+    if (result.error) { mascotErrorToast('Failed to update visibility.'); return; }
     setPrograms(function(prev) {
       return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, updates) : p; });
     });
@@ -383,11 +655,108 @@ function OrgPrograms() {
     if (!program.is_public) { toast.error('Enable "Show on org page" first'); return; }
     var newVal = !program.publish_to_discovery;
     var result = await supabase.from('org_programs').update({ publish_to_discovery: newVal }).eq('id', program.id);
-    if (result.error) { mascotErrorToast('Failed to update Discover visibility.', result.error.message); return; }
+    if (result.error) { mascotErrorToast('Failed to update Discover visibility.'); return; }
     setPrograms(function(prev) {
       return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, { publish_to_discovery: newVal }) : p; });
     });
     mascotSuccessToast(newVal ? 'Added to Discover.' : 'Removed from Discover.');
+  }
+
+  // ── Bookmark (save) ───────────────────────────────────────────────────────
+  async function toggleSave(programId) {
+    if (!currentUserId) return;
+    var isSaved = savedIds.has(programId);
+    if (isSaved) {
+      var result = await supabase.from('program_saves').delete()
+        .eq('program_id', programId).eq('user_id', currentUserId);
+      if (result.error) { mascotErrorToast('Failed to remove bookmark.'); return; }
+      setSavedIds(function(prev) { var next = new Set(prev); next.delete(programId); return next; });
+    } else {
+      var result2 = await supabase.from('program_saves').insert({ program_id: programId, user_id: currentUserId });
+      if (result2.error) { mascotErrorToast('Failed to save program.'); return; }
+      setSavedIds(function(prev) { var next = new Set(prev); next.add(programId); return next; });
+    }
+  }
+
+  // ── Registration ──────────────────────────────────────────────────────────
+  async function handleRegister(program) {
+    if (!currentUserId) { navigate('/login'); return; }
+
+    // Check capacity
+    var enrolledCount = await supabase
+      .from('program_registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('program_id', program.id)
+      .eq('status', 'enrolled');
+    var cap = program.capacity;
+    if (cap != null && enrolledCount.count >= cap) {
+      toast.error('This program is full.');
+      return;
+    }
+
+    var status = program.requires_approval ? 'pending' : 'enrolled';
+    var result = await supabase.from('program_registrations').insert({
+      program_id: program.id,
+      user_id: currentUserId,
+      organization_id: organizationId,
+      status: status,
+    });
+    if (result.error) {
+      if (result.error.code === '23505') { toast.error('You are already registered.'); return; }
+      mascotErrorToast('Registration failed.', 'Please try again.');
+      return;
+    }
+
+    setMyRegistrations(function(prev) {
+      var next = Object.assign({}, prev);
+      next[program.id] = { program_id: program.id, status: status };
+      return next;
+    });
+
+    mascotSuccessToast(
+      status === 'enrolled' ? 'Registered!' : 'Request submitted!',
+      status === 'enrolled' ? 'You are now enrolled in ' + program.name + '.' : 'Your registration is pending approval.'
+    );
+
+    // Notify admins
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var authRes = await supabase.auth.getUser();
+      var membersRes = await supabase.from('members').select('first_name, last_name').eq('user_id', authRes.data.user.id).single();
+      var memberName = membersRes.data ? membersRes.data.first_name + ' ' + membersRes.data.last_name : 'A member';
+      await notifModule.notifyOrgAdmins({
+        organizationId: organizationId,
+        type: 'program_registration',
+        title: program.name,
+        message: memberName + (status === 'enrolled' ? ' registered for ' : ' requested to join ') + program.name + '.',
+        link: '/organizations/' + organizationId + '/programs',
+        excludeUserId: currentUserId,
+      });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne) { console.error('Registration notification failed:', ne); }
+  }
+
+  async function handleCancelRegistration(program) {
+    var reg = myRegistrations[program.id];
+    if (!reg) return;
+    openConfirm(
+      'Cancel registration?',
+      'You will be removed from ' + program.name + '. You can re-register later if spots are available.',
+      'Cancel Registration',
+      async function() {
+        closeConfirm();
+        var result = await supabase.from('program_registrations')
+          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+          .eq('id', reg.id);
+        if (result.error) { mascotErrorToast('Failed to cancel registration.'); return; }
+        setMyRegistrations(function(prev) {
+          var next = Object.assign({}, prev);
+          delete next[program.id];
+          return next;
+        });
+        mascotSuccessToast('Registration cancelled.');
+      }
+    );
   }
 
   // ── Tags ──────────────────────────────────────────────────────────────────
@@ -441,9 +810,7 @@ function OrgPrograms() {
   }
 
   function handleDrop(targetId) {
-    if (!draggingId || draggingId === targetId) {
-      setDraggingId(null); setDragOverId(null); return;
-    }
+    if (!draggingId || draggingId === targetId) { setDraggingId(null); setDragOverId(null); return; }
     var fromIdx = programs.findIndex(function(p) { return p.id === draggingId; });
     var toIdx   = programs.findIndex(function(p) { return p.id === targetId; });
     var arr     = programs.slice();
@@ -463,8 +830,7 @@ function OrgPrograms() {
     });
     var results = await Promise.all(promises);
     setSavingOrder(false);
-    var failed = results.some(function(r) { return r.error; });
-    if (failed) {
+    if (results.some(function(r) { return r.error; })) {
       toast.error('Failed to save order — try again');
     } else {
       mascotSuccessToast('Order saved.');
@@ -472,7 +838,6 @@ function OrgPrograms() {
   }
 
   // ── Computed view ─────────────────────────────────────────────────────────
-  var isAdmin      = effectiveRole === 'admin';
   var isDragEnabled = isAdmin && sortBy === 'custom' && statusFilter === 'all' && !searchQuery.trim();
 
   var statusCounts = {
@@ -484,6 +849,7 @@ function OrgPrograms() {
 
   var displayPrograms = programs
     .filter(function(p) {
+      if (!isAdmin && !p.is_public) return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (searchQuery.trim()) {
         var q = searchQuery.toLowerCase();
@@ -507,29 +873,56 @@ function OrgPrograms() {
       return (a.sort_order || 0) - (b.sort_order || 0);
     });
 
-  var inputStyle = { width: '100%', padding: '8px 12px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT, outline: 'none', boxSizing: 'border-box' };
-  var labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' };
+  var inputStyle  = { width: '100%', padding: '8px 12px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT, outline: 'none', boxSizing: 'border-box' };
+  var labelStyle  = { display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' };
 
   // ── Skeleton ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: PAGE_BG, padding: '32px 24px', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
-          <div style={{ height: '36px', width: '180px', background: BDR, borderRadius: '8px' }} className="animate-pulse" />
+          <div>
+            <div style={{ height: '30px', width: '160px', background: BDR, borderRadius: '6px', marginBottom: '8px' }} className="animate-pulse" />
+            <div style={{ height: '14px', width: '80px', background: ELEVATED, borderRadius: '4px' }} className="animate-pulse" />
+          </div>
           <div style={{ height: '36px', width: '120px', background: BDR, borderRadius: '8px' }} className="animate-pulse" />
         </div>
-        <div style={{ height: '44px', background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', marginBottom: '20px' }} className="animate-pulse" />
+        <div style={{ height: '52px', background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', marginBottom: '20px' }} className="animate-pulse" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
           {[1,2,3,4,5,6].map(function(i) {
             return (
               <div key={i} style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '12px', padding: '20px' }} className="animate-pulse">
-                <div style={{ height: '16px', width: '60%', background: BDR, borderRadius: '4px', marginBottom: '10px' }} />
+                <div style={{ height: '15px', width: '60%', background: BDR, borderRadius: '4px', marginBottom: '10px' }} />
                 <div style={{ height: '20px', width: '80px', background: ELEVATED, borderRadius: '99px', marginBottom: '12px' }} />
                 <div style={{ height: '12px', width: '90%', background: ELEVATED, borderRadius: '4px', marginBottom: '6px' }} />
-                <div style={{ height: '12px', width: '70%', background: ELEVATED, borderRadius: '4px' }} />
+                <div style={{ height: '12px', width: '70%', background: ELEVATED, borderRadius: '4px', marginBottom: '16px' }} />
+                <div style={{ height: '32px', background: ELEVATED, borderRadius: '8px' }} />
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error state ───────────────────────────────────────────────────────────
+  if (loadError) {
+    return (
+      <div style={{ minHeight: '100vh', background: PAGE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+        <div style={{ textAlign: 'center', padding: '48px 24px', maxWidth: '360px' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <AlertTriangle size={24} style={{ color: '#EF4444' }} aria-hidden="true" />
+          </div>
+          <h2 style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: '0 0 8px' }}>Failed to load programs</h2>
+          <p style={{ fontSize: '13px', color: MUTED, margin: '0 0 24px', lineHeight: 1.6 }}>Something went wrong. Check your connection and try again.</p>
+          <button
+            onClick={init}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Try Again
+          </button>
         </div>
       </div>
     );
@@ -540,7 +933,7 @@ function OrgPrograms() {
     <>
       <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", padding: '32px 24px' }}>
 
-        {/* Page header — standard 30px/800 */}
+        {/* Page header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
           <div>
             <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, margin: 0 }}>Programs</h1>
@@ -566,8 +959,7 @@ function OrgPrograms() {
             <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '160px' }}>
               <Icon path={ICONS.search} className="h-4 w-4" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: MUTED, pointerEvents: 'none' }} />
               <input
-                type="text"
-                value={searchQuery}
+                type="text" value={searchQuery}
                 onChange={function(e) { setSearchQuery(e.target.value); }}
                 placeholder="Search programs..."
                 aria-label="Search programs"
@@ -616,7 +1008,7 @@ function OrgPrograms() {
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty state — no programs */}
         {programs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 24px', background: CARD_BG, border: '2px dashed ' + BDR, borderRadius: '12px' }} role="region" aria-label="No programs">
             <div style={{ color: MUTED, marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
@@ -631,9 +1023,7 @@ function OrgPrograms() {
                 onClick={openNew}
                 style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
                 className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Add Your First Program
-              </button>
+              >Add Your First Program</button>
             )}
           </div>
         ) : displayPrograms.length === 0 ? (
@@ -642,13 +1032,17 @@ function OrgPrograms() {
               <Icon path={ICONS.search} className="h-10 w-10" sw={1} />
             </div>
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>No programs match your filters</h2>
-            <p style={{ color: MUTED, fontSize: '13px' }}>Try adjusting your search or status filter.</p>
+            <p style={{ color: MUTED, fontSize: '13px', marginBottom: '16px' }}>Try adjusting your search or status filter.</p>
+            <button
+              onClick={function() { setSearchQuery(''); setStatusFilter('all'); }}
+              style={{ padding: '8px 16px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
+              className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >Clear Filters</button>
           </div>
         ) : (
           <div
             style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
-            role="list"
-            aria-label="Programs"
+            role="list" aria-label="Programs"
           >
             {displayPrograms.map(function(program) {
               var enrolled     = program.enrolled_count || 0;
@@ -662,6 +1056,10 @@ function OrgPrograms() {
               var startFmt     = formatDate(program.start_date);
               var endFmt       = formatDate(program.end_date);
               var hasExpand    = !!(program.how_to_apply || program.contact_name);
+              var isSaved      = savedIds.has(program.id);
+              var myReg        = myRegistrations[program.id];
+              var isFull       = cap != null && enrolled >= cap;
+              var regOpen      = program.registration_open !== false && !isClosed;
 
               return (
                 <article
@@ -695,34 +1093,58 @@ function OrgPrograms() {
                   {/* Title row */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                     <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, margin: 0, lineHeight: 1.3 }}>{program.name}</h2>
-                    {isAdmin && (
-                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                      {/* Bookmark button — always visible to non-admins */}
+                      {!isAdmin && (
                         <button
-                          onClick={function(e) { e.stopPropagation(); openEdit(program); }}
-                          style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
-                          className="hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label={'Edit ' + program.name}
+                          onClick={function(e) { e.stopPropagation(); toggleSave(program.id); }}
+                          style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: isSaved ? '#F5B731' : MUTED }}
+                          className={'focus:outline-none focus:ring-2 focus:ring-yellow-400 ' + (isSaved ? '' : 'hover:text-yellow-500')}
+                          aria-label={isSaved ? 'Remove bookmark for ' + program.name : 'Bookmark ' + program.name}
+                          aria-pressed={isSaved}
                         >
-                          <Icon path={ICONS.pencil} className="h-4 w-4" />
+                          {isSaved
+                            ? <BookmarkCheck size={16} aria-hidden="true" />
+                            : <BookmarkIcon size={16} aria-hidden="true" />}
                         </button>
-                        <button
-                          onClick={function(e) { e.stopPropagation(); copyProgram(program); }}
-                          style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
-                          className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                          aria-label={'Copy ' + program.name}
-                        >
-                          <Icon path={ICONS.copy} className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={function(e) { e.stopPropagation(); deleteProgram(program.id, program.name); }}
-                          style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
-                          className="hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                          aria-label={'Delete ' + program.name}
-                        >
-                          <Icon path={ICONS.trash} className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={function(e) { e.stopPropagation(); setDrawerProgram(program); }}
+                            style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
+                            className="hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                            aria-label={'View registrations for ' + program.name}
+                          >
+                            <Icon path={ICONS.users} className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={function(e) { e.stopPropagation(); openEdit(program); }}
+                            style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
+                            className="hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label={'Edit ' + program.name}
+                          >
+                            <Icon path={ICONS.pencil} className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={function(e) { e.stopPropagation(); copyProgram(program); }}
+                            style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
+                            className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                            aria-label={'Copy ' + program.name}
+                          >
+                            <Icon path={ICONS.copy} className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={function(e) { e.stopPropagation(); deleteProgram(program.id, program.name); }}
+                            style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
+                            className="hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            aria-label={'Delete ' + program.name}
+                          >
+                            <Icon path={ICONS.trash} className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Status + visibility badges */}
@@ -746,6 +1168,15 @@ function OrgPrograms() {
                     )}
                     {isAdmin && !program.is_public && (
                       <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', color: '#B45309' }}>Hidden</span>
+                    )}
+                    {program.requires_approval && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(100,116,139,0.1)', color: '#475569' }}>
+                        <Icon path={ICONS.lock} className="h-3 w-3" />
+                        Approval required
+                      </span>
+                    )}
+                    {!program.registration_open && !isClosed && (
+                      <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(239,68,68,0.1)', color: '#EF4444' }}>Registration closed</span>
                     )}
                   </div>
 
@@ -850,7 +1281,7 @@ function OrgPrograms() {
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', alignSelf: 'flex-start' }}
                         className="hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
                         aria-expanded={isExpanded}
-                        aria-label={isExpanded ? 'Collapse ' + program.name + ' details' : 'Expand ' + program.name + ' details'}
+                        aria-label={(isExpanded ? 'Collapse ' : 'Expand ') + program.name + ' details'}
                       >
                         <Icon path={isExpanded ? ICONS.chevronUp : ICONS.chevronDown} className="h-3.5 w-3.5" />
                         {isExpanded ? 'Show less' : 'View details'}
@@ -858,27 +1289,54 @@ function OrgPrograms() {
                     </>
                   )}
 
+                  {/* Register / Bookmark footer — member view */}
+                  {!isAdmin && (
+                    <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid ' + BDR, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {myReg ? (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{
+                            fontSize: '12px', fontWeight: 700, padding: '4px 12px', borderRadius: '99px',
+                            background: myReg.status === 'enrolled' ? 'rgba(34,197,94,0.12)' : myReg.status === 'pending' ? 'rgba(245,183,49,0.15)' : 'rgba(100,116,139,0.1)',
+                            color: myReg.status === 'enrolled' ? '#22C55E' : myReg.status === 'pending' ? '#B45309' : '#64748B',
+                          }}>
+                            {myReg.status === 'enrolled' ? 'Enrolled' : myReg.status === 'pending' ? 'Pending approval' : 'Cancelled'}
+                          </span>
+                          {(myReg.status === 'enrolled' || myReg.status === 'pending') && (
+                            <button
+                              onClick={function(e) { e.stopPropagation(); handleCancelRegistration(program); }}
+                              style={{ fontSize: '12px', color: MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px' }}
+                              className="hover:text-red-500 hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400"
+                              aria-label={'Cancel registration for ' + program.name}
+                            >Cancel</button>
+                          )}
+                        </div>
+                      ) : regOpen && !isFull ? (
+                        <button
+                          onClick={function(e) { e.stopPropagation(); handleRegister(program); }}
+                          style={{ flex: 1, padding: '8px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', textAlign: 'center' }}
+                          className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label={'Register for ' + program.name}
+                        >
+                          {program.requires_approval ? 'Request to Join' : 'Register'}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: MUTED, fontStyle: 'italic' }}>
+                          {isFull ? 'Program is full' : 'Registration closed'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Admin toggles footer */}
                   {isAdmin && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid ' + BDR }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: '11px', color: MUTED }}>Org page</span>
-                        <Toggle
-                          small checked={program.is_public}
-                          onClick={function(e) { e.stopPropagation(); togglePublic(program); }}
-                          label={'Toggle ' + program.name + ' org page visibility'}
-                        />
+                        <Toggle small checked={program.is_public} onClick={function(e) { e.stopPropagation(); togglePublic(program); }} label={'Toggle ' + program.name + ' org page visibility'} />
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: '11px', color: MUTED }}>Discover</span>
-                        <Toggle
-                          small checked={program.publish_to_discovery}
-                          disabled={!program.is_public}
-                          onClick={function(e) { e.stopPropagation(); toggleDiscovery(program); }}
-                          label={'Toggle ' + program.name + ' on Discover'}
-                          color="#8B5CF6"
-                          ringColor="focus:ring-purple-500"
-                        />
+                        <Toggle small checked={program.publish_to_discovery} disabled={!program.is_public} onClick={function(e) { e.stopPropagation(); toggleDiscovery(program); }} label={'Toggle ' + program.name + ' on Discover'} color="#8B5CF6" ringColor="focus:ring-purple-500" />
                       </div>
                     </div>
                   )}
@@ -897,10 +1355,12 @@ function OrgPrograms() {
           onClick={function() { setShowModal(false); }}
         >
           <div
-            style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}
+            ref={modalTrapRef}
+            style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
             onClick={function(e) { e.stopPropagation(); }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + BDR }}>
+            {/* Modal header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
               <h2 id="prog-modal-title" style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: 0 }}>
                 {editingProgram ? 'Edit Program' : 'Add Program'}
               </h2>
@@ -909,53 +1369,69 @@ function OrgPrograms() {
               </button>
             </div>
 
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label htmlFor="prog-name" style={labelStyle}>Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                <input id="prog-name" type="text" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="e.g. After School Tutoring" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
-              </div>
-              <div>
-                <label htmlFor="prog-desc" style={labelStyle}>Description</label>
-                <textarea id="prog-desc" value={form.description} rows={3} onChange={function(e) { setField('description', e.target.value); }} placeholder="What does this program do?" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {/* Tab bar */}
+            <div style={{ display: 'flex', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
+              {[
+                { key: false, label: 'Details' },
+                { key: true,  label: 'Settings' },
+              ].map(function(tab) {
+                var active = showSettingsTab === tab.key;
+                return (
+                  <button
+                    key={String(tab.key)}
+                    onClick={function() { setShowSettingsTab(tab.key); }}
+                    style={{ flex: 1, padding: '12px', fontSize: '13px', fontWeight: 700, color: active ? TEXT : MUTED, background: 'none', border: 'none', borderBottom: active ? '2px solid #3B82F6' : '2px solid transparent', cursor: 'pointer', transition: 'color 0.15s' }}
+                    className="hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    aria-selected={active}
+                    role="tab"
+                  >{tab.label}</button>
+                );
+              })}
+            </div>
+
+            {/* Details tab */}
+            {!showSettingsTab && (
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div>
-                  <label htmlFor="prog-start" style={labelStyle}>Start Date</label>
-                  <input id="prog-start" type="date" value={form.start_date} onChange={function(e) { setField('start_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  <label htmlFor="prog-name" style={labelStyle}>Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
+                  <input id="prog-name" type="text" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="e.g. After School Tutoring" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
                 </div>
                 <div>
-                  <label htmlFor="prog-end" style={labelStyle}>End Date</label>
-                  <input id="prog-end" type="date" value={form.end_date} onChange={function(e) { setField('end_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  <label htmlFor="prog-desc" style={labelStyle}>Description</label>
+                  <textarea id="prog-desc" value={form.description} rows={3} onChange={function(e) { setField('description', e.target.value); }} placeholder="What does this program do?" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label htmlFor="prog-start" style={labelStyle}>Start Date</label>
+                    <input id="prog-start" type="date" value={form.start_date} onChange={function(e) { setField('start_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="prog-end" style={labelStyle}>End Date</label>
+                    <input id="prog-end" type="date" value={form.end_date} onChange={function(e) { setField('end_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
                 <div>
                   <label htmlFor="prog-capacity" style={labelStyle}>Capacity (Max Spots)</label>
-                  <input id="prog-capacity" type="number" min="0" value={form.capacity} onChange={function(e) { setField('capacity', e.target.value); }} placeholder="e.g. 30" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  <input id="prog-capacity" type="number" min="0" value={form.capacity} onChange={function(e) { setField('capacity', e.target.value); }} placeholder="Leave blank for unlimited" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label htmlFor="prog-enrolled" style={labelStyle}>Currently Enrolled</label>
-                  <input id="prog-enrolled" type="number" min="0" value={form.enrolled_count} onChange={function(e) { setField('enrolled_count', e.target.value); }} placeholder="e.g. 12" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-              <div>
-                <label style={labelStyle}>Tags</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                  {PROGRAM_TAGS.map(function(tag) {
-                    var sel = (form.tags || []).indexOf(tag) !== -1;
-                    return (
-                      <button key={tag} type="button" onClick={function() { toggleTag(tag); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: sel ? 'none' : '1px solid ' + BDR, background: sel ? '#3B82F6' : 'transparent', color: sel ? '#FFFFFF' : TEXT2 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={sel}>
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" value={newTagInput} onChange={function(e) { setNewTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }} placeholder="Custom tag — press Enter to add" aria-label="Add custom tag" style={Object.assign({}, inputStyle, { flex: 1 })} className="focus:ring-2 focus:ring-blue-500" />
-                  <button type="button" onClick={addCustomTag} style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
-                </div>
-                {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                  <label style={labelStyle}>Tags</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                    {PROGRAM_TAGS.map(function(tag) {
+                      var sel = (form.tags || []).indexOf(tag) !== -1;
+                      return (
+                        <button key={tag} type="button" onClick={function() { toggleTag(tag); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: sel ? 'none' : '1px solid ' + BDR, background: sel ? '#3B82F6' : 'transparent', color: sel ? '#FFFFFF' : TEXT2 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={sel}>
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="text" value={newTagInput} onChange={function(e) { setNewTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }} placeholder="Custom tag — press Enter to add" aria-label="Add custom tag" style={Object.assign({}, inputStyle, { flex: 1 })} className="focus:ring-2 focus:ring-blue-500" />
+                    <button type="button" onClick={addCustomTag} style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
+                  </div>
+                  {/* Custom tags always shown so user gets feedback */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px', minHeight: '28px' }}>
                     {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).map(function(tag) {
                       return (
                         <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: '#0E1523', color: '#FFFFFF' }}>
@@ -966,60 +1442,101 @@ function OrgPrograms() {
                         </span>
                       );
                     })}
+                    {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).length === 0 && newTagInput.trim() === '' && (
+                      <span style={{ fontSize: '12px', color: MUTED, fontStyle: 'italic', lineHeight: '28px' }}>Custom tags will appear here</span>
+                    )}
                   </div>
-                )}
-              </div>
-              <div>
-                <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>
-                <input id="prog-audience" type="text" value={form.audience} onChange={function(e) { setField('audience', e.target.value); }} placeholder="e.g. Youth ages 6–18" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label htmlFor="prog-schedule" style={labelStyle}>Schedule</label>
-                <input id="prog-schedule" type="text" value={form.schedule} onChange={function(e) { setField('schedule', e.target.value); }} placeholder="e.g. Every Monday 3–5pm" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label htmlFor="prog-apply" style={labelStyle}>How To Apply / Sign Up</label>
-                <textarea id="prog-apply" value={form.how_to_apply} rows={2} onChange={function(e) { setField('how_to_apply', e.target.value); }} placeholder="e.g. Fill out form at front desk or call us" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label htmlFor="prog-cname" style={labelStyle}>Contact Name</label>
-                  <input id="prog-cname" type="text" value={form.contact_name} onChange={function(e) { setField('contact_name', e.target.value); }} placeholder="Jane Smith" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label htmlFor="prog-cemail" style={labelStyle}>Contact Email</label>
-                  <input id="prog-cemail" type="email" value={form.contact_email} onChange={function(e) { setField('contact_email', e.target.value); }} placeholder="jane@org.org" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>
+                  <input id="prog-audience" type="text" value={form.audience} onChange={function(e) { setField('audience', e.target.value); }} placeholder="e.g. Youth ages 6–18" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
-              </div>
-              <div>
-                <label htmlFor="prog-status" style={labelStyle}>Status</label>
-                <select id="prog-status" value={form.status} onChange={function(e) { setField('status', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500">
-                  <option value="active">Active</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
-                  <Toggle checked={form.is_public} onClick={function() { setField('is_public', !form.is_public); }} label="Toggle visibility on org page" />
+                <div>
+                  <label htmlFor="prog-schedule" style={labelStyle}>Schedule</label>
+                  <input id="prog-schedule" type="text" value={form.schedule} onChange={function(e) { setField('schedule', e.target.value); }} placeholder="e.g. Every Monday 3–5pm" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label htmlFor="prog-apply" style={labelStyle}>How To Apply / Sign Up</label>
+                  <textarea id="prog-apply" value={form.how_to_apply} rows={2} onChange={function(e) { setField('how_to_apply', e.target.value); }} placeholder="e.g. Fill out form at front desk or call us" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on org page</p>
-                    <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>Visitors to your public page will see this program</p>
+                    <label htmlFor="prog-cname" style={labelStyle}>Contact Name</label>
+                    <input id="prog-cname" type="text" value={form.contact_name} onChange={function(e) { setField('contact_name', e.target.value); }} placeholder="Jane Smith" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="prog-cemail" style={labelStyle}>Contact Email</label>
+                    <input id="prog-cemail" type="email" value={form.contact_email} onChange={function(e) { setField('contact_email', e.target.value); }} placeholder="jane@org.org" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR, opacity: form.is_public ? 1 : 0.5, transition: 'opacity 0.2s' }}>
-                  <Toggle checked={form.publish_to_discovery} disabled={!form.is_public} onClick={function() { setField('publish_to_discovery', !form.publish_to_discovery); }} label="Toggle visibility on Discover page" color="#8B5CF6" ringColor="focus:ring-purple-500" />
-                  <div>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on Discover</p>
-                    <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>
-                      {form.is_public ? 'Anyone browsing /discover can find this program' : 'Enable "Show on org page" first'}
-                    </p>
-                  </div>
+                <div>
+                  <label htmlFor="prog-status" style={labelStyle}>Status</label>
+                  <select id="prog-status" value={form.status} onChange={function(e) { setField('status', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500">
+                    <option value="active">Active</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="closed">Closed</option>
+                  </select>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div style={{ display: 'flex', gap: '12px', padding: '16px 24px', borderTop: '1px solid ' + BDR }}>
+            {/* Settings tab */}
+            {showSettingsTab && (
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+                <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>Control how members interact with this program.</p>
+
+                {/* Visibility section */}
+                <div>
+                  <p style={labelStyle}>Visibility</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                      <Toggle checked={form.is_public} onClick={function() { setField('is_public', !form.is_public); }} label="Toggle visibility on org page" />
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on org page</p>
+                        <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>Visitors to your public page will see this program</p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR, opacity: form.is_public ? 1 : 0.5 }}>
+                      <Toggle checked={form.publish_to_discovery} disabled={!form.is_public} onClick={function() { setField('publish_to_discovery', !form.publish_to_discovery); }} label="Toggle visibility on Discover page" color="#8B5CF6" ringColor="focus:ring-purple-500" />
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show on Discover</p>
+                        <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>
+                          {form.is_public ? 'Anyone browsing /discover can find this program' : 'Enable "Show on org page" first'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registration section */}
+                <div>
+                  <p style={labelStyle}>Registration</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                      <Toggle checked={form.registration_open} onClick={function() { setField('registration_open', !form.registration_open); }} label="Toggle registration open" />
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Registration open</p>
+                        <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>Members can register or request to join</p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                      <Toggle checked={form.requires_approval} onClick={function() { setField('requires_approval', !form.requires_approval); }} label="Toggle approval required" color="#8B5CF6" ringColor="focus:ring-purple-500" />
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Require approval</p>
+                        <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>
+                          {form.requires_approval
+                            ? 'Registrations are held for your review before enrolling'
+                            : 'Members are enrolled automatically on registration'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal footer */}
+            <div style={{ display: 'flex', gap: '12px', padding: '16px 24px', borderTop: '1px solid ' + BDR, flexShrink: 0 }}>
               <button onClick={function() { setShowModal(false); }} style={{ flex: 1, padding: '10px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
               <button onClick={saveProgram} disabled={saving} style={{ flex: 1, padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
@@ -1038,6 +1555,15 @@ function OrgPrograms() {
         onConfirm={confirmModal.onConfirm || function() {}}
         onCancel={closeConfirm}
       />
+
+      {/* Registrations drawer */}
+      {drawerProgram && (
+        <RegistrationsDrawer
+          program={drawerProgram}
+          organizationId={organizationId}
+          onClose={function() { setDrawerProgram(null); }}
+        />
+      )}
     </>
   );
 }
