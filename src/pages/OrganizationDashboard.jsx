@@ -15,6 +15,7 @@ import GuidedTour from '../components/GuidedTour';
 import { Lock, AlertTriangle } from 'lucide-react';
 import usePlanLimits from '../hooks/usePlanLimits';
 import StorageMeter from '../components/StorageMeter';
+import OrgPhotoGallery from '../components/OrgPhotoGallery';
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth, style }) {
@@ -286,13 +287,6 @@ function OrganizationDashboard() {
   var [inquiries, setInquiries]                       = useState([]);
   var [inquiriesLoading, setInquiriesLoading]         = useState(false);
   var [unreadInquiriesCount, setUnreadInquiriesCount] = useState(0);
-  var [photos, setPhotos]                             = useState([]);
-  var [photosLoading, setPhotosLoading]               = useState(false);
-  var [photoUploading, setPhotoUploading]             = useState(false);
-  var [photoCaption, setPhotoCaption]                 = useState('');
-  var [photoError, setPhotoError]                     = useState(null);
-  var [deletingPhotoId, setDeletingPhotoId]           = useState(null);
-  var [lightboxPhoto, setLightboxPhoto]               = useState(null);
 
   // ── Programs ───────────────────────────────────────────────────────────────
   var [showProgramModal, setShowProgramModal]         = useState(false);
@@ -338,7 +332,6 @@ function OrganizationDashboard() {
 
   useEffect(function() { if (activeTab === 'approvals') fetchPendingApprovals(); }, [activeTab]);
   useEffect(function() { if (activeTab === 'inbox') fetchInquiries(); }, [activeTab]);
-  useEffect(function() { if (activeTab === 'photos') fetchPhotos(); }, [activeTab]);
 
   useEffect(function() {
     if (organization && membership && membership.role === 'admin') fetchCollaborationRequests();
@@ -599,16 +592,6 @@ function OrganizationDashboard() {
     finally { setInquiriesLoading(false); }
   }
 
-  async function fetchPhotos() {
-    try {
-      setPhotosLoading(true);
-      var r = await supabase.from('org_photos').select('*').eq('organization_id', organizationId).order('sort_order', { ascending: true }).order('created_at', { ascending: false });
-      if (r.error) throw r.error;
-      setPhotos(r.data || []);
-    } catch (err) { console.error(err); }
-    finally { setPhotosLoading(false); }
-  }
-
   async function fetchCollaborationRequests() {
     setCollabRequestsLoading(true);
     try {
@@ -745,61 +728,6 @@ function handleDeleteInquiry(id) {
           if (deleted && !deleted.is_read) setUnreadInquiriesCount(function(p) { return Math.max(0, p - 1); });
           mascotSuccessToast('Message deleted.');
         } catch (err) { toast.error('Could not delete.'); }
-      }
-    );
-  }
-
-  async function handlePhotoUpload(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    var allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowed.includes(file.type)) { setPhotoError('Only JPG, PNG, GIF, WebP allowed.'); return; }
-    if (file.size > 5 * 1024 * 1024) { setPhotoError('Image must be under 5MB.'); return; }
-    try {
-      setPhotoUploading(true); setPhotoError(null);
-      var ext = file.name.split('.').pop();
-      var fileName = organizationId + '/' + Date.now() + '.' + ext;
-      var upResult = await supabase.storage.from('organization-images').upload(fileName, file, { upsert: false });
-      if (upResult.error) throw upResult.error;
-      var urlData = supabase.storage.from('organization-images').getPublicUrl(fileName);
-      var ins = await supabase.from('org_photos').insert({ organization_id: organizationId, uploaded_by: currentUserId, photo_url: urlData.data.publicUrl, caption: photoCaption.trim() || null });
-      if (ins.error) throw ins.error;
-      setPhotoCaption(''); e.target.value = '';
-      await fetchPhotos();
-      mascotSuccessToast('Photo uploaded!');
-      try {
-        var notifModule = await import('../lib/notificationService');
-        await notifModule.notifyOrganizationMembers({
-          organizationId: organizationId,
-          type: 'new_photo',
-          title: photoCaption.trim() ? photoCaption.trim() : 'New Photo Added',
-          message: (organization ? organization.name : 'Your organization') + ' added a new photo to the gallery.',
-          link: '/organizations/' + organizationId + '/photos',
-          excludeUserId: currentUserId,
-        });
-        window.dispatchEvent(new CustomEvent('notificationCreated'));
-      } catch(ne){ console.error('Photo notification failed:', ne); }
-    } catch (err) { setPhotoError('Upload failed: ' + err.message); mascotErrorToast('Upload failed.', 'Please try again.'); }
-    finally { setPhotoUploading(false); }
-  }
-
-function handleDeletePhoto(photo) {
-    openConfirm(
-      'Delete this photo?',
-      (photo.caption ? '"' + photo.caption + '" will be' : 'This photo will be') + ' permanently deleted and cannot be recovered.',
-      'Delete Photo',
-      async function() {
-        closeConfirm();
-        try {
-          setDeletingPhotoId(photo.id);
-          var parts = photo.photo_url.split('/organization-images/');
-          if (parts.length === 2) await supabase.storage.from('organization-images').remove([parts[1]]);
-          var r = await supabase.from('org_photos').delete().eq('id', photo.id);
-          if (r.error) throw r.error;
-          setPhotos(function(prev) { return prev.filter(function(p) { return p.id !== photo.id; }); });
-          mascotSuccessToast('Photo deleted.');
-        } catch (err) { mascotErrorToast('Could not delete photo.'); }
-        finally { setDeletingPhotoId(null); }
       }
     );
   }
@@ -1966,7 +1894,14 @@ function handleDeletePhoto(photo) {
       )}
 
       {resolvedTab === 'overview'  && renderOverview()}
-      {resolvedTab === 'photos'    && renderPhotos()}
+      {resolvedTab === 'photos' && (
+  <OrgPhotoGallery
+    organizationId={organizationId}
+    currentUserId={currentUserId}
+    isAdmin={isAdmin}
+    organizationName={organization ? organization.name : ''}
+  />
+)}
       {resolvedTab === 'approvals' && isAdmin && renderApprovals()}
       {resolvedTab === 'analytics' && isAdmin && <AnalyticsDashboard organizationId={organizationId} />}
       {resolvedTab === 'settings'  && (
