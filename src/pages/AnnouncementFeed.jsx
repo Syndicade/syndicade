@@ -5,6 +5,7 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import CreateAnnouncement from '../components/CreateAnnouncement';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { notifyOrganizationMembers, notifyGroupMembers } from '../lib/notificationService';
 import { AlertTriangle, GripVertical, Plus, Check, CalendarClock } from 'lucide-react';
 
 var TITLE_COLOR    = '#0E1523';
@@ -86,7 +87,6 @@ function getExpiryInfo(expiresAt) {
 
 // ── Inline Extend Widget ──────────────────────────────────────────────────────
 function ExtendWidget({ announcementId, currentExpiresAt, onExtended, onCancel }) {
-  // Default to 7 days from now, or 7 days from current expiry if still in future
   var baseDate = currentExpiresAt && new Date(currentExpiresAt) > new Date()
     ? new Date(currentExpiresAt)
     : new Date();
@@ -96,7 +96,6 @@ function ExtendWidget({ announcementId, currentExpiresAt, onExtended, onCancel }
   var [newDate, setNewDate] = useState(defaultVal);
   var [saving, setSaving]   = useState(false);
 
-  // Min = tomorrow at current time
   var tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   var minDate = tomorrow.toISOString().slice(0, 16);
@@ -182,12 +181,13 @@ function AnnouncementFeed() {
   var [selectedIds, setSelectedIds]                     = useState([]);
   var [bulkDeleting, setBulkDeleting]                   = useState(false);
   var [bulkMarkingRead, setBulkMarkingRead]             = useState(false);
-  // Track which card has the extend widget open (one at a time)
   var [extendingId, setExtendingId]                     = useState(null);
+
+  // Cache org name so we don't refetch it on every announcement create
+  var orgNameRef = useRef(null);
 
   // Drag state
   var dragIndex        = useRef(null);
-  // Preserve manual drag order so filter useEffect doesn't clobber it
   var manualOrder      = useRef(null);
   var [dragOver, setDragOver] = useState(null);
 
@@ -201,13 +201,25 @@ function AnnouncementFeed() {
     setConfirmModal({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   }
 
+  // Pre-fetch org name once on mount so handleAnnouncementCreated can use it synchronously
+  useEffect(function() {
+    if (!organizationId || orgNameRef.current) return;
+    supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', organizationId)
+      .single()
+      .then(function(res) {
+        if (!res.error && res.data) orgNameRef.current = res.data.name;
+      });
+  }, [organizationId]);
+
   // ── Fetch announcements ─────────────────────────────────────────────────────
   useEffect(function() {
     fetchAnnouncements();
   }, [organizationId]);
 
   async function fetchAnnouncements() {
-    // Reset manual order on full refetch
     manualOrder.current = null;
     try {
       var authRes = await supabase.auth.getUser();
@@ -245,13 +257,12 @@ function AnnouncementFeed() {
 
   // ── Filter logic ────────────────────────────────────────────────────────────
   useEffect(function() {
-    // If admin has manually reordered, start from that order instead of announcements
     var base = manualOrder.current ? manualOrder.current.slice() : announcements.slice();
 
     if (searchTerm.trim()) {
       var term = searchTerm.toLowerCase();
       base = base.filter(function(a) {
-        return a.title.toLowerCase().includes(term) || a.content.toLowerCase().includes(term);
+        return a.title.toLowerCase().indexOf(term) !== -1 || a.content.toLowerCase().indexOf(term) !== -1;
       });
     }
 
@@ -267,7 +278,6 @@ function AnnouncementFeed() {
       base = base.filter(function(a) { return a.is_pinned; });
     }
 
-    // Only auto-sort when no manual order has been set
     if (!manualOrder.current) {
       base.sort(function(a, b) {
         if (a.is_pinned && !b.is_pinned) return -1;
@@ -304,7 +314,6 @@ function AnnouncementFeed() {
       var next = prev.slice();
       var dragged = next.splice(from, 1)[0];
       next.splice(index, 0, dragged);
-      // Persist manual order so filter useEffect respects it
       manualOrder.current = next.slice();
       return next;
     });
@@ -361,7 +370,6 @@ function AnnouncementFeed() {
     fetchAnnouncements();
   }
 
-  // Task 28 — extend confirmed: patch expires_at optimistically in state
   function handleExtended(announcementId, newExpiresAt) {
     setExtendingId(null);
     setAnnouncements(function(prev) {
@@ -379,37 +387,43 @@ function AnnouncementFeed() {
   async function handleAnnouncementCreated(newAnnouncement) {
     var authRes = await supabase.auth.getUser();
     var user = authRes.data.user;
-
-    // Creator shouldn't see their own post as unread
     var isOwnPost = user && newAnnouncement.created_by === user.id;
 
     setAnnouncements(function(prev) {
       return [Object.assign({}, newAnnouncement, { is_read: isOwnPost }), ...prev];
     });
-    // Reset manual order so new post sorts correctly to top
     manualOrder.current = null;
 
     if (!isOwnPost) {
       setUnreadCount(function(prev) { return prev + 1; });
     }
 
+    // Fire notification — group-scoped if announcement has a group_id, org-wide otherwise
     try {
-      var notifModule = await import('../lib/notificationService');
-      // Lazy-fetch org name only when needed for the notification
-      var orgName = 'Your organization';
-      try {
-        var orgRes = await supabase.from('organizations').select('name').eq('id', organizationId).single();
-        if (!orgRes.error && orgRes.data) orgName = orgRes.data.name;
-      } catch (_) {}
+      var orgName = orgNameRef.current || 'Your organization';
+      var excludeId = user ? user.id : null;
+      var hasGroupId = newAnnouncement.group_id;
 
-      await notifModule.notifyOrganizationMembers({
-        organizationId: organizationId,
-        type: 'new_announcement',
-        title: newAnnouncement.title || 'New Announcement',
-        message: orgName + ' posted a new announcement.',
-        link: '/organizations/' + organizationId + '/announcements',
-        excludeUserId: user ? user.id : null,
-      });
+      if (hasGroupId) {
+        await notifyGroupMembers({
+          groupId: hasGroupId,
+          organizationId: organizationId,
+          type: 'new_announcement',
+          title: newAnnouncement.title || 'New Announcement',
+          message: orgName + ' posted a new announcement for your group.',
+          link: '/organizations/' + organizationId + '/announcements',
+          excludeUserId: excludeId,
+        });
+      } else {
+        await notifyOrganizationMembers({
+          organizationId: organizationId,
+          type: 'new_announcement',
+          title: newAnnouncement.title || 'New Announcement',
+          message: orgName + ' posted a new announcement.',
+          link: '/organizations/' + organizationId + '/announcements',
+          excludeUserId: excludeId,
+        });
+      }
       window.dispatchEvent(new CustomEvent('notificationCreated'));
     } catch (ne) { console.error('Announcement notification failed:', ne); }
   }
@@ -846,7 +860,6 @@ function AnnouncementFeed() {
                     onDragEnd={isAdmin && !bulkMode ? handleDragEnd : undefined}
                     style={{ display: 'flex', flexDirection: 'column', gap: '4px', opacity: isDragTarget ? 0.7 : 1, transition: 'opacity 0.15s' }}
                   >
-                    {/* Per-card meta row — drag handle + bulk checkbox only */}
                     {(isAdmin || bulkMode) && (
                       <div style={{ display: 'flex', alignItems: 'center', minHeight: '22px', paddingLeft: '2px', paddingRight: '2px', gap: '8px' }}>
                         {isAdmin && !bulkMode && !hasActiveFilters && (
@@ -866,7 +879,6 @@ function AnnouncementFeed() {
                       </div>
                     )}
 
-                    {/* Pinned cards get yellow outline; member read cards fade slightly */}
                     <div style={{ borderRadius: '13px', outline: ann.is_pinned ? '2px solid rgba(245,183,49,0.4)' : '2px solid transparent', outlineOffset: '1px', opacity: (!isAdmin && ann.is_read) ? 0.72 : 1, transition: 'opacity 0.2s' }}>
                       <AnnouncementCard
                         announcement={ann}
@@ -879,7 +891,6 @@ function AnnouncementFeed() {
                       />
                     </div>
 
-                    {/* Expiry badge row — with Extend button for admins */}
                     {expiryInfo && (
                       <div style={{ paddingLeft: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -890,7 +901,6 @@ function AnnouncementFeed() {
                             {expiryInfo.label}
                           </span>
 
-                          {/* Extend button — admin only, hidden when widget is open */}
                           {isAdmin && !isExtending && (
                             <button
                               onClick={function() { setExtendingId(ann.id); }}
@@ -904,7 +914,6 @@ function AnnouncementFeed() {
                           )}
                         </div>
 
-                        {/* Inline extend widget */}
                         {isAdmin && isExtending && (
                           <ExtendWidget
                             announcementId={ann.id}

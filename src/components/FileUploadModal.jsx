@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { uploadDocument, validateFile } from '../lib/documentService';
-import { notifyOrganizationMembers } from '../lib/notificationService';
+import { notifyOrganizationMembers, notifyGroupMembers } from '../lib/notificationService';
 import { supabase } from '../lib/supabase';
 import { mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
@@ -34,11 +34,23 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
   // Categories state
   var [categories, setCategories] = useState([]);
 
+  // Cache refs — persist across opens so we never refetch for the same org
+  var tagCacheRef = useRef(null);      // { orgId, tags: [], categories: [] }
+  var groupCacheRef = useRef(null);    // { orgId, groups: [] }
+
   var todayStr = new Date().toISOString().split('T')[0];
 
-  // Fetch existing tags + categories from org on open
+  // Fetch existing tags + categories — cached per org, skips if already loaded
   useEffect(function() {
     if (!isOpen || !organizationId) return;
+
+    // Return from cache if same org
+    if (tagCacheRef.current && tagCacheRef.current.orgId === organizationId) {
+      setTagSuggestions(tagCacheRef.current.tags);
+      setCategories(tagCacheRef.current.categories);
+      return;
+    }
+
     supabase
       .from('documents')
       .select('tags, category')
@@ -57,15 +69,23 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
         });
         allTags.sort();
         allCats.sort();
+        // Write to cache
+        tagCacheRef.current = { orgId: organizationId, tags: allTags, categories: allCats };
         setTagSuggestions(allTags);
         setCategories(allCats);
       });
   }, [isOpen, organizationId]);
 
-  // Fetch org groups when visibility switches to 'groups'
+  // Fetch org groups when visibility switches to 'groups' — cached per org
   useEffect(function() {
     if (visibility !== 'groups') return;
-    if (groups.length > 0) return;
+
+    // Return from cache if same org
+    if (groupCacheRef.current && groupCacheRef.current.orgId === organizationId) {
+      setGroups(groupCacheRef.current.groups);
+      return;
+    }
+
     setGroupsLoading(true);
     supabase
       .from('org_groups')
@@ -74,10 +94,12 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
       .eq('is_active', true)
       .order('name')
       .then(function(result) {
-        if (!result.error) setGroups(result.data || []);
+        var data = result.error ? [] : (result.data || []);
+        groupCacheRef.current = { orgId: organizationId, groups: data };
+        setGroups(data);
         setGroupsLoading(false);
       });
-  }, [visibility]);
+  }, [visibility, organizationId]);
 
   function addTag(raw) {
     var val = raw.trim().slice(0, TAG_MAX_LENGTH);
@@ -145,68 +167,100 @@ function FileUploadModal({ isOpen, onClose, organizationId, folderId, groupId, o
     setUploading(true);
     setError(null);
 
-    var uploadOptions = {
-      organizationId: organizationId,
-      folderId: folderId,
-      title: title,
-      description: description,
-      visibility: visibility,
-      allowedGroups: visibility === 'groups' ? selectedGroupIds : [],
-    };
-
-    var uploadResult = await uploadDocument(file, uploadOptions);
-    if (uploadResult.error) {
-      mascotErrorToast('Upload failed.', uploadResult.error);
-      setError(uploadResult.error);
-      setUploading(false);
-      return;
-    }
-
-    var uploadedDoc = uploadResult.data;
-
-    var extraFields = {};
-    if (deleteAfter) extraFields.delete_after = deleteAfter;
-    if (category) extraFields.category = category;
-    if (tags.length > 0) extraFields.tags = tags;
-
-    if (Object.keys(extraFields).length > 0 && uploadedDoc && uploadedDoc.id) {
-      var updateResult = await supabase
-        .from('documents')
-        .update(extraFields)
-        .eq('id', uploadedDoc.id);
-      if (!updateResult.error) {
-        uploadedDoc = Object.assign({}, uploadedDoc, extraFields);
-      }
-    }
-
-try {
-      var authRes = await supabase.auth.getUser();
-      var currentUser = authRes.data.user;
-      var notifResult = await notifyOrganizationMembers({
+    try {
+      var uploadOptions = {
         organizationId: organizationId,
-        type: 'new_document',
-        title: title || file.name,
-        message: 'A new document has been added to the library.',
-        link: '/organizations/' + organizationId + '/documents',
-        excludeUserId: currentUser ? currentUser.id : null,
-      });
-      if (!notifResult.error) window.dispatchEvent(new CustomEvent('notificationCreated'));
-    } catch (notifError) {
-      console.error('Notification error (document still uploaded):', notifError);
+        folderId: folderId,
+        title: title,
+        description: description,
+        visibility: visibility,
+        allowedGroups: visibility === 'groups' ? selectedGroupIds : [],
+      };
+
+      var uploadResult = await uploadDocument(file, uploadOptions);
+      if (uploadResult.error) {
+        mascotErrorToast('Upload failed.', uploadResult.error);
+        setError(uploadResult.error);
+        return;
+      }
+
+      var uploadedDoc = uploadResult.data;
+
+      var extraFields = {};
+      if (deleteAfter) extraFields.delete_after = deleteAfter;
+      if (category) extraFields.category = category;
+      if (tags.length > 0) extraFields.tags = tags;
+
+      if (Object.keys(extraFields).length > 0 && uploadedDoc && uploadedDoc.id) {
+        var updateResult = await supabase
+          .from('documents')
+          .update(extraFields)
+          .eq('id', uploadedDoc.id);
+        if (!updateResult.error) {
+          uploadedDoc = Object.assign({}, uploadedDoc, extraFields);
+        }
+      }
+
+      // Invalidate tag/category cache so next open picks up new doc's tags/category
+      if (tags.length > 0 || category) {
+        tagCacheRef.current = null;
+      }
+
+      // Notify: group members only when visibility === 'groups', org members otherwise
+      // (skip admin-only docs entirely — consistent with FileUploadModal.jsx prior behaviour)
+      if (visibility !== 'admin') {
+        try {
+          var authRes = await supabase.auth.getUser();
+          var currentUser = authRes.data.user;
+          var excludeId = currentUser ? currentUser.id : null;
+
+          if (visibility === 'groups' && selectedGroupIds.length > 0) {
+            // Notify each selected group's members — fire-and-forget after first group
+            // If multiple groups are selected, notify the union without duplicates by
+            // notifying each group sequentially (notifyGroupMembers deduplicates per group)
+            var notifPromises = selectedGroupIds.map(function(gid) {
+              return notifyGroupMembers({
+                groupId: gid,
+                organizationId: organizationId,
+                type: 'new_document',
+                title: title || file.name,
+                message: 'A new document has been shared with your group.',
+                link: '/organizations/' + organizationId + '/documents',
+                excludeUserId: excludeId,
+              });
+            });
+            await Promise.all(notifPromises);
+          } else {
+            await notifyOrganizationMembers({
+              organizationId: organizationId,
+              type: 'new_document',
+              title: title || file.name,
+              message: 'A new document has been added to the library.',
+              link: '/organizations/' + organizationId + '/documents',
+              excludeUserId: excludeId,
+            });
+          }
+          window.dispatchEvent(new CustomEvent('notificationCreated'));
+        } catch (notifError) {
+          console.error('Notification error (document still uploaded):', notifError);
+        }
+      }
+
+      // Reset form
+      setFile(null);
+      setTitle('');
+      setDescription('');
+      setCategory('');
+      setDeleteAfter('');
+      setTags([]);
+      setTagInput('');
+      setVisibility(groupId ? 'groups' : 'members');
+      setSelectedGroupIds(groupId ? [groupId] : []);
+
+      onSuccess(uploadedDoc);
+    } finally {
+      setUploading(false);
     }
-
-    setUploading(false);
-    onSuccess(uploadedDoc);
-
-    setFile(null);
-    setTitle('');
-    setDescription('');
-    setCategory('');
-    setDeleteAfter('');
-    setTags([]);
-    setTagInput('');
-    setVisibility('members');
-    setSelectedGroupIds([]);
   }
 
   var filteredSuggestions = tagSuggestions.filter(function(s) {

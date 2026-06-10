@@ -1942,13 +1942,14 @@ function handleDeleteInquiry(id) {
           onFormCreated={function() { setShowCreateSignupForm(false); mascotSuccessToast('Sign-up form created!'); }}
         />
       )}
-      <OrgInviteMemberModal
-        isOpen={showInviteModal}
-        onClose={function() { setShowInviteModal(false); }}
-        organizationId={organizationId}
-        organizationName={organization ? organization.name : ''}
-        currentUserId={currentUserId}
-      />
+      {showInviteModal && (
+  <OrgInviteMemberModal
+    organizationId={organizationId}
+    organizationName={organization ? organization.name : ''}
+    currentUserId={currentUserId}
+    onClose={function() { setShowInviteModal(false); }}
+  />
+)}
 
       {showProgramModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowProgramModal(false); }}>

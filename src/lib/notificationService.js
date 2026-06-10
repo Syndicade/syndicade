@@ -43,9 +43,7 @@ export async function createNotification({ userId, organizationId, type, title, 
   try {
     var { data, error } = await supabase
       .from('notifications')
-      .insert([{ user_id: userId, organization_id: organizationId, type, title, message, link, read: false }])
-      .select()
-      .single();
+      .insert([{ user_id: userId, organization_id: organizationId, type, title, message, link, read: false }]);
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
@@ -83,8 +81,7 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
 
     if (memberIds.length === 0) return { data: [], error: null };
 
-    // Step 2: check preferences for all members
-    // Fetch all pref rows for this org in one query
+    // Step 2: check preferences for all members in one query
     var { data: prefs } = await supabase
       .from('member_notification_prefs')
       .select('user_id, muted, overrides')
@@ -122,12 +119,88 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
 
     var { data, error } = await supabase
       .from('notifications')
-      .insert(notifications)
+      .insert(notifications);
 
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
     console.error('Error notifying organization members:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Notify all active members of a specific group only.
+ * Respects member_notification_prefs (muted + per-type overrides).
+ * Uses two-step query: org_group_members → members table.
+ */
+export async function notifyGroupMembers({ groupId, organizationId, type, title, message, link, excludeUserId }) {
+  try {
+    // Step 1: get active group member IDs
+    var { data: groupMembers, error: gmError } = await supabase
+      .from('org_group_members')
+      .select('member_id')
+      .eq('group_id', groupId)
+      .eq('status', 'active');
+
+    if (gmError) {
+      console.error('Error fetching group members:', gmError);
+      throw gmError;
+    }
+
+    if (!groupMembers || groupMembers.length === 0) {
+      return { data: [], error: null };
+    }
+
+    var memberIds = groupMembers
+      .map(function(m) { return m.member_id; })
+      .filter(function(id) { return id !== excludeUserId; });
+
+    if (memberIds.length === 0) return { data: [], error: null };
+
+    // Step 2: check notification prefs for this org in one query
+    var { data: prefs } = await supabase
+      .from('member_notification_prefs')
+      .select('user_id, muted, overrides')
+      .eq('org_id', organizationId)
+      .in('user_id', memberIds);
+
+    var prefMap = {};
+    if (prefs) {
+      prefs.forEach(function(p) { prefMap[p.user_id] = p; });
+    }
+
+    var eligibleIds = memberIds.filter(function(userId) {
+      var pref = prefMap[userId];
+      if (!pref) return true; // no row = opted in
+      if (pref.muted === true) return false;
+      if (pref.overrides && pref.overrides[type] === false) return false;
+      return true;
+    });
+
+    if (eligibleIds.length === 0) return { data: [], error: null };
+
+    // Step 3: insert notifications
+    var notifications = eligibleIds.map(function(memberId) {
+      return {
+        user_id: memberId,
+        organization_id: organizationId,
+        type: type,
+        title: title,
+        message: message,
+        link: link,
+        read: false,
+      };
+    });
+
+    var { data, error } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error notifying group members:', error);
     return { data: null, error };
   }
 }
@@ -190,7 +263,7 @@ export async function notifyOrgAdmins({ organizationId, type, title, message, li
 
     var { data, error } = await supabase
       .from('notifications')
-      .insert(notifications)
+      .insert(notifications);
 
     if (error) throw error;
     return { data, error: null };
@@ -219,7 +292,7 @@ export async function notifyUsers({ userIds, organizationId, type, title, messag
 
     var { data, error } = await supabase
       .from('notifications')
-      .insert(notifications)
+      .insert(notifications);
 
     if (error) throw error;
     return { data, error: null };
@@ -237,9 +310,7 @@ export async function markNotificationAsRead(notificationId) {
     var { data, error } = await supabase
       .from('notifications')
       .update({ read: true })
-      .eq('id', notificationId)
-      .select()
-      .single();
+      .eq('id', notificationId);
     if (error) throw error;
     return { data, error: null };
   } catch (error) {

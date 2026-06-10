@@ -27,6 +27,7 @@ import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { notifyGroupMembers } from '../lib/notificationService';
 import CreateEvent from '../components/CreateEvent';
 import FileUploadModal from '../components/FileUploadModal';
 
@@ -1219,12 +1220,37 @@ var EventsTab = function(props) {
         </ul>
       )}
 
-      <CreateEvent isOpen={showCreateEvent}
+ <CreateEvent isOpen={showCreateEvent}
         onClose={function() { setShowCreateEvent(false); }}
-        onSuccess={function() { setShowCreateEvent(false); fetchEvents(); }}
+        onSuccess={async function(newEvent) {
+          setShowCreateEvent(false);
+          fetchEvents();
+          // Notify group members about the new event (CreateEvent already notifies
+          // all org members via notifyOrganizationMembers — here we additionally
+          // notify group members who may not be org-wide but are in this group,
+          // and provide a group-contextual message)
+          try {
+            var evAuthRes = await supabase.auth.getUser();
+            var evUser = evAuthRes.data.user;
+            var eventTitle = (newEvent && newEvent.title) ? newEvent.title : 'New Event';
+            await notifyGroupMembers({
+              groupId: groupId,
+              organizationId: organizationId,
+              type: 'new_event',
+              title: eventTitle,
+              message: 'A new event has been added to your group.',
+              link: '/organizations/' + organizationId + '/groups/' + groupId,
+              excludeUserId: evUser ? evUser.id : null,
+            });
+            window.dispatchEvent(new CustomEvent('notificationCreated'));
+          } catch (notifErr) {
+            console.error('Group event notification failed (event still created):', notifErr);
+          }
+        }}
         organizationId={organizationId}
         organizationName={orgName}
         groupId={groupId} />
+ 
 
       {showLinkModal && (
         <LinkEventModal
@@ -1450,6 +1476,25 @@ var GroupAnnouncementModal = function(props) {
       }
       if (err) throw err;
       mascotSuccessToast(editAnn ? 'Announcement updated' : 'Announcement posted');
+      // Notify group members for new announcements (skip on edit — members already saw it)
+      if (!editAnn) {
+        try {
+          var notifAuthRes = await supabase.auth.getUser();
+          var notifUser = notifAuthRes.data.user;
+          await notifyGroupMembers({
+            groupId: groupId,
+            organizationId: organizationId,
+            type: 'new_announcement',
+            title: form.title.trim(),
+            message: 'A new announcement has been posted to your group.',
+            link: '/organizations/' + organizationId + '/groups/' + groupId,
+            excludeUserId: notifUser ? notifUser.id : null,
+          });
+          window.dispatchEvent(new CustomEvent('notificationCreated'));
+        } catch (notifErr) {
+          console.error('Group announcement notification failed (announcement still saved):', notifErr);
+        }
+      }
       onSaved();
     } catch (e) {
       mascotErrorToast('Failed to save announcement', e.message);
