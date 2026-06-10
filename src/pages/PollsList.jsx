@@ -26,7 +26,6 @@ var ICONS = {
   x:        'M6 18L18 6M6 6l12 12',
   alert:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
   download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-  spinner:  null,
 };
 
 function StatSkeleton() {
@@ -71,9 +70,11 @@ function PollsList() {
   var [editingPoll, setEditingPoll] = useState(null);
   var [orgName, setOrgName] = useState('');
   var [memberCount, setMemberCount] = useState(0);
-  var [bulkExporting, setBulkExporting] = useState(false);
+  var [exporting, setExporting] = useState(false);
 
-  // Cache the auth user once — avoids calling getUser() on every poll action
+  // Selection state — Set of poll IDs
+  var [selectedIds, setSelectedIds] = useState(new Set());
+
   var currentUserRef = useRef(null);
 
   useEffect(function() {
@@ -83,6 +84,11 @@ function PollsList() {
   useEffect(function() {
     applyFiltersAndSort();
   }, [polls, searchTerm, statusFilter, typeFilter, sortBy]);
+
+  // Clear selection when filters change so stale IDs don't linger
+  useEffect(function() {
+    setSelectedIds(new Set());
+  }, [searchTerm, statusFilter, typeFilter, sortBy]);
 
   function isPollClosed(p) {
     var expired = p.closes_at && new Date(p.closes_at) < new Date();
@@ -107,14 +113,12 @@ function PollsList() {
     filtered.sort(function(a, b) {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-
       if (sortBy === 'closing') {
         if (!a.closes_at && !b.closes_at) return new Date(b.created_at) - new Date(a.created_at);
         if (!a.closes_at) return 1;
         if (!b.closes_at) return -1;
         return new Date(a.closes_at) - new Date(b.closes_at);
       }
-
       var aClosed = isPollClosed(a);
       var bClosed = isPollClosed(b);
       if (!aClosed && bClosed) return -1;
@@ -128,8 +132,6 @@ function PollsList() {
   async function loadData() {
     try {
       setLoading(true); setError(null);
-
-      // Cache auth user once here so PollCard actions don't each call getUser()
       var authRes = await supabase.auth.getUser();
       currentUserRef.current = authRes.data.user;
 
@@ -142,14 +144,12 @@ function PollsList() {
         .eq('organization_id', organizationId).eq('status', 'active');
       setMemberCount(countResult.count || 0);
 
-      // Include last_reminded_at in the select
       var pollsResult = await supabase.from('polls')
         .select('*, last_reminded_at')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
       if (pollsResult.error) throw pollsResult.error;
       setPolls(pollsResult.data || []);
-
     } catch (err) {
       console.error('Error loading polls:', err);
       setError(err.message);
@@ -157,8 +157,111 @@ function PollsList() {
     } finally { setLoading(false); }
   }
 
+  // Selection helpers
+  function toggleSelect(pollId) {
+    setSelectedIds(function(prev) {
+      var next = new Set(prev);
+      if (next.has(pollId)) { next.delete(pollId); } else { next.add(pollId); }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    var allIds = filteredPolls.map(function(p) { return p.id; });
+    var allSelected = allIds.every(function(id) { return selectedIds.has(id); });
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allIds));
+    }
+  }
+
+  var allFilteredSelected = filteredPolls.length > 0 && filteredPolls.every(function(p) { return selectedIds.has(p.id); });
+  var someFilteredSelected = filteredPolls.some(function(p) { return selectedIds.has(p.id); });
+  var selectedCount = filteredPolls.filter(function(p) { return selectedIds.has(p.id); }).length;
+
+  // Export: uses selectedIds if any, otherwise all filteredPolls
+  async function handleExport() {
+    var pollsToExport = selectedCount > 0
+      ? filteredPolls.filter(function(p) { return selectedIds.has(p.id); })
+      : filteredPolls;
+    if (exporting || pollsToExport.length === 0) return;
+    setExporting(true);
+    var loadId = toast.loading('Preparing export...');
+    try {
+      var pollIds = pollsToExport.map(function(p) { return p.id; });
+
+      var optsResult = await supabase
+        .from('poll_options')
+        .select('id, poll_id, option_text, display_order')
+        .in('poll_id', pollIds)
+        .order('display_order');
+      if (optsResult.error) throw optsResult.error;
+
+      var votesResult = await supabase
+        .from('poll_votes')
+        .select('poll_id, option_id')
+        .in('poll_id', pollIds);
+      if (votesResult.error) throw votesResult.error;
+
+      var optsByPoll = {};
+      (optsResult.data || []).forEach(function(o) {
+        if (!optsByPoll[o.poll_id]) optsByPoll[o.poll_id] = [];
+        optsByPoll[o.poll_id].push(o);
+      });
+
+      var votesByPoll = {};
+      (votesResult.data || []).forEach(function(v) {
+        if (!votesByPoll[v.poll_id]) votesByPoll[v.poll_id] = [];
+        votesByPoll[v.poll_id].push(v);
+      });
+
+      var rows = [['Poll', 'Status', 'Option', 'Votes', 'Percentage', 'Total Votes']];
+      pollsToExport.forEach(function(poll) {
+        var pollOpts = optsByPoll[poll.id] || [];
+        var pollVotes = votesByPoll[poll.id] || [];
+        var total = pollVotes.length;
+        var isClosed = poll.status === 'closed' || (poll.closes_at && new Date(poll.closes_at) < new Date());
+        var statusLabel = isClosed ? 'Closed' : 'Active';
+        var counts = {};
+        pollVotes.forEach(function(v) { counts[v.option_id] = (counts[v.option_id] || 0) + 1; });
+        if (pollOpts.length === 0) {
+          rows.push([poll.title, statusLabel, '(no options)', 0, '0%', total]);
+        } else {
+          pollOpts.forEach(function(opt, idx) {
+            var c = counts[opt.id] || 0;
+            var pct = total > 0 ? Math.round((c / total) * 100) : 0;
+            rows.push([idx === 0 ? poll.title : '', idx === 0 ? statusLabel : '', opt.option_text, c, pct + '%', idx === 0 ? total : '']);
+          });
+        }
+        rows.push(['', '', '', '', '', '']);
+      });
+
+      var csv = rows.map(function(row) {
+        return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\n');
+
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      var dateStr = new Date().toISOString().slice(0, 10);
+      a.download = 'polls_export_' + dateStr + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.dismiss(loadId);
+      mascotSuccessToast(pollsToExport.length + ' poll' + (pollsToExport.length !== 1 ? 's' : '') + ' exported!');
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast.dismiss(loadId);
+      mascotErrorToast('Export failed.', err.message);
+    } finally { setExporting(false); }
+  }
+
   function handlePollDelete(pollId) {
     setPolls(function(prev) { return prev.filter(function(p) { return p.id !== pollId; }); });
+    setSelectedIds(function(prev) { var next = new Set(prev); next.delete(pollId); return next; });
   }
 
   async function handlePollCreated(newPoll) {
@@ -188,7 +291,6 @@ function PollsList() {
     setPolls(function(prev) { return [newPoll].concat(prev); });
   }
 
-  // Called by PollCard after reminders are sent — updates last_reminded_at in local state
   function handleRemind(pollId, timestamp) {
     setPolls(function(prev) {
       return prev.map(function(p) {
@@ -197,101 +299,9 @@ function PollsList() {
     });
   }
 
-  function openCreate() {
-    setEditingPoll(null);
-    setShowCreateModal(true);
-  }
-
-  function openEdit(poll) {
-    setEditingPoll(poll);
-    setShowCreateModal(true);
-  }
-
-  function closeModal() {
-    setShowCreateModal(false);
-    setEditingPoll(null);
-  }
-
-  // Bulk export: fetches options + votes for every poll in filteredPolls,
-  // then writes a single CSV with one section per poll.
-  async function handleBulkExport() {
-    if (bulkExporting || filteredPolls.length === 0) return;
-    setBulkExporting(true);
-    var loadId = toast.loading('Preparing export...');
-    try {
-      var pollIds = filteredPolls.map(function(p) { return p.id; });
-
-      var optsResult = await supabase
-        .from('poll_options')
-        .select('id, poll_id, option_text, display_order')
-        .in('poll_id', pollIds)
-        .order('display_order');
-      if (optsResult.error) throw optsResult.error;
-
-      var votesResult = await supabase
-        .from('poll_votes')
-        .select('poll_id, option_id')
-        .in('poll_id', pollIds);
-      if (votesResult.error) throw votesResult.error;
-
-      var optsByPoll = {};
-      (optsResult.data || []).forEach(function(o) {
-        if (!optsByPoll[o.poll_id]) optsByPoll[o.poll_id] = [];
-        optsByPoll[o.poll_id].push(o);
-      });
-
-      var votesByPoll = {};
-      (votesResult.data || []).forEach(function(v) {
-        if (!votesByPoll[v.poll_id]) votesByPoll[v.poll_id] = [];
-        votesByPoll[v.poll_id].push(v);
-      });
-
-      var rows = [['Poll', 'Status', 'Option', 'Votes', 'Percentage', 'Total Votes']];
-
-      filteredPolls.forEach(function(poll) {
-        var pollOpts = optsByPoll[poll.id] || [];
-        var pollVotes = votesByPoll[poll.id] || [];
-        var total = pollVotes.length;
-        var isClosed = poll.status === 'closed' || (poll.closes_at && new Date(poll.closes_at) < new Date());
-        var statusLabel = isClosed ? 'Closed' : 'Active';
-
-        var counts = {};
-        pollVotes.forEach(function(v) { counts[v.option_id] = (counts[v.option_id] || 0) + 1; });
-
-        if (pollOpts.length === 0) {
-          rows.push([poll.title, statusLabel, '(no options)', 0, '0%', total]);
-        } else {
-          pollOpts.forEach(function(opt, idx) {
-            var c = counts[opt.id] || 0;
-            var pct = total > 0 ? Math.round((c / total) * 100) : 0;
-            // Only write poll title and total on the first option row for readability
-            rows.push([idx === 0 ? poll.title : '', idx === 0 ? statusLabel : '', opt.option_text, c, pct + '%', idx === 0 ? total : '']);
-          });
-        }
-        // Blank separator row between polls
-        rows.push(['', '', '', '', '', '']);
-      });
-
-      var csv = rows.map(function(row) {
-        return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
-      }).join('\n');
-
-      var blob = new Blob([csv], { type: 'text/csv' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      var dateStr = new Date().toISOString().slice(0, 10);
-      a.download = 'polls_export_' + dateStr + '.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-
-      toast.dismiss(loadId);
-      mascotSuccessToast(filteredPolls.length + ' poll' + (filteredPolls.length !== 1 ? 's' : '') + ' exported!');
-    } catch (err) {
-      toast.dismiss(loadId);
-      mascotErrorToast('Export failed.', err.message);
-    } finally { setBulkExporting(false); }
-  }
+  function openCreate() { setEditingPoll(null); setShowCreateModal(true); }
+  function openEdit(poll) { setEditingPoll(poll); setShowCreateModal(true); }
+  function closeModal() { setShowCreateModal(false); setEditingPoll(null); }
 
   var activeCount  = polls.filter(function(p) { return !isPollClosed(p); }).length;
   var closedCount  = polls.filter(function(p) { return isPollClosed(p); }).length;
@@ -352,20 +362,19 @@ function PollsList() {
           <div>
             <h1 style={{fontSize:'30px',fontWeight:800,color:'#0E1523',lineHeight:1.2}}>Polls</h1>
             <p className="text-sm mt-1 text-[#64748B]">
-              {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' · ' + activeCount + ' active'}
+              {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' \u00b7 ' + activeCount + ' active'}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Bulk export — only shown when there are polls and user is admin */}
             {isAdmin && filteredPolls.length > 0 && (
               <button
-                onClick={handleBulkExport}
-                disabled={bulkExporting}
+                onClick={handleExport}
+                disabled={exporting}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm disabled:opacity-50"
-                aria-label={'Export ' + filteredPolls.length + ' poll results as CSV'}>
-                {bulkExporting
+                aria-label={selectedCount > 0 ? 'Export ' + selectedCount + ' selected polls as CSV' : 'Export all ' + filteredPolls.length + ' polls as CSV'}>
+                {exporting
                   ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" aria-hidden="true" />Exporting...</>
-                  : <><Icon path={ICONS.download} className="h-4 w-4" />{'Export (' + filteredPolls.length + ')'}</>
+                  : <><Icon path={ICONS.download} className="h-4 w-4" />{selectedCount > 0 ? 'Export selected (' + selectedCount + ')' : 'Export (' + filteredPolls.length + ')'}</>
                 }
               </button>
             )}
@@ -407,6 +416,24 @@ function PollsList() {
         {/* Controls */}
         <div className="rounded-xl border p-4 bg-white border-slate-200">
           <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
+            {/* Select all checkbox — admin only, only when polls exist */}
+            {isAdmin && filteredPolls.length > 0 && (
+              <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
+                <input
+                  id="select-all-polls"
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  ref={function(el) { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  aria-label={allFilteredSelected ? 'Deselect all polls' : 'Select all polls'}
+                />
+                <label htmlFor="select-all-polls" className="text-xs font-semibold text-[#475569] cursor-pointer whitespace-nowrap">
+                  {selectedCount > 0 ? selectedCount + ' selected' : 'Select all'}
+                </label>
+              </div>
+            )}
+
             <div className="flex-1 w-full relative min-w-[160px]">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                 <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
@@ -484,20 +511,39 @@ function PollsList() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="list" aria-label="Polls">
             {filteredPolls.map(function(poll) {
+              var isSelected = selectedIds.has(poll.id);
               return (
                 <div key={poll.id} role="listitem">
-                  <PollCard
-                    poll={poll}
-                    onVote={function() {}}
-                    onDelete={handlePollDelete}
-                    onPollUpdated={handlePollUpdated}
-                    onDuplicate={handleDuplicate}
-                    onEdit={openEdit}
-                    onRemind={handleRemind}
-                    isAdmin={isAdmin}
-                    showOrganization={false}
-                    memberCount={memberCount}
-                  />
+                  {/* Selection bar — admin only */}
+                  {isAdmin && (
+                    <div className={'flex items-center gap-2 px-3 py-1.5 rounded-t-xl border-x border-t transition-colors ' + (isSelected ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200')}>
+                      <input
+                        id={'select-poll-' + poll.id}
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={function() { toggleSelect(poll.id); }}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        aria-label={'Select poll: ' + poll.title}
+                      />
+                      <label htmlFor={'select-poll-' + poll.id} className={'text-xs font-semibold cursor-pointer ' + (isSelected ? 'text-blue-600' : 'text-[#64748B]')}>
+                        {isSelected ? 'Selected' : 'Select for export'}
+                      </label>
+                    </div>
+                  )}
+                  <div className={isAdmin ? 'rounded-b-xl overflow-hidden' + (isSelected ? ' ring-2 ring-blue-300' : '') : ''}>
+                    <PollCard
+                      poll={poll}
+                      onVote={function() {}}
+                      onDelete={handlePollDelete}
+                      onPollUpdated={handlePollUpdated}
+                      onDuplicate={handleDuplicate}
+                      onEdit={openEdit}
+                      onRemind={handleRemind}
+                      isAdmin={isAdmin}
+                      showOrganization={false}
+                      memberCount={memberCount}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -507,6 +553,7 @@ function PollsList() {
         {filteredPolls.length > 0 && (
           <p className="text-center text-xs text-[#64748B]">
             {'Showing ' + filteredPolls.length + ' of ' + polls.length + ' poll' + (polls.length !== 1 ? 's' : '')}
+            {selectedCount > 0 && ' \u00b7 ' + selectedCount + ' selected'}
           </p>
         )}
 

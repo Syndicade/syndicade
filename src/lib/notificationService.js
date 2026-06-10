@@ -123,7 +123,6 @@ export async function notifyOrganizationMembers({ organizationId, type, title, m
     var { data, error } = await supabase
       .from('notifications')
       .insert(notifications)
-      .select();
 
     if (error) throw error;
     return { data, error: null };
@@ -192,7 +191,6 @@ export async function notifyOrgAdmins({ organizationId, type, title, message, li
     var { data, error } = await supabase
       .from('notifications')
       .insert(notifications)
-      .select();
 
     if (error) throw error;
     return { data, error: null };
@@ -222,7 +220,6 @@ export async function notifyUsers({ userIds, organizationId, type, title, messag
     var { data, error } = await supabase
       .from('notifications')
       .insert(notifications)
-      .select();
 
     if (error) throw error;
     return { data, error: null };
