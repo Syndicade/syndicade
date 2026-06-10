@@ -4,11 +4,6 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 
-/*
- * DB MIGRATION REQUIRED — run once in Supabase SQL editor before deploying:
- * ALTER TABLE chat_channels ADD COLUMN IF NOT EXISTS is_pinned boolean DEFAULT false;
- */
-
 var BG         = '#F8FAFC';
 var SIDEBAR_BG = '#F1F5F9';
 var CARD_BG    = '#FFFFFF';
@@ -88,7 +83,45 @@ var ICONS = {
   tag:     ['M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z', 'M7 7h.01'],
   search:  'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0',
   pin:     'M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z',
+  pencil:  ['M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7', 'M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z'],
+  check:   'M20 6L9 17l-5-5',
 };
+
+// ConfirmModal — matches app-wide pattern
+function ConfirmModal({ title, message, confirmLabel, confirmDanger, onConfirm, onCancel }) {
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [onCancel]);
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '16px' }}
+      role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}>
+      <div style={{ background: CARD_BG, borderRadius: '16px', width: '100%', maxWidth: '400px', border: '1px solid ' + BORDER, padding: '28px 24px' }}>
+        <h2 id="confirm-modal-title" style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: '0 0 10px' }}>{title}</h2>
+        <p style={{ fontSize: '14px', color: TEXT2, margin: '0 0 24px', lineHeight: 1.6 }}>{message}</p>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{ padding: '8px 18px', borderRadius: '8px', border: '1px solid ' + BORDER, background: 'transparent', color: MUTED, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            className={'hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400'}>
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: confirmDanger ? '#EF4444' : '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            className={confirmDanger ? 'hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500' : 'hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500'}
+            autoFocus>
+            {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SkeletonMessages() {
   return (
@@ -195,6 +228,7 @@ export default function OrgChat() {
   var [unreadCounts,      setUnreadCounts]      = useState({});
   var [channelSearch,     setChannelSearch]     = useState('');
 
+  // New channel modal
   var [showNewChannel,        setShowNewChannel]        = useState(false);
   var [newChannelName,        setNewChannelName]        = useState('');
   var [newChannelDesc,        setNewChannelDesc]        = useState('');
@@ -202,21 +236,36 @@ export default function OrgChat() {
   var [newChannelAudienceId,  setNewChannelAudienceId]  = useState('');
   var [creatingChannel,       setCreatingChannel]       = useState(false);
 
+  // Edit channel
+  var [editingChannelId,   setEditingChannelId]   = useState(null);
+  var [editChannelName,    setEditChannelName]    = useState('');
+  var [editChannelDesc,    setEditChannelDesc]    = useState('');
+  var [savingEdit,         setSavingEdit]         = useState(false);
+
+  // Members panel
   var [showMembersPanel,  setShowMembersPanel]  = useState(false);
   var [orgMembers,        setOrgMembers]        = useState([]);
   var [loadingMembers,    setLoadingMembers]    = useState(false);
 
+  // Groups & tiers for channel creation
   var [orgGroups,       setOrgGroups]       = useState([]);
   var [membershipTiers, setMembershipTiers] = useState([]);
+
+  // Confirm modal
+  var [confirmModal, setConfirmModal] = useState(null);
+  // Hover state for channel item buttons
+  var [hoveredChannelId, setHoveredChannelId] = useState(null);
 
   var messagesEndRef = useRef(null);
   var inputRef       = useRef(null);
   var realtimeRef    = useRef(null);
+  var editNameRef    = useRef(null);
 
   useEffect(function() { fetchInitialData(); }, [organizationId]);
 
   useEffect(function() {
     if (selectedChannel) {
+      setMessageInput('');
       fetchMessages(selectedChannel.id);
       markChannelRead(selectedChannel.id);
       setupRealtime(selectedChannel.id);
@@ -230,6 +279,14 @@ export default function OrgChat() {
   }, [selectedChannel]);
 
   useEffect(function() { scrollToBottom(); }, [messages]);
+
+  // Focus edit input when editing starts
+  useEffect(function() {
+    if (editingChannelId && editNameRef.current) {
+      editNameRef.current.focus();
+      editNameRef.current.select();
+    }
+  }, [editingChannelId]);
 
   function scrollToBottom() {
     if (messagesEndRef.current) {
@@ -279,7 +336,7 @@ export default function OrgChat() {
     setLoadingChannels(true);
     try {
       var result = await supabase
-        .from('chat_channels')
+        .from('org_chat_channels')
         .select('*')
         .eq('organization_id', organizationId)
         .order('is_pinned', { ascending: false })
@@ -288,26 +345,29 @@ export default function OrgChat() {
       var channelList = result.data || [];
       setChannels(channelList);
 
+      // Batch unread counts with Promise.all instead of sequential awaits
       if (userId && channelList.length > 0) {
-        var counts = {};
-        for (var i = 0; i < channelList.length; i++) {
-          var ch = channelList[i];
-          var readResult = await supabase
-            .from('chat_reads')
-            .select('last_read_at')
-            .eq('channel_id', ch.id)
-            .eq('member_id', userId)
-            .maybeSingle();
-          var lastRead = readResult.data ? readResult.data.last_read_at : null;
+        var readsResult = await supabase
+          .from('chat_reads')
+          .select('channel_id, last_read_at')
+          .eq('member_id', userId)
+          .in('channel_id', channelList.map(function(c) { return c.id; }));
+        var readsMap = {};
+        (readsResult.data || []).forEach(function(r) { readsMap[r.channel_id] = r.last_read_at; });
+
+        var countPromises = channelList.map(function(ch) {
+          var lastRead = readsMap[ch.id] || null;
           var q = supabase
             .from('chat_messages')
             .select('id', { count: 'exact', head: true })
             .eq('channel_id', ch.id)
             .eq('is_deleted', false);
           if (lastRead) q = q.gt('created_at', lastRead);
-          var countResult = await q;
-          counts[ch.id] = countResult.count || 0;
-        }
+          return q.then(function(r) { return { id: ch.id, count: r.count || 0 }; });
+        });
+        var countResults = await Promise.all(countPromises);
+        var counts = {};
+        countResults.forEach(function(r) { counts[r.id] = r.count; });
         setUnreadCounts(counts);
       }
 
@@ -418,6 +478,16 @@ export default function OrgChat() {
         });
         markChannelRead(channelId);
       })
+      // Listen for UPDATE so soft-deletes by other users reflect in real time
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'chat_messages',
+        filter: 'channel_id=eq.' + channelId,
+      }, function(payload) {
+        var updated = payload.new;
+        if (updated.is_deleted) {
+          setMessages(function(prev) { return prev.filter(function(m) { return m.id !== updated.id; }); });
+        }
+      })
       .subscribe();
     realtimeRef.current = channel;
   }
@@ -447,20 +517,29 @@ export default function OrgChat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
 
-  async function handleDeleteMessage(messageId) {
-    var result = await supabase.from('chat_messages').update({ is_deleted: true }).eq('id', messageId);
-    if (result.error) {
-      mascotErrorToast('Failed to delete message');
-    } else {
-      setMessages(function(prev) { return prev.filter(function(m) { return m.id !== messageId; }); });
-      mascotSuccessToast('Message deleted');
-    }
+  function confirmDeleteMessage(messageId) {
+    setConfirmModal({
+      title: 'Delete Message',
+      message: 'This message will be permanently removed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      confirmDanger: true,
+      onConfirm: async function() {
+        setConfirmModal(null);
+        var result = await supabase.from('chat_messages').update({ is_deleted: true }).eq('id', messageId);
+        if (result.error) {
+          mascotErrorToast('Failed to delete message');
+        } else {
+          setMessages(function(prev) { return prev.filter(function(m) { return m.id !== messageId; }); });
+          mascotSuccessToast('Message deleted');
+        }
+      },
+    });
   }
 
   async function handleTogglePin(channel, e) {
     e.stopPropagation();
     var newPinned = !channel.is_pinned;
-    var result = await supabase.from('chat_channels').update({ is_pinned: newPinned }).eq('id', channel.id);
+    var result = await supabase.from('org_chat_channels').update({ is_pinned: newPinned }).eq('id', channel.id);
     if (result.error) {
       mascotErrorToast('Failed to update pin');
       return;
@@ -476,6 +555,47 @@ export default function OrgChat() {
       });
     });
     mascotSuccessToast(newPinned ? 'Channel pinned' : 'Channel unpinned');
+  }
+
+  function startEditChannel(channel, e) {
+    e.stopPropagation();
+    setEditingChannelId(channel.id);
+    setEditChannelName(channel.name);
+    setEditChannelDesc(channel.description || '');
+  }
+
+  async function saveEditChannel() {
+    if (!editChannelName.trim()) { toast.error('Channel name is required'); return; }
+    setSavingEdit(true);
+    var result = await supabase
+      .from('org_chat_channels')
+      .update({ name: editChannelName.trim(), description: editChannelDesc.trim() || null })
+      .eq('id', editingChannelId);
+    if (result.error) {
+      mascotErrorToast('Failed to save changes');
+    } else {
+      setChannels(function(prev) {
+        return prev.map(function(ch) {
+          return ch.id === editingChannelId
+            ? Object.assign({}, ch, { name: editChannelName.trim(), description: editChannelDesc.trim() || null })
+            : ch;
+        });
+      });
+      if (selectedChannel && selectedChannel.id === editingChannelId) {
+        setSelectedChannel(function(prev) {
+          return Object.assign({}, prev, { name: editChannelName.trim(), description: editChannelDesc.trim() || null });
+        });
+      }
+      mascotSuccessToast('Channel updated');
+      setEditingChannelId(null);
+    }
+    setSavingEdit(false);
+  }
+
+  function cancelEditChannel() {
+    setEditingChannelId(null);
+    setEditChannelName('');
+    setEditChannelDesc('');
   }
 
   async function handleCreateChannel() {
@@ -502,7 +622,7 @@ export default function OrgChat() {
         audience_label: audienceLabel,
         is_pinned: false,
       };
-      var result = await supabase.from('chat_channels').insert(insertData).select().single();
+      var result = await supabase.from('org_chat_channels').insert(insertData).select().single();
       if (result.error) throw result.error;
       mascotSuccessToast('Chat created', result.data.name + ' is ready to use.');
       setShowNewChannel(false);
@@ -519,18 +639,26 @@ export default function OrgChat() {
     }
   }
 
-  async function handleDeleteChannel(channel) {
-    if (!window.confirm('Delete "' + channel.name + '"? All messages will be permanently lost.')) return;
-    var result = await supabase.from('chat_channels').delete().eq('id', channel.id);
-    if (result.error) {
-      mascotErrorToast('Failed to delete chat');
-    } else {
-      mascotSuccessToast('Chat deleted');
-      var remaining = channels.filter(function(c) { return c.id !== channel.id; });
-      setChannels(remaining);
-      setSelectedChannel(remaining.length > 0 ? remaining[0] : null);
-      setMessages([]);
-    }
+  function confirmDeleteChannel(channel) {
+    setConfirmModal({
+      title: 'Delete "' + channel.name + '"?',
+      message: 'All messages in this channel will be permanently lost. This cannot be undone.',
+      confirmLabel: 'Delete Channel',
+      confirmDanger: true,
+      onConfirm: async function() {
+        setConfirmModal(null);
+        var result = await supabase.from('org_chat_channels').delete().eq('id', channel.id);
+        if (result.error) {
+          mascotErrorToast('Failed to delete chat');
+        } else {
+          mascotSuccessToast('Chat deleted');
+          var remaining = channels.filter(function(c) { return c.id !== channel.id; });
+          setChannels(remaining);
+          setSelectedChannel(remaining.length > 0 ? remaining[0] : null);
+          setMessages([]);
+        }
+      },
+    });
   }
 
   function getSenderName(senderId) {
@@ -545,7 +673,7 @@ export default function OrgChat() {
   function isMe(senderId) { return !!(currentUser && senderId === currentUser.id); }
 
   // Derived
-  var totalUnread = Object.values(unreadCounts).reduce(function(sum, n) { return sum + n; }, 0);
+  var totalUnread      = Object.values(unreadCounts).reduce(function(sum, n) { return sum + n; }, 0);
   var filteredChannels = channels.filter(function(ch) {
     if (!channelSearch.trim()) return true;
     return ch.name.toLowerCase().indexOf(channelSearch.toLowerCase()) !== -1;
@@ -556,18 +684,71 @@ export default function OrgChat() {
   var regularMembers   = orgMembers.filter(function(m) { return m.role !== 'admin'; });
 
   function renderChannelItem(ch) {
-    var isSelected = !!(selectedChannel && selectedChannel.id === ch.id);
-    var unread = unreadCounts[ch.id] || 0;
-    var restricted = !!(ch.visibility && ch.visibility !== 'all');
+    var isSelected  = !!(selectedChannel && selectedChannel.id === ch.id);
+    var isEditing   = editingChannelId === ch.id;
+    var unread      = unreadCounts[ch.id] || 0;
+    var restricted  = !!(ch.visibility && ch.visibility !== 'all');
+
+    if (isEditing) {
+      return (
+        <div key={ch.id} style={{ padding: '6px 8px', marginBottom: '2px' }} role="listitem">
+          <input
+            ref={editNameRef}
+            type="text"
+            value={editChannelName}
+            onChange={function(e) { setEditChannelName(e.target.value); }}
+            onKeyDown={function(e) {
+              if (e.key === 'Enter') saveEditChannel();
+              if (e.key === 'Escape') cancelEditChannel();
+            }}
+            aria-label="Edit channel name"
+            style={{ width: '100%', background: CARD_BG, border: '1px solid #3B82F6', borderRadius: '6px', padding: '5px 8px', color: TEXT, fontSize: '12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: '4px' }}
+          />
+          <input
+            type="text"
+            value={editChannelDesc}
+            onChange={function(e) { setEditChannelDesc(e.target.value); }}
+            onKeyDown={function(e) {
+              if (e.key === 'Enter') saveEditChannel();
+              if (e.key === 'Escape') cancelEditChannel();
+            }}
+            placeholder="Description (optional)"
+            aria-label="Edit channel description"
+            style={{ width: '100%', background: CARD_BG, border: '1px solid ' + BORDER, borderRadius: '6px', padding: '5px 8px', color: TEXT, fontSize: '11px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: '6px' }}
+          />
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              onClick={saveEditChannel}
+              disabled={savingEdit || !editChannelName.trim()}
+              aria-label="Save channel name"
+              style={{ flex: 1, padding: '4px', borderRadius: '5px', border: 'none', background: '#3B82F6', color: '#FFFFFF', fontSize: '11px', fontWeight: 600, cursor: editChannelName.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}
+              className={'focus:outline-none focus:ring-2 focus:ring-blue-500'}>
+              <Icon path={ICONS.check} size={11} />
+              Save
+            </button>
+            <button
+              onClick={cancelEditChannel}
+              aria-label="Cancel edit"
+              style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid ' + BORDER, background: 'transparent', color: MUTED, fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+              className={'hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400'}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div key={ch.id} role="listitem" style={{ position: 'relative' }} className="group">
+      <div key={ch.id} role="listitem" style={{ position: 'relative' }}
+        onMouseEnter={function() { setHoveredChannelId(ch.id); }}
+        onMouseLeave={function() { setHoveredChannelId(null); }}>
         <button
           onClick={function() { setSelectedChannel(ch); }}
           aria-label={ch.name + (unread > 0 ? ', ' + unread + ' unread' : '') + (restricted ? ', restricted' : '') + (ch.is_pinned ? ', pinned' : '')}
           aria-current={isSelected ? 'true' : undefined}
           style={{
             width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-            padding: '7px 32px 7px 10px', borderRadius: '6px', marginBottom: '2px',
+            padding: '7px 56px 7px 10px', borderRadius: '6px', marginBottom: '2px',
             background: isSelected ? '#E2E8F0' : 'transparent',
             display: 'flex', alignItems: 'center', gap: '6px',
             color: isSelected ? TEXT : (unread > 0 ? TEXT : MUTED),
@@ -586,28 +767,34 @@ export default function OrgChat() {
             </span>
           )}
         </button>
+
+        {/* Admin action buttons — edit + pin, visible on hover */}
         {isAdmin && (
-          <button
-            onClick={function(e) { handleTogglePin(ch, e); }}
-            aria-label={(ch.is_pinned ? 'Unpin ' : 'Pin ') + ch.name}
-            title={ch.is_pinned ? 'Unpin from top' : 'Pin to top'}
-            style={{
-              position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
-              padding: '4px', borderRadius: '4px', border: 'none', background: 'transparent',
-              color: ch.is_pinned ? '#F5B731' : MUTED, cursor: 'pointer',
-              display: 'flex', alignItems: 'center',
-              opacity: ch.is_pinned ? 1 : 0,
-            }}
-            className={'group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-opacity'}>
-            <Icon path={ICONS.pin} size={12} filled={ch.is_pinned} />
-          </button>
+          <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', opacity: (hoveredChannelId === ch.id || ch.is_pinned) ? 1 : 0, transition: 'opacity 0.1s' }}>
+            <button
+              onClick={function(e) { startEditChannel(ch, e); }}
+              aria-label={'Edit ' + ch.name}
+              title="Edit channel"
+              style={{ padding: '4px', borderRadius: '4px', border: 'none', background: 'transparent', color: MUTED, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              className={'hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'}>
+              <Icon path={ICONS.pencil} size={12} />
+            </button>
+            <button
+              onClick={function(e) { handleTogglePin(ch, e); }}
+              aria-label={(ch.is_pinned ? 'Unpin ' : 'Pin ') + ch.name}
+              title={ch.is_pinned ? 'Unpin from top' : 'Pin to top'}
+              style={{ padding: '4px', borderRadius: '4px', border: 'none', background: 'transparent', color: ch.is_pinned ? '#F5B731' : MUTED, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              className={'hover:text-yellow-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'}>
+              <Icon path={ICONS.pin} size={12} filled={ch.is_pinned} />
+            </button>
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div style={{ background: BG, height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+    <div style={{ background: BG, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
       {/* Page header */}
       <div style={{ background: CARD_BG, borderBottom: '1px solid ' + BORDER, padding: '24px', flexShrink: 0 }}>
@@ -620,10 +807,12 @@ export default function OrgChat() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
         {/* Left sidebar */}
-        <div style={{ width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <nav
+          aria-label="Chat channels"
+          style={{ width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           {/* Sidebar header */}
           <div style={{ padding: '16px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -696,13 +885,13 @@ export default function OrgChat() {
               </div>
             )}
           </div>
-        </div>
+        </nav>
 
         {/* Center + right */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
           {/* Message area */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: BG }}>
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: BG, minHeight: 0 }}>
             {!selectedChannel ? (
               <EmptyState
                 icon={<Icon path={ICONS.chat} size={28} />}
@@ -756,7 +945,7 @@ export default function OrgChat() {
 
                   {isAdmin && (
                     <button
-                      onClick={function() { handleDeleteChannel(selectedChannel); }}
+                      onClick={function() { confirmDeleteChannel(selectedChannel); }}
                       aria-label={'Delete chat ' + selectedChannel.name}
                       style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid ' + BORDER, background: 'transparent', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}
                       className={'hover:border-red-400 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors'}>
@@ -780,11 +969,11 @@ export default function OrgChat() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       {messages.map(function(msg, index) {
-                        var showHeader = index === 0 || messages[index - 1].sender_id !== msg.sender_id || shouldShowDivider(messages, index);
-                        var avatarUrl  = getSenderAvatar(msg.sender_id);
-                        var senderName = getSenderName(msg.sender_id);
-                        var mine       = isMe(msg.sender_id);
-                        var avatarColor = getAvatarColor(senderName);
+                        var showHeader   = index === 0 || messages[index - 1].sender_id !== msg.sender_id || shouldShowDivider(messages, index);
+                        var avatarUrl    = getSenderAvatar(msg.sender_id);
+                        var senderName   = getSenderName(msg.sender_id);
+                        var mine         = isMe(msg.sender_id);
+                        var avatarColor  = getAvatarColor(senderName);
 
                         return (
                           <div key={msg.id}>
@@ -829,7 +1018,7 @@ export default function OrgChat() {
                                   </p>
                                   {(mine || isAdmin) && (
                                     <button
-                                      onClick={function() { handleDeleteMessage(msg.id); }}
+                                      onClick={function() { confirmDeleteMessage(msg.id); }}
                                       aria-label="Delete message"
                                       style={{ padding: '3px', borderRadius: '4px', border: 'none', background: 'transparent', color: '#EF4444', cursor: 'pointer', opacity: 0, flexShrink: 0 }}
                                       className={'group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-opacity'}>
@@ -876,12 +1065,13 @@ export default function OrgChat() {
                 </div>
               </>
             )}
-          </div>
+          </main>
 
           {/* Members panel */}
           {showMembersPanel && (
-            <div style={{ width: '220px', flexShrink: 0, background: CARD_BG, borderLeft: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-              role="complementary" aria-label="Members panel">
+            <aside
+              style={{ width: '220px', flexShrink: 0, background: CARD_BG, borderLeft: '1px solid ' + BORDER, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              aria-label="Members panel">
               <div style={{ padding: '14px 16px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px' }}>
                   Members{(!loadingMembers && orgMembers.length > 0) ? ' (' + orgMembers.length + ')' : ''}
@@ -920,7 +1110,7 @@ export default function OrgChat() {
                   </div>
                 )}
               </div>
-            </div>
+            </aside>
           )}
         </div>
       </div>
@@ -928,7 +1118,8 @@ export default function OrgChat() {
       {/* New Channel Modal */}
       {showNewChannel && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}
-          role="dialog" aria-modal="true" aria-labelledby="new-channel-title">
+          role="dialog" aria-modal="true" aria-labelledby="new-channel-title"
+          onClick={function(e) { if (e.target === e.currentTarget) setShowNewChannel(false); }}>
           <div style={{ background: CARD_BG, borderRadius: '16px', width: '100%', maxWidth: '500px', border: '1px solid ' + BORDER, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + BORDER, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: CARD_BG, zIndex: 1 }}>
               <h2 id="new-channel-title" style={{ fontSize: '16px', fontWeight: 700, color: TEXT, margin: 0 }}>Create Chat</h2>
@@ -940,7 +1131,6 @@ export default function OrgChat() {
             </div>
             <div style={{ padding: '24px' }}>
 
-              {/* Name */}
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="chat-name" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
                   Chat Name <span aria-hidden="true" style={{ color: '#EF4444' }}>*</span>
@@ -959,7 +1149,6 @@ export default function OrgChat() {
                 />
               </div>
 
-              {/* Description */}
               <div style={{ marginBottom: '20px' }}>
                 <label htmlFor="chat-desc" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' }}>
                   Description <span style={{ color: MUTED, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
@@ -975,7 +1164,6 @@ export default function OrgChat() {
                 />
               </div>
 
-              {/* Audience */}
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '10px' }}>Audience</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} role="radiogroup" aria-label="Channel audience">
@@ -1062,7 +1250,6 @@ export default function OrgChat() {
                 </div>
               </div>
 
-              {/* Actions */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={function() { setShowNewChannel(false); }}
                   style={{ flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid ' + BORDER, background: 'transparent', color: MUTED, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
@@ -1079,6 +1266,18 @@ export default function OrgChat() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          confirmDanger={confirmModal.confirmDanger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={function() { setConfirmModal(null); }}
+        />
       )}
     </div>
   );
