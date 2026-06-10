@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
-// ── SVG Icon helper ───────────────────────────────────────────────────────────
 function Icon({ path, className, strokeWidth }) {
   var cls = className || 'h-5 w-5';
   var sw  = strokeWidth || 2;
@@ -15,7 +14,6 @@ function Icon({ path, className, strokeWidth }) {
   );
 }
 
-// ── Icon paths ────────────────────────────────────────────────────────────────
 var ICONS = {
   bell:      ['M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'],
   megaphone: ['M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'],
@@ -31,27 +29,40 @@ var ICONS = {
   poll:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', 'M9 12h3m0 0h3m-3 0v3m0-3V9'],
   photo:     ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
   program:   ['M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'],
+  signup:    ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M12 11v4m-2-2h4'],
+  document:  ['M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z'],
 };
 
-// ── Type → icon/color/link ────────────────────────────────────────────────────
+// ── Type → icon / color / link ─────────────────────────────────────────────
+// IMPORTANT: all linkFn references use n.organization_id (not n.org_id).
+// The notifications table column is organization_id.
 var TYPE_CONFIG = {
-  announcement:            { icon: ICONS.megaphone, color: '#3B82F6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/announcements' : null; } },
-  event:                   { icon: ICONS.calendar,  color: '#22C55E', linkFn: function(n) { return n.entity_id ? '/events/' + n.entity_id : null; } },
-  member:                  { icon: ICONS.userPlus,  color: '#8B5CF6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/members' : null; } },
-  invitation:              { icon: ICONS.mail,      color: '#F5B731', linkFn: function(n) { return n.link || null; } },
-  document:                { icon: ICONS.folder,    color: '#64748B', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/documents' : null; } },
-  collaboration_request:   { icon: ICONS.collab,    color: '#8B5CF6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
-  collab_request:          { icon: ICONS.collab,    color: '#8B5CF6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
-  collab_invite:           { icon: ICONS.collab,    color: '#8B5CF6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
-  collab_accepted:         { icon: ICONS.collab,    color: '#22C55E', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
-  collab_declined:         { icon: ICONS.collab,    color: '#EF4444', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
-  community_board_message: { icon: ICONS.pinboard,  color: '#8B5CF6', linkFn: function(n) { return n.entity_id ? '/community-board/' + n.entity_id : null; } },
-  board_reply:             { icon: ICONS.pinboard,  color: '#8B5CF6', linkFn: function(n) { return n.entity_id ? '/community-board/' + n.entity_id : null; } },
-  new_poll:                { icon: ICONS.poll,      color: '#3B82F6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/polls' : null; } },
-  new_survey:              { icon: ICONS.poll,      color: '#8B5CF6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/surveys' : null; } },
-  new_photo:               { icon: ICONS.photo,     color: '#22C55E', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/photos' : null; } },
-  new_program:             { icon: ICONS.program,   color: '#F5B731', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/programs' : null; } },
-  inbox_message:           { icon: ICONS.mail,      color: '#3B82F6', linkFn: function(n) { return n.org_id ? '/organizations/' + n.org_id + '/inbox' : null; } },
+  announcement:            { icon: ICONS.megaphone, color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/announcements' : (n.link || null); } },
+  new_announcement:        { icon: ICONS.megaphone, color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/announcements' : (n.link || null); } },
+  event:                   { icon: ICONS.calendar,  color: '#22C55E',  linkFn: function(n) { return n.link || null; } },
+  new_event:               { icon: ICONS.calendar,  color: '#22C55E',  linkFn: function(n) { return n.link || null; } },
+  event_reminder:          { icon: ICONS.calendar,  color: '#F5B731',  linkFn: function(n) { return n.link || null; } },
+  event_rsvp:              { icon: ICONS.calendar,  color: '#22C55E',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  member:                  { icon: ICONS.userPlus,  color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/members' : (n.link || null); } },
+  member_joined:           { icon: ICONS.userPlus,  color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/members' : (n.link || null); } },
+  invitation:              { icon: ICONS.mail,      color: '#F5B731',  linkFn: function(n) { return n.link || null; } },
+  invite_received:         { icon: ICONS.mail,      color: '#F5B731',  linkFn: function(n) { return n.link || null; } },
+  document:                { icon: ICONS.document,  color: '#64748B',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/documents' : (n.link || null); } },
+  new_document:            { icon: ICONS.document,  color: '#64748B',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/documents' : (n.link || null); } },
+  collaboration_request:   { icon: ICONS.collab,    color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  collab_request:          { icon: ICONS.collab,    color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  collab_invite:           { icon: ICONS.collab,    color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  collab_accepted:         { icon: ICONS.collab,    color: '#22C55E',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  collab_declined:         { icon: ICONS.collab,    color: '#EF4444',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  community_board_message: { icon: ICONS.pinboard,  color: '#8B5CF6',  linkFn: function(n) { return n.link || null; } },
+  board_reply:             { icon: ICONS.pinboard,  color: '#8B5CF6',  linkFn: function(n) { return n.link || null; } },
+  new_poll:                { icon: ICONS.poll,      color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/polls' : (n.link || null); } },
+  new_survey:              { icon: ICONS.poll,      color: '#8B5CF6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/surveys' : (n.link || null); } },
+  new_photo:               { icon: ICONS.photo,     color: '#22C55E',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/photos' : (n.link || null); } },
+  new_program:             { icon: ICONS.program,   color: '#F5B731',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/programs' : (n.link || null); } },
+  program_registration:    { icon: ICONS.program,   color: '#F5B731',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/programs' : (n.link || null); } },
+  new_signup_form:         { icon: ICONS.signup,    color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/signup-forms' : (n.link || null); } },
+  inbox_message:           { icon: ICONS.mail,      color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
 };
 
 function getTypeConfig(type) {
@@ -74,11 +85,11 @@ function getTimeAgo(timestamp) {
 }
 
 function getDayBucket(timestamp) {
-  var now   = new Date();
-  var date  = new Date(timestamp);
-  var diffD = Math.floor((now.setHours(0,0,0,0) - date.setHours(0,0,0,0)) / 86400000);
-  if (diffD === 0)  return 'Today';
-  if (diffD === 1)  return 'Yesterday';
+  var now  = new Date();
+  var date = new Date(timestamp);
+  var diffD = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(date.getFullYear(), date.getMonth(), date.getDate())) / 86400000);
+  if (diffD === 0) return 'Today';
+  if (diffD === 1) return 'Yesterday';
   return 'Earlier';
 }
 
@@ -113,15 +124,14 @@ function NotificationSkeleton() {
 function NotificationBell() {
   var navigate     = useNavigate();
   var dropdownRef  = useRef(null);
-  var lastFetchRef = useRef(null); // ISO timestamp of most recent notification fetched
+  var lastFetchRef = useRef(null);
 
   var [notifications, setNotifications] = useState([]);
   var [unreadCount,   setUnreadCount]   = useState(0);
   var [isOpen,        setIsOpen]        = useState(false);
   var [loading,       setLoading]       = useState(false);
-  var [newIds,        setNewIds]        = useState({}); // { [id]: true } — animate for 3s
+  var [newIds,        setNewIds]        = useState({});
 
-  // ── Full fetch (mount + open) ─────────────────────────────────────────────
   var fetchAll = useCallback(async function() {
     try {
       setLoading(true);
@@ -149,7 +159,6 @@ function NotificationBell() {
     }
   }, []);
 
-  // ── Incremental fetch (poll + realtime trigger) ───────────────────────────
   var fetchIncremental = useCallback(async function() {
     try {
       var authData = await supabase.auth.getUser();
@@ -172,12 +181,10 @@ function NotificationBell() {
       var incoming = result.data || [];
       if (incoming.length === 0) return;
 
-      // Track new IDs for slide-in animation
       var newIdMap = {};
       incoming.forEach(function(n) { newIdMap[n.id] = true; });
       setNewIds(function(prev) { return Object.assign({}, prev, newIdMap); });
 
-      // Clear animation flag after 3s
       setTimeout(function() {
         setNewIds(function(prev) {
           var next = Object.assign({}, prev);
@@ -187,7 +194,6 @@ function NotificationBell() {
       }, 3000);
 
       setNotifications(function(prev) {
-        // Merge: prepend new, dedupe by id
         var existingIds = {};
         prev.forEach(function(n) { existingIds[n.id] = true; });
         var truly_new = incoming.filter(function(n) { return !existingIds[n.id]; });
@@ -206,63 +212,46 @@ function NotificationBell() {
     }
   }, []);
 
-  // ── Realtime + polling setup ──────────────────────────────────────────────
   useEffect(function() {
     fetchAll();
 
     var dbChannel        = null;
     var broadcastChannel = null;
     var pollInterval     = null;
-    var userId           = null;
 
     async function setup() {
       var authData = await supabase.auth.getUser();
       var user = authData.data && authData.data.user;
       if (!user) return;
-      userId = user.id;
+      var userId = user.id;
 
-      // postgres_changes with user_id filter for reliability
       dbChannel = supabase
         .channel('notif-db-' + userId)
         .on(
           'postgres_changes',
-          {
-            event:  'INSERT',
-            schema: 'public',
-            table:  'notifications',
-            filter: 'user_id=eq.' + userId,
-          },
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + userId },
           function() { fetchIncremental(); }
         )
         .subscribe(function(status) {
-          // Re-fetch on reconnect after disconnect
-          if (status === 'SUBSCRIBED' && dbChannel._prevStatus === 'CLOSED') {
-            fetchIncremental();
-          }
+          if (status === 'SUBSCRIBED' && dbChannel._prevStatus === 'CLOSED') fetchIncremental();
           dbChannel._prevStatus = status;
         });
 
-      // Broadcast channel for cross-browser instant delivery
       broadcastChannel = supabase
         .channel('notif-broadcast-' + userId)
         .on('broadcast', { event: 'new_notification' }, function() { fetchIncremental(); })
         .subscribe();
 
-      // 30s polling — only incremental
       pollInterval = setInterval(function() { fetchIncremental(); }, 30000);
     }
 
     setup();
 
-    // Tab visibility — re-fetch when tab becomes active
     function handleVisibility() {
-      if (document.visibilityState === 'visible') {
-        fetchIncremental();
-      }
+      if (document.visibilityState === 'visible') fetchIncremental();
     }
     document.addEventListener('visibilitychange', handleVisibility);
 
-    // Custom event from other components
     function handleCustomEvent() { fetchIncremental(); }
     window.addEventListener('notificationCreated', handleCustomEvent);
 
@@ -275,17 +264,13 @@ function NotificationBell() {
     };
   }, [fetchAll, fetchIncremental]);
 
-  // ── Re-fetch full list when dropdown opens ────────────────────────────────
   useEffect(function() {
     if (isOpen) fetchAll();
   }, [isOpen, fetchAll]);
 
-  // ── Click outside to close ────────────────────────────────────────────────
   useEffect(function() {
     function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
     }
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
@@ -293,21 +278,15 @@ function NotificationBell() {
     }
   }, [isOpen]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   async function markAsRead(notificationId) {
     try {
-      var result = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId);
+      var result = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
       if (result.error) throw result.error;
       setNotifications(function(prev) {
         return prev.map(function(n) { return n.id === notificationId ? Object.assign({}, n, { read: true }) : n; });
       });
       setUnreadCount(function(prev) { return Math.max(0, prev - 1); });
-    } catch (err) {
-      console.error('markAsRead error:', err);
-    }
+    } catch (err) { console.error('markAsRead error:', err); }
   }
 
   async function markAllAsRead() {
@@ -315,24 +294,15 @@ function NotificationBell() {
       var authData = await supabase.auth.getUser();
       var user = authData.data && authData.data.user;
       if (!user) return;
-      var result = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', user.id)
-        .eq('read', false);
+      var result = await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false);
       if (result.error) throw result.error;
-      setNotifications(function(prev) {
-        return prev.map(function(n) { return Object.assign({}, n, { read: true }); });
-      });
+      setNotifications(function(prev) { return prev.map(function(n) { return Object.assign({}, n, { read: true }); }); });
       setUnreadCount(0);
-    } catch (err) {
-      console.error('markAllAsRead error:', err);
-    }
+    } catch (err) { console.error('markAllAsRead error:', err); }
   }
 
   async function dismissNotification(e, notificationId) {
     e.stopPropagation();
-    // Optimistic remove
     setNotifications(function(prev) { return prev.filter(function(n) { return n.id !== notificationId; }); });
     setUnreadCount(function(prev) {
       var wasUnread = notifications.find(function(n) { return n.id === notificationId && !n.read; });
@@ -340,10 +310,7 @@ function NotificationBell() {
     });
     try {
       await supabase.from('notifications').delete().eq('id', notificationId);
-    } catch (err) {
-      console.error('dismissNotification error:', err);
-      // Silently fail — already removed from UI
-    }
+    } catch (err) { console.error('dismissNotification error:', err); }
   }
 
   function handleNotificationClick(notification) {
@@ -353,9 +320,7 @@ function NotificationBell() {
     setIsOpen(false);
   }
 
-  // ── Grouped list ──────────────────────────────────────────────────────────
   var groups = groupNotifications(notifications);
-
   var labelText = 'Notifications' + (unreadCount > 0 ? ' (' + unreadCount + ' unread)' : '');
 
   return (
@@ -420,14 +385,13 @@ function NotificationBell() {
                 {groups.map(function(group) {
                   return (
                     <div key={group.label}>
-                      {/* Date group label */}
                       <div style={{padding:'8px 16px 4px',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0',borderTop:'1px solid #E2E8F0'}}>
                         <span style={{fontSize:'11px',fontWeight:700,color:'#F5B731',letterSpacing:'4px',textTransform:'uppercase'}}>{group.label}</span>
                       </div>
 
                       {group.items.map(function(notification) {
-                        var cfg    = getTypeConfig(notification.type);
-                        var isNew  = newIds[notification.id] || false;
+                        var cfg   = getTypeConfig(notification.type);
+                        var isNew = newIds[notification.id] || false;
                         return (
                           <div
                             key={notification.id}
@@ -436,8 +400,7 @@ function NotificationBell() {
                               position:'relative',
                               background: isNew ? '#F0FDF4' : (notification.read ? '#FFFFFF' : '#EFF6FF'),
                               borderBottom:'1px solid #E2E8F0',
-                              transition:'background 0.4s ease, transform 0.3s ease, opacity 0.3s ease',
-                              transform: isNew ? 'translateX(0)' : 'translateX(0)',
+                              transition:'background 0.4s ease',
                               animation: isNew ? 'slideInLeft 0.3s ease' : 'none',
                             }}
                           >
@@ -475,7 +438,7 @@ function NotificationBell() {
                               </div>
                             </button>
 
-                            {/* Dismiss button */}
+                            {/* Dismiss */}
                             <button
                               onClick={function(e) { dismissNotification(e, notification.id); }}
                               style={{position:'absolute',top:'12px',right:'10px',padding:'4px',color:'#CBD5E1',background:'transparent',border:'none',cursor:'pointer',borderRadius:'4px',display:'flex',alignItems:'center',justifyContent:'center'}}

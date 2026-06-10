@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { notifyUsers } from '../lib/notificationService';
 
 function Icon({ path, className }) {
   return (
@@ -44,7 +45,6 @@ var ICONS = {
 
 var CHART_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16'];
 
-// ── Donut chart ───────────────────────────────────────────────────────────────
 function DonutChart({ labels, values, total }) {
   var CX = 60; var CY = 60; var R = 45; var IR = 28;
   var segments = []; var angle = -90;
@@ -81,7 +81,6 @@ function DonutChart({ labels, values, total }) {
   );
 }
 
-// ── Star rating ───────────────────────────────────────────────────────────────
 function StarRating({ value, onChange, disabled }) {
   return (
     <div className="flex gap-1" role="radiogroup" aria-label="Rating">
@@ -98,7 +97,6 @@ function StarRating({ value, onChange, disabled }) {
   );
 }
 
-// ── Conditional logic helper ──────────────────────────────────────────────────
 function shouldShowQuestion(question, answers, allQuestions) {
   if (!question.condition_question_id) return true;
   var condQ = allQuestions.find(function(q) { return q.id === question.condition_question_id; });
@@ -109,21 +107,15 @@ function shouldShowQuestion(question, answers, allQuestions) {
   return ans === question.condition_answer;
 }
 
-// ── Closing countdown badge ───────────────────────────────────────────────────
 function ClosingBadge({ closesAt }) {
   if (!closesAt) return null;
-  var now = new Date();
-  var closes = new Date(closesAt);
+  var now = new Date(); var closes = new Date(closesAt);
   if (closes <= now) return null;
   var hoursLeft = (closes - now) / (1000 * 60 * 60);
   var daysLeft  = hoursLeft / 24;
   if (daysLeft > 3) return null;
-  var label = hoursLeft < 24
-    ? 'Closes in ' + Math.ceil(hoursLeft) + 'h'
-    : 'Closes in ' + Math.ceil(daysLeft) + 'd';
-  var cls = hoursLeft < 24
-    ? 'bg-red-50 text-red-600 border-red-200'
-    : 'bg-orange-50 text-orange-600 border-orange-200';
+  var label = hoursLeft < 24 ? 'Closes in ' + Math.ceil(hoursLeft) + 'h' : 'Closes in ' + Math.ceil(daysLeft) + 'd';
+  var cls = hoursLeft < 24 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-orange-50 text-orange-600 border-orange-200';
   return (
     <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ' + cls}>
       <Icon path={ICONS.clock} className="h-3 w-3" />{label}
@@ -131,7 +123,6 @@ function ClosingBadge({ closesAt }) {
   );
 }
 
-// ── Response rate bar ─────────────────────────────────────────────────────────
 function ResponseBar({ count, total }) {
   if (!total || total === 0) return null;
   var pct = Math.min(100, Math.round((count / total) * 100));
@@ -149,23 +140,26 @@ function ResponseBar({ count, total }) {
   );
 }
 
-// ── SurveyCard ────────────────────────────────────────────────────────────────
 function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, isAdmin, memberCount }) {
-  var [loading, setLoading]         = useState(false);
-  var [questions, setQuestions]     = useState([]);
-  var [answers, setAnswers]         = useState({});
-  var [showForm, setShowForm]       = useState(false);
-  var [hasResponded, setHasResponded] = useState(false);
+  var [loading, setLoading]             = useState(false);
+  var [questions, setQuestions]         = useState([]);
+  var [answers, setAnswers]             = useState({});
+  var [showForm, setShowForm]           = useState(false);
+  var [hasResponded, setHasResponded]   = useState(false);
   var [responseCount, setResponseCount] = useState(0);
-  var [showResults, setShowResults] = useState(false);
-  var [results, setResults]         = useState(null);
+  var [showResults, setShowResults]     = useState(false);
+  var [results, setResults]             = useState(null);
   var [confirmDelete, setConfirmDelete] = useState(false);
-  var [deleting, setDeleting]       = useState(false);
-  var [duplicating, setDuplicating] = useState(false);
-  var [savingTemplate, setSavingTemplate] = useState(false);
-  var [formError, setFormError]     = useState(null);
-  var [chartMode, setChartMode]     = useState('bar');
-  var [reminding, setReminding]     = useState(false);
+  var [deleting, setDeleting]           = useState(false);
+  var [duplicating, setDuplicating]     = useState(false);
+  var [formError, setFormError]         = useState(null);
+  var [chartMode, setChartMode]         = useState('bar');
+  var [reminding, setReminding]         = useState(false);
+
+  // Save as template inline state
+  var [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  var [templateName, setTemplateName]         = useState('');
+  var [savingTemplate, setSavingTemplate]     = useState(false);
 
   var isExpired = survey.closes_at && new Date(survey.closes_at) < new Date();
   var isClosed  = survey.status === 'closed' || isExpired;
@@ -363,147 +357,90 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, is
     finally { setDuplicating(false); }
   }
 
+  // Opens inline save-as-template panel
+  function openSaveTemplate() {
+    setTemplateName(survey.title || 'My Survey Template');
+    setShowSaveTemplate(true);
+  }
+
   async function handleSaveAsTemplate() {
+    var name = templateName.trim();
+    if (!name) { toast.error('Template name cannot be empty.'); return; }
     setSavingTemplate(true);
     try {
       var auth = await supabase.auth.getUser();
       var user = auth.data.user;
 
-      // Fetch questions fresh
       var qR = await supabase.from('survey_questions').select('*').eq('survey_id', survey.id).order('order_number');
       if (qR.error) throw qR.error;
       var templateQuestions = (qR.data || []).map(function(q) {
         return { question_text: q.question_text, question_type: q.question_type,
           required: q.required, options: q.options || [] };
       });
-      var templateData = {
-        title:                         survey.title,
-        description:                   survey.description || '',
-        anonymous_responses:           survey.anonymous_responses,
-        allow_multiple_responses:      survey.allow_multiple_responses,
-        show_results_after_submission: survey.show_results_after_submission,
-        result_visibility:             survey.result_visibility || 'full',
-        visibility:                    survey.visibility || 'all_members',
-        questions:                     templateQuestions,
-      };
 
-      // Check for an existing template with the same name in this org
-      var dupR = await supabase.from('poll_survey_templates')
-        .select('id, name')
-        .eq('organization_id', survey.organization_id)
-        .eq('type', 'survey')
-        .ilike('name', survey.title)
-        .maybeSingle();
-      if (dupR.error) throw dupR.error;
-
-      if (dupR.data) {
-        // Duplicate found — ask the user what to do
-        var choice = window.confirm(
-          'A template named "' + dupR.data.name + '" already exists.\n\n' +
-          'Click OK to replace it, or Cancel to save as a new copy.'
-        );
-        if (choice) {
-          // Replace existing template
-          var upR = await supabase.from('poll_survey_templates')
-            .update({ name: survey.title, template_data: templateData })
-            .eq('id', dupR.data.id);
-          if (upR.error) throw upR.error;
-          mascotSuccessToast('Template updated!', '"' + survey.title + '" has been replaced.');
-          return;
-        }
-        // Fall through to save as copy with "(2)", "(3)", etc.
-        var copyName = survey.title + ' (2)';
-        var n = 2;
-        // Keep incrementing until the name is free
-        var checkLoop = true;
-        while (checkLoop) {
-          var cR = await supabase.from('poll_survey_templates')
-            .select('id')
-            .eq('organization_id', survey.organization_id)
-            .eq('type', 'survey')
-            .ilike('name', copyName)
-            .maybeSingle();
-          if (cR.error) throw cR.error;
-          if (!cR.data) { checkLoop = false; }
-          else { n++; copyName = survey.title + ' (' + n + ')'; }
-        }
-        templateData.title = copyName;
-        var insR = await supabase.from('poll_survey_templates').insert({
-          organization_id: survey.organization_id,
-          type:            'survey',
-          name:            copyName,
-          template_data:   templateData,
-          created_by:      user.id,
-        });
-        if (insR.error) throw insR.error;
-        mascotSuccessToast('Template saved!', '"' + copyName + '" saved as a new template.');
-        return;
-      }
-
-      // No duplicate — plain insert
       var r = await supabase.from('poll_survey_templates').insert({
         organization_id: survey.organization_id,
         type:            'survey',
-        name:            survey.title,
-        template_data:   templateData,
-        created_by:      user.id,
+        name:            name,
+        template_data: {
+          title:                         survey.title,
+          description:                   survey.description || '',
+          anonymous_responses:           survey.anonymous_responses,
+          allow_multiple_responses:      survey.allow_multiple_responses,
+          show_results_after_submission: survey.show_results_after_submission,
+          result_visibility:             survey.result_visibility || 'full',
+          visibility:                    survey.visibility || 'all_members',
+          questions:                     templateQuestions,
+        },
+        created_by: user.id,
       });
       if (r.error) throw r.error;
-      mascotSuccessToast('Template saved!', '"' + survey.title + '" saved as a template.');
+      mascotSuccessToast('Template saved!', '"' + name + '" added to your templates.');
+      setShowSaveTemplate(false);
+      setTemplateName('');
     } catch (err) {
       mascotErrorToast('Failed to save template.', err.message);
-    } finally {
-      setSavingTemplate(false);
-    }
+    } finally { setSavingTemplate(false); }
   }
 
   async function handleRemind() {
     setReminding(true);
+    var loadId = toast.loading('Sending reminders...');
     try {
-      // Get all active members
       var memR = await supabase.from('memberships').select('member_id')
         .eq('organization_id', survey.organization_id).eq('status', 'active');
       if (memR.error) throw memR.error;
-      var allMemberIds = (memR.data || []).map(function(m) { return m.member_id; });
 
-      // Get members who already responded
       var respR = await supabase.from('survey_responses').select('member_id').eq('survey_id', survey.id);
       if (respR.error) throw respR.error;
       var respondedIds = new Set((respR.data || []).map(function(r) { return r.member_id; }));
 
-      var nonRespondents = allMemberIds.filter(function(id) { return !respondedIds.has(id); });
-      if (nonRespondents.length === 0) {
-        toast.error('All members have already responded.');
-        return;
-      }
+      var auth = await supabase.auth.getUser();
+      var currentUserId = auth.data.user ? auth.data.user.id : null;
 
-var nonRespondents = allMemberIds.filter(function(id) {
-  return id != null && !respondedIds.has(id);
-});
-if (nonRespondents.length === 0) {
-  toast.error('All members have already responded.');
-  return;
-}
+      var recipientIds = (memR.data || [])
+        .map(function(m) { return m.member_id; })
+        .filter(function(id) { return id != null && !respondedIds.has(id) && id !== currentUserId; });
 
-var notifications = nonRespondents.map(function(memberId) {
-  return {
-    user_id:         memberId,   // ← fixed
-    organization_id: survey.organization_id,
-    type:            'announcement',
-    title:           'Survey reminder: ' + survey.title,
-    message:         'You have not yet responded to this survey. Your feedback matters!',
-    read:            false,
-  };
-});
+      toast.dismiss(loadId);
+      if (recipientIds.length === 0) { toast.error('All members have already responded.'); return; }
 
-      var nR = await supabase.from('notifications').insert(notifications);
-      if (nR.error) throw nR.error;
-      mascotSuccessToast('Reminders sent!', nonRespondents.length + ' member' + (nonRespondents.length !== 1 ? 's' : '') + ' notified.');
+      // Use notifyUsers — correct type for bell routing + respects pref system
+      await notifyUsers({
+        userIds: recipientIds,
+        organizationId: survey.organization_id,
+        type: 'new_survey',
+        title: 'Survey reminder: ' + survey.title,
+        message: 'You have not yet responded to this survey. Your feedback matters!',
+        link: '/organizations/' + survey.organization_id + '/surveys',
+      });
+
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+      mascotSuccessToast('Reminders sent!', recipientIds.length + ' member' + (recipientIds.length !== 1 ? 's' : '') + ' notified.');
     } catch (err) {
+      toast.dismiss(loadId);
       mascotErrorToast('Failed to send reminders.', err.message);
-    } finally {
-      setReminding(false);
-    }
+    } finally { setReminding(false); }
   }
 
   async function handleDelete() {
@@ -551,12 +488,10 @@ var notifications = nonRespondents.map(function(memberId) {
   var canTakeSurvey = !isClosed && (!hasResponded || survey.allow_multiple_responses);
   var visibleQuestions = questions.filter(function(q) { return shouldShowQuestion(q, answers, questions); });
 
-  // Urgent card border
   var borderCls = survey.is_pinned
     ? 'border-[#F5B731] border-2'
-    : isUrgent
-      ? 'border-orange-300 border-2'
-      : 'border-slate-200';
+    : isUrgent ? 'border-orange-300 border-2'
+    : 'border-slate-200';
 
   return (
     <article className={'rounded-xl border p-5 bg-white ' + borderCls} aria-label={survey.title + ' survey'}>
@@ -610,7 +545,6 @@ var notifications = nonRespondents.map(function(memberId) {
           </div>
           <h3 className="text-base font-bold text-[#0E1523]">{survey.title}</h3>
           {survey.description && <p className="text-sm mt-1 text-[#475569]">{survey.description}</p>}
-          {/* Response rate bar — admin only, active surveys */}
           {isAdmin && !isClosed && memberCount > 0 && (
             <ResponseBar count={responseCount} total={memberCount} />
           )}
@@ -651,7 +585,6 @@ var notifications = nonRespondents.map(function(memberId) {
             <Icon path={isClosed ? ICONS.unlock : ICONS.lock} className="h-3.5 w-3.5" />
             {isClosed ? 'Reopen' : 'Close Now'}
           </button>
-          {/* Edit button — available on all surveys (title/description/settings can always be updated) */}
           {onEdit && (
             <button onClick={function() { onEdit(survey); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">
@@ -663,13 +596,11 @@ var notifications = nonRespondents.map(function(memberId) {
             <Icon path={ICONS.copy} className="h-3.5 w-3.5" />
             {duplicating ? 'Copying...' : 'Duplicate'}
           </button>
-          {/* Save as Template */}
-          <button onClick={handleSaveAsTemplate} disabled={savingTemplate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50">
+          <button onClick={openSaveTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">
             <Icon path={ICONS.template} className="h-3.5 w-3.5" />
-            {savingTemplate ? 'Saving...' : 'Save as Template'}
+            Save as Template
           </button>
-          {/* Remind non-respondents — active surveys only */}
           {!isClosed && (
             <button onClick={handleRemind} disabled={reminding}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50">
@@ -683,6 +614,31 @@ var notifications = nonRespondents.map(function(memberId) {
               <Icon path={ICONS.download} className="h-3.5 w-3.5" />Export CSV
             </button>
           )}
+        </div>
+      )}
+
+      {/* Save as Template inline panel */}
+      {showSaveTemplate && (
+        <div className="mb-4 border border-blue-200 bg-blue-50 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-semibold text-[#0E1523]">Save as Template</p>
+          <div className="flex items-center gap-2">
+            <label htmlFor={'sname-' + survey.id} className="sr-only">Template name</label>
+            <input id={'sname-' + survey.id} type="text" value={templateName}
+              onChange={function(e) { setTemplateName(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); handleSaveAsTemplate(); } if (e.key === 'Escape') setShowSaveTemplate(false); }}
+              maxLength={100} autoFocus
+              placeholder="Template name"
+              className="flex-1 px-3 py-1.5 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white text-gray-900" />
+            <button type="button" onClick={handleSaveAsTemplate} disabled={savingTemplate || !templateName.trim()}
+              className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors flex items-center gap-1">
+              {savingTemplate ? 'Saving...' : <><Icon path={ICONS.check} className="h-3 w-3" />Save</>}
+            </button>
+            <button type="button" onClick={function() { setShowSaveTemplate(false); setTemplateName(''); }}
+              className="p-1.5 text-[#94A3B8] hover:text-[#475569] rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors"
+              aria-label="Cancel save as template">
+              <Icon path={ICONS.x} className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 

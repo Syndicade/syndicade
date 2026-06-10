@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
@@ -17,14 +17,16 @@ function Icon({ path, className }) {
 }
 
 var ICONS = {
-  chart:  'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  plus:   'M12 4v16m8-8H4',
-  search: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  check:  'M5 13l4 4L19 7',
-  lock:   'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-  pin:    ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
-  x:      'M6 18L18 6M6 6l12 12',
-  alert:  ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
+  chart:    'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  plus:     'M12 4v16m8-8H4',
+  search:   'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  check:    'M5 13l4 4L19 7',
+  lock:     'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+  pin:      ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
+  x:        'M6 18L18 6M6 6l12 12',
+  alert:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
+  download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+  spinner:  null,
 };
 
 function StatSkeleton() {
@@ -54,7 +56,8 @@ function PollCardSkeleton() {
 function PollsList() {
   var params = useParams();
   var organizationId = params.organizationId;
-  var { isAdmin } = useOutletContext();
+  var outletCtx = useOutletContext() || {};
+  var isAdmin = outletCtx.isAdmin;
 
   var [polls, setPolls] = useState([]);
   var [filteredPolls, setFilteredPolls] = useState([]);
@@ -68,6 +71,10 @@ function PollsList() {
   var [editingPoll, setEditingPoll] = useState(null);
   var [orgName, setOrgName] = useState('');
   var [memberCount, setMemberCount] = useState(0);
+  var [bulkExporting, setBulkExporting] = useState(false);
+
+  // Cache the auth user once — avoids calling getUser() on every poll action
+  var currentUserRef = useRef(null);
 
   useEffect(function() {
     if (organizationId) loadData();
@@ -122,6 +129,10 @@ function PollsList() {
     try {
       setLoading(true); setError(null);
 
+      // Cache auth user once here so PollCard actions don't each call getUser()
+      var authRes = await supabase.auth.getUser();
+      currentUserRef.current = authRes.data.user;
+
       var orgResult = await supabase.from('organizations').select('name').eq('id', organizationId).single();
       if (orgResult.error) throw orgResult.error;
       setOrgName(orgResult.data.name);
@@ -131,8 +142,11 @@ function PollsList() {
         .eq('organization_id', organizationId).eq('status', 'active');
       setMemberCount(countResult.count || 0);
 
-      var pollsResult = await supabase.from('polls').select('*')
-        .eq('organization_id', organizationId).order('created_at', { ascending: false });
+      // Include last_reminded_at in the select
+      var pollsResult = await supabase.from('polls')
+        .select('*, last_reminded_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
       if (pollsResult.error) throw pollsResult.error;
       setPolls(pollsResult.data || []);
 
@@ -147,12 +161,11 @@ function PollsList() {
     setPolls(function(prev) { return prev.filter(function(p) { return p.id !== pollId; }); });
   }
 
-async function handlePollCreated(newPoll) {
+  async function handlePollCreated(newPoll) {
     setPolls(function(prev) { return [newPoll].concat(prev); });
     try {
       var notifModule = await import('../lib/notificationService');
-      var authRes = await supabase.auth.getUser();
-      var user = authRes.data.user;
+      var user = currentUserRef.current;
       await notifModule.notifyOrganizationMembers({
         organizationId: organizationId,
         type: 'new_poll',
@@ -175,6 +188,15 @@ async function handlePollCreated(newPoll) {
     setPolls(function(prev) { return [newPoll].concat(prev); });
   }
 
+  // Called by PollCard after reminders are sent — updates last_reminded_at in local state
+  function handleRemind(pollId, timestamp) {
+    setPolls(function(prev) {
+      return prev.map(function(p) {
+        return p.id === pollId ? Object.assign({}, p, { last_reminded_at: timestamp }) : p;
+      });
+    });
+  }
+
   function openCreate() {
     setEditingPoll(null);
     setShowCreateModal(true);
@@ -188,6 +210,87 @@ async function handlePollCreated(newPoll) {
   function closeModal() {
     setShowCreateModal(false);
     setEditingPoll(null);
+  }
+
+  // Bulk export: fetches options + votes for every poll in filteredPolls,
+  // then writes a single CSV with one section per poll.
+  async function handleBulkExport() {
+    if (bulkExporting || filteredPolls.length === 0) return;
+    setBulkExporting(true);
+    var loadId = toast.loading('Preparing export...');
+    try {
+      var pollIds = filteredPolls.map(function(p) { return p.id; });
+
+      var optsResult = await supabase
+        .from('poll_options')
+        .select('id, poll_id, option_text, display_order')
+        .in('poll_id', pollIds)
+        .order('display_order');
+      if (optsResult.error) throw optsResult.error;
+
+      var votesResult = await supabase
+        .from('poll_votes')
+        .select('poll_id, option_id')
+        .in('poll_id', pollIds);
+      if (votesResult.error) throw votesResult.error;
+
+      var optsByPoll = {};
+      (optsResult.data || []).forEach(function(o) {
+        if (!optsByPoll[o.poll_id]) optsByPoll[o.poll_id] = [];
+        optsByPoll[o.poll_id].push(o);
+      });
+
+      var votesByPoll = {};
+      (votesResult.data || []).forEach(function(v) {
+        if (!votesByPoll[v.poll_id]) votesByPoll[v.poll_id] = [];
+        votesByPoll[v.poll_id].push(v);
+      });
+
+      var rows = [['Poll', 'Status', 'Option', 'Votes', 'Percentage', 'Total Votes']];
+
+      filteredPolls.forEach(function(poll) {
+        var pollOpts = optsByPoll[poll.id] || [];
+        var pollVotes = votesByPoll[poll.id] || [];
+        var total = pollVotes.length;
+        var isClosed = poll.status === 'closed' || (poll.closes_at && new Date(poll.closes_at) < new Date());
+        var statusLabel = isClosed ? 'Closed' : 'Active';
+
+        var counts = {};
+        pollVotes.forEach(function(v) { counts[v.option_id] = (counts[v.option_id] || 0) + 1; });
+
+        if (pollOpts.length === 0) {
+          rows.push([poll.title, statusLabel, '(no options)', 0, '0%', total]);
+        } else {
+          pollOpts.forEach(function(opt, idx) {
+            var c = counts[opt.id] || 0;
+            var pct = total > 0 ? Math.round((c / total) * 100) : 0;
+            // Only write poll title and total on the first option row for readability
+            rows.push([idx === 0 ? poll.title : '', idx === 0 ? statusLabel : '', opt.option_text, c, pct + '%', idx === 0 ? total : '']);
+          });
+        }
+        // Blank separator row between polls
+        rows.push(['', '', '', '', '', '']);
+      });
+
+      var csv = rows.map(function(row) {
+        return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\n');
+
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      var dateStr = new Date().toISOString().slice(0, 10);
+      a.download = 'polls_export_' + dateStr + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.dismiss(loadId);
+      mascotSuccessToast(filteredPolls.length + ' poll' + (filteredPolls.length !== 1 ? 's' : '') + ' exported!');
+    } catch (err) {
+      toast.dismiss(loadId);
+      mascotErrorToast('Export failed.', err.message);
+    } finally { setBulkExporting(false); }
   }
 
   var activeCount  = polls.filter(function(p) { return !isPollClosed(p); }).length;
@@ -244,7 +347,7 @@ async function handlePollCreated(newPoll) {
     <div className="min-h-screen bg-[#F8FAFC]">
       <div className="px-6 py-6 space-y-6">
 
-{/* Page header */}
+        {/* Page header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 style={{fontSize:'30px',fontWeight:800,color:'#0E1523',lineHeight:1.2}}>Polls</h1>
@@ -252,13 +355,28 @@ async function handlePollCreated(newPoll) {
               {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' · ' + activeCount + ' active'}
             </p>
           </div>
-          {isAdmin && (
-            <button onClick={openCreate}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-              <Icon path={ICONS.plus} className="h-4 w-4" />
-              Create Poll
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Bulk export — only shown when there are polls and user is admin */}
+            {isAdmin && filteredPolls.length > 0 && (
+              <button
+                onClick={handleBulkExport}
+                disabled={bulkExporting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm disabled:opacity-50"
+                aria-label={'Export ' + filteredPolls.length + ' poll results as CSV'}>
+                {bulkExporting
+                  ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" aria-hidden="true" />Exporting...</>
+                  : <><Icon path={ICONS.download} className="h-4 w-4" />{'Export (' + filteredPolls.length + ')'}</>
+                }
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={openCreate}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                <Icon path={ICONS.plus} className="h-4 w-4" />
+                Create Poll
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -375,6 +493,7 @@ async function handlePollCreated(newPoll) {
                     onPollUpdated={handlePollUpdated}
                     onDuplicate={handleDuplicate}
                     onEdit={openEdit}
+                    onRemind={handleRemind}
                     isAdmin={isAdmin}
                     showOrganization={false}
                     memberCount={memberCount}

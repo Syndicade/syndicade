@@ -27,15 +27,18 @@ var ICONS = {
   check:    'M5 13l4 4L19 7',
   edit:     'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
   lock:     'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+  drag:     ['M4 6h16M4 12h16M4 18h16'],
+  save:     ['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2', 'M23 21v-2a4 4 0 00-3-3.87', 'M16 3.13a4 4 0 010 7.75'],
 };
 
 var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900';
 var labelCls = 'block text-sm font-semibold text-[#0E1523] mb-2';
 
-var POLL_TYPES = [
-  { value: 'single_choice',   label: 'Single Choice',      description: 'Members pick one option' },
-  { value: 'multiple_choice', label: 'Multiple Choice',    description: 'Members pick multiple options' },
-  { value: 'yes_no_abstain',  label: 'Yes / No / Abstain', description: 'Simple voting' },
+// Question types available per question
+var QUESTION_TYPES = [
+  { value: 'single_choice',   label: 'Single Choice',      description: 'Pick one option' },
+  { value: 'multiple_choice', label: 'Multiple Choice',    description: 'Pick multiple options' },
+  { value: 'yes_no_abstain',  label: 'Yes / No / Abstain', description: 'Simple yes/no vote' },
 ];
 
 var RETENTION_OPTIONS = [
@@ -58,58 +61,56 @@ var RECURRING_INTERVALS = [
   { value: 'yearly',    label: 'Yearly' },
 ];
 
+// A blank question object
+function blankQuestion(displayOrder) {
+  return {
+    id:            null,       // null = new; string = existing DB id
+    question_text: '',
+    question_type: 'single_choice',
+    display_order: displayOrder,
+    options: [
+      { text: '', existingId: null, voteCount: 0 },
+      { text: '', existingId: null, voteCount: 0 },
+    ],
+  };
+}
+
 var BLANK_FORM = {
-  title: '', description: '', poll_type: 'single_choice', visibility: 'all_members',
+  title: '', description: '', visibility: 'all_members',
   allow_anonymous: false, show_results_before_close: false, allow_vote_changes: true,
   closes_at: '', retention_days: '', result_visibility: 'full',
   is_recurring: false, recurring_interval: 'monthly', recurring_ends_at: '',
 };
 
-// ─── Template Picker ─────────────────────────────────────────────────────────
-
+// ─── TemplatePicker ───────────────────────────────────────────────────────────
 function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClose, deletingId, renamingId }) {
   var [editingId, setEditingId] = useState(null);
   var [editingName, setEditingName] = useState('');
 
-  function startRename(tmpl) {
-    setEditingId(tmpl.id);
-    setEditingName(tmpl.name);
-  }
-
-  function cancelRename() {
-    setEditingId(null);
-    setEditingName('');
-  }
-
+  function startRename(tmpl) { setEditingId(tmpl.id); setEditingName(tmpl.name); }
+  function cancelRename() { setEditingId(null); setEditingName(''); }
   function commitRename(id) {
     var trimmed = editingName.trim();
     if (!trimmed) { toast.error('Name cannot be empty.'); return; }
     onRename(id, trimmed);
-    setEditingId(null);
-    setEditingName('');
+    setEditingId(null); setEditingName('');
   }
-
-  function handleRenameKeyDown(e, id) {
+  function handleKeyDown(e, id) {
     if (e.key === 'Enter') { e.preventDefault(); commitRename(id); }
     if (e.key === 'Escape') cancelRename();
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
-      onClick={onClose}
-      role="dialog" aria-modal="true" aria-labelledby="template-picker-title"
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
-        onClick={function(e) { e.stopPropagation(); }}
-      >
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
+      onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="tmpl-picker-title">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
+        onClick={function(e) { e.stopPropagation(); }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <Icon path={ICONS.template} className="h-4 w-4 text-blue-500" />
             </div>
-            <h3 id="template-picker-title" className="text-base font-bold text-[#0E1523]">Load Poll Template</h3>
+            <h3 id="tmpl-picker-title" className="text-base font-bold text-[#0E1523]">Load Poll Template</h3>
           </div>
           <button type="button" onClick={onClose}
             className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
@@ -119,8 +120,8 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
         </div>
         <div className="overflow-y-auto flex-1 px-5 py-4">
           {loading ? (
-            <div className="space-y-3" aria-busy="true" aria-label="Loading templates">
-              {[1, 2, 3].map(function(n) {
+            <div className="space-y-3" aria-busy="true">
+              {[1,2,3].map(function(n) {
                 return (
                   <div key={n} className="border border-slate-200 rounded-xl p-4 animate-pulse flex items-center justify-between">
                     <div className="space-y-2 flex-1 mr-4">
@@ -143,39 +144,28 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
               </div>
               <p className="text-sm font-semibold text-[#475569] mb-1">No templates yet</p>
               <p className="text-xs text-[#94A3B8] max-w-[220px]">
-                Use the &ldquo;Save as Template&rdquo; button on any poll card to save one for reuse.
+                Use "Save as Template" on any poll card to save one for reuse.
               </p>
             </div>
           ) : (
             <ul className="space-y-2" role="list" aria-label="Saved poll templates">
               {templates.map(function(tmpl) {
                 var d = tmpl.template_data;
-                var optCount = d.options ? d.options.length : (d.poll_type === 'yes_no_abstain' ? 3 : 0);
-                var meta = [
-                  d.poll_type === 'single_choice' ? 'Single choice' : d.poll_type === 'multiple_choice' ? 'Multiple choice' : 'Yes/No/Abstain',
-                  optCount > 0 ? optCount + ' options' : null,
-                ].filter(Boolean).join(' · ');
+                var qCount = d.questions ? d.questions.length : 0;
+                var meta = qCount + ' question' + (qCount !== 1 ? 's' : '');
                 var isDeleting = deletingId === tmpl.id;
                 var isRenaming = renamingId === tmpl.id;
-                var isEditing = editingId === tmpl.id;
-
+                var isEditing  = editingId === tmpl.id;
                 return (
                   <li key={tmpl.id} className={'border rounded-xl p-4 transition-colors ' + (isEditing ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:border-blue-200 hover:bg-slate-50')}>
                     {isEditing ? (
-                      /* Rename mode */
                       <div className="space-y-2">
                         <label htmlFor={'rename-' + tmpl.id} className="text-xs font-semibold text-[#475569]">Template name</label>
-                        <input
-                          id={'rename-' + tmpl.id}
-                          type="text"
-                          value={editingName}
+                        <input id={'rename-' + tmpl.id} type="text" value={editingName}
                           onChange={function(e) { setEditingName(e.target.value); }}
-                          onKeyDown={function(e) { handleRenameKeyDown(e, tmpl.id); }}
-                          maxLength={100}
-                          autoFocus
-                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900"
-                          aria-label="New template name"
-                        />
+                          onKeyDown={function(e) { handleKeyDown(e, tmpl.id); }}
+                          maxLength={100} autoFocus
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900" />
                         <div className="flex items-center gap-2 justify-end">
                           <button type="button" onClick={cancelRename}
                             className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-[#475569] rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
@@ -184,14 +174,13 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
                           <button type="button" onClick={function() { commitRename(tmpl.id); }} disabled={isRenaming}
                             className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors flex items-center gap-1">
                             {isRenaming
-                              ? <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Saving...</>
+                              ? <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Saving...</>
                               : <><Icon path={ICONS.check} className="h-3 w-3" />Save</>
                             }
                           </button>
                         </div>
                       </div>
                     ) : (
-                      /* Normal mode */
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[#0E1523] truncate">{tmpl.name}</p>
@@ -212,7 +201,7 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
                             className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors disabled:opacity-40"
                             aria-label={'Delete template: ' + tmpl.name}>
                             {isDeleting
-                              ? <svg className="animate-spin h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                              ? <svg className="animate-spin h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
                               : <Icon path={ICONS.trash} className="h-4 w-4" />
                             }
                           </button>
@@ -230,37 +219,207 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── QuestionBlock ────────────────────────────────────────────────────────────
+// Renders a single question editor inside the CreatePoll modal
+function QuestionBlock({ question, index, total, onChange, onRemove, onMoveUp, onMoveDown, hasExistingVotes }) {
+  var isYesNo = question.question_type === 'yes_no_abstain';
 
-// editPoll: optional poll object — when provided, modal is in edit mode
+  function handleTypeChange(newType) {
+    // When switching to yes_no_abstain clear custom options; when switching away seed 2 blank
+    var newOptions = question.options;
+    if (newType === 'yes_no_abstain') {
+      newOptions = [];
+    } else if (question.question_type === 'yes_no_abstain') {
+      newOptions = [
+        { text: '', existingId: null, voteCount: 0 },
+        { text: '', existingId: null, voteCount: 0 },
+      ];
+    }
+    onChange(Object.assign({}, question, { question_type: newType, options: newOptions }));
+  }
+
+  function handleOptionChange(optIdx, value) {
+    var next = question.options.slice();
+    next[optIdx] = Object.assign({}, next[optIdx], { text: value });
+    onChange(Object.assign({}, question, { options: next }));
+  }
+
+  function addOption() {
+    if (question.options.length >= 10) return;
+    onChange(Object.assign({}, question, {
+      options: question.options.concat([{ text: '', existingId: null, voteCount: 0 }])
+    }));
+  }
+
+  function removeOption(optIdx) {
+    var opt = question.options[optIdx];
+    if (opt && opt.existingId && opt.voteCount > 0) { toast.error('Cannot remove this option — it already has votes.'); return; }
+    if (question.options.length <= 2) return;
+    onChange(Object.assign({}, question, { options: question.options.filter(function(_, i) { return i !== optIdx; }) }));
+  }
+
+  return (
+    <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+      {/* Question header */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
+        <span className="text-xs font-bold text-[#F5B731] uppercase tracking-widest flex-shrink-0">
+          {'Q' + (index + 1)}
+        </span>
+        <div className="flex-1 min-w-0">
+          <input
+            type="text"
+            value={question.question_text}
+            onChange={function(e) { onChange(Object.assign({}, question, { question_text: e.target.value })); }}
+            placeholder={'Question ' + (index + 1) + ' text...'}
+            maxLength={200}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900"
+            aria-label={'Question ' + (index + 1) + ' text'}
+          />
+        </div>
+        {/* Move up / down / remove */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button type="button" onClick={onMoveUp} disabled={index === 0}
+            className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-30 transition-colors"
+            aria-label={'Move question ' + (index + 1) + ' up'}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+          <button type="button" onClick={onMoveDown} disabled={index === total - 1}
+            className="p-1.5 text-[#94A3B8] hover:text-[#475569] hover:bg-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-30 transition-colors"
+            aria-label={'Move question ' + (index + 1) + ' down'}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {total > 1 && (
+            <button type="button" onClick={onRemove}
+              className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors"
+              aria-label={'Remove question ' + (index + 1)}>
+              <Icon path={ICONS.x} className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Question body */}
+      <div className="px-4 py-4 space-y-4">
+        {/* Type selector */}
+        <div>
+          <p className="text-xs font-bold text-[#64748B] uppercase tracking-widest mb-2">Question Type</p>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={'Question ' + (index + 1) + ' type'}>
+            {QUESTION_TYPES.map(function(qt) {
+              var checked = question.question_type === qt.value;
+              var disabled = hasExistingVotes && !!question.id;
+              return (
+                <label key={qt.value}
+                  className={'flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg cursor-pointer text-xs font-semibold transition-colors ' +
+                    (checked ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-blue-300') +
+                    (disabled ? ' opacity-60 cursor-not-allowed' : '')}>
+                  <input type="radio"
+                    name={'qtype-' + question.id + '-' + index}
+                    value={qt.value}
+                    checked={checked}
+                    onChange={function() { if (!disabled) handleTypeChange(qt.value); }}
+                    disabled={disabled}
+                    className="sr-only" />
+                  {qt.label}
+                </label>
+              );
+            })}
+          </div>
+          {hasExistingVotes && question.id && (
+            <p className="text-xs text-amber-600 mt-1">Type cannot be changed once votes exist.</p>
+          )}
+        </div>
+
+        {/* Options */}
+        {!isYesNo && (
+          <div>
+            <p className="text-xs font-bold text-[#64748B] uppercase tracking-widest mb-2">Options</p>
+            <div className="space-y-2">
+              {question.options.map(function(opt, oi) {
+                var hasVotes = opt.voteCount > 0;
+                return (
+                  <div key={oi} className="flex items-center gap-2">
+                    <span className="text-[#94A3B8] text-xs font-bold w-5 text-right flex-shrink-0">{oi + 1}.</span>
+                    <input type="text" value={opt.text}
+                      onChange={function(e) { handleOptionChange(oi, e.target.value); }}
+                      placeholder={'Option ' + (oi + 1)} maxLength={100}
+                      className={inputCls}
+                      aria-label={'Question ' + (index + 1) + ' option ' + (oi + 1)} />
+                    {hasVotes && (
+                      <span className="text-xs text-amber-600 font-semibold whitespace-nowrap flex-shrink-0"
+                        title={opt.voteCount + ' vote' + (opt.voteCount !== 1 ? 's' : '')}>
+                        {opt.voteCount}v
+                      </span>
+                    )}
+                    {question.options.length > 2 && (
+                      <button type="button" onClick={function() { removeOption(oi); }}
+                        disabled={hasVotes}
+                        className={'p-2 rounded-lg focus:outline-none focus:ring-2 transition-colors flex-shrink-0 ' +
+                          (hasVotes ? 'text-[#CBD5E1] cursor-not-allowed' : 'text-[#94A3B8] hover:text-red-500 hover:bg-red-50 focus:ring-red-500')}
+                        aria-label={hasVotes ? 'Cannot remove — option has votes' : 'Remove option ' + (oi + 1)}>
+                        <Icon path={ICONS.x} className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {question.options.length < 10 && (
+              <button type="button" onClick={addOption}
+                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                <Icon path={ICONS.plus} className="h-3.5 w-3.5" />Add Option
+              </button>
+            )}
+          </div>
+        )}
+
+        {isYesNo && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+            <p className="text-xs font-bold text-[#64748B] uppercase tracking-widest mb-2">Auto-generated options</p>
+            <div className="flex gap-2">
+              {['Yes', 'No', 'Abstain'].map(function(l) {
+                return <span key={l} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-[#475569]">{l}</span>;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationName, editPoll }) {
   var isEditMode = !!editPoll;
 
-  var [formData, setFormData] = useState(BLANK_FORM);
-  // Each entry: { text: string, existingId: string|null, voteCount: number }
-  var [options, setOptions] = useState([
-    { text: '', existingId: null, voteCount: 0 },
-    { text: '', existingId: null, voteCount: 0 },
-  ]);
-  var [optionsLoading, setOptionsLoading] = useState(false);
-  var [loading, setLoading] = useState(false);
-  var [error, setError] = useState(null);
-  var [orgRoles, setOrgRoles] = useState([]);
+  var [formData, setFormData]     = useState(BLANK_FORM);
+  var [questions, setQuestions]   = useState([blankQuestion(0)]);
+  var [loading, setLoading]       = useState(false);
+  var [error, setError]           = useState(null);
+  var [orgRoles, setOrgRoles]     = useState([]);
   var [rolesLoading, setRolesLoading] = useState(false);
+  var [questionsLoading, setQuestionsLoading] = useState(false);
+  var [totalExistingVotes, setTotalExistingVotes] = useState(0);
 
   // Template state
-  var [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  var [templates, setTemplates] = useState([]);
-  var [templatesLoading, setTemplatesLoading] = useState(false);
-  var [deletingTemplateId, setDeletingTemplateId] = useState(null);
-  var [renamingTemplateId, setRenamingTemplateId] = useState(null);
+  var [showTemplatePicker, setShowTemplatePicker]   = useState(false);
+  var [templates, setTemplates]                     = useState([]);
+  var [templatesLoading, setTemplatesLoading]       = useState(false);
+  var [deletingTemplateId, setDeletingTemplateId]   = useState(null);
+  var [renamingTemplateId, setRenamingTemplateId]   = useState(null);
 
-  // Load org roles when modal opens
+  // Save as template inline name input state
+  var [showSaveTemplate, setShowSaveTemplate]       = useState(false);
+  var [templateName, setTemplateName]               = useState('');
+  var [savingTemplate, setSavingTemplate]           = useState(false);
+
   useEffect(function() {
     if (isOpen && organizationId) loadOrgRoles();
   }, [isOpen, organizationId]);
 
-  // Pre-fill form when editing
   useEffect(function() {
     if (!isOpen) return;
     if (isEditMode) {
@@ -284,7 +443,6 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
     setFormData({
       title:                    p.title || '',
       description:              p.description || '',
-      poll_type:                p.poll_type || 'single_choice',
       visibility:               p.visibility || 'all_members',
       allow_anonymous:          !!p.allow_anonymous,
       show_results_before_close: !!p.show_results_before_close,
@@ -297,37 +455,57 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       recurring_ends_at:        p.recurring_ends_at ? p.recurring_ends_at.slice(0, 10) : '',
     });
 
-    if (p.poll_type === 'yes_no_abstain') {
-      setOptions([
-        { text: '', existingId: null, voteCount: 0 },
-        { text: '', existingId: null, voteCount: 0 },
-      ]);
-      return;
-    }
-
-    setOptionsLoading(true);
+    setQuestionsLoading(true);
     try {
-      var optR = await supabase.from('poll_options').select('id, option_text, display_order')
+      // Load questions for this poll
+      var qRes = await supabase.from('poll_questions').select('*')
         .eq('poll_id', p.id).order('display_order');
-      if (optR.error || !optR.data || optR.data.length === 0) {
-        setOptions([{ text: '', existingId: null, voteCount: 0 }, { text: '', existingId: null, voteCount: 0 }]);
+      if (qRes.error) throw qRes.error;
+      var dbQuestions = qRes.data || [];
+
+      if (dbQuestions.length === 0) {
+        setQuestions([blankQuestion(0)]);
+        setQuestionsLoading(false);
         return;
       }
 
+      var questionIds = dbQuestions.map(function(q) { return q.id; });
+
+      // Load options for all questions
+      var optsRes = await supabase.from('poll_options').select('*')
+        .in('question_id', questionIds).order('display_order');
+      if (optsRes.error) throw optsRes.error;
+      var allOptions = optsRes.data || [];
+
       // Count votes per option
-      var votesR = await supabase.from('poll_votes').select('option_id').eq('poll_id', p.id);
+      var votesRes = await supabase.from('poll_votes').select('option_id').eq('poll_id', p.id);
       var voteCounts = {};
-      (votesR.data || []).forEach(function(v) {
+      (votesRes.data || []).forEach(function(v) {
         voteCounts[v.option_id] = (voteCounts[v.option_id] || 0) + 1;
       });
+      var totalVotes = (votesRes.data || []).length;
+      setTotalExistingVotes(totalVotes);
 
-      setOptions(optR.data.map(function(o) {
-        return { text: o.option_text, existingId: o.id, voteCount: voteCounts[o.id] || 0 };
-      }));
+      var loaded = dbQuestions.map(function(q) {
+        var qOpts = allOptions.filter(function(o) { return o.question_id === q.id; });
+        var isYesNo = q.question_type === 'yes_no_abstain';
+        return {
+          id: q.id,
+          question_text: q.question_text,
+          question_type: q.question_type,
+          display_order: q.display_order,
+          options: isYesNo ? [] : qOpts.map(function(o) {
+            return { text: o.option_text, existingId: o.id, voteCount: voteCounts[o.id] || 0 };
+          }),
+        };
+      });
+
+      setQuestions(loaded.length > 0 ? loaded : [blankQuestion(0)]);
     } catch (err) {
-      console.error('Error loading options:', err);
+      console.error('Error loading questions:', err);
+      setQuestions([blankQuestion(0)]);
     } finally {
-      setOptionsLoading(false);
+      setQuestionsLoading(false);
     }
   }
 
@@ -341,9 +519,8 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
         .eq('organization_id', organizationId).eq('type', 'poll').order('created_at', { ascending: false });
       if (r.error) throw r.error;
       setTemplates(r.data || []);
-    } catch (err) {
-      toast.error('Could not load templates.');
-    } finally { setTemplatesLoading(false); }
+    } catch (err) { toast.error('Could not load templates.'); }
+    finally { setTemplatesLoading(false); }
   }
 
   function applyTemplate(tmpl) {
@@ -352,7 +529,6 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       return Object.assign({}, prev, {
         title:                    d.title || '',
         description:              d.description || '',
-        poll_type:                d.poll_type || 'single_choice',
         visibility:               d.visibility || 'all_members',
         allow_anonymous:          !!d.allow_anonymous,
         show_results_before_close: !!d.show_results_before_close,
@@ -360,8 +536,16 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
         result_visibility:        d.result_visibility || 'full',
       });
     });
-    if (d.options && Array.isArray(d.options) && d.options.length >= 2) {
-      setOptions(d.options.map(function(t) { return { text: t, existingId: null, voteCount: 0 }; }));
+    if (d.questions && Array.isArray(d.questions) && d.questions.length > 0) {
+      setQuestions(d.questions.map(function(q, i) {
+        return {
+          id: null,
+          question_text: q.question_text || '',
+          question_type: q.question_type || 'single_choice',
+          display_order: i,
+          options: (q.options || []).map(function(o) { return { text: o, existingId: null, voteCount: 0 }; }),
+        };
+      }));
     }
     setShowTemplatePicker(false);
     mascotSuccessToast('Template loaded!', tmpl.name + ' applied to the form.');
@@ -374,9 +558,8 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       if (r.error) throw r.error;
       setTemplates(function(prev) { return prev.filter(function(t) { return t.id !== id; }); });
       mascotSuccessToast('Template deleted.');
-    } catch (err) {
-      toast.error('Could not delete template.');
-    } finally { setDeletingTemplateId(null); }
+    } catch (err) { toast.error('Could not delete template.'); }
+    finally { setDeletingTemplateId(null); }
   }
 
   async function renameTemplate(id, newName) {
@@ -388,49 +571,102 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
         return prev.map(function(t) { return t.id === id ? Object.assign({}, t, { name: newName }) : t; });
       });
       mascotSuccessToast('Template renamed.');
+    } catch (err) { toast.error('Could not rename template.'); }
+    finally { setRenamingTemplateId(null); }
+  }
+
+  // Opens the inline save-as-template panel, pre-filling name from poll title
+  function openSaveTemplate() {
+    setTemplateName(formData.title.trim() || 'My Poll Template');
+    setShowSaveTemplate(true);
+  }
+
+  async function handleSaveTemplate() {
+    var name = templateName.trim();
+    if (!name) { toast.error('Template name cannot be empty.'); return; }
+    setSavingTemplate(true);
+    try {
+      var auth = await supabase.auth.getUser();
+      if (!auth.data.user) throw new Error('Not authenticated');
+
+      var templateQuestions = questions.map(function(q) {
+        var isYesNo = q.question_type === 'yes_no_abstain';
+        return {
+          question_text: q.question_text,
+          question_type: q.question_type,
+          options: isYesNo ? [] : q.options.filter(function(o) { return o.text.trim(); }).map(function(o) { return o.text.trim(); }),
+        };
+      });
+
+      var r = await supabase.from('poll_survey_templates').insert({
+        organization_id: organizationId,
+        type: 'poll',
+        name: name,
+        template_data: {
+          title:                    formData.title,
+          description:              formData.description,
+          visibility:               formData.visibility,
+          allow_anonymous:          formData.allow_anonymous,
+          show_results_before_close: formData.show_results_before_close,
+          allow_vote_changes:       formData.allow_vote_changes,
+          result_visibility:        formData.result_visibility,
+          questions:                templateQuestions,
+        },
+        created_by: auth.data.user.id,
+      });
+      if (r.error) throw r.error;
+      mascotSuccessToast('Template saved!', '"' + name + '" added to your templates.');
+      setShowSaveTemplate(false);
+      setTemplateName('');
     } catch (err) {
-      toast.error('Could not rename template.');
-    } finally { setRenamingTemplateId(null); }
+      mascotErrorToast('Failed to save template.', err.message);
+    } finally { setSavingTemplate(false); }
   }
 
   // ── Form helpers ───────────────────────────────────────────────────────────
 
   function handleChange(e) {
-    var name = e.target.name;
+    var name  = e.target.name;
     var value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData(function(prev) { return Object.assign({}, prev, { [name]: value }); });
   }
 
-  function handleOptionChange(index, value) {
-    setOptions(function(prev) {
+  function updateQuestion(index, updated) {
+    setQuestions(function(prev) {
       var next = prev.slice();
-      next[index] = Object.assign({}, next[index], { text: value });
+      next[index] = updated;
       return next;
     });
   }
 
-  function addOption() {
-    if (options.length < 10)
-      setOptions(function(prev) { return prev.concat([{ text: '', existingId: null, voteCount: 0 }]); });
+  function addQuestion() {
+    setQuestions(function(prev) { return prev.concat([blankQuestion(prev.length)]); });
   }
 
-  function removeOption(index) {
-    var opt = options[index];
-    if (opt && opt.existingId && opt.voteCount > 0) {
-      toast.error('Cannot remove this option — it already has votes.');
-      return;
-    }
-    if (options.length > 2)
-      setOptions(function(prev) { return prev.filter(function(_, i) { return i !== index; }); });
+  function removeQuestion(index) {
+    if (questions.length <= 1) return;
+    setQuestions(function(prev) { return prev.filter(function(_, i) { return i !== index; }); });
+  }
+
+  function moveQuestion(index, direction) {
+    setQuestions(function(prev) {
+      var next = prev.slice();
+      var target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      var tmp = next[index];
+      next[index] = next[target];
+      next[target] = tmp;
+      return next;
+    });
   }
 
   function resetForm() {
     setFormData(BLANK_FORM);
-    setOptions([
-      { text: '', existingId: null, voteCount: 0 },
-      { text: '', existingId: null, voteCount: 0 },
-    ]);
+    setQuestions([blankQuestion(0)]);
+    setTotalExistingVotes(0);
     setError(null);
+    setShowSaveTemplate(false);
+    setTemplateName('');
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -438,11 +674,16 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
   async function handleSubmit(e) {
     e.preventDefault(); setError(null); setLoading(true);
     try {
-      if (formData.title.trim().length < 3) throw new Error('Poll question must be at least 3 characters');
-      var isYesNo = formData.poll_type === 'yes_no_abstain';
-      if (!isYesNo) {
-        if (options.filter(function(o) { return o.text.trim().length > 0; }).length < 2)
-          throw new Error('Please provide at least 2 options');
+      if (formData.title.trim().length < 3) throw new Error('Poll title must be at least 3 characters');
+
+      // Validate questions
+      for (var qi = 0; qi < questions.length; qi++) {
+        var q = questions[qi];
+        if (!q.question_text.trim()) throw new Error('Question ' + (qi + 1) + ' needs a question text');
+        if (q.question_type !== 'yes_no_abstain') {
+          var validOpts = q.options.filter(function(o) { return o.text.trim().length > 0; });
+          if (validOpts.length < 2) throw new Error('Question ' + (qi + 1) + ' needs at least 2 options');
+        }
       }
 
       var authResult = await supabase.auth.getUser();
@@ -452,7 +693,8 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       var pollFields = {
         title:                    formData.title.trim(),
         description:              formData.description.trim() || null,
-        poll_type:                formData.poll_type,
+        // poll_type kept for backward compat — use first question's type
+        poll_type:                questions[0].question_type,
         visibility:               formData.visibility,
         allow_anonymous:          formData.allow_anonymous,
         show_results_before_close: formData.show_results_before_close,
@@ -469,28 +711,45 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
         var upR = await supabase.from('polls').update(pollFields).eq('id', editPoll.id);
         if (upR.error) throw upR.error;
 
-        if (!isYesNo) {
-          var validOpts = options.filter(function(o) { return o.text.trim().length > 0; });
+        // Upsert questions
+        for (var uqi = 0; uqi < questions.length; uqi++) {
+          var uq = questions[uqi];
+          var uqFields = {
+            poll_id:       editPoll.id,
+            question_text: uq.question_text.trim(),
+            question_type: uq.question_type,
+            display_order: uqi,
+          };
 
-          // Update existing options
-          for (var ei = 0; ei < validOpts.length; ei++) {
-            var opt = validOpts[ei];
-            if (opt.existingId) {
-              await supabase.from('poll_options')
-                .update({ option_text: opt.text.trim(), display_order: ei })
-                .eq('id', opt.existingId);
-            } else {
-              // New option — INSERT
-              await supabase.from('poll_options').insert({
-                poll_id: editPoll.id,
-                option_text: opt.text.trim(),
-                display_order: ei,
-              });
+          var questionId = uq.id;
+          if (uq.id) {
+            // Existing question — update text and order (not type if has votes)
+            var uqRes = await supabase.from('poll_questions').update({
+              question_text: uqFields.question_text,
+              display_order: uqFields.display_order,
+            }).eq('id', uq.id);
+            if (uqRes.error) throw uqRes.error;
+          } else {
+            // New question — insert
+            var nqRes = await supabase.from('poll_questions').insert(uqFields).select().single();
+            if (nqRes.error) throw nqRes.error;
+            questionId = nqRes.data.id;
+          }
+
+          // Upsert options for this question (skip yes_no_abstain)
+          if (uq.question_type !== 'yes_no_abstain') {
+            var validOpts = uq.options.filter(function(o) { return o.text.trim().length > 0; });
+            for (var oi = 0; oi < validOpts.length; oi++) {
+              var opt = validOpts[oi];
+              if (opt.existingId) {
+                await supabase.from('poll_options').update({ option_text: opt.text.trim(), display_order: oi }).eq('id', opt.existingId);
+              } else {
+                await supabase.from('poll_options').insert({ poll_id: editPoll.id, question_id: questionId, option_text: opt.text.trim(), display_order: oi });
+              }
             }
           }
         }
 
-        // Fetch updated poll and return it
         var updatedR = await supabase.from('polls').select('*').eq('id', editPoll.id).single();
         if (onSuccess) onSuccess(updatedR.data || Object.assign({}, editPoll, pollFields));
         resetForm();
@@ -510,20 +769,34 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
           created_by: user.id, approval_status: approvalStatus,
         })]).select().single();
         if (pollResult.error) throw pollResult.error;
+        var pollId = pollResult.data.id;
 
-        var optionsToInsert;
-        if (isYesNo) {
-          optionsToInsert = [
-            { poll_id: pollResult.data.id, option_text: 'Yes',     display_order: 0 },
-            { poll_id: pollResult.data.id, option_text: 'No',      display_order: 1 },
-            { poll_id: pollResult.data.id, option_text: 'Abstain', display_order: 2 },
-          ];
-        } else {
-          optionsToInsert = options.filter(function(o) { return o.text.trim().length > 0; })
-            .map(function(o, i) { return { poll_id: pollResult.data.id, option_text: o.text.trim(), display_order: i }; });
+        // Insert questions + options
+        for (var cqi = 0; cqi < questions.length; cqi++) {
+          var cq = questions[cqi];
+          var cqRes = await supabase.from('poll_questions').insert({
+            poll_id:       pollId,
+            question_text: cq.question_text.trim(),
+            question_type: cq.question_type,
+            display_order: cqi,
+          }).select().single();
+          if (cqRes.error) throw cqRes.error;
+          var cqId = cqRes.data.id;
+
+          var optionsToInsert;
+          if (cq.question_type === 'yes_no_abstain') {
+            optionsToInsert = [
+              { poll_id: pollId, question_id: cqId, option_text: 'Yes',     display_order: 0 },
+              { poll_id: pollId, question_id: cqId, option_text: 'No',      display_order: 1 },
+              { poll_id: pollId, question_id: cqId, option_text: 'Abstain', display_order: 2 },
+            ];
+          } else {
+            optionsToInsert = cq.options.filter(function(o) { return o.text.trim().length > 0; })
+              .map(function(o, i) { return { poll_id: pollId, question_id: cqId, option_text: o.text.trim(), display_order: i }; });
+          }
+          var optsR = await supabase.from('poll_options').insert(optionsToInsert);
+          if (optsR.error) throw optsR.error;
         }
-        var optsR = await supabase.from('poll_options').insert(optionsToInsert);
-        if (optsR.error) throw optsR.error;
 
         if (onSuccess) onSuccess(pollResult.data);
         resetForm();
@@ -540,15 +813,15 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
 
   if (!isOpen) return null;
 
-  var isYesNo = formData.poll_type === 'yes_no_abstain';
-  var validOptionCount = options.filter(function(o) { return o.text.trim().length > 0; }).length;
-  var canSubmit = !loading && formData.title.trim().length >= 3 &&
-    (isYesNo || validOptionCount >= 2);
+  var canSubmit = !loading && formData.title.trim().length >= 3 && questions.length > 0 &&
+    questions.every(function(q) {
+      if (!q.question_text.trim()) return false;
+      if (q.question_type === 'yes_no_abstain') return true;
+      return q.options.filter(function(o) { return o.text.trim(); }).length >= 2;
+    });
 
   var visibilityOptions = [{ value: 'all_members', label: 'All Members' }];
   orgRoles.forEach(function(tier) { visibilityOptions.push({ value: 'tier_' + tier.id, label: tier.name }); });
-
-  var totalExistingVotes = options.reduce(function(sum, o) { return sum + (o.voteCount || 0); }, 0);
 
   return (
     <>
@@ -605,7 +878,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1 px-6 py-6 space-y-5">
+          <div className="overflow-y-auto flex-1 px-6 py-6 space-y-6">
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
@@ -613,25 +886,24 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
               </div>
             )}
 
-            {/* Edit warning when poll has votes */}
             {isEditMode && totalExistingVotes > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
                 <Icon path={ICONS.lock} className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-amber-800 font-semibold text-sm">This poll has votes</p>
                   <p className="text-amber-700 text-xs mt-0.5">
-                    You can edit the question, settings, and closing date. Options that have received votes cannot be removed, but you can edit their text or add new options.
+                    You can edit the title, settings, and closing date. Question types with existing votes cannot be changed. Options that have received votes cannot be removed.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Question */}
+            {/* Poll title */}
             <div>
-              <label htmlFor="poll-title" className={labelCls}>Poll Question <span className="text-red-500" aria-hidden="true">*</span></label>
+              <label htmlFor="poll-title" className={labelCls}>Poll Title <span className="text-red-500" aria-hidden="true">*</span></label>
               <input id="poll-title" name="title" type="text" required aria-required="true"
                 value={formData.title} onChange={handleChange}
-                placeholder="e.g., What time should we meet?"
+                placeholder="e.g., Member Feedback — Q3 2026"
                 className={inputCls} maxLength={200} />
               <p className="text-xs text-[#94A3B8] mt-1" aria-live="polite">{formData.title.length}/200</p>
             </div>
@@ -640,97 +912,50 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
             <div>
               <label htmlFor="poll-description" className={labelCls}>Description <span className="text-[#94A3B8] font-normal">(optional)</span></label>
               <textarea id="poll-description" name="description" value={formData.description} onChange={handleChange}
-                placeholder="Add context or additional information..." rows={3}
+                placeholder="Add context or additional information..." rows={2}
                 className={inputCls + ' resize-none'} maxLength={500} />
-              <p className="text-xs text-[#94A3B8] mt-1" aria-live="polite">{formData.description.length}/500</p>
             </div>
 
-            {/* Poll Type */}
+            {/* Questions */}
             <div>
-              <p className={labelCls} id="poll-type-label">Poll Type <span className="text-red-500" aria-hidden="true">*</span></p>
-              <div className="space-y-2" role="radiogroup" aria-labelledby="poll-type-label">
-                {POLL_TYPES.map(function(opt) {
-                  var checked = formData.poll_type === opt.value;
-                  var disabled = isEditMode && totalExistingVotes > 0;
-                  return (
-                    <label key={opt.value} className={'flex items-center p-3 border-2 rounded-xl transition-colors ' + (checked ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50') + (disabled ? ' opacity-60 cursor-not-allowed' : ' cursor-pointer')}>
-                      <input type="radio" name="poll_type" value={opt.value} checked={checked} onChange={handleChange}
-                        disabled={disabled}
-                        className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
-                      <div className="ml-3">
-                        <p className="font-semibold text-[#0E1523] text-sm">{opt.label}</p>
-                        <p className="text-xs text-[#64748B]">{opt.description}</p>
-                      </div>
-                    </label>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-3">
+                <p className={labelCls + ' mb-0'}>
+                  Questions <span className="text-red-500" aria-hidden="true">*</span>
+                  <span className="ml-2 text-xs font-normal text-[#94A3B8]">({questions.length})</span>
+                </p>
               </div>
-              {isEditMode && totalExistingVotes > 0 && (
-                <p className="text-xs text-amber-600 mt-1.5">Poll type cannot be changed once votes exist.</p>
-              )}
-            </div>
 
-            {/* Options */}
-            {!isYesNo && (
-              <div>
-                <label className={labelCls}>Poll Options <span className="text-red-500" aria-hidden="true">*</span></label>
-                {optionsLoading ? (
-                  <div className="space-y-2">
-                    {[1,2,3].map(function(n) { return <div key={n} className="h-11 bg-slate-100 rounded-lg animate-pulse" aria-hidden="true" />; })}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {options.map(function(opt, index) {
-                      var hasVotes = opt.voteCount > 0;
-                      var isExisting = !!opt.existingId;
-                      return (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="text-[#94A3B8] text-xs font-bold w-5 text-right flex-shrink-0">{index + 1}.</span>
-                          <input type="text" value={opt.text}
-                            onChange={function(e) { handleOptionChange(index, e.target.value); }}
-                            placeholder={'Option ' + (index + 1)} className={inputCls} maxLength={100}
-                            aria-label={'Option ' + (index + 1)} />
-                          {hasVotes && (
-                            <span className="text-xs text-amber-600 font-semibold whitespace-nowrap flex-shrink-0"
-                              title={opt.voteCount + ' vote' + (opt.voteCount !== 1 ? 's' : '')}>
-                              {opt.voteCount}v
-                            </span>
-                          )}
-                          {options.length > 2 && (
-                            <button type="button" onClick={function() { removeOption(index); }}
-                              disabled={hasVotes}
-                              className={'p-2 rounded-lg focus:outline-none focus:ring-2 transition-colors flex-shrink-0 ' + (hasVotes ? 'text-[#CBD5E1] cursor-not-allowed' : 'text-[#94A3B8] hover:text-red-500 hover:bg-red-50 focus:ring-red-500')}
-                              aria-label={hasVotes ? 'Cannot remove — option has votes' : 'Remove option ' + (index + 1)}
-                              title={hasVotes ? 'Cannot remove — this option has ' + opt.voteCount + ' vote' + (opt.voteCount !== 1 ? 's' : '') : ''}>
-                              <Icon path={ICONS.x} className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {options.length < 10 && !optionsLoading && (
-                  <button type="button" onClick={addOption}
-                    className="mt-3 flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                    <Icon path={ICONS.plus} className="h-4 w-4" />Add Option
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isYesNo && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <p className="text-xs font-bold text-[#64748B] uppercase tracking-widest mb-3">Auto-generated options</p>
-                <div className="flex gap-2">
-                  {['Yes', 'No', 'Abstain'].map(function(l) {
-                    return <span key={l} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-[#475569]">{l}</span>;
+              {questionsLoading ? (
+                <div className="space-y-3">
+                  {[1,2].map(function(n) { return <div key={n} className="h-40 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />; })}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {questions.map(function(q, qi) {
+                    return (
+                      <QuestionBlock
+                        key={qi}
+                        question={q}
+                        index={qi}
+                        total={questions.length}
+                        onChange={function(updated) { updateQuestion(qi, updated); }}
+                        onRemove={function() { removeQuestion(qi); }}
+                        onMoveUp={function() { moveQuestion(qi, -1); }}
+                        onMoveDown={function() { moveQuestion(qi, 1); }}
+                        hasExistingVotes={totalExistingVotes > 0}
+                      />
+                    );
                   })}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Who Can Vote */}
+              <button type="button" onClick={addQuestion}
+                className="mt-3 flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                <Icon path={ICONS.plus} className="h-4 w-4" />Add Question
+              </button>
+            </div>
+
+            {/* Who can vote */}
             <div>
               <label htmlFor="poll-visibility" className={labelCls}>Who Can Vote <span className="text-red-500" aria-hidden="true">*</span></label>
               {rolesLoading ? (
@@ -774,9 +999,9 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
               <p className="text-xs font-bold text-[#64748B] uppercase tracking-widest mb-4">Poll Settings</p>
               <div className="space-y-3">
                 {[
-                  { id: 'allow-changes', name: 'allow_vote_changes',        checked: formData.allow_vote_changes,        icon: ICONS.refresh, color: 'text-blue-500',   label: 'Allow Vote Changes',    desc: 'Members can change their vote before poll closes' },
-                  { id: 'show-results',  name: 'show_results_before_close', checked: formData.show_results_before_close, icon: ICONS.eye,     color: 'text-green-500',  label: 'Show Live Results',     desc: 'Display results while poll is active (after voting)' },
-                  { id: 'anon',          name: 'allow_anonymous',           checked: formData.allow_anonymous,           icon: ICONS.shield,  color: 'text-purple-500', label: 'Anonymous Voting',      desc: "Don't show who voted for what" },
+                  { id: 'allow-changes', name: 'allow_vote_changes',        checked: formData.allow_vote_changes,        icon: ICONS.refresh, color: 'text-blue-500',   label: 'Allow Vote Changes',  desc: 'Members can change their vote before poll closes' },
+                  { id: 'show-results',  name: 'show_results_before_close', checked: formData.show_results_before_close, icon: ICONS.eye,     color: 'text-green-500',  label: 'Show Live Results',   desc: 'Display results while poll is active (after voting)' },
+                  { id: 'anon',          name: 'allow_anonymous',           checked: formData.allow_anonymous,           icon: ICONS.shield,  color: 'text-purple-500', label: 'Anonymous Voting',    desc: "Don't show who voted for what" },
                 ].map(function(item) {
                   return (
                     <label key={item.id} className={'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ' + (item.checked ? 'border-blue-300 bg-white' : 'border-transparent hover:bg-white')}>
@@ -857,6 +1082,41 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
               <p id="retention-hint" className="text-xs text-[#94A3B8] mt-1">Poll and all responses deleted automatically after this period</p>
             </div>
 
+            {/* Save as Template — inline panel */}
+            {showSaveTemplate ? (
+              <div className="border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-semibold text-[#0E1523]">Save as Template</p>
+                <div>
+                  <label htmlFor="template-name" className="block text-xs font-semibold text-[#475569] mb-1">Template name</label>
+                  <input id="template-name" type="text" value={templateName}
+                    onChange={function(e) { setTemplateName(e.target.value); }}
+                    onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); handleSaveTemplate(); } if (e.key === 'Escape') setShowSaveTemplate(false); }}
+                    maxLength={100} autoFocus
+                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900"
+                    placeholder="e.g., Board Vote Template" />
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <button type="button" onClick={function() { setShowSaveTemplate(false); setTemplateName(''); }}
+                    className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-[#475569] rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate || !templateName.trim()}
+                    className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors flex items-center gap-1">
+                    {savingTemplate
+                      ? <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Saving...</>
+                      : <><Icon path={ICONS.check} className="h-3 w-3" />Save Template</>
+                    }
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={openSaveTemplate}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#475569] bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                <Icon path={ICONS.template} className="h-4 w-4 text-[#94A3B8]" />
+                Save as Template
+              </button>
+            )}
+
           </div>
 
           {/* Footer */}
@@ -868,7 +1128,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
             <button type="button" onClick={handleSubmit} disabled={!canSubmit}
               className={'px-6 py-3 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center gap-2 text-sm ' + (isEditMode ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500' : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500')}>
               {loading ? (
-                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>{isEditMode ? 'Saving...' : 'Creating...'}</>
+                <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{isEditMode ? 'Saving...' : 'Creating...'}</>
               ) : (
                 <><Icon path={isEditMode ? ICONS.edit : ICONS.chart} className="h-4 w-4" />{isEditMode ? 'Save Changes' : 'Create Poll'}</>
               )}
