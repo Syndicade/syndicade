@@ -875,9 +875,6 @@ function handleDeleteInquiry(id) {
           </div>
           <h1 className="text-lg font-bold text-[#0E1523] mb-2">Access Denied</h1>
           <p className="text-sm text-[#64748B] mb-5">{error}</p>
-          <button onClick={function() { navigate('/organizations'); }} className="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-            Back to Organizations
-          </button>
         </div>
       </main>
     );

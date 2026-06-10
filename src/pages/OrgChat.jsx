@@ -307,7 +307,7 @@ export default function OrgChat() {
         .eq('member_id', authResult.data.user.id)
         .eq('status', 'active')
         .maybeSingle();
-      if (!memberResult.data) { navigate('/organizations'); return; }
+      if (!memberResult.data) { navigate('/dashboard'); return; }
 
       var profileResult = await supabase
         .from('members')
