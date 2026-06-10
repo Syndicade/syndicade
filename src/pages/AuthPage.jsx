@@ -133,7 +133,7 @@ function Spinner({ dark }) {
 // ---------------------------------------------------------------------------
 // Signup form
 // ---------------------------------------------------------------------------
-function SignupForm({ onSwitchToLogin }) {
+function SignupForm({ inviteToken, onSwitchToLogin }) {
   var navigate = useNavigate();
   var [firstName, setFirstName]             = useState('');
   var [lastName, setLastName]               = useState('');
@@ -186,7 +186,7 @@ function SignupForm({ onSwitchToLogin }) {
         });
       }
 
-      navigate('/welcome', { replace: true });
+      navigate(inviteToken ? '/accept-invite?token=' + inviteToken : '/welcome', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Could not create your account. Please try again.');
     } finally {
@@ -308,7 +308,7 @@ function SignupForm({ onSwitchToLogin }) {
 // ---------------------------------------------------------------------------
 // Login form
 // ---------------------------------------------------------------------------
-function LoginForm({ onSwitchToSignup }) {
+function LoginForm({ inviteToken, onSwitchToSignup }) {
   var navigate = useNavigate();
   var [email, setEmail]       = useState('');
   var [password, setPassword] = useState('');
@@ -339,7 +339,7 @@ function LoginForm({ onSwitchToSignup }) {
         });
       } catch (_) {}
 
-      navigate('/dashboard', { replace: true });
+      navigate(inviteToken ? '/accept-invite?token=' + inviteToken : '/dashboard', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -404,6 +404,7 @@ export default function AuthPage() {
   var location   = useLocation();
   var initialTab = location.pathname === '/signup' ? 'signup' : 'login';
   var [tab, setTab] = useState(initialTab);
+  var inviteToken = new URLSearchParams(location.search).get('invite') || '';
 
   useEffect(function() {
     var path = tab === 'signup' ? '/signup' : '/login';
@@ -441,8 +442,8 @@ export default function AuthPage() {
         {/* Form card */}
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '20px', padding: '36px', width: '100%', maxWidth: '460px', boxShadow: '0 4px 24px rgba(14,21,35,0.06)' }}>
           {tab === 'login'
-            ? <LoginForm onSwitchToSignup={function() { setTab('signup'); }} />
-            : <SignupForm onSwitchToLogin={function() { setTab('login'); }} />
+            ? <LoginForm inviteToken={inviteToken} onSwitchToSignup={function() { setTab('signup'); }} />
+            : <SignupForm inviteToken={inviteToken} onSwitchToLogin={function() { setTab('login'); }} />
           }
         </div>
       </main>

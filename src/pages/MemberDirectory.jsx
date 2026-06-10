@@ -1144,7 +1144,12 @@ function MemberDirectory() {
 
       {/* ── Modals ── */}
       {showInviteModal && (
-        <OrgInviteMemberModal organizationId={organizationId} onClose={function() { setShowInviteModal(false); }} onSuccess={function() { setShowInviteModal(false); loadData(); }} />
+        <OrgInviteMemberModal
+  organizationId={organizationId}
+  organizationName={organizationName}
+  currentUserId={currentUserId}
+  onClose={function() { setShowInviteModal(false); loadData(); }}
+/>
       )}
 
       {manualInstructionsTarget && (

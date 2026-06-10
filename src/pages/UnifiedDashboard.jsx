@@ -11,7 +11,6 @@ import CreateOrganization from '../components/CreateOrganization'
 import CreateEvent from '../components/CreateEvent.jsx'
 import MySignups from '../components/MySignups'
 import TasksWidget from '../components/TasksWidget';
-import InviteMemberModal from '../components/InviteMemberModal'
 import InviteOrgModal from '../components/InviteOrgModal'
 import { UserPlus, Building2, BookmarkCheck, Bookmark, CalendarCheck, ClipboardList } from 'lucide-react'
 
@@ -1342,7 +1341,6 @@ function UnifiedDashboard() {
   // ── Modal state ──
   var [showCreateModal,     setShowCreateModal]      = useState(false)
   var [showCreateEvent,     setShowCreateEvent]      = useState(false)
-  var [showInviteMember,    setShowInviteMember]     = useState(false)
   var [showInviteOrg,       setShowInviteOrg]        = useState(false)
   var [selectedOrgForEvent, setSelectedOrgForEvent]  = useState(null)
   var [createEventPrefill,  setCreateEventPrefill]   = useState(null)
@@ -2085,9 +2083,6 @@ function UnifiedDashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
               <button onClick={function() { setTourStep(0) }} aria-label="Take the guided tour" style={{ fontSize: '12px', fontWeight: 600, color: MUTED, background: 'transparent', border: '1px solid ' + BDR, padding: '5px 14px', borderRadius: '8px', cursor: 'pointer' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">Take the tour</button>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={function() { setShowInviteMember(true) }} aria-label="Invite a member to your organization" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: BLUE, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <UserPlus size={13} aria-hidden="true" /> Invite Member
-                </button>
                 <button onClick={function() { setShowInviteOrg(true) }} aria-label="Invite an organization" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, color: PURPLE, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap' }} className="focus:outline-none focus:ring-2 focus:ring-purple-500">
                   <Building2 size={13} aria-hidden="true" /> Invite Org
                 </button>
@@ -2222,7 +2217,6 @@ function UnifiedDashboard() {
       {selectedOrgForEvent && (
         <CreateEvent isOpen={showCreateEvent} onClose={function() { setShowCreateEvent(false); setSelectedOrgForEvent(null); setCreateEventPrefill(null) }} onSuccess={fetchAll} organizationId={selectedOrgForEvent.id} organizationName={selectedOrgForEvent.name} prefillData={createEventPrefill} />
       )}
-      <InviteMemberModal isOpen={showInviteMember} onClose={function() { setShowInviteMember(false) }} />
       <InviteOrgModal    isOpen={showInviteOrg}    onClose={function() { setShowInviteOrg(false) }} />
     </div>
   )

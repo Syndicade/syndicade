@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { X, UserPlus, Mail, ChevronDown, Clock, Trash2, Send, Copy, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { notifyUsers } from '../lib/notificationService';
 import toast from 'react-hot-toast';
 
-export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, organizationName, currentUserId }) {
+export default function OrgInviteMemberModal({ onClose, organizationId, organizationName, currentUserId }) {
   var [email, setEmail] = useState('');
   var [role, setRole] = useState('member');
   var [message, setMessage] = useState('');
@@ -15,10 +16,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
   var [resending, setResending] = useState(null);
 
   useEffect(function () {
-    if (isOpen) {
-      loadPendingInvites();
-    }
-  }, [isOpen]);
+    loadPendingInvites();
+    // Close on Escape
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function () { document.removeEventListener('keydown', onKey); };
+  }, []);
 
   async function loadPendingInvites() {
     setLoadingInvites(true);
@@ -46,6 +49,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
 
     setSending(true);
 
+    // Check for existing pending invite
     var { data: existing } = await supabase
       .from('invitations')
       .select('id')
@@ -83,7 +87,9 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
       return;
     }
 
-    await sendInviteEmail(invite, email.trim().toLowerCase());
+    // Fire both email and in-app notification concurrently — fire-and-forget
+    sendInviteEmail(invite, email.trim().toLowerCase());
+    sendInviteNotification(email.trim().toLowerCase(), invite.id);
 
     setEmail('');
     setRole('member');
@@ -120,6 +126,33 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
     }
   }
 
+  // Option A: look up invitee in members table by email.
+  // If they have an account, send an in-app invite_received notification.
+  // If they don't have an account yet, skip — the email invite is sufficient.
+  async function sendInviteNotification(inviteeEmail, inviteId) {
+    try {
+      var { data: member } = await supabase
+        .from('members')
+        .select('user_id')
+        .eq('email', inviteeEmail)
+        .maybeSingle();
+
+      if (!member) return; // no account yet — email is enough
+
+      await notifyUsers({
+        userIds: [member.user_id],
+        organizationId: organizationId,
+        type: 'invite_received',
+        title: 'You\'ve been invited to join ' + organizationName,
+        message: 'You\'ve been invited as a ' + role + '. Click to view the invitation.',
+        link: '/accept-invite?token=' + inviteId,
+      });
+    } catch (err) {
+      // Fire-and-forget — don't surface notification errors to the user
+      console.error('sendInviteNotification error:', err);
+    }
+  }
+
   async function handleRevoke(inviteId, inviteEmail) {
     setRevoking(inviteId);
     var { error } = await supabase
@@ -152,7 +185,8 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
       return;
     }
 
-    await sendInviteEmail({ ...invite, expires_at: newExpiry.toISOString() }, invite.email);
+    var updatedInvite = Object.assign({}, invite, { expires_at: newExpiry.toISOString() });
+    await sendInviteEmail(updatedInvite, invite.email);
     loadPendingInvites();
     setResending(null);
   }
@@ -160,7 +194,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
   function handleCopyLink(inviteId) {
     var link = 'https://syndicade.org/accept-invite?token=' + inviteId;
     navigator.clipboard.writeText(link).then(function () {
-      toast.success('Invite link copied!');
+      mascotSuccessToast('Invite link copied!');
     }).catch(function () {
       toast.error('Could not copy to clipboard.');
     });
@@ -184,8 +218,6 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
     return '';
   }
 
-  if (!isOpen) return null;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -198,6 +230,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
         className="w-full max-w-lg rounded-xl border flex flex-col"
         style={{ background: '#FFFFFF', borderColor: '#E2E8F0', maxHeight: '90vh' }}
       >
+        {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
           style={{ borderColor: '#E2E8F0' }}
@@ -227,7 +260,10 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           </button>
         </div>
 
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+
+          {/* Email */}
           <div>
             <label
               htmlFor="invite-email"
@@ -250,6 +286,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             />
           </div>
 
+          {/* Role */}
           <div>
             <label
               htmlFor="invite-role"
@@ -282,6 +319,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             </p>
           </div>
 
+          {/* Personal message */}
           <div>
             <label
               htmlFor="invite-message"
@@ -304,6 +342,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             />
           </div>
 
+          {/* Send button */}
           <button
             onClick={handleSend}
             disabled={sending}
@@ -314,8 +353,10 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
             {sending ? 'Sending...' : 'Send Invitation'}
           </button>
 
+          {/* Divider */}
           <div className="border-t" style={{ borderColor: '#E2E8F0' }} />
 
+          {/* Pending invites */}
           <div>
             <p
               className="text-xs font-bold uppercase mb-3"
@@ -357,8 +398,12 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
                           <span className="text-sm font-semibold truncate block" style={{ color: '#0E1523' }}>
                             {inv.email}
                           </span>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-xs capitalize" style={{ color: '#475569' }}>{inv.role}</span>
+                            <span style={{ color: '#CBD5E1' }}>·</span>
+                            <span className="text-xs" style={{ color: '#94A3B8' }}>
+                              {'Sent ' + formatExpiry(inv.created_at)}
+                            </span>
                             <span style={{ color: '#CBD5E1' }}>·</span>
                             <div className="flex items-center gap-1">
                               <Clock size={10} style={{ color: expiring ? '#F5B731' : '#94A3B8' }} aria-hidden="true" />
@@ -408,6 +453,7 @@ export default function OrgInviteMemberModal({ isOpen, onClose, organizationId, 
           </div>
         </div>
 
+        {/* Footer */}
         <div
           className="flex justify-end px-6 py-4 border-t shrink-0"
           style={{ borderColor: '#E2E8F0' }}
