@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { notifyUsers } from '../lib/notificationService';
 
 function Icon({ path, className }) {
@@ -140,7 +140,7 @@ function ResponseBar({ count, total }) {
   );
 }
 
-function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, isAdmin, memberCount }) {
+function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, onRemind, isAdmin, memberCount }) {
   var [loading, setLoading]             = useState(false);
   var [questions, setQuestions]         = useState([]);
   var [answers, setAnswers]             = useState({});
@@ -155,6 +155,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, is
   var [formError, setFormError]         = useState(null);
   var [chartMode, setChartMode]         = useState('bar');
   var [reminding, setReminding]         = useState(false);
+  var [lastRemindedAt, setLastRemindedAt] = useState(survey.last_reminded_at || null);
 
   // Save as template inline state
   var [showSaveTemplate, setShowSaveTemplate] = useState(false);
@@ -435,6 +436,11 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, is
         link: '/organizations/' + survey.organization_id + '/surveys',
       });
 
+      var now = new Date().toISOString();
+      var updateR = await supabase.from('surveys').update({ last_reminded_at: now }).eq('id', survey.id);
+      if (updateR.error) console.error('Failed to update last_reminded_at:', updateR.error);
+      setLastRemindedAt(now);
+      if (onRemind) onRemind(survey.id, now);
       window.dispatchEvent(new CustomEvent('notificationCreated'));
       mascotSuccessToast('Reminders sent!', recipientIds.length + ' member' + (recipientIds.length !== 1 ? 's' : '') + ' notified.');
     } catch (err) {
@@ -884,6 +890,22 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, is
           )}
         </div>
       )}
+{/* Footer */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#64748B] border-t border-slate-100 pt-2.5 mt-3">
+        <span>Created {format(new Date(survey.created_at), 'MMM d, yyyy')}</span>
+        {survey.closes_at && (
+          <span className="flex items-center gap-1">
+            <Icon path={ICONS.clock} className="h-3 w-3" />
+            {isClosed ? 'Closed' : 'Closes'} {format(new Date(survey.closes_at), 'MMM d, yyyy')}
+          </span>
+        )}
+        {isAdmin && lastRemindedAt && (
+          <span className="flex items-center gap-1">
+            <Icon path={ICONS.bell} className="h-3 w-3" />
+            {'Reminded ' + formatDistanceToNow(new Date(lastRemindedAt), { addSuffix: true })}
+          </span>
+        )}
+      </div>
     </article>
   );
 }

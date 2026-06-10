@@ -627,12 +627,19 @@ function SurveysList() {
                     </div>
                   )}
                   <div className={isAdmin ? 'rounded-b-xl overflow-hidden' + (isSelected ? ' ring-2 ring-blue-300' : '') : ''}>
-                    <SurveyCard
+<SurveyCard
                       survey={survey}
                       onDelete={function() { handleSurveyDelete(survey.id); }}
                       onSurveyUpdated={handleSurveyUpdated}
                       onDuplicate={handleDuplicate}
                       onEdit={openEdit}
+                      onRemind={function(surveyId, timestamp) {
+                        setSurveys(function(prev) {
+                          return prev.map(function(s) {
+                            return s.id === surveyId ? Object.assign({}, s, { last_reminded_at: timestamp }) : s;
+                          });
+                        });
+                      }}
                       isAdmin={isAdmin}
                       memberCount={memberCount}
                     />
