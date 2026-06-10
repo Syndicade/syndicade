@@ -5,6 +5,14 @@
  *   - window.confirm → ConfirmModal
  *   - Auto-create chat channel in CreateGroupModal after group insert
  *   - var only, string concat className, no template literals
+ *
+ * Session Jun 10 improvements:
+ *   - #1 Chat channel insert now passes visibility: 'all'
+ *   - #2 Cancel pending join request
+ *   - #3 Leave Group (with ConfirmModal)
+ *   - #4 Pending requests count badge for admins
+ *   - #5 Email Group quick action for admins
+ *   - #7 Keyboard reorder (Up/Down buttons) as ADA fallback
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -121,6 +129,56 @@ var AlertTriangleIcon = function() {
   );
 };
 
+var MailIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+      <polyline points="22,6 12,13 2,6"/>
+    </svg>
+  );
+};
+
+var LogOutIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+  );
+};
+
+var XCircleIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="15" y1="9" x2="9" y2="15"/>
+      <line x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+  );
+};
+
+var ChevronUpIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="18 15 12 9 6 15"/>
+    </svg>
+  );
+};
+
+var ChevronDownIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 var TYPE_LABELS = {
@@ -188,10 +246,10 @@ var ConfirmModal = function(props) {
   var title = props.title;
   var message = props.message;
   var confirmLabel = props.confirmLabel || 'Delete';
+  var confirmClass = props.confirmClass || 'bg-red-500 hover:bg-red-600 focus:ring-red-500';
   var onConfirm = props.onConfirm;
   var onCancel = props.onCancel;
 
-  // Close on Escape
   useEffect(function() {
     function onKey(e) { if (e.key === 'Escape') onCancel(); }
     document.addEventListener('keydown', onKey);
@@ -224,7 +282,7 @@ var ConfirmModal = function(props) {
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className={'px-4 py-2 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ' + confirmClass}
           >
             {confirmLabel}
           </button>
@@ -248,7 +306,8 @@ var MembersModal = function(props) {
         var gmRes = await supabase
           .from('org_group_members')
           .select('member_id')
-          .eq('group_id', group.id);
+          .eq('group_id', group.id)
+          .eq('status', 'active');
         var ids = (gmRes.data || []).map(function(r) { return r.member_id; });
         if (ids.length === 0) { setMembers([]); setLoading(false); return; }
         var namesRes = await supabase
@@ -270,6 +329,12 @@ var MembersModal = function(props) {
     }
     load();
   }, [group.id]);
+
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
 
   return (
     <div
@@ -369,6 +434,12 @@ var CreateGroupModal = function(props) {
   });
   var [saving, setSaving] = useState(false);
 
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
   function updateForm(key, value) {
     setForm(function(f) {
       var next = Object.assign({}, f);
@@ -414,16 +485,16 @@ var CreateGroupModal = function(props) {
       }
       if (err) throw err;
 
-      // Auto-create a chat channel when a new group is created
+      // #1 Fix: pass visibility: 'all' to org_chat_channels (required column)
       if (newGroupId) {
         var channelRes = await supabase.from('org_chat_channels').insert({
           name: form.name.trim(),
           organization_id: organizationId,
           group_id: newGroupId,
           created_by: userId,
+          visibility: 'all',
           is_private: form.visibility === 'group_only',
         });
-        // Non-fatal: log but don't block the success toast
         if (channelRes.error) {
           console.warn('Could not auto-create chat channel:', channelRes.error.message);
         }
@@ -583,6 +654,7 @@ var CreateGroupModal = function(props) {
 
 function GroupsList() {
   var { organizationId } = useParams();
+  var navigate = useNavigate();
   var context = useOutletContext();
   var isAdmin = context ? context.isAdmin : false;
 
@@ -590,13 +662,16 @@ function GroupsList() {
   var [loading, setLoading] = useState(true);
   var [currentUserId, setCurrentUserId] = useState(null);
   var [memberCounts, setMemberCounts] = useState({});
+  var [pendingCounts, setPendingCounts] = useState({}); // #4 admin pending request counts
   var [userGroupIds, setUserGroupIds] = useState(new Set());
   var [pendingGroupIds, setPendingGroupIds] = useState(new Set());
 
   var [showModal, setShowModal] = useState(false);
   var [editGroup, setEditGroup] = useState(null);
   var [membersModal, setMembersModal] = useState(null);
-  var [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
+  var [confirmDelete, setConfirmDelete] = useState(null);   // { id, name }
+  var [confirmLeave, setConfirmLeave] = useState(null);     // #3 { id, name }
+  var [confirmCancel, setConfirmCancel] = useState(null);   // #2 { id, name }
 
   var [search, setSearch] = useState('');
   var [typeFilter, setTypeFilter] = useState('all');
@@ -631,17 +706,31 @@ function GroupsList() {
 
       if (groupsData.length) {
         var counts = {};
+        var pending = {};
         var userSet = new Set();
         var pendingSet = new Set();
 
         await Promise.all(
           groupsData.map(async function(g) {
+            // Active member count
             var cntRes = await supabase
               .from('org_group_members')
               .select('member_id', { count: 'exact', head: true })
-              .eq('group_id', g.id);
+              .eq('group_id', g.id)
+              .eq('status', 'active');
             counts[g.id] = cntRes.count || 0;
 
+            // #4 Pending request count for admins
+            if (isAdmin) {
+              var pendingRes = await supabase
+                .from('org_group_members')
+                .select('member_id', { count: 'exact', head: true })
+                .eq('group_id', g.id)
+                .eq('status', 'pending');
+              pending[g.id] = pendingRes.count || 0;
+            }
+
+            // Current user membership status
             var myRow = await supabase
               .from('org_group_members')
               .select('member_id, status')
@@ -659,6 +748,7 @@ function GroupsList() {
         );
 
         setMemberCounts(counts);
+        setPendingCounts(pending);
         setUserGroupIds(userSet);
         setPendingGroupIds(pendingSet);
       }
@@ -667,7 +757,7 @@ function GroupsList() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, isAdmin]);
 
   useEffect(function() { fetchData(); }, [fetchData]);
 
@@ -691,7 +781,21 @@ function GroupsList() {
     var srcIndex = dragSrcIndexRef.current;
     dragSrcIndexRef.current = null;
     if (srcIndex === null || srcIndex === dropIndex) return;
+    await reorderGroups(srcIndex, dropIndex);
+  };
 
+  // #7 Keyboard reorder — move up/down
+  var handleMoveUp = async function(index) {
+    if (index === 0) return;
+    await reorderGroups(index, index - 1);
+  };
+
+  var handleMoveDown = async function(index) {
+    if (index === groups.length - 1) return;
+    await reorderGroups(index, index + 1);
+  };
+
+  var reorderGroups = async function(srcIndex, dropIndex) {
     var reordered = groups.slice();
     var moved = reordered.splice(srcIndex, 1)[0];
     reordered.splice(dropIndex, 0, moved);
@@ -726,6 +830,59 @@ function GroupsList() {
       fetchData();
     } catch (e) {
       mascotErrorToast('Failed to delete group', e.message);
+    }
+  };
+
+  // ─── #2 Cancel Join Request ────────────────────────────────────────────────
+
+  var handleCancelRequestConfirmed = async function() {
+    if (!confirmCancel) return;
+    var groupId = confirmCancel.id;
+    setConfirmCancel(null);
+    try {
+      var res = await supabase
+        .from('org_group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('member_id', currentUserId);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Request cancelled');
+      setPendingGroupIds(function(prev) {
+        var next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
+    } catch (e) {
+      mascotErrorToast('Could not cancel request', e.message);
+    }
+  };
+
+  // ─── #3 Leave Group ────────────────────────────────────────────────────────
+
+  var handleLeaveConfirmed = async function() {
+    if (!confirmLeave) return;
+    var groupId = confirmLeave.id;
+    setConfirmLeave(null);
+    try {
+      var res = await supabase
+        .from('org_group_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('member_id', currentUserId);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Left group');
+      setUserGroupIds(function(prev) {
+        var next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
+      setMemberCounts(function(prev) {
+        var next = Object.assign({}, prev);
+        next[groupId] = Math.max(0, (prev[groupId] || 1) - 1);
+        return next;
+      });
+    } catch (e) {
+      mascotErrorToast('Could not leave group', e.message);
     }
   };
 
@@ -781,7 +938,7 @@ function GroupsList() {
     <main className="min-h-screen bg-[#F8FAFC]" aria-label="Groups and Committees">
       <div className="px-6 py-6">
 
-        {/* ── Page Header (standard: 30px/800, count-based subtitle) ── */}
+        {/* ── Page Header ── */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
@@ -853,17 +1010,17 @@ function GroupsList() {
           </button>
         </div>
 
-        {/* Drag hint */}
+        {/* Reorder hints */}
         {canDrag && (
           <p className="text-xs text-[#94A3B8] mb-3 flex items-center gap-1.5" aria-live="polite">
             <GripIcon />
-            {savingOrder ? 'Saving order...' : 'Drag cards to reorder. Disabled while filters are active.'}
+            {savingOrder ? 'Saving order...' : 'Drag cards or use the arrow buttons to reorder.'}
           </p>
         )}
         {isAdmin && filtersActive && !loading && groups.length > 1 && (
           <p className="text-xs text-[#94A3B8] mb-3 flex items-center gap-1.5">
             <GripIcon />
-            Clear filters to enable drag-to-reorder.
+            Clear filters to enable reordering.
           </p>
         )}
 
@@ -927,6 +1084,7 @@ function GroupsList() {
               var typeStyle = TYPE_STYLES[group.type] || TYPE_STYLES.other;
               var isDragTarget = dragOverIndex === index;
               var count = memberCounts[group.id] || 0;
+              var pendingCount = pendingCounts[group.id] || 0; // #4
 
               return (
                 <div
@@ -946,16 +1104,36 @@ function GroupsList() {
                     aria-hidden="true"
                   />
 
-                  {/* Entire card body is a link */}
                   <Link
                     to={'/organizations/' + organizationId + '/groups/' + group.id}
                     className="flex-1 flex flex-col p-4 min-w-0 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     aria-label={'Open ' + group.name}
                   >
-                    {canDrag && (
-                      <div className="flex justify-end mb-1">
-                        <div className="text-[#CBD5E1] hover:text-[#94A3B8] cursor-grab active:cursor-grabbing" aria-hidden="true" title="Drag to reorder">
-                          <GripIcon />
+                    {/* #7 Keyboard reorder buttons — only shown for admins, no filters active */}
+                    {isAdmin && !filtersActive && groups.length > 1 && (
+                      <div className="flex justify-between items-center mb-1">
+                        <div className="text-[#CBD5E1] cursor-grab active:cursor-grabbing" aria-hidden="true" title="Drag to reorder">
+                          {canDrag && <GripIcon />}
+                        </div>
+                        <div className="flex gap-0.5">
+                          <button
+                            onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleMoveUp(index); }}
+                            disabled={index === 0 || savingOrder}
+                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
+                            aria-label={'Move ' + group.name + ' up'}
+                            title="Move up"
+                          >
+                            <ChevronUpIcon />
+                          </button>
+                          <button
+                            onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleMoveDown(index); }}
+                            disabled={index === groups.length - 1 || savingOrder}
+                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
+                            aria-label={'Move ' + group.name + ' down'}
+                            title="Move down"
+                          >
+                            <ChevronDownIcon />
+                          </button>
                         </div>
                       </div>
                     )}
@@ -983,6 +1161,15 @@ function GroupsList() {
                           Pending
                         </span>
                       )}
+                      {/* #4 Pending requests badge for admins */}
+                      {isAdmin && pendingCount > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700"
+                          title={pendingCount + ' pending join ' + (pendingCount === 1 ? 'request' : 'requests')}
+                        >
+                          {pendingCount} pending
+                        </span>
+                      )}
                     </div>
 
                     {group.description && (
@@ -1002,6 +1189,30 @@ function GroupsList() {
                       </button>
 
                       <div className="flex items-center gap-1">
+                        {/* #2 Cancel request */}
+                        {!isAdmin && isPending && (
+                          <button
+                            onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmCancel({ id: group.id, name: group.name }); }}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 transition-colors"
+                            aria-label={'Cancel join request for ' + group.name}
+                          >
+                            <XCircleIcon />
+                            Cancel
+                          </button>
+                        )}
+
+                        {/* #3 Leave group */}
+                        {!isAdmin && isMember && (
+                          <button
+                            onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmLeave({ id: group.id, name: group.name }); }}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#64748B] border border-slate-200 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 transition-colors"
+                            aria-label={'Leave ' + group.name}
+                          >
+                            <LogOutIcon />
+                            Leave
+                          </button>
+                        )}
+
                         {canJoin && (
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleRequestJoin(group); }}
@@ -1011,8 +1222,22 @@ function GroupsList() {
                             {group.join_approval_required ? 'Request' : 'Join'}
                           </button>
                         )}
+
                         {isAdmin && (
                           <>
+                            {/* #5 Email Group quick action */}
+                            <button
+                              onClick={function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate('/organizations/' + organizationId + '/email-blasts?group=' + group.id);
+                              }}
+                              className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                              aria-label={'Email ' + group.name}
+                              title="Email this group"
+                            >
+                              <MailIcon />
+                            </button>
                             <button
                               onClick={function(e) { e.preventDefault(); e.stopPropagation(); setEditGroup(group); setShowModal(true); }}
                               className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
@@ -1058,13 +1283,39 @@ function GroupsList() {
         />
       )}
 
+      {/* Delete group */}
       {confirmDelete && (
         <ConfirmModal
           title={'Delete "' + confirmDelete.name + '"?'}
           message="This group will be deactivated and removed from all member views. This cannot be undone."
           confirmLabel="Delete Group"
+          confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
           onConfirm={handleDeleteConfirmed}
           onCancel={function() { setConfirmDelete(null); }}
+        />
+      )}
+
+      {/* #2 Cancel join request */}
+      {confirmCancel && (
+        <ConfirmModal
+          title={'Cancel request to join "' + confirmCancel.name + '"?'}
+          message="Your pending request will be withdrawn. You can request to join again at any time."
+          confirmLabel="Cancel Request"
+          confirmClass="bg-amber-500 hover:bg-amber-600 focus:ring-amber-500"
+          onConfirm={handleCancelRequestConfirmed}
+          onCancel={function() { setConfirmCancel(null); }}
+        />
+      )}
+
+      {/* #3 Leave group */}
+      {confirmLeave && (
+        <ConfirmModal
+          title={'Leave "' + confirmLeave.name + '"?'}
+          message="You will be removed from this group. You can request to rejoin at any time."
+          confirmLabel="Leave Group"
+          confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleLeaveConfirmed}
+          onCancel={function() { setConfirmLeave(null); }}
         />
       )}
     </main>
