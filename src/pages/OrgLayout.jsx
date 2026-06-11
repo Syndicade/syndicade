@@ -17,6 +17,9 @@ var textPrimary   = '#0E1523';
 var textSecondary = '#475569';
 var textMuted     = '#64748B';
 
+// ── Items that can never be hidden ───────────────────────────────────────────
+var ALWAYS_VISIBLE = ['overview', 'settings', 'billing'];
+
 // ── Icon ──────────────────────────────────────────────────────────────────────
 function Icon({ path, className, style }) {
   return (
@@ -72,11 +75,15 @@ var ICONS = {
   menu:       'M4 6h16M4 12h16M4 18h16',
   email:      'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
   contacts:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-tasks:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+  tasks:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
   scheduling: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  // eye / eye-off for hide/show
+  eye:        ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
+  eyeOff:     ['M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'],
+  pencilEdit: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z',
 };
 
-// ── Nav groups ────────────────────────────────────────────────────────────────
+// ── Nav groups builder ────────────────────────────────────────────────────────
 function buildNavGroups(organizationId, pendingCount, unreadCount) {
   var base = '/organizations/' + organizationId;
   return [
@@ -109,7 +116,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       items: [
         { id:'approvals',    label:'Approvals',    iconKey:'approvals', route:'approvals',    path: base + '/approvals',    badge: pendingCount },
         { id:'inbox',        label:'Inbox',        iconKey:'inbox',     route:'inbox',        path: base + '/inbox',        badge: unreadCount },
-        { id: 'tasks',       label: 'Tasks',        iconKey: 'tasks',    route: 'tasks',      path: base + '/tasks' },
+        { id:'tasks',        label:'Tasks',        iconKey:'tasks',     route:'tasks',        path: base + '/tasks' },
         { id:'contacts',     label:'Contacts',     iconKey:'contacts',  route:'contacts',     path: base + '/contacts' },
         { id:'analytics',    label:'Analytics',    iconKey:'analytics', route:'analytics',    path: base + '/analytics',    lock:'growth' },
         { id:'publicpage',   label:'Public Page',  iconKey:'pencil',    route:'page-editor',  path: base + '/page-editor',  tourKey:'tour-public-page-nav', adminOnly: true },
@@ -145,6 +152,11 @@ function OrgLayout() {
   var [mobileNavOpen, setMobileNavOpen] = useState(false);
   var [lockedNavTarget, setLockedNavTarget] = useState(null);
 
+  // ── Nav edit state ────────────────────────────────────────────────────────
+  var [editingNav, setEditingNav] = useState(false);
+  var [hiddenNavItems, setHiddenNavItems] = useState([]);
+  var [navSaving, setNavSaving] = useState(false);
+
   var access = useOrgAccess(organizationId);
   var accessStatus = access.status;
   var accessDaysLeft = access.daysLeft;
@@ -164,6 +176,55 @@ function OrgLayout() {
     window.addEventListener('inboxUnreadUpdate', handleInboxUpdate);
     return function() { window.removeEventListener('inboxUnreadUpdate', handleInboxUpdate); };
   }, []);
+
+  // ── Fetch nav preferences ─────────────────────────────────────────────────
+  async function fetchHiddenNavItems() {
+    try {
+      var key = 'nav_hidden_items_' + organizationId;
+      var r = await supabase.from('site_content').select('value').eq('key', key).maybeSingle();
+      if (r.data && r.data.value) {
+        var parsed = JSON.parse(r.data.value);
+        setHiddenNavItems(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      // No saved prefs yet — default to nothing hidden
+      setHiddenNavItems([]);
+    }
+  }
+
+  async function saveHiddenNavItems(items) {
+    setNavSaving(true);
+    try {
+      var key = 'nav_hidden_items_' + organizationId;
+      var value = JSON.stringify(items);
+      // Check if row exists first
+      var existing = await supabase.from('site_content').select('id').eq('key', key).maybeSingle();
+      if (existing.data) {
+        await supabase.from('site_content').update({ value: value, updated_at: new Date().toISOString() }).eq('key', key);
+      } else {
+        await supabase.from('site_content').insert({ key: key, value: value, label: 'Nav Hidden Items', section: 'navigation', field_type: 'json' });
+      }
+    } catch (e) {
+      console.error('Failed to save nav prefs:', e);
+    } finally {
+      setNavSaving(false);
+    }
+  }
+
+  function toggleNavItem(itemId) {
+    var updated;
+    if (hiddenNavItems.includes(itemId)) {
+      updated = hiddenNavItems.filter(function(id) { return id !== itemId; });
+    } else {
+      updated = hiddenNavItems.concat([itemId]);
+    }
+    setHiddenNavItems(updated);
+    saveHiddenNavItems(updated);
+  }
+
+  function isItemHidden(itemId) {
+    return hiddenNavItems.includes(itemId);
+  }
 
   async function fetchLayout() {
     try {
@@ -191,6 +252,10 @@ function OrgLayout() {
           setPendingCount(total);
         });
       }
+
+      // Always fetch nav prefs (applies to all users)
+      await fetchHiddenNavItems();
+
     } catch(err) {
       setError(err.message);
     } finally {
@@ -208,109 +273,255 @@ function OrgLayout() {
     return pathname === base + '/' + item.route || pathname.startsWith(base + '/' + item.route + '/');
   }
 
+  // ── Render nav ────────────────────────────────────────────────────────────
   function renderNav() {
     var navGroups = buildNavGroups(organizationId, pendingCount, unreadCount);
-    return navGroups.map(function(group) {
-      if (group.adminOnly && !isAdmin) return null;
-      var visibleItems = group.items.filter(function(item) {
-        if (item.adminOnly && !isAdmin) return false;
-        if (!isAdmin && group.label === 'Admin') return false;
-        return true;
+
+    // Collect all hidden items from all groups for the Platform section footer
+    var hiddenItemDefs = [];
+    navGroups.forEach(function(group) {
+      group.items.forEach(function(item) {
+        if (isItemHidden(item.id) && !ALWAYS_VISIBLE.includes(item.id)) {
+          hiddenItemDefs.push(item);
+        }
       });
-      if (visibleItems.length === 0) return null;
-      return (
-        <div key={group.label} style={{ marginBottom:'4px' }}>
-          <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color: textMuted, padding:'8px 10px 3px' }}>{group.label}</p>
-          {visibleItems.map(function(item) {
-            var active = isActive(item);
-
-            var isLocked = false;
-            var lockReason = null;
-            if (item.lock === 'growth') {
-              isLocked = !isAllowed('has_full_analytics');
-              lockReason = isLocked ? 'growth' : null;
-            } else if (item.lock === 'pro') {
-              isLocked = !isAllowed('has_ai_assistant');
-              lockReason = isLocked ? 'pro' : null;
-            } else if (item.lock === 'verified') {
-              isLocked = !(organization && organization.is_verified_nonprofit);
-              lockReason = isLocked ? 'verified' : null;
-            }
-
-            var color = isLocked
-              ? '#94A3B8'
-              : (item.isPurple ? '#A78BFA' : active ? '#3B82F6' : textSecondary);
-            var bg = active && !isLocked ? 'rgba(59,130,246,0.08)' : 'transparent';
-
-            return (
-              <button
-                key={item.id}
-                onClick={function() {
-                  if (item.comingSoon) return;
-                  if (isLocked && lockReason === 'verified') {
-                    setLockedNavTarget(lockReason);
-                    return;
-                  }
-                  setMobileNavOpen(false);
-                  if (item.path) navigate(item.path);
-                }}
-                data-tour={item.tourKey || undefined}
-                style={{
-                  display:'flex', alignItems:'center', gap:'8px',
-                  padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px',
-                  borderRadius:'7px',
-                  fontSize: item.isSub ? '11px' : '12px',
-                  fontWeight: 600,
-                  color: color,
-                  background: bg,
-                  border:'none',
-                  cursor: item.comingSoon ? 'default' : 'pointer',
-                  width:'100%', textAlign:'left',
-                  position:'relative', whiteSpace:'nowrap',
-                  opacity: isLocked ? 0.5 : 1,
-                  transition: 'background 0.15s',
-                }}
-                aria-current={active && !isLocked ? 'page' : undefined}
-                aria-disabled={isLocked || item.comingSoon ? true : undefined}
-                aria-label={
-                  isLocked && lockReason === 'verified'
-                    ? (item.label + ' — available to verified nonprofits')
-                    : item.comingSoon
-                      ? (item.label + ' — coming soon')
-                      : item.label
-                }
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-              >
-                <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:color }} />
-                <span style={{ flex:1 }}>{item.label}</span>
-
-                {item.comingSoon && (
-                  <span style={{ fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', background:'#F1F5F9', color:'#64748B', border:'1px solid #E2E8F0', textTransform:'uppercase', letterSpacing:'0.5px', flexShrink:0 }} aria-hidden="true">
-                    Soon
-                  </span>
-                )}
-
-                {isLocked && lockReason && (
-                  <>
-                    <Lock size={10} style={{ color:'#94A3B8', flexShrink:0 }} aria-hidden="true" />
-                    <LockedNavBadge requiredPlan={lockReason} />
-                  </>
-                )}
-
-                {!isLocked && !item.comingSoon && item.badge > 0 && (
-                  <span
-                    style={{ background: item.id === 'inbox' ? '#EF4444' : '#F5B731', color: item.id === 'inbox' ? '#FFFFFF' : '#1A0000', fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', flexShrink:0 }}
-                    aria-label={item.badge + ' pending'}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      );
     });
+
+    return (
+      <>
+        {navGroups.map(function(group) {
+          if (group.adminOnly && !isAdmin) return null;
+
+          var visibleItems = group.items.filter(function(item) {
+            if (item.adminOnly && !isAdmin) return false;
+            if (!isAdmin && group.label === 'Admin') return false;
+            // Members never see hidden items
+            if (!isAdmin && isItemHidden(item.id)) return false;
+            // Admins: hide from normal groups — they'll appear in Platform footer
+            if (isAdmin && !editingNav && isItemHidden(item.id) && group.label !== 'Platform') return false;
+            return true;
+          });
+
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={group.label} style={{ marginBottom:'4px' }}>
+              <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color: textMuted, padding:'8px 10px 3px' }}>{group.label}</p>
+              {visibleItems.map(function(item) {
+                var active = isActive(item);
+                var hidden = isItemHidden(item.id);
+                var canHide = !ALWAYS_VISIBLE.includes(item.id);
+
+                var isLocked = false;
+                var lockReason = null;
+                if (item.lock === 'growth') {
+                  isLocked = !isAllowed('has_full_analytics');
+                  lockReason = isLocked ? 'growth' : null;
+                } else if (item.lock === 'pro') {
+                  isLocked = !isAllowed('has_ai_assistant');
+                  lockReason = isLocked ? 'pro' : null;
+                } else if (item.lock === 'verified') {
+                  isLocked = !(organization && organization.is_verified_nonprofit);
+                  lockReason = isLocked ? 'verified' : null;
+                }
+
+                var color = isLocked
+                  ? '#94A3B8'
+                  : (item.isPurple ? '#A78BFA' : active ? '#3B82F6' : textSecondary);
+                var bg = active && !isLocked ? 'rgba(59,130,246,0.08)' : 'transparent';
+
+                return (
+                  <div key={item.id} style={{ position:'relative', display:'flex', alignItems:'center', gap:'2px' }}>
+                    <button
+                      onClick={function() {
+                        if (editingNav) return;
+                        if (item.comingSoon) return;
+                        if (isLocked && lockReason === 'verified') {
+                          setLockedNavTarget(lockReason);
+                          return;
+                        }
+                        setMobileNavOpen(false);
+                        if (item.path) navigate(item.path);
+                      }}
+                      data-tour={item.tourKey || undefined}
+                      style={{
+                        display:'flex', alignItems:'center', gap:'8px',
+                        padding: item.isSub ? '7px 10px 7px 26px' : '7px 10px',
+                        borderRadius:'7px',
+                        fontSize: item.isSub ? '11px' : '12px',
+                        fontWeight: 600,
+                        color: color,
+                        background: bg,
+                        border:'none',
+                        cursor: editingNav ? 'default' : (item.comingSoon ? 'default' : 'pointer'),
+                        flex: 1,
+                        textAlign:'left',
+                        whiteSpace:'nowrap',
+                        opacity: isLocked ? 0.5 : 1,
+                        transition: 'background 0.15s',
+                      }}
+                      aria-current={active && !isLocked ? 'page' : undefined}
+                      aria-disabled={isLocked || item.comingSoon ? true : undefined}
+                      aria-label={
+                        isLocked && lockReason === 'verified'
+                          ? (item.label + ' — available to verified nonprofits')
+                          : item.comingSoon
+                            ? (item.label + ' — coming soon')
+                            : item.label
+                      }
+                      className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    >
+                      <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:color }} />
+                      <span style={{ flex:1 }}>{item.label}</span>
+
+                      {item.comingSoon && !editingNav && (
+                        <span style={{ fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', background:'#F1F5F9', color:'#64748B', border:'1px solid #E2E8F0', textTransform:'uppercase', letterSpacing:'0.5px', flexShrink:0 }} aria-hidden="true">
+                          Soon
+                        </span>
+                      )}
+
+                      {isLocked && lockReason && !editingNav && (
+                        <>
+                          <Lock size={10} style={{ color:'#94A3B8', flexShrink:0 }} aria-hidden="true" />
+                          <LockedNavBadge requiredPlan={lockReason} />
+                        </>
+                      )}
+
+                      {!isLocked && !item.comingSoon && item.badge > 0 && !editingNav && (
+                        <span
+                          style={{ background: item.id === 'inbox' ? '#EF4444' : '#F5B731', color: item.id === 'inbox' ? '#FFFFFF' : '#1A0000', fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', flexShrink:0 }}
+                          aria-label={item.badge + ' pending'}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Eye toggle — only shown in edit mode for hideable items */}
+                    {editingNav && isAdmin && canHide && (
+                      <button
+                        onClick={function() { toggleNavItem(item.id); }}
+                        style={{
+                          width:'26px', height:'26px', flexShrink:0,
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          background: 'transparent',
+                          border:'none', borderRadius:'6px', cursor:'pointer',
+                          color: hidden ? '#CBD5E1' : '#3B82F6',
+                          marginRight:'4px',
+                        }}
+                        className="focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        aria-label={(hidden ? 'Show ' : 'Hide ') + item.label + ' from navigation'}
+                        aria-pressed={!hidden}
+                        title={hidden ? 'Show in nav' : 'Hide from nav'}
+                      >
+                        <Icon path={hidden ? ICONS.eyeOff : ICONS.eye} className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+
+                    {/* Lock icon placeholder when edit mode but not hideable */}
+                    {editingNav && isAdmin && !canHide && (
+                      <div style={{ width:'26px', height:'26px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', marginRight:'4px' }} aria-hidden="true">
+                        <Lock size={11} style={{ color:'#CBD5E1' }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* Hidden items section — admin only, shown when not in edit mode */}
+        {isAdmin && !editingNav && hiddenItemDefs.length > 0 && (
+          <div style={{ marginTop:'4px', marginBottom:'4px' }}>
+            <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color:'#CBD5E1', padding:'8px 10px 3px' }}>Hidden Pages</p>
+            {hiddenItemDefs.map(function(item) {
+              var hiddenActive = isActive(item);
+              return (
+                <div key={'hidden-' + item.id} style={{ display:'flex', alignItems:'center', gap:'2px' }}>
+                  <button
+                    onClick={function() { if (item.path) navigate(item.path); }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:'8px',
+                      padding:'6px 10px',
+                      borderRadius:'7px',
+                      fontSize:'12px', fontWeight:500,
+                      color: hiddenActive ? '#94A3B8' : '#CBD5E1',
+                      background: hiddenActive ? 'rgba(148,163,184,0.08)' : 'transparent',
+                      border:'none',
+                      cursor:'pointer',
+                      flex:1,
+                      whiteSpace:'nowrap',
+                      textAlign:'left',
+                    }}
+                    aria-label={'View ' + item.label + ' (currently hidden from members)'}
+                    className="focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-1 hover:text-slate-400"
+                  >
+                    <Icon path={ICONS[item.iconKey]} className="h-3.5 w-3.5" style={{ flexShrink:0, color:'#CBD5E1' }} />
+                    <span style={{ flex:1 }}>{item.label}</span>
+                    <span style={{ fontSize:'8px', fontWeight:700, padding:'1px 5px', borderRadius:'99px', background:'#F1F5F9', color:'#CBD5E1', border:'1px solid #E2E8F0', textTransform:'uppercase', letterSpacing:'0.5px', flexShrink:0 }}>
+                      Hidden
+                    </span>
+                  </button>
+                  <button
+                    onClick={function() { toggleNavItem(item.id); }}
+                    style={{
+                      width:'26px', height:'26px', flexShrink:0,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      background:'transparent', border:'none', borderRadius:'6px',
+                      cursor:'pointer', color:'#94A3B8', marginRight:'4px',
+                    }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    aria-label={'Show ' + item.label + ' in navigation'}
+                    title="Show in nav"
+                  >
+                    <Icon path={ICONS.eye} className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Edit nav toggle button — admin only */}
+        {isAdmin && (
+          <div style={{ marginTop:'8px', paddingTop:'8px', borderTop:'1px solid #F1F5F9' }}>
+            <button
+              onClick={function() { setEditingNav(function(p) { return !p; }); }}
+              style={{
+                display:'flex', alignItems:'center', gap:'6px',
+                width:'100%', padding:'6px 10px',
+                background: editingNav ? 'rgba(59,130,246,0.06)' : 'transparent',
+                border: editingNav ? '1px solid rgba(59,130,246,0.2)' : '1px solid transparent',
+                borderRadius:'7px',
+                fontSize:'11px', fontWeight:700,
+                color: editingNav ? '#3B82F6' : '#94A3B8',
+                cursor:'pointer', textAlign:'left',
+              }}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 hover:text-slate-500"
+              aria-pressed={editingNav}
+              aria-label={editingNav ? 'Done editing navigation' : 'Edit navigation visibility'}
+            >
+              <Icon
+                path={editingNav ? ICONS.x : ICONS.pencilEdit}
+                className="h-3 w-3"
+                style={{ flexShrink:0 }}
+              />
+              {editingNav ? 'Done editing' : 'Edit nav'}
+              {navSaving && (
+                <span style={{ marginLeft:'auto', fontSize:'9px', color:'#94A3B8', fontWeight:400 }}>Saving...</span>
+              )}
+            </button>
+
+            {editingNav && (
+              <p style={{ fontSize:'10px', color:'#94A3B8', padding:'4px 10px 2px', lineHeight:1.4 }}>
+                Toggle pages to show or hide them from members.
+              </p>
+            )}
+          </div>
+        )}
+      </>
+    );
   }
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
@@ -375,7 +586,7 @@ function OrgLayout() {
     return <OrgUnavailable orgName={organization && organization.name} />;
   }
 
-  // ── Listed plan gate — redirect to listing management page ────────────────
+  // ── Listed plan gate ──────────────────────────────────────────────────────
   if (!planData.loading && currentPlan === 'listed') {
     var listingPath = '/organizations/' + organizationId + '/listing';
     if (location.pathname !== listingPath) {
@@ -518,6 +729,36 @@ function OrgLayout() {
 
             {/* Page content */}
             <main style={{ flex:1, minWidth:0 }} role="main">
+              {(function() {
+                // Detect if the current route is a hidden page — admin-only banner
+                if (!isAdmin || hiddenNavItems.length === 0) return null;
+                var allItems = [];
+                buildNavGroups(organizationId, 0, 0).forEach(function(g) { g.items.forEach(function(i) { allItems.push(i); }); });
+                var currentHiddenItem = allItems.find(function(item) {
+                  return isItemHidden(item.id) && isActive(item);
+                });
+                if (!currentHiddenItem) return null;
+                return (
+                  <div
+                    style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 16px', marginBottom:'16px', background:'rgba(148,163,184,0.08)', border:'1px solid rgba(148,163,184,0.25)', borderRadius:'10px' }}
+                    role="status"
+                    aria-label="This page is hidden from members"
+                  >
+                    <Icon path={ICONS.eyeOff} className="h-4 w-4" style={{ color:'#94A3B8', flexShrink:0 }} />
+                    <p style={{ fontSize:'12px', color:'#64748B', flex:1, margin:0, lineHeight:1.5 }}>
+                      <strong style={{ color:'#475569' }}>{currentHiddenItem.label}</strong> is hidden from members — only you can see this page.
+                    </p>
+                    <button
+                      onClick={function() { toggleNavItem(currentHiddenItem.id); }}
+                      style={{ fontSize:'11px', fontWeight:700, color:'#3B82F6', background:'none', border:'none', cursor:'pointer', flexShrink:0, padding:'3px 8px', borderRadius:'6px' }}
+                      className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      aria-label={'Make ' + currentHiddenItem.label + ' visible to members'}
+                    >
+                      Unhide
+                    </button>
+                  </div>
+                );
+              })()}
               <Outlet context={{ organization:organization, membership:membership, isAdmin:isAdmin, viewMode:viewMode, organizationId:organizationId, accessStatus:accessStatus }} />
             </main>
 
