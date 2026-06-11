@@ -31,13 +31,65 @@ serve(async (req) => {
 
     event = JSON.parse(payload)
 
-    // ── Handle checkout.session.completed (ticket purchases) ──────────────
+    // ── Handle checkout.session.completed ─────────────────────────────────
     if (event.type === 'checkout.session.completed') {
       var session = event.data.object
       var metadata = session.metadata || {}
-      var eventId = metadata.event_id
-      var memberId = metadata.member_id
       var sessionType = metadata.type
+
+      // ── PROGRAM PAYMENT ──────────────────────────────────────────────────
+      if (sessionType === 'program') {
+        var programId = metadata.program_id
+        var orgId     = metadata.organization_id
+        var userId    = metadata.user_id
+
+        if (programId && orgId && userId) {
+          var paymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent && session.payment_intent.id) || null
+
+          // Fetch the program to check requires_approval
+          var { data: prog } = await supabase
+            .from('org_programs')
+            .select('requires_approval')
+            .eq('id', programId)
+            .single()
+
+          var newStatus = (prog && prog.requires_approval) ? 'pending' : 'enrolled'
+
+          // Update the registration row inserted at checkout creation
+          // Fall back to upsert in case row doesn't exist yet
+          var { error: regError } = await supabase
+            .from('program_registrations')
+            .update({
+              status: newStatus,
+              payment_status: 'paid',
+              payment_intent_id: paymentIntentId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('program_id', programId)
+            .eq('user_id', userId)
+            .eq('payment_status', 'pending')
+
+          if (regError) {
+            console.error('Program registration update error:', regError.message)
+            // Try insert as fallback
+            await supabase.from('program_registrations').insert({
+              program_id: programId,
+              user_id: userId,
+              organization_id: orgId,
+              status: newStatus,
+              payment_status: 'paid',
+              payment_intent_id: paymentIntentId,
+              updated_at: new Date().toISOString(),
+            })
+          }
+        }
+      }
+
+      // ── EVENT TICKET PURCHASE ────────────────────────────────────────────
+      var eventId  = metadata.event_id
+      var memberId = metadata.member_id
 
       if (sessionType === 'event_ticket' && eventId && memberId) {
         var lineItemsRes = await fetch(
@@ -51,9 +103,9 @@ serve(async (req) => {
         Object.keys(metadata).forEach(function(key) {
           if (key.startsWith('tt_')) {
             var val = metadata[key]
-            var parts = val.split(':')
-            var ttId = parts[0]
-            var qty = parseInt(parts[1]) || 1
+            var parts2 = val.split(':')
+            var ttId = parts2[0]
+            var qty = parseInt(parts2[1]) || 1
             ttMap[key.replace('tt_', '')] = { ticket_type_id: ttId, quantity: qty }
           }
         })
@@ -104,60 +156,57 @@ serve(async (req) => {
         }
       }
 
-      // DUES PAYMENT
-      if (session.metadata?.type === 'dues') {
-        var duesMemberId = session.metadata.member_id;
-        var duesOrgId = session.metadata.organization_id;
-        var duesTierId = session.metadata.tier_id || null;
-        var duesAmount = parseFloat(session.metadata.amount || '0');
-        var paymentIntentId = typeof session.payment_intent === 'string'
+      // ── DUES PAYMENT ─────────────────────────────────────────────────────
+      if (metadata.type === 'dues') {
+        var duesMemberId   = metadata.member_id
+        var duesOrgId      = metadata.organization_id
+        var duesTierId     = metadata.tier_id || null
+        var duesAmount     = parseFloat(metadata.amount || '0')
+        var duesPayIntent  = typeof session.payment_intent === 'string'
           ? session.payment_intent
-          : session.payment_intent?.id || null;
+          : (session.payment_intent && session.payment_intent.id) || null
 
         await supabase.from('dues_payments').insert({
           member_id: duesMemberId,
           organization_id: duesOrgId,
           tier_id: duesTierId || null,
           amount: duesAmount,
-          stripe_payment_intent_id: paymentIntentId,
+          stripe_payment_intent_id: duesPayIntent,
           paid_at: new Date().toISOString(),
-        });
+        })
 
-        var duesPaidUntil = new Date();
-        duesPaidUntil.setFullYear(duesPaidUntil.getFullYear() + 1);
+        var duesPaidUntil = new Date()
+        duesPaidUntil.setFullYear(duesPaidUntil.getFullYear() + 1)
 
         await supabase
           .from('memberships')
-          .update({
-            dues_paid: true,
-            dues_paid_until: duesPaidUntil.toISOString(),
-          })
+          .update({ dues_paid: true, dues_paid_until: duesPaidUntil.toISOString() })
           .eq('member_id', duesMemberId)
-          .eq('organization_id', duesOrgId);
+          .eq('organization_id', duesOrgId)
 
         try {
           var { data: duesMember } = await supabase
             .from('members')
             .select('email, first_name, last_name, display_name')
             .eq('user_id', duesMemberId)
-            .single();
+            .single()
           var { data: duesOrg } = await supabase
             .from('organizations')
             .select('name, logo_url')
             .eq('id', duesOrgId)
-            .single();
-          var duesTier = null;
+            .single()
+          var duesTierData = null
           if (duesTierId) {
-            var { data: tierData } = await supabase
+            var { data: tierRow } = await supabase
               .from('membership_tiers')
               .select('name')
               .eq('id', duesTierId)
-              .single();
-            duesTier = tierData;
+              .single()
+            duesTierData = tierRow
           }
           if (duesMember && duesMember.email) {
             var memberDisplayName = duesMember.display_name ||
-              ((duesMember.first_name || '') + ' ' + (duesMember.last_name || '')).trim();
+              ((duesMember.first_name || '') + ' ' + (duesMember.last_name || '')).trim()
             await fetch('https://zktmhqrygknkodydbumq.supabase.co/functions/v1/send-transactional', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -169,14 +218,14 @@ serve(async (req) => {
                   orgName: duesOrg ? duesOrg.name : '',
                   orgLogoUrl: duesOrg ? duesOrg.logo_url : '',
                   amount: duesAmount,
-                  tierName: duesTier ? duesTier.name : null,
+                  tierName: duesTierData ? duesTierData.name : null,
                   duesPaidUntil: duesPaidUntil.toISOString(),
                 },
               }),
-            });
+            })
           }
         } catch (emailErr) {
-          console.error('Dues confirmation email error:', emailErr);
+          console.error('Dues confirmation email error:', emailErr)
         }
       }
     }
@@ -187,7 +236,7 @@ serve(async (req) => {
         event.type === 'customer.subscription.deleted') {
 
       var subscription = event.data.object
-      var customerId = subscription.customer
+      var customerId   = subscription.customer
 
       var { data: subRecord } = await supabase
         .from('subscriptions')
@@ -196,25 +245,23 @@ serve(async (req) => {
         .single()
 
       if (subRecord) {
-        var status = subscription.status
-        var priceId = subscription.items?.data?.[0]?.price?.id
+        var status    = subscription.status
+        var priceId   = subscription.items && subscription.items.data && subscription.items.data[0] && subscription.items.data[0].price && subscription.items.data[0].price.id
         var stripeSubId = subscription.id
 
-        // ── Price ID → plan name mapping (update placeholders when Listed IDs are created in Stripe)
-        var PRICE_TO_PLAN: Record<string, string> = {
-         'price_1TbJvlKMpHjSZayWgtSa1gIH': 'listed',
-'price_1TbJwAKMpHjSZayWQ2REzDyi': 'listed',
-          'price_1TMnuAKMpHjSZayWhfMtS8AB':    'starter',
-          'price_1TMnuAKMpHjSZayWbYHYUoS8':    'starter',
-          'price_1TOKEKKMpHjSZayWoryYepSM':    'growth',
-          'price_1TMnu9KMpHjSZayW67fBSDzC':    'growth',
-          'price_1TMnu8KMpHjSZayWRcSF5Qez':    'pro',
-          'price_1TMnu7KMpHjSZayW34qmec4T':    'pro',
-          'price_1TOKB2KMpHjSZayWoq7QSqOA':    'student',
+        var PRICE_TO_PLAN = {
+          'price_1TbJvlKMpHjSZayWgtSa1gIH': 'listed',
+          'price_1TbJwAKMpHjSZayWQ2REzDyi':  'listed',
+          'price_1TMnuAKMpHjSZayWhfMtS8AB':  'starter',
+          'price_1TMnuAKMpHjSZayWbYHYUoS8':  'starter',
+          'price_1TOKEKKMpHjSZayWoryYepSM':  'growth',
+          'price_1TMnu9KMpHjSZayW67fBSDzC':  'growth',
+          'price_1TMnu8KMpHjSZayWRcSF5Qez':  'pro',
+          'price_1TMnu7KMpHjSZayW34qmec4T':  'pro',
+          'price_1TOKB2KMpHjSZayWoq7QSqOA':  'student',
         }
         var planName = (priceId && PRICE_TO_PLAN[priceId]) || 'starter'
 
-        // ── Annual price IDs (used to set billing_interval = 'year')
         var yearlyPrices = [
           'price_1TbJwAKMpHjSZayWQ2REzDyi',
           'price_1TMnuAKMpHjSZayWbYHYUoS8',

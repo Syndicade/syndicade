@@ -50,6 +50,19 @@ async function sbUpsert(path, data, serviceKey, supabaseUrl) {
   })
 }
 
+async function sbPatch(path, data, serviceKey, supabaseUrl) {
+  var res = await fetch(supabaseUrl + '/rest/v1' + path, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': 'Bearer ' + serviceKey,
+      'apikey': serviceKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+  return res
+}
+
 async function stripePost(path, body, secretKey) {
   var res = await fetch('https://api.stripe.com/v1' + path, {
     method: 'POST',
@@ -78,17 +91,14 @@ async function validatePromoCode(code, plan, serviceKey, supabaseUrl) {
 
   var dc = rows[0]
 
-  // Check expiry
   if (dc.expires_at && new Date(dc.expires_at) < new Date()) {
     return { valid: false, reason: 'Code has expired' }
   }
 
-  // Check max uses
   if (dc.max_uses !== null && dc.uses_count >= dc.max_uses) {
     return { valid: false, reason: 'Code has reached its usage limit' }
   }
 
-  // Check applicable plans
   if (dc.applicable_plans && !dc.applicable_plans.includes(plan)) {
     return { valid: false, reason: 'Code is not valid for this plan' }
   }
@@ -148,6 +158,95 @@ Deno.serve(async function(req) {
     if (!user.id) throw new Error('Unauthorized')
 
     var body = await req.json()
+
+    // ── PROGRAM PAYMENT BRANCH ────────────────────────────────────────────────
+    // Triggered when body.type === 'program'
+    if (body.type === 'program') {
+      var programId    = body.program_id
+      var orgId        = body.organization_id
+      var successUrl   = body.success_url
+      var cancelUrl    = body.cancel_url
+
+      if (!programId || !orgId) throw new Error('Missing program_id or organization_id')
+
+      // Fetch program details
+      var programs = await sbGet(
+        '/org_programs?id=eq.' + programId + '&select=id,name,cost_amount,cost_type,organization_id&limit=1',
+        SB_KEY, SB_URL
+      )
+      var program = programs && programs[0]
+      if (!program) throw new Error('Program not found')
+      if (program.organization_id !== orgId) throw new Error('Program does not belong to this organization')
+      if (program.cost_type !== 'paid') throw new Error('Program is not a paid program')
+      if (!program.cost_amount || parseFloat(program.cost_amount) <= 0) throw new Error('Invalid program price')
+
+      // Fetch org's connected Stripe account
+      var orgs = await sbGet(
+        '/organizations?id=eq.' + orgId + '&select=name,stripe_connect_account_id,stripe_connect_status&limit=1',
+        SB_KEY, SB_URL
+      )
+      var org = orgs && orgs[0]
+      if (!org) throw new Error('Organization not found')
+      if (!org.stripe_connect_account_id || org.stripe_connect_status !== 'active') {
+        throw new Error('Organization does not have an active Stripe Connect account')
+      }
+
+      var amountCents = Math.round(parseFloat(program.cost_amount) * 100)
+      // $1.00 platform fee in cents
+      var platformFeeCents = 100
+
+      var defaultSuccess = successUrl || ('https://syndicade.org/organizations/' + orgId + '/programs/' + programId + '?payment=success')
+      var defaultCancel  = cancelUrl  || ('https://syndicade.org/organizations/' + orgId + '/programs/' + programId + '?payment=cancelled')
+
+      var sessionParams = {
+        mode: 'payment',
+        'line_items[0][price_data][currency]': 'usd',
+        'line_items[0][price_data][product_data][name]': program.name,
+        'line_items[0][price_data][unit_amount]': String(amountCents),
+        'line_items[0][quantity]': '1',
+        'payment_intent_data[application_fee_amount]': String(platformFeeCents),
+        'payment_intent_data[transfer_data][destination]': org.stripe_connect_account_id,
+        'payment_intent_data[metadata][type]': 'program',
+        'payment_intent_data[metadata][program_id]': programId,
+        'payment_intent_data[metadata][organization_id]': orgId,
+        'payment_intent_data[metadata][user_id]': user.id,
+        success_url: defaultSuccess + (defaultSuccess.includes('?') ? '&' : '?') + 'session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: defaultCancel,
+        'metadata[type]': 'program',
+        'metadata[program_id]': programId,
+        'metadata[organization_id]': orgId,
+        'metadata[user_id]': user.id,
+      }
+
+      var stripeSession = await stripePost('/checkout/sessions', sessionParams, STRIPE_KEY)
+
+      // Insert registration row with payment_status = 'pending'
+      // Use upsert to handle duplicate gracefully
+      await fetch(SB_URL + '/rest/v1/program_registrations', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + SB_KEY,
+          'apikey': SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({
+          program_id: programId,
+          user_id: user.id,
+          organization_id: orgId,
+          status: 'pending',
+          payment_status: 'pending',
+          payment_intent_id: stripeSession.payment_intent || null,
+          updated_at: new Date().toISOString(),
+        }),
+      })
+
+      return new Response(JSON.stringify({ url: stripeSession.url }), {
+        headers: Object.assign({}, corsHeaders, { 'Content-Type': 'application/json' }),
+      })
+    }
+
+    // ── SUBSCRIPTION / PLAN BRANCH (existing logic unchanged) ────────────────
     var org_id = body.organization_id
     var plan = body.plan
     var interval = body.interval
@@ -162,7 +261,6 @@ Deno.serve(async function(req) {
     var membership = memberships && memberships[0]
     if (!membership || !['admin','owner'].includes(membership.role)) throw new Error('Admin required')
 
-    // ── Validate promo code if provided ──────────────────────────────────────
     var validatedCode = null
     if (promo_code) {
       var codeResult = await validatePromoCode(promo_code, plan, SB_KEY, SB_URL)
@@ -182,42 +280,37 @@ Deno.serve(async function(req) {
     var customerId = subs && subs[0] && subs[0].stripe_customer_id
 
     if (!customerId) {
-      var orgs = await sbGet('/organizations?id=eq.' + org_id + '&select=name&limit=1', SB_KEY, SB_URL)
+      var subOrgs = await sbGet('/organizations?id=eq.' + org_id + '&select=name&limit=1', SB_KEY, SB_URL)
       var members = await sbGet('/members?user_id=eq.' + user.id + '&select=email&limit=1', SB_KEY, SB_URL)
       var customer = await stripePost('/customers', {
         email: (members && members[0] && members[0].email) || '',
-        name: (orgs && orgs[0] && orgs[0].name) || '',
+        name: (subOrgs && subOrgs[0] && subOrgs[0].name) || '',
         'metadata[organization_id]': org_id,
       }, STRIPE_KEY)
       customerId = customer.id
     }
 
-    // ── Plan guards ───────────────────────────────────────────────────────────
     if (plan === 'student' && interval === 'year') throw new Error('Student plan is monthly only')
 
     var priceId = PRICE_IDS[plan + '_' + interval]
     if (!priceId) throw new Error('Invalid plan or interval')
 
-    // ── Success/cancel URLs ───────────────────────────────────────────────────
-    var defaultSuccess = plan === 'listed'
+    var defaultSuccess2 = plan === 'listed'
       ? 'https://syndicade.org/organizations/' + org_id + '/listing?billing=success'
       : 'https://syndicade.org/organizations/' + org_id + '/billing?billing=success'
-    var defaultCancel = plan === 'listed'
+    var defaultCancel2 = plan === 'listed'
       ? 'https://syndicade.org/organizations/' + org_id + '/listing?billing=cancelled'
       : 'https://syndicade.org/organizations/' + org_id + '/billing?billing=cancelled'
 
-    var successUrl = body.success_url || defaultSuccess
-    var cancelUrl  = body.cancel_url  || defaultCancel
+    var successUrl2 = body.success_url || defaultSuccess2
+    var cancelUrl2  = body.cancel_url  || defaultCancel2
 
-    // ── Calculate trial days ──────────────────────────────────────────────────
-    // months_free extends trial; percent_off and flat_off apply via Stripe coupon instead
     var trialDays = TRIAL_DAYS
     if (validatedCode && validatedCode.type === 'months_free') {
       trialDays = Math.max(TRIAL_DAYS, Math.round(validatedCode.value * 30))
     }
 
-    // ── Build Stripe session params ───────────────────────────────────────────
-    var sessionParams = {
+    var sessionParams2 = {
       customer: customerId,
       mode: 'subscription',
       'line_items[0][price]': priceId,
@@ -225,33 +318,26 @@ Deno.serve(async function(req) {
       'subscription_data[trial_period_days]': String(trialDays),
       'subscription_data[metadata][organization_id]': org_id,
       payment_method_collection: 'if_required',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: successUrl2,
+      cancel_url: cancelUrl2,
       'metadata[organization_id]': org_id,
     }
 
-    // ── Apply Stripe coupon for percent_off and flat_off ──────────────────────
-    // months_free is handled via trial extension above — no coupon needed
     if (validatedCode && (validatedCode.type === 'percent_off' || validatedCode.type === 'flat_off')) {
       if (validatedCode.stripe_coupon_id) {
-        // Apply to the subscription so it persists on recurring invoices (percent_off: forever)
-        // or applies to first invoice only (flat_off: once) — both handled by Stripe coupon duration
-        sessionParams['discounts[0][coupon]'] = validatedCode.stripe_coupon_id
+        sessionParams2['discounts[0][coupon]'] = validatedCode.stripe_coupon_id
       } else {
-        // stripe_coupon_id missing — code was created before Stripe integration
-        // Log warning but don't block checkout; discount won't apply in Stripe
         console.warn('Promo code ' + validatedCode.code + ' has no stripe_coupon_id — discount not applied in Stripe')
       }
     }
 
     if (validatedCode) {
-      sessionParams['metadata[promo_code]'] = validatedCode.code
-      sessionParams['metadata[promo_code_id]'] = validatedCode.id
+      sessionParams2['metadata[promo_code]'] = validatedCode.code
+      sessionParams2['metadata[promo_code_id]'] = validatedCode.id
     }
 
-    var session = await stripePost('/checkout/sessions', sessionParams, STRIPE_KEY)
+    var session = await stripePost('/checkout/sessions', sessionParams2, STRIPE_KEY)
 
-    // ── Save subscription record ──────────────────────────────────────────────
     await sbUpsert('/subscriptions', {
       organization_id: org_id,
       stripe_customer_id: customerId,
@@ -263,7 +349,6 @@ Deno.serve(async function(req) {
       updated_at: new Date().toISOString(),
     }, SB_KEY, SB_URL)
 
-    // ── Record promo code use AFTER successful session creation ───────────────
     if (validatedCode) {
       try {
         await recordPromoCodeUse(validatedCode.id, org_id, plan, interval, SB_KEY, SB_URL)

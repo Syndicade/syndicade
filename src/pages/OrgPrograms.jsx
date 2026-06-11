@@ -73,6 +73,8 @@ var ICONS = {
   upload:      ['M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
 };
 
+var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
+
 var EMPTY_FORM = {
   name: '', description: '', audience: '', schedule: '',
   start_date: '', end_date: '', start_time: '', end_time: '',
@@ -758,34 +760,74 @@ function OrgPrograms() {
   }
 
   // ── Registration ──────────────────────────────────────────────────────────
-  async function handleRegister(e, program) {
-    e.preventDefault(); e.stopPropagation();
-    if (!currentUserId) { navigate('/login'); return; }
-    var countRes = await supabase.from('program_registrations').select('id', { count: 'exact', head: true }).eq('program_id', program.id).eq('status', 'enrolled');
-    var cap = program.capacity;
-    if (cap != null && countRes.count >= cap) { toast.error('This program is full.'); return; }
-    var status = program.requires_approval ? 'pending' : 'enrolled';
-    var result = await supabase.from('program_registrations').insert({ program_id: program.id, user_id: currentUserId, organization_id: organizationId, status: status });
-    if (result.error) {
-      if (result.error.code === '23505') { toast.error('You are already registered.'); return; }
-      mascotErrorToast('Registration failed.', 'Please try again.');
+async function handleRegister(e, program) {
+  e.preventDefault(); e.stopPropagation();
+  if (!currentUserId) { navigate('/login'); return; }
+
+  // Paid programs — route through Stripe
+  if (program.cost_type === 'paid' && program.cost_amount && parseFloat(program.cost_amount) > 0) {
+    var orgResult = await supabase.from('organizations').select('stripe_connect_account_id, stripe_connect_status').eq('id', organizationId).single();
+    var hasConnect = orgResult.data && orgResult.data.stripe_connect_account_id && orgResult.data.stripe_connect_status === 'active';
+    if (!hasConnect) { toast.error('This program cannot accept payments right now.'); return; }
+    try {
+      var authRes = await supabase.auth.getSession();
+      var token = authRes.data.session ? authRes.data.session.access_token : '';
+      var res = await fetch(SUPABASE_URL + '/functions/v1/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          type: 'program',
+          program_id: program.id,
+          organization_id: organizationId,
+          success_url: window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=success',
+          cancel_url: window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=cancelled',
+        }),
+      });
+      var data = await res.json();
+      if (!res.ok || !data.url) { mascotErrorToast('Could not start checkout.', data.error || 'Please try again.'); return; }
+      window.location.href = data.url;
+      return;
+    } catch(err) {
+      mascotErrorToast('Checkout failed.', 'Check your connection and try again.');
       return;
     }
-    setMyRegistrations(function(prev) {
-      var next = Object.assign({}, prev);
-      next[program.id] = { program_id: program.id, status: status };
-      return next;
-    });
-    mascotSuccessToast(status === 'enrolled' ? 'Registered!' : 'Request submitted!', status === 'enrolled' ? 'You are now enrolled in ' + program.name + '.' : 'Your registration is pending approval.');
-    try {
-      var notifModule = await import('../lib/notificationService');
-      var authRes = await supabase.auth.getUser();
-      var membersRes = await supabase.from('members').select('first_name, last_name').eq('user_id', authRes.data.user.id).single();
-      var memberName = membersRes.data ? membersRes.data.first_name + ' ' + membersRes.data.last_name : 'A member';
-      await notifModule.notifyOrgAdmins({ organizationId, type: 'program_registration', title: program.name, message: memberName + (status === 'enrolled' ? ' registered for ' : ' requested to join ') + program.name + '.', link: '/organizations/' + organizationId + '/programs', excludeUserId: currentUserId });
-      window.dispatchEvent(new CustomEvent('notificationCreated'));
-    } catch(ne) { console.error('Registration notification failed:', ne); }
   }
+
+  // Free / donation programs — direct insert
+  var countRes = await supabase.from('program_registrations').select('id', { count: 'exact', head: true }).eq('program_id', program.id).eq('status', 'enrolled');
+  var cap = program.capacity;
+  if (cap != null && countRes.count >= cap) { toast.error('This program is full.'); return; }
+  var status = program.requires_approval ? 'pending' : 'enrolled';
+  var result = await supabase.from('program_registrations').insert({
+    program_id: program.id,
+    user_id: currentUserId,
+    organization_id: organizationId,
+    status: status,
+    payment_status: 'not_required',
+  });
+  if (result.error) {
+    if (result.error.code === '23505') { toast.error('You are already registered.'); return; }
+    mascotErrorToast('Registration failed.', 'Please try again.');
+    return;
+  }
+  setMyRegistrations(function(prev) {
+    var next = Object.assign({}, prev);
+    next[program.id] = { program_id: program.id, status: status };
+    return next;
+  });
+  mascotSuccessToast(
+    status === 'enrolled' ? 'Registered!' : 'Request submitted!',
+    status === 'enrolled' ? 'You are now enrolled in ' + program.name + '.' : 'Your registration is pending approval.'
+  );
+  try {
+    var notifModule = await import('../lib/notificationService');
+    var authRes2 = await supabase.auth.getUser();
+    var membersRes = await supabase.from('members').select('first_name, last_name').eq('user_id', authRes2.data.user.id).single();
+    var memberName = membersRes.data ? membersRes.data.first_name + ' ' + membersRes.data.last_name : 'A member';
+    await notifModule.notifyOrgAdmins({ organizationId, type: 'program_registration', title: program.name, message: memberName + (status === 'enrolled' ? ' registered for ' : ' requested to join ') + program.name + '.', link: '/organizations/' + organizationId + '/programs', excludeUserId: currentUserId });
+    window.dispatchEvent(new CustomEvent('notificationCreated'));
+  } catch(ne) { console.error('Registration notification failed:', ne); }
+}
 
   async function handleCancelRegistration(e, program) {
     e.preventDefault(); e.stopPropagation();
@@ -1059,7 +1101,7 @@ function OrgPrograms() {
                   onClick={function(e) {
                     if (isDragEnabled) return;
                     if (e.target.closest('button')) return;
-                    navigate('/organizations/' + organizationId + '/programs/' + program.id);
+                    navigate('/organizations/' + organizationId + '/programs/' + program.id, { state: { from: 'org-programs' } });
                   }}
                   style={{
                     background:    program.is_public ? CARD_BG : CARD_ALT,
@@ -1077,12 +1119,12 @@ function OrgPrograms() {
                   {/* Invisible overlay — makes whole card clickable */}
                   <Link
                     to={'/organizations/' + organizationId + '/programs/' + program.id}
+                    state={{ from: 'org-programs' }}
                     onClick={function(e) { if (isDragEnabled) e.preventDefault(); }}
                     aria-label={'View details for ' + program.name}
                     style={{ position: 'absolute', inset: 0, zIndex: 0 }}
                     tabIndex={0}
                   />
-
                   {/* Program image */}
                   {program.image_url ? (
                     <div style={{ height: '140px', overflow: 'hidden', flexShrink: 0, position: 'relative', zIndex: 1, borderRadius: '12px 12px 0 0' }}>

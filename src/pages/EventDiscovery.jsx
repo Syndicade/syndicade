@@ -213,7 +213,10 @@ function ProgramCardSkeleton() {
 export default function EventDiscovery() {
   var [session, setSession] = useState(null);
   var [sessionLoading, setSessionLoading] = useState(true);
-  var [viewMode, setViewMode] = useState('events');
+  var [viewMode, setViewMode] = useState(function() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('tab') === 'programs' ? 'programs' : 'events';
+  });
   var [verifiedOnly, setVerifiedOnly] = useState(true);
   var [filters, setFilters] = useState(DEFAULT_FILTERS);
   var [keyword, setKeyword] = useState('');

@@ -162,6 +162,7 @@ var hideChrome = (
             <Route path="/calendar" element={session ? <EventCalendar /> : <Navigate to="/login" replace />} />
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/events/:eventId" element={<EventDetails />} />
+            <Route path="/organizations/:organizationId/programs/:programId" element={<ProgramDetail />} />
 
             {/* ── Check-in ───────────────────────────────────────── */}
             <Route path="/check-in/:eventId" element={<CheckInPage />} />
@@ -202,7 +203,6 @@ var hideChrome = (
               <Route path="signup-forms" element={<SignupFormsList />} />
               <Route path="surveys" element={<SurveysList />} />
               <Route path="programs" element={<OrgPrograms />} />
-              <Route path="programs/:programId" element={<ProgramDetail />} />
               <Route path="scheduling" element={<SchedulingPolls />} />
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />

@@ -238,10 +238,13 @@ function OrgLayout() {
 
       var memResult = await supabase.from('memberships').select('id,role,status').eq('organization_id', organizationId).eq('member_id', userId).eq('status', 'active').maybeSingle();
       if (memResult.error) throw memResult.error;
-      if (!memResult.data) { setError('You are not a member of this organization.'); setLoading(false); return; }
-      setMembership(memResult.data);
 
-      if (memResult.data.role === 'admin') {
+      // Allow non-members to view program detail pages when navigating from discover
+      var isProgramDetailRoute = location.pathname.match(/\/programs\/[^/]+$/);
+      if (!memResult.data && !isProgramDetailRoute) { setError('You are not a member of this organization.'); setLoading(false); return; }
+      setMembership(memResult.data || null);
+
+      if (memResult.data && memResult.data.role === 'admin') {
         supabase.from('contact_inquiries').select('*', { count:'exact', head:true }).eq('organization_id', organizationId).eq('is_read', false).then(function(r) { setUnreadCount(r.count || 0); });
         var tables = ['events','announcements','polls','surveys','signup_forms'];
         var total = 0;
