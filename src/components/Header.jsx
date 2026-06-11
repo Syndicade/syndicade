@@ -62,6 +62,22 @@ function Header() {
   var cardBg        = '#FFFFFF';
   var hoverBg       = '#F1F5F9';
 
+  function NavBtn({ path, label, style, hoverStyle }) {
+    var active = location.pathname === path;
+    return (
+      <button
+        onClick={function() { navigate(path); }}
+        style={Object.assign({ color: active ? textPrimary : textSecondary, background: active ? hoverBg : 'transparent', fontWeight: active ? 700 : 500 }, style)}
+        className="text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = (hoverStyle && hoverStyle.background) || hoverBg; }}
+        onMouseLeave={function(e) { e.currentTarget.style.color = active ? textPrimary : (style && style.color) || textSecondary; e.currentTarget.style.background = active ? hoverBg : (style && style.background) || 'transparent'; }}
+        aria-current={active ? 'page' : undefined}
+      >
+        {label}
+      </button>
+    );
+  }
+
   return (
     <header style={{ background: '#FFFFFF', borderBottom: '1px solid ' + headerBorder }} className="sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -80,32 +96,19 @@ function Header() {
           {/* Nav — logged in */}
           {currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
-              {[
-                { label: 'Dashboard',       path: '/dashboard' },
-                { label: 'Discover Events', path: '/discover'  },
-                { label: 'Explore Orgs',    path: '/explore'   },
-                { label: 'Calendar',        path: '/calendar'  },
-              ].map(function(item) {
-                return (
-                  <button
-                    key={item.path}
-                    onClick={function() { navigate(item.path); }}
-                    style={{ color: textSecondary }}
-                    className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }}
-                    onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
+              <NavBtn path="/dashboard"     label="Dashboard" />
+              <NavBtn path="/discover"      label="Discover Events" />
+              <NavBtn path="/explore"       label="Explore Orgs" />
+              <NavBtn path="/opportunities" label="Opportunities" />
+              <NavBtn path="/funding"       label="Funding" />
               {firstAdminOrg && (
                 <button
                   onClick={function() { navigate('/community-board/hub'); }}
-                  style={{ color: '#A78BFA', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}
-                  className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+                  style={{ color: '#A78BFA', background: location.pathname.startsWith('/community-board') ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', fontWeight: 500 }}
+                  className="text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
                   onMouseEnter={function(e) { e.currentTarget.style.background = 'rgba(139,92,246,0.2)'; }}
                   onMouseLeave={function(e) { e.currentTarget.style.background = 'rgba(139,92,246,0.1)'; }}
+                  aria-current={location.pathname.startsWith('/community-board') ? 'page' : undefined}
                 >
                   Community Board
                 </button>
@@ -117,16 +120,18 @@ function Header() {
           {!currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
               {location.pathname !== '/features' && (
-                <button onClick={function() { navigate('/features'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Features</button>
+                <NavBtn path="/features" label="Features" />
               )}
               {location.pathname !== '/pricing' && (
-                <button onClick={function() { navigate('/pricing'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Pricing</button>
+                <NavBtn path="/pricing" label="Pricing" />
               )}
               {location.pathname !== '/compare' && (
-  <button onClick={function() { navigate('/compare'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Compare Costs</button>
-)}
-              <button onClick={function() { navigate('/discover'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Discover Events</button>
-              <button onClick={function() { navigate('/explore'); }} style={{ color: textSecondary }} className="font-medium text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" onMouseEnter={function(e) { e.currentTarget.style.color = textPrimary; e.currentTarget.style.background = hoverBg; }} onMouseLeave={function(e) { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'transparent'; }}>Explore Orgs</button>
+                <NavBtn path="/compare" label="Compare Costs" />
+              )}
+              <NavBtn path="/discover"      label="Discover Events" />
+              <NavBtn path="/explore"       label="Explore Orgs" />
+              <NavBtn path="/opportunities" label="Opportunities" />
+              <NavBtn path="/funding"       label="Funding" />
             </nav>
           )}
 
@@ -168,7 +173,6 @@ function Header() {
                         <p className="text-xs truncate" style={{ color: textMuted }}>{currentUser.email}</p>
                       </div>
 
-                      {/* Single "Account Settings" entry — covers profile + account + privacy */}
                       <button
                         onClick={function() { setUserMenuOpen(false); navigate('/account-settings'); }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm focus:outline-none transition-colors text-left"

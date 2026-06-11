@@ -36,6 +36,9 @@ import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
 import ProgramDetail from './pages/ProgramDetail';
+import OrgOpportunities from './pages/OrgOpportunities';
+import OrgFunding from './pages/OrgFunding';
+import FundingDiscovery from './pages/FundingDiscovery';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
@@ -47,6 +50,7 @@ import GroupDetail from './pages/GroupDetail';
 import OnboardingPage from './pages/OnboardingPage';
 import WishlistPage from './pages/WishlistPage';
 import OrganizationDiscovery from './pages/OrganizationDiscovery';
+import OpportunityDiscovery from './pages/OpportunityDiscovery';
 import CommunityBoardHub from './pages/CommunityBoardHub';
 import CommunityBoard from './pages/CommunityBoard';
 import CommunityBoardJoin from './pages/CommunityBoardJoin';
@@ -163,6 +167,8 @@ var hideChrome = (
             <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" replace />} />
             <Route path="/events/:eventId" element={<EventDetails />} />
             <Route path="/organizations/:organizationId/programs/:programId" element={<ProgramDetail />} />
+            <Route path="/opportunities" element={<OpportunityDiscovery />} />
+            <Route path="/funding" element={<FundingDiscovery />} />
 
             {/* ── Check-in ───────────────────────────────────────── */}
             <Route path="/check-in/:eventId" element={<CheckInPage />} />
@@ -203,6 +209,8 @@ var hideChrome = (
               <Route path="signup-forms" element={<SignupFormsList />} />
               <Route path="surveys" element={<SurveysList />} />
               <Route path="programs" element={<OrgPrograms />} />
+              <Route path="opportunities" element={<OrgOpportunities />} />
+              <Route path="funding" element={<OrgFunding />} />
               <Route path="scheduling" element={<SchedulingPolls />} />
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />

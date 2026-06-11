@@ -77,6 +77,8 @@ var ICONS = {
   contacts:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
   tasks:      ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
   scheduling: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  opportunities: ['M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+funding:       ['M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
   // eye / eye-off for hide/show
   eye:        ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
   eyeOff:     ['M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'],
@@ -92,7 +94,6 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       items: [
         { id:'overview',      label:'Overview',      iconKey:'overview',   route:'',              path: base,                            roles:['admin','member'] },
         { id:'events',        label:'Events',        iconKey:'calendar',   route:'events',        path: base + '/events',                roles:['admin','member'], tourKey:'tour-events-nav' },
-        { id:'announcements', label:'Announcements', iconKey:'megaphone',  route:'announcements', path: base + '/announcements',         roles:['admin','member'], tourKey:'tour-announcements-nav' },
         { id:'members',       label:'Members',       iconKey:'members',    route:'members',       path: base + '/members',               roles:['admin','member'], tourKey:'tour-members-nav' },
         { id:'groups',        label:'Groups',        iconKey:'groups',     route:'groups',        path: base + '/groups',                roles:['admin','member'] },
         { id:'chat',          label:'Chat',          iconKey:'chat',       route:'chat',          path: base + '/chat',                  roles:['admin','member'] },
@@ -101,13 +102,21 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
       ]
     },
     {
-      label: 'Tools',
+      label: 'Community',
       items: [
-        { id:'polls',       label:'Polls',           iconKey:'polls',      route:'polls',         path: base + '/polls' },
-        { id:'surveys',     label:'Surveys',         iconKey:'surveys',    route:'surveys',       path: base + '/surveys' },
-        { id:'forms',       label:'Sign-Up Forms',   iconKey:'forms',      route:'signup-forms',  path: base + '/signup-forms' },
-        { id:'programs',    label:'Programs',        iconKey:'programs',   route:'programs',      path: base + '/programs' },
-        { id:'scheduling',  label:'Scheduling',      iconKey:'scheduling', route:'scheduling',    path: base + '/scheduling' },
+        { id:'programs',      label:'Programs',      iconKey:'programs',   route:'programs',      path: base + '/programs' },
+        { id:'opportunities', label:'Opportunities', iconKey:'opportunities', route:'opportunities', path: base + '/opportunities', lock:'verified' },
+        { id:'funding',       label:'Funding',       iconKey:'funding',    route:'funding',       path: base + '/funding',       lock:'verified' },
+      ]
+    },
+    {
+      label: 'Engagement',
+      items: [
+        { id:'announcements', label:'Announcements', iconKey:'megaphone',  route:'announcements', path: base + '/announcements',         roles:['admin','member'], tourKey:'tour-announcements-nav' },
+        { id:'polls',         label:'Polls',         iconKey:'polls',      route:'polls',         path: base + '/polls' },
+        { id:'surveys',       label:'Surveys',       iconKey:'surveys',    route:'surveys',       path: base + '/surveys' },
+        { id:'forms',         label:'Sign-Up Forms', iconKey:'forms',      route:'signup-forms',  path: base + '/signup-forms' },
+        { id:'scheduling',    label:'Scheduling',    iconKey:'scheduling', route:'scheduling',    path: base + '/scheduling' },
       ]
     },
     {
@@ -309,7 +318,11 @@ function OrgLayout() {
 
           return (
             <div key={group.label} style={{ marginBottom:'4px' }}>
-              <p style={{ fontSize:'9px', fontWeight:700, letterSpacing:'3px', textTransform:'uppercase', color: textMuted, padding:'8px 10px 3px' }}>{group.label}</p>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px', padding:'10px 10px 4px', marginTop:'2px' }}>
+              <div style={{ height:'1px', width:'8px', background:'#E2E8F0', flexShrink:0 }} aria-hidden="true" />
+              <p style={{ fontSize:'9px', fontWeight:800, letterSpacing:'3px', textTransform:'uppercase', color:'#94A3B8', margin:0, whiteSpace:'nowrap' }}>{group.label}</p>
+              <div style={{ height:'1px', flex:1, background:'#E2E8F0' }} aria-hidden="true" />
+            </div>
               {visibleItems.map(function(item) {
                 var active = isActive(item);
                 var hidden = isItemHidden(item.id);

@@ -63,6 +63,8 @@ var TYPE_CONFIG = {
   program_registration:    { icon: ICONS.program,   color: '#F5B731',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/programs' : (n.link || null); } },
   new_signup_form:         { icon: ICONS.signup,    color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/signup-forms' : (n.link || null); } },
   inbox_message:           { icon: ICONS.mail,      color: '#3B82F6',  linkFn: function(n) { return n.organization_id ? '/organizations/' + n.organization_id + '/inbox' : (n.link || null); } },
+  new_opportunity:         { icon: ICONS.program,   color: '#3B82F6', linkFn: function(n) { return n.link || (n.organization_id ? '/organizations/' + n.organization_id + '/opportunities' : null); } },
+  new_funding:             { icon: ICONS.program,   color: '#16A34A', linkFn: function(n) { return n.link || (n.organization_id ? '/organizations/' + n.organization_id + '/funding' : null); } },
 };
 
 function getTypeConfig(type) {
