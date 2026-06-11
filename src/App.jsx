@@ -35,6 +35,7 @@ import OrgChat from './pages/OrgChat';
 import SurveysList from './pages/SurveysList';
 import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
+import ProgramDetail from './pages/ProgramDetail';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
 import AccountSettings from './pages/AccountSettings';
@@ -201,6 +202,7 @@ var hideChrome = (
               <Route path="signup-forms" element={<SignupFormsList />} />
               <Route path="surveys" element={<SurveysList />} />
               <Route path="programs" element={<OrgPrograms />} />
+              <Route path="programs/:programId" element={<ProgramDetail />} />
               <Route path="scheduling" element={<SchedulingPolls />} />
               <Route path="groups" element={<GroupsList />} />
               <Route path="groups/:groupId" element={<GroupDetail />} />
