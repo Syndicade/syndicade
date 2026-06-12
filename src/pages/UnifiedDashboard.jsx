@@ -298,10 +298,22 @@ function PostItCard({ item, orgNoteBg, onDismiss, onToggleImportant, isImportant
     bg = '#EDE9FE'; accentColor = '#5B21B6'
     tagBgColor = 'rgba(139,92,246,0.2)'; tagTxtColor = '#5B21B6'
     tagLabel = 'Document'; TagIcon = IcoDoc
-  } else if (item.priority === 'urgent') {
+} else if (item.priority === 'urgent') {
     bg = '#FEE2E2'; accentColor = '#B91C1C'
     tagBgColor = 'rgba(239,68,68,0.2)'; tagTxtColor = '#B91C1C'
     tagLabel = 'Urgent'; TagIcon = IcoAlert
+  } else if (item.type === 'opportunity') {
+    bg = '#DBEAFE'; accentColor = '#1D4ED8'
+    tagBgColor = 'rgba(59,130,246,0.2)'; tagTxtColor = '#1E40AF'
+    tagLabel = 'Opportunity'; TagIcon = IcoDoc
+  } else if (item.type === 'funding') {
+    bg = '#DCFCE7'; accentColor = '#15803D'
+    tagBgColor = 'rgba(34,197,94,0.2)'; tagTxtColor = '#15803D'
+    tagLabel = 'Funding'; TagIcon = IcoDoc
+  } else if (item.type === 'program') {
+    bg = '#EDE9FE'; accentColor = '#5B21B6'
+    tagBgColor = 'rgba(139,92,246,0.2)'; tagTxtColor = '#5B21B6'
+    tagLabel = 'Program'; TagIcon = IcoDoc
   } else {
     bg = orgNoteBg || '#FEF9C3'; accentColor = '#92400E'
     tagBgColor = 'rgba(0,0,0,0.1)'; tagTxtColor = '#374151'
@@ -837,7 +849,9 @@ function ActivityIcon({ type }) {
   if (type === 'poll')          return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
   if (type === 'survey')        return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
   if (type === 'signup_form')   return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-  if (type === 'program')       return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+  if (type === 'program')       return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+  if (type === 'opportunity')   return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+  if (type === 'funding')       return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
   return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 }
 function getActivityConfig(type) {
@@ -847,6 +861,8 @@ function getActivityConfig(type) {
   if (type === 'survey')        return { bg:'#FEF3C7', color:'#F59E0B', label:'Survey'       }
   if (type === 'signup_form')   return { bg:'#CCFBF1', color:'#14B8A6', label:'Sign-Up Form' }
   if (type === 'program')       return { bg:'#E0E7FF', color:'#6366F1', label:'Program'      }
+  if (type === 'opportunity')   return { bg:'#DBEAFE', color:'#3B82F6', label:'Opportunity'  }
+  if (type === 'funding')       return { bg:'#DCFCE7', color:'#22C55E', label:'Funding'      }
   return { bg:'#F1F5F9', color:'#64748B', label:'Activity' }
 }
 
@@ -1324,7 +1340,7 @@ function UnifiedDashboard() {
   var [activeTab,           setActiveTab]            = useState('all')
   var [eventsView,          setEventsView]           = useState('list')
   var [orgFilter,           setOrgFilter]            = useState('all')
-  var [dateFilter,          setDateFilter]           = useState('2weeks')
+  var [dateFilter,          setDateFilter]           = useState('week')
 
   // ── localStorage state (Rec #2: capped at LS_CAP) ──
   var [dismissedActivities, setDismissedActivities]  = useState(function() { return lsRead('dismissedActivities') })
@@ -1528,16 +1544,47 @@ function UnifiedDashboard() {
       .order('created_at', { ascending: false })
       .limit(30)
 
+      var programFeed = await supabase
+      .from('org_programs')
+      .select('id, name, created_at, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+var oppFeed = await supabase
+      .from('org_opportunities')
+      .select('id, title, created_at, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .neq('visibility', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    var fundFeed = await supabase
+      .from('org_funding')
+      .select('id, title, created_at, organization:organizations (id, name)')
+      .in('organization_id', orgIds)
+      .neq('visibility', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(20)
+
     var all = [
       ...(annFeed.data || []).map(function(item) {
         return { id: 'announcement-' + item.id, type: 'announcement', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, priority: item.priority, time: timeAgo(item.created_at) }
       }),
       ...(evtFeed.data || []).map(function(item) {
-        // Task 42: store start_time so we can filter past events
         return { id: 'event-' + item.id, type: 'event', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, startTime: item.start_time, time: timeAgo(item.created_at) }
       }),
       ...(docFeed.data || []).map(function(item) {
         return { id: 'document-' + item.id, type: 'document', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) }
+      }),
+      ...(programFeed.data || []).map(function(item) {
+        return { id: 'program-' + item.id, type: 'program', title: item.name, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) }
+      }),
+      ...(oppFeed.data || []).map(function(item) {
+        return { id: 'opportunity-' + item.id, type: 'opportunity', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) }
+      }),
+      ...(fundFeed.data || []).map(function(item) {
+        return { id: 'funding-' + item.id, type: 'funding', title: item.title, organizationName: item.organization.name, organizationId: item.organization.id, timestamp: item.created_at, time: timeAgo(item.created_at) }
       }),
     ]
     all.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
@@ -1565,7 +1612,9 @@ function UnifiedDashboard() {
       var pollsRes    = await supabase.from('polls').select('id, question, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
       var surveysRes  = await supabase.from('surveys').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20)
       var formsRes    = await supabase.from('signup_forms').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
-      var programsRes = await supabase.from('org_programs').select('id, name, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
+      var programsRes      = await supabase.from('org_programs').select('id, name, created_at, organizations(id, name)').in('organization_id', orgIds).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
+      var opportunitiesRes = await supabase.from('org_opportunities').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).neq('visibility', 'draft').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
+      var fundingRes       = await supabase.from('org_funding').select('id, title, created_at, organizations(id, name)').in('organization_id', orgIds).neq('visibility', 'draft').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(10)
       var items = []
       ;(membersRes.data || []).forEach(function(m) {
         var mn = m.members ? (m.members.first_name + ' ' + m.members.last_name).trim() : 'A new member'
@@ -1575,7 +1624,9 @@ function UnifiedDashboard() {
       ;(pollsRes.data    || []).forEach(function(p)  { items.push({ id: 'poll-'    + p.id,  type: 'poll',        title: p.question, orgName: p.organizations  ? p.organizations.name  : '', orgId: p.organizations  ? p.organizations.id  : null, timestamp: p.created_at  }) })
       ;(surveysRes.data  || []).forEach(function(s)  { items.push({ id: 'survey-'  + s.id,  type: 'survey',      title: s.title,    orgName: s.organizations  ? s.organizations.name  : '', orgId: s.organizations  ? s.organizations.id  : null, timestamp: s.created_at  }) })
       ;(formsRes.data    || []).forEach(function(f)  { items.push({ id: 'form-'    + f.id,  type: 'signup_form', title: f.title,    orgName: f.organizations  ? f.organizations.name  : '', orgId: f.organizations  ? f.organizations.id  : null, timestamp: f.created_at  }) })
-      ;(programsRes.data || []).forEach(function(pr) { items.push({ id: 'program-' + pr.id, type: 'program',     title: pr.name,    orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at }) })
+      ;(programsRes.data      || []).forEach(function(pr) { items.push({ id: 'program-'     + pr.id, type: 'program',     title: pr.name,  orgName: pr.organizations ? pr.organizations.name : '', orgId: pr.organizations ? pr.organizations.id : null, timestamp: pr.created_at }) })
+      ;(opportunitiesRes.data || []).forEach(function(op) { items.push({ id: 'opportunity-' + op.id, type: 'opportunity', title: op.title, orgName: op.organizations ? op.organizations.name : '', orgId: op.organizations ? op.organizations.id : null, timestamp: op.created_at }) })
+      ;(fundingRes.data       || []).forEach(function(fn) { items.push({ id: 'funding-'     + fn.id, type: 'funding',     title: fn.title, orgName: fn.organizations ? fn.organizations.name : '', orgId: fn.organizations ? fn.organizations.id : null, timestamp: fn.created_at }) })
       items.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp) })
       setRecentActivity(items)
     } catch(err) { console.error('loadRecentActivity error:', err) }
@@ -1711,27 +1762,31 @@ function UnifiedDashboard() {
   var visibleActivities = activities.filter(function(a) { return !dismissedActivities.includes(a.id) })
   var now = new Date()
 
-  var DATE_FILTER_OPTIONS = [
-    { key: 'week',    label: 'This week'     },
-    { key: '2weeks',  label: 'Last 2 weeks'  },
-    { key: 'month',   label: 'Last month'    },
-    { key: '3months', label: 'Last 3 months' },
-    { key: 'all',     label: 'All time'      },
+var DATE_FILTER_OPTIONS = [
+    { key: 'week',      label: 'This week'   },
+    { key: 'nextmonth', label: 'Next month'  },
+    { key: 'month',     label: 'Last month'  },
+    { key: 'all',       label: 'All time'    },
   ]
-  function getDateCutoff(filter) {
-    var days = { week: 7, '2weeks': 14, month: 30, '3months': 90 }
+function getDateCutoff(filter) {
+    if (filter === 'nextmonth') return null
+    var days = { week: 7, month: 30 }
     if (!days[filter]) return null
     return new Date(Date.now() - days[filter] * 86400000)
   }
 
   function getFilteredFeed(typeFilter) {
-    var cutoff = getDateCutoff(dateFilter)
+var cutoff = getDateCutoff(dateFilter)
+    var nextMonthEnd = dateFilter === 'nextmonth' ? new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59) : null
     return visibleActivities
       .filter(function(a) {
         var typeMatch = typeFilter === 'all' || a.type === typeFilter
         var orgMatch  = orgFilter === 'all' || a.organizationId === orgFilter
         var dateMatch = !cutoff || new Date(a.timestamp) >= cutoff
-        // Task 42: auto-hide event cards where start_time is in the past
+        if (dateFilter === 'nextmonth') {
+          var ts = new Date(a.timestamp)
+          dateMatch = ts >= now && ts <= nextMonthEnd
+        }
         if (a.type === 'event' && a.startTime && new Date(a.startTime) < now) return false
         return typeMatch && orgMatch && dateMatch
       })

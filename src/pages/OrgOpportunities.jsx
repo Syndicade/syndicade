@@ -94,8 +94,26 @@ function VisibilityBadge({ visibility }) {
 }
 
 // ── Tag input ─────────────────────────────────────────────────────────────────
+var TAG_SUGGESTIONS = [
+  'volunteer','fundraising','nonprofit','community','education','youth',
+  'environment','health','arts','housing','food','legal','mentorship',
+  'advocacy','senior','veterans','disability','literacy','job-training','stemm',
+];
+
+var TAG_SUGGESTIONS = [
+  'volunteer','fundraising','nonprofit','community','education','youth',
+  'environment','health','arts','housing','food','legal','mentorship',
+  'advocacy','senior','veterans','disability','literacy','job-training','stem',
+];
+
 function TagInput({ tags, onChange }) {
   var [input, setInput] = useState('');
+
+  var suggestions = input.length > 0
+    ? TAG_SUGGESTIONS.filter(function(s) {
+        return s.includes(input.toLowerCase()) && !tags.includes(s);
+      }).slice(0, 5)
+    : [];
 
   function addTag(val) {
     var trimmed = val.trim().toLowerCase();
@@ -118,37 +136,80 @@ function TagInput({ tags, onChange }) {
   }
 
   return (
-    <div
-      style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', background: cardBg, minHeight: '42px', cursor: 'text' }}
-      onClick={function(e) { e.currentTarget.querySelector('input').focus(); }}
-    >
-      {tags.map(function(tag) {
-        return (
-          <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', background: '#EFF6FF', color: '#3B82F6', fontSize: '12px', fontWeight: 600 }}>
-            {tag}
-            <button
-              type="button"
-              onClick={function() { removeTag(tag); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3B82F6', padding: '0', lineHeight: 1, display: 'flex' }}
-              aria-label={'Remove tag ' + tag}
-            >
-              <X size={10} />
-            </button>
-          </span>
-        );
-      })}
-      <input
-        value={input}
-        onChange={function(e) { setInput(e.target.value); }}
-        onKeyDown={handleKeyDown}
-        onBlur={function() { if (input) addTag(input); }}
-        placeholder={tags.length ? '' : 'Type a tag and press Enter'}
-        style={{ border: 'none', outline: 'none', fontSize: '13px', color: textPrimary, flex: 1, minWidth: '120px', background: 'transparent' }}
-        aria-label="Add tags"
-      />
+    <div style={{ position: 'relative' }}>
+      <div
+        style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', background: cardBg, minHeight: '42px', cursor: 'text' }}
+        onClick={function(e) { e.currentTarget.querySelector('input').focus(); }}
+      >
+        {tags.map(function(tag) {
+          return (
+            <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', background: '#EFF6FF', color: '#3B82F6', fontSize: '12px', fontWeight: 600 }}>
+              {tag}
+              <button
+                type="button"
+                onClick={function() { removeTag(tag); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3B82F6', padding: '0', lineHeight: 1, display: 'flex' }}
+                aria-label={'Remove tag ' + tag}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          );
+        })}
+        <input
+          value={input}
+          onChange={function(e) { setInput(e.target.value); }}
+          onKeyDown={handleKeyDown}
+          onBlur={function() { if (input) addTag(input); }}
+          placeholder={tags.length ? '' : 'Type a tag and press Enter'}
+          style={{ border: 'none', outline: 'none', fontSize: '13px', color: textPrimary, flex: 1, minWidth: '120px', background: 'transparent' }}
+          aria-label="Add tags"
+          aria-autocomplete="list"
+          aria-expanded={suggestions.length > 0}
+        />
+      </div>
+      {suggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 10, overflow: 'hidden' }} role="listbox" aria-label="Tag suggestions">
+          {suggestions.map(function(s) {
+            return (
+              <button
+                key={s}
+                type="button"
+                role="option"
+                aria-selected="false"
+                onMouseDown={function(e) { e.preventDefault(); addTag(s); }}
+                style={{ width: '100%', padding: '7px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textPrimary, textAlign: 'left' }}
+                className="hover:bg-slate-50"
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
+  function addTag(val) {
+    var trimmed = val.trim().toLowerCase();
+    if (!trimmed || tags.includes(trimmed)) return;
+    onChange(tags.concat([trimmed]));
+    setInput('');
+  }
+
+  function removeTag(tag) {
+    onChange(tags.filter(function(t) { return t !== tag; }));
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === 'Backspace' && !input && tags.length) {
+      removeTag(tags[tags.length - 1]);
+    }
+  }
 
 // ── Role type multi-select ────────────────────────────────────────────────────
 function RoleTypeSelect({ selected, onChange }) {
@@ -240,7 +301,7 @@ function RoleTypeSelect({ selected, onChange }) {
               );
             })}
           </div>
-          <div style={{ padding: '8px 12px', borderTop: '1px solid ' + borderColor, display: 'flex', gap: '6px' }}>
+<div style={{ padding: '8px 12px', borderTop: '1px solid ' + borderColor, display: 'flex', gap: '6px' }}>
             <input
               value={customInput}
               onChange={function(e) { setCustomInput(e.target.value); }}
@@ -256,6 +317,14 @@ function RoleTypeSelect({ selected, onChange }) {
               className="focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               Add
+            </button>
+            <button
+              type="button"
+              onClick={function() { setOpen(false); }}
+              style={{ padding: '5px 10px', background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+              className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              Done
             </button>
           </div>
         </div>
@@ -331,7 +400,7 @@ function EmptyState({ onAdd, isVerified }) {
 }
 
 // ── Opportunity form modal ────────────────────────────────────────────────────
-function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
+function OpportunityModal({ organizationId, currentUserId, existing, onClose, onSaved }) {
   var [form, setForm] = useState(existing ? {
     title: existing.title || '',
     role_types: existing.role_types || [],
@@ -449,6 +518,10 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
       posting_url: postingUrl,
       updated_at: new Date().toISOString(),
     };
+
+    if (!existing) {
+      payload.created_by = currentUserId;
+    }
 
     var result;
     if (existing) {
@@ -982,6 +1055,7 @@ function OrgOpportunities() {
 
   var isVerified = !!(organization && organization.is_verified_nonprofit);
 
+  var [currentUserId, setCurrentUserId] = useState(null);
   var [items, setItems] = useState([]);
   var [appCounts, setAppCounts] = useState({});
   var [loading, setLoading] = useState(true);
@@ -991,6 +1065,12 @@ function OrgOpportunities() {
   var [viewingApps, setViewingApps] = useState(null);
   var [search, setSearch] = useState('');
   var [filterVis, setFilterVis] = useState('all');
+
+  useEffect(function() {
+    supabase.auth.getUser().then(function(r) {
+      if (r.data && r.data.user) setCurrentUserId(r.data.user.id);
+    });
+  }, []);
 
   useEffect(function() { loadItems(); }, [organizationId]);
 
@@ -1160,6 +1240,7 @@ function OrgOpportunities() {
       {showModal && (
         <OpportunityModal
           organizationId={organizationId}
+          currentUserId={currentUserId}
           existing={editing}
           onClose={function() { setShowModal(false); setEditing(null); }}
           onSaved={function() { loadItems(); }}
