@@ -501,7 +501,7 @@ function OrganizationDashboard() {
   async function fetchChatPreview() {
     setChatLoading(true);
     try {
-      var chRes = await supabase.from('chat_channels').select('id,name').eq('organization_id', organizationId).order('name').limit(3);
+      var chRes = await supabase.from('org_chat_channels').select('id,name').eq('organization_id', organizationId).order('name').limit(3);
       if (!chRes.data || chRes.data.length === 0) { setChatPreview([]); return; }
       var previews = [];
       for (var i = 0; i < chRes.data.length; i++) {
@@ -541,7 +541,7 @@ function OrganizationDashboard() {
       var pollRes = await supabase.from('polls').select('id,question,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(2);
       if (pollRes.data) {
         pollRes.data.forEach(function(p) {
-          items.push({ type: 'poll', label: '"' + p.question + '" poll created', sub: 'Poll', time: p.created_at, bg: '#EDE9FE', iconColor: '#7C3AED', iconPath: ICONS.polls, link: '/organizations/' + organizationId + '/polls' });
+          items.push({ type: 'poll', label: '"' + (p.title || 'Poll') + '" poll created', sub: 'Poll', time: p.created_at, bg: '#EDE9FE', iconColor: '#7C3AED', iconPath: ICONS.polls, link: '/organizations/' + organizationId + '/polls' });
         });
       }
       try {
@@ -552,6 +552,32 @@ function OrganizationDashboard() {
           });
         }
       } catch (e) { /* ignore */ }
+      try {
+      var progRes = await supabase.from('org_programs').select('id,name,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(2);
+      if (progRes.data) {
+        progRes.data.forEach(function(p) {
+          items.push({ type: 'program', label: p.name + ' program added', sub: 'Program', time: p.created_at, bg: '#EDE9FE', iconColor: '#7C3AED', iconPath: ICONS.clipboard, link: '/organizations/' + organizationId + '/programs' });
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    try {
+      var oppRes = await supabase.from('org_opportunities').select('id,title,created_at').eq('organization_id', organizationId).neq('visibility', 'draft').order('created_at', { ascending: false }).limit(2);
+      if (oppRes.data) {
+        oppRes.data.forEach(function(o) {
+          items.push({ type: 'opportunity', label: o.title + ' opportunity posted', sub: 'Opportunity', time: o.created_at, bg: '#DBEAFE', iconColor: '#2563EB', iconPath: ICONS.fileUp, link: '/organizations/' + organizationId + '/opportunities' });
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    try {
+      var fundRes = await supabase.from('org_funding').select('id,title,created_at').eq('organization_id', organizationId).neq('visibility', 'draft').order('created_at', { ascending: false }).limit(2);
+      if (fundRes.data) {
+        fundRes.data.forEach(function(f) {
+          items.push({ type: 'funding', label: f.title + ' funding posted', sub: 'Funding', time: f.created_at, bg: '#DCFCE7', iconColor: '#16A34A', iconPath: ICONS.check, link: '/organizations/' + organizationId + '/funding' });
+        });
+      }
+    } catch (e) { /* ignore */ }
       items.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
       setRecentActivity(items.slice(0, 6));
     } catch (err) { console.error('fetchRecentActivity error:', err); }

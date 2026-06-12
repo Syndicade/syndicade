@@ -141,7 +141,7 @@ var hideChrome = (
       <div style={{ flex: 1 }}>
         <Routes>
             {/* ── Public / auth ──────────────────────────────────── */}
-            <Route path="/" element={session ? <UnifiedDashboard /> : <LandingPage />} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/staff" element={<StaffDashboard />} />
             <Route path="/dashboard" element={session ? <UnifiedDashboard /> : <Navigate to="/login" replace />} />
             <Route path="/login"  element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} />

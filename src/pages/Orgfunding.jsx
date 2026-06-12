@@ -561,91 +561,37 @@ function FundingCard({ item, appCount, onEdit, onDelete, onVisibilityChange, onV
   }
 
   return (
-    <article style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '18px 20px', marginBottom: '10px' }} aria-label={item.title + ' funding listing'}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 800, color: textPrimary, margin: 0 }}>{item.title}</h3>
-            <VisibilityBadge visibility={item.visibility} />
-            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: typeColor.bg, color: typeColor.color }}>
-              {typeLabel ? typeLabel.label : item.funding_type}
-            </span>
-            {isExpired && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>Expired</span>}
-            {/* Application count badge — only for form-apply listings */}
-            {hasFormApply && appCount > 0 && (
-              <button
-                onClick={function() { onViewApps(item); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE', cursor: 'pointer' }}
-                className="hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label={'View ' + appCount + ' application' + (appCount !== 1 ? 's' : '')}
-              >
-                <Inbox size={10} aria-hidden="true" />
-                {appCount} {appCount === 1 ? 'application' : 'applications'}
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '8px' }}>
-            {formatAmount() && (
-              <span style={{ fontSize: '12px', color: '#16A34A', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <DollarSign size={12} aria-hidden="true" />{formatAmount()}
-              </span>
-            )}
-            {item.deadline && (
-              <span style={{ fontSize: '12px', color: isExpired ? '#DC2626' : textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} aria-hidden="true" />
-                Deadline: {new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            )}
-          </div>
-
-          {item.description && (
-            <p style={{ fontSize: '13px', color: textSecondary, lineHeight: 1.5, margin: '0 0 10px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {item.description}
-            </p>
-          )}
-
-          {item.tags && item.tags.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {item.tags.map(function(tag) {
-                return <span key={tag} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: '#F1F5F9', color: textMuted, fontWeight: 600 }}>{tag}</span>;
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Actions menu */}
+    <article
+      style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', height: '100%', boxSizing: 'border-box' }}
+      aria-label={item.title + ' funding listing'}
+    >
+      {/* Title row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.4, flex: 1 }}>{item.title}</h3>
         <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
           <button
             onClick={function() { setMenuOpen(!menuOpen); }}
-            style={{ background: elevatedBg, border: '1px solid ' + borderColor, borderRadius: '7px', padding: '6px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}
+            style={{ background: elevatedBg, border: '1px solid ' + borderColor, borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: textSecondary, display: 'flex', alignItems: 'center', gap: '3px' }}
             className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Listing actions" aria-haspopup="true" aria-expanded={menuOpen}
           >
-            Actions <ChevronDown size={12} aria-hidden="true" />
+            Actions <ChevronDown size={11} aria-hidden="true" />
           </button>
-
           {menuOpen && (
             <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', minWidth: '190px', zIndex: 20, overflow: 'hidden' }} role="menu">
               <button onClick={function() { setMenuOpen(false); onEdit(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textPrimary, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-slate-50 focus:outline-none" role="menuitem">
                 <Pencil size={13} aria-hidden="true" /> Edit
               </button>
-
-              {/* View Applications — only shown for in-platform form */}
               {hasFormApply && (
                 <button onClick={function() { setMenuOpen(false); onViewApps(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#3B82F6', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-blue-50 focus:outline-none" role="menuitem">
                   <Inbox size={13} aria-hidden="true" />
                   View Applications
                   {appCount > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', padding: '1px 7px', borderRadius: '99px' }}>
-                      {appCount}
-                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', padding: '1px 7px', borderRadius: '99px' }}>{appCount}</span>
                   )}
                 </button>
               )}
-
               <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
-
               {item.visibility === 'draft' && (
                 <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none" role="menuitem">
                   <Users size={13} aria-hidden="true" /> Share with Members
@@ -674,98 +620,40 @@ function FundingCard({ item, appCount, onEdit, onDelete, onVisibilityChange, onV
           )}
         </div>
       </div>
-    </article>
-  );
-}
 
-// ── Confirm delete ────────────────────────────────────────────────────────────
-function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }} role="dialog" aria-modal="true" aria-labelledby="confirm-del-title">
-      <div style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }} aria-hidden="true">
-          <Trash2 size={22} color="#EF4444" />
-        </div>
-        <h3 id="confirm-del-title" style={{ fontSize: '16px', fontWeight: 800, color: textPrimary, textAlign: 'center', marginBottom: '8px' }}>Delete Listing?</h3>
-        <p style={{ fontSize: '13px', color: textSecondary, textAlign: 'center', lineHeight: 1.6, marginBottom: '24px' }}>
-          <strong style={{ color: textPrimary }}>{item.title}</strong> will be permanently removed.
-        </p>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: textMuted, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
-          <button onClick={onConfirm} style={{ flex: 1, padding: '10px', background: '#EF4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }} className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Applications drawer ───────────────────────────────────────────────────────
-function ApplicationsDrawer({ item, onClose }) {
-  var [apps, setApps] = useState([]);
-  var [loading, setLoading] = useState(true);
-
-  useEffect(function() {
-    async function load() {
-      var r = await supabase.from('funding_applications').select('*').eq('funding_id', item.id).order('created_at', { ascending: false });
-      setApps(r.data || []);
-      setLoading(false);
-    }
-    load();
-  }, [item.id]);
-
-  async function updateStatus(appId, status) {
-    var r = await supabase.from('funding_applications').update({ status: status }).eq('id', appId);
-    if (r.error) { toast.error('Failed to update status.'); return; }
-    setApps(function(prev) { return prev.map(function(a) { return a.id === appId ? Object.assign({}, a, { status: status }) : a; }); });
-    mascotSuccessToast('Status updated.');
-  }
-
-  var STATUS_COLORS = { new: '#3B82F6', reviewed: '#D97706', contacted: '#8B5CF6', closed: '#64748B' };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 50 }} role="dialog" aria-modal="true" aria-labelledby="fund-apps-title" onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: '100%', maxWidth: '460px', background: cardBg, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + borderColor, position: 'sticky', top: 0, background: cardBg, zIndex: 1 }}>
-          <div>
-            <h2 id="fund-apps-title" style={{ fontSize: '15px', fontWeight: 800, color: textPrimary, margin: 0 }}>Applications</h2>
-            <p style={{ fontSize: '12px', color: textMuted, margin: '2px 0 0' }}>{item.title}</p>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMuted }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label="Close">
-            <X size={18} />
+      {/* Badges row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+        <VisibilityBadge visibility={item.visibility} />
+        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: typeColor.bg, color: typeColor.color }}>
+          {typeLabel ? typeLabel.label : item.funding_type}
+        </span>
+        {isExpired && (
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>Expired</span>
+        )}
+        {hasFormApply && appCount > 0 && (
+          <button
+            onClick={function() { onViewApps(item); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE', cursor: 'pointer' }}
+            className="hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label={'View ' + appCount + ' application' + (appCount !== 1 ? 's' : '')}
+          >
+            {appCount} {appCount === 1 ? 'application' : 'applications'}
           </button>
-        </div>
-        <div style={{ padding: '16px 24px' }}>
-          {loading && [1,2,3].map(function(i) { return <div key={i} style={{ height: '80px', background: elevatedBg, borderRadius: '10px', marginBottom: '10px' }} />; })}
-          {!loading && apps.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Inbox size={32} color={textTertiary} style={{ margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
-              <p style={{ fontSize: '14px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>No applications yet</p>
-              <p style={{ fontSize: '13px', color: textMuted }}>Applications submitted through the platform will appear here.</p>
-            </div>
-          )}
-          {!loading && apps.map(function(app) {
-            return (
-              <div key={app.id} style={{ background: pageBg, border: '1px solid ' + borderColor, borderRadius: '10px', padding: '14px 16px', marginBottom: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                  <div>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, margin: 0 }}>{app.applicant_name}</p>
-                    <a href={'mailto:' + app.applicant_email} style={{ fontSize: '12px', color: '#3B82F6', textDecoration: 'none' }}>{app.applicant_email}</a>
-                  </div>
-                  <select value={app.status} onChange={function(e) { updateStatus(app.id, e.target.value); }} style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '99px', border: '1px solid ' + borderColor, background: cardBg, color: STATUS_COLORS[app.status] || textMuted, cursor: 'pointer' }} aria-label={'Status for ' + app.applicant_name} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="new">New</option>
-                    <option value="reviewed">Reviewed</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-                {app.message && <p style={{ fontSize: '12px', color: textSecondary, lineHeight: 1.5, margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>{app.message}</p>}
-                <p style={{ fontSize: '11px', color: textTertiary, marginTop: '8px' }}>{new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-              </div>
-            );
-          })}
-        </div>
+        )}
       </div>
-    </div>
+
+      {/* Meta row */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {formatAmount() && (
+          <p style={{ fontSize: '12px', color: '#16A34A', fontWeight: 700, margin: 0 }}>{formatAmount()}</p>
+        )}
+        {item.deadline && (
+          <p style={{ fontSize: '11px', color: isExpired ? '#DC2626' : textMuted, margin: 0 }}>
+            {'Deadline: ' + new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -794,11 +682,19 @@ function OrgFunding() {
     });
   }, []);
 
-  useEffect(function() { loadItems(); }, [organizationId]);
+  useEffect(function() { loadItems(); }, [organizationId, isAdmin]);
 
-  async function loadItems() {
+async function loadItems() {
     setLoading(true);
-    var r = await supabase.from('org_funding').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false });
+    var query = supabase
+      .from('org_funding')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+    if (!isAdmin) {
+      query = query.neq('visibility', 'draft');
+    }
+    var r = await query;
     var rows = r.data || [];
     setItems(rows);
 
@@ -900,12 +796,12 @@ function OrgFunding() {
                 <input value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search funding listings..." style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textPrimary, background: cardBg, boxSizing: 'border-box', outline: 'none' }} aria-label="Search listings" className="focus:ring-2 focus:ring-blue-500" />
               </div>
               <div style={{ display: 'flex', gap: '6px' }} role="group" aria-label="Filter by visibility">
-                {['all', 'draft', 'members_only', 'public'].map(function(v) {
+                {(isAdmin ? ['all', 'draft', 'members_only', 'public'] : ['all', 'members_only', 'public']).map(function(v) {
                   var active = filterVis === v;
                   var meta = VISIBILITY_META[v];
                   var label = v === 'all' ? 'All' : meta ? meta.label : v;
                   return (
-                    <button key={v} onClick={function() { setFilterVis(v); }}
+                    <button key={v} onClick={function(val) { return function() { setFilterVis(val); }; }(v)}
                       style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#16A34A' : borderColor), background: active ? '#F0FDF4' : cardBg, color: active ? '#16A34A' : textMuted, cursor: 'pointer' }}
                       className="focus:outline-none focus:ring-2 focus:ring-green-500" aria-pressed={active}>
                       {label} {counts[v] > 0 ? '(' + counts[v] + ')' : ''}
@@ -932,19 +828,24 @@ function OrgFunding() {
             </div>
           )}
 
-          {!loading && filtered.map(function(item) {
-            return (
-              <FundingCard
-                key={item.id}
-                item={item}
-                appCount={appCounts[item.id] || 0}
-                onEdit={function(i) { setEditing(i); setShowModal(true); }}
-                onDelete={function(i) { setDeleting(i); }}
-                onVisibilityChange={handleVisibilityChange}
-                onViewApps={function(i) { setViewingApps(i); }}
-              />
-            );
-          })}
+{!loading && filtered.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} role="list" aria-label="Funding listings">
+              {filtered.map(function(item) {
+                return (
+                  <div key={item.id} role="listitem">
+                    <FundingCard
+                      item={item}
+                      appCount={appCounts[item.id] || 0}
+                      onEdit={function(i) { setEditing(i); setShowModal(true); }}
+                      onDelete={function(i) { setDeleting(i); }}
+                      onVisibilityChange={handleVisibilityChange}
+                      onViewApps={function(i) { setViewingApps(i); }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 

@@ -782,97 +782,27 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
 
   var isExpired = item.deadline && new Date(item.deadline) < new Date();
   var hasFormApply = item.apply_method === 'form';
+  var compLabel = COMPENSATION_TYPES.find(function(c) { return c.value === item.compensation_type; });
 
   return (
     <article
-      style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '18px 20px', marginBottom: '10px' }}
+      style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
       aria-label={item.title + ' opportunity'}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 800, color: textPrimary, margin: 0 }}>{item.title}</h3>
-            <VisibilityBadge visibility={item.visibility} />
-            {isExpired && (
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
-                Expired
-              </span>
-            )}
-            {/* Application count badge — only for form-apply listings */}
-            {hasFormApply && appCount > 0 && (
-              <button
-                onClick={function() { onViewApps(item); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE', cursor: 'pointer' }}
-                className="hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label={'View ' + appCount + ' application' + (appCount !== 1 ? 's' : '')}
-              >
-                <Inbox size={10} aria-hidden="true" />
-                {appCount} {appCount === 1 ? 'application' : 'applications'}
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '8px' }}>
-            {item.role_types && item.role_types.length > 0 && (
-              <span style={{ fontSize: '12px', color: textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Briefcase size={12} aria-hidden="true" />
-                {item.role_types.slice(0, 2).join(', ')}{item.role_types.length > 2 ? ' +' + (item.role_types.length - 2) + ' more' : ''}
-              </span>
-            )}
-            {item.compensation_type && (
-              <span style={{ fontSize: '12px', color: textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <FileText size={12} aria-hidden="true" />
-                {COMPENSATION_TYPES.find(function(c) { return c.value === item.compensation_type; }) ? COMPENSATION_TYPES.find(function(c) { return c.value === item.compensation_type; }).label : item.compensation_type}
-              </span>
-            )}
-            {item.location_type && (
-              <span style={{ fontSize: '12px', color: textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <MapPin size={12} aria-hidden="true" />
-                {LOCATION_TYPES.find(function(l) { return l.value === item.location_type; }) ? LOCATION_TYPES.find(function(l) { return l.value === item.location_type; }).label : item.location_type}
-                {item.city ? ' · ' + item.city : ''}
-              </span>
-            )}
-            {item.deadline && (
-              <span style={{ fontSize: '12px', color: isExpired ? '#DC2626' : textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} aria-hidden="true" />
-                Deadline: {new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            )}
-          </div>
-
-          {item.description && (
-            <p style={{ fontSize: '13px', color: textSecondary, lineHeight: 1.5, margin: '0 0 10px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {item.description}
-            </p>
-          )}
-
-          {item.tags && item.tags.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {item.tags.map(function(tag) {
-                return (
-                  <span key={tag} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: '#F1F5F9', color: textMuted, fontWeight: 600 }}>
-                    {tag}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Actions menu */}
+      {/* Title row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.4, flex: 1 }}>{item.title}</h3>
         <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
           <button
             onClick={function() { setMenuOpen(!menuOpen); }}
-            style={{ background: elevatedBg, border: '1px solid ' + borderColor, borderRadius: '7px', padding: '6px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: textSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}
+            style={{ background: elevatedBg, border: '1px solid ' + borderColor, borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: textSecondary, display: 'flex', alignItems: 'center', gap: '3px' }}
             className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Opportunity actions"
             aria-haspopup="true"
             aria-expanded={menuOpen}
           >
-            Actions
-            <ChevronDown size={12} aria-hidden="true" />
+            Actions <ChevronDown size={11} aria-hidden="true" />
           </button>
-
           {menuOpen && (
             <div
               style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', minWidth: '190px', zIndex: 20, overflow: 'hidden' }}
@@ -881,54 +811,78 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
               <button onClick={function() { setMenuOpen(false); onEdit(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textPrimary, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-slate-50 focus:outline-none focus:bg-slate-50" role="menuitem">
                 <Pencil size={13} aria-hidden="true" /> Edit
               </button>
-
-              {/* View Applications — only shown for in-platform form */}
               {hasFormApply && (
                 <button onClick={function() { setMenuOpen(false); onViewApps(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#3B82F6', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-blue-50 focus:outline-none focus:bg-blue-50" role="menuitem">
                   <Inbox size={13} aria-hidden="true" />
                   View Applications
                   {appCount > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', padding: '1px 7px', borderRadius: '99px' }}>
-                      {appCount}
-                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', padding: '1px 7px', borderRadius: '99px' }}>{appCount}</span>
                   )}
                 </button>
               )}
-
               <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
-
               {item.visibility === 'draft' && (
-                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none focus:bg-amber-50" role="menuitem">
+                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none" role="menuitem">
                   <Users size={13} aria-hidden="true" /> Share with Members
                 </button>
               )}
-
               {item.visibility !== 'public' && (
-                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'public'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#16A34A', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-green-50 focus:outline-none focus:bg-green-50" role="menuitem">
+                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'public'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#16A34A', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-green-50 focus:outline-none" role="menuitem">
                   <Globe size={13} aria-hidden="true" /> Publish Publicly
                 </button>
               )}
-
               {item.visibility === 'public' && (
-                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none focus:bg-amber-50" role="menuitem">
+                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none" role="menuitem">
                   <EyeOff size={13} aria-hidden="true" /> Unpublish
                 </button>
               )}
-
               {item.visibility !== 'draft' && (
-                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'draft'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textMuted, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-slate-50 focus:outline-none focus:bg-slate-50" role="menuitem">
+                <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'draft'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textMuted, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-slate-50 focus:outline-none" role="menuitem">
                   <Lock size={13} aria-hidden="true" /> Move to Draft
                 </button>
               )}
-
               <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
-
-              <button onClick={function() { setMenuOpen(false); onDelete(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#EF4444', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-red-50 focus:outline-none focus:bg-red-50" role="menuitem">
+              <button onClick={function() { setMenuOpen(false); onDelete(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#EF4444', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-red-50 focus:outline-none" role="menuitem">
                 <Trash2 size={13} aria-hidden="true" /> Delete
               </button>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Badges row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+        <VisibilityBadge visibility={item.visibility} />
+        {isExpired && (
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>Expired</span>
+        )}
+        {hasFormApply && appCount > 0 && (
+          <button
+            onClick={function() { onViewApps(item); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE', cursor: 'pointer' }}
+            className="hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label={'View ' + appCount + ' application' + (appCount !== 1 ? 's' : '')}
+          >
+            {appCount} {appCount === 1 ? 'application' : 'applications'}
+          </button>
+        )}
+      </div>
+
+      {/* Meta row */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {item.role_types && item.role_types.length > 0 && (
+          <p style={{ fontSize: '12px', color: textSecondary, margin: 0 }}>
+            {item.role_types.slice(0, 2).join(', ')}{item.role_types.length > 2 ? ' +' + (item.role_types.length - 2) : ''}
+          </p>
+        )}
+        {compLabel && (
+          <p style={{ fontSize: '12px', color: textMuted, margin: 0 }}>{compLabel.label}</p>
+        )}
+        {item.deadline && (
+          <p style={{ fontSize: '11px', color: isExpired ? '#DC2626' : textMuted, margin: 0 }}>
+            {'Deadline: ' + new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        )}
       </div>
     </article>
   );
@@ -1072,15 +1026,19 @@ function OrgOpportunities() {
     });
   }, []);
 
-  useEffect(function() { loadItems(); }, [organizationId]);
+  useEffect(function() { loadItems(); }, [organizationId, isAdmin]);
 
-  async function loadItems() {
+async function loadItems() {
     setLoading(true);
-    var r = await supabase
+    var query = supabase
       .from('org_opportunities')
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
+    if (!isAdmin) {
+      query = query.neq('visibility', 'draft');
+    }
+    var r = await query;
     var rows = r.data || [];
     setItems(rows);
 
@@ -1189,12 +1147,12 @@ function OrgOpportunities() {
               </div>
 
               <div style={{ display: 'flex', gap: '6px' }} role="group" aria-label="Filter by visibility">
-                {['all', 'draft', 'members_only', 'public'].map(function(v) {
+                {(isAdmin ? ['all', 'draft', 'members_only', 'public'] : ['all', 'members_only', 'public']).map(function(v) {
                   var active = filterVis === v;
                   var meta = VISIBILITY_META[v];
                   var label = v === 'all' ? 'All' : meta ? meta.label : v;
                   return (
-                    <button key={v} onClick={function() { setFilterVis(v); }}
+                    <button key={v} onClick={function(val) { return function() { setFilterVis(val); }; }(v)}
                       style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#3B82F6' : borderColor), background: active ? '#EFF6FF' : cardBg, color: active ? '#3B82F6' : textMuted, cursor: 'pointer' }}
                       className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
                       {label} {counts[v] > 0 ? '(' + counts[v] + ')' : ''}
@@ -1221,21 +1179,26 @@ function OrgOpportunities() {
             </div>
           )}
 
-          {!loading && filtered.map(function(item) {
-            return (
-              <OpportunityCard
-                key={item.id}
-                item={item}
-                appCount={appCounts[item.id] || 0}
-                onEdit={function(i) { setEditing(i); setShowModal(true); }}
-                onDelete={function(i) { setDeleting(i); }}
-                onVisibilityChange={handleVisibilityChange}
-                onViewApps={function(i) { setViewingApps(i); }}
-              />
-            );
-          })}
-        </>
-      )}
+      {!loading && filtered.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} role="list" aria-label="Opportunities">
+                    {filtered.map(function(item) {
+                      return (
+                        <div key={item.id} role="listitem">
+                          <OpportunityCard
+                            item={item}
+                            appCount={appCounts[item.id] || 0}
+                            onEdit={function(i) { setEditing(i); setShowModal(true); }}
+                            onDelete={function(i) { setDeleting(i); }}
+                            onVisibilityChange={handleVisibilityChange}
+                            onViewApps={function(i) { setViewingApps(i); }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
 
       {showModal && (
         <OpportunityModal

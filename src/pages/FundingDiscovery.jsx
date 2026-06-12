@@ -384,7 +384,7 @@ function FundingCard({ item, orgName, onClick }) {
 
   return (
     <article
-      style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '18px 20px', marginBottom: '10px', cursor: 'pointer', boxShadow: '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)' }}
+      style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '18px 20px', cursor: 'pointer', boxShadow: '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)' }}
       onClick={onClick}
       onMouseEnter={function(e) { e.currentTarget.style.borderColor = '#BBF7D0'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
       onMouseLeave={function(e) { e.currentTarget.style.borderColor = borderColor; e.currentTarget.style.boxShadow = '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)'; }}
@@ -661,7 +661,7 @@ export default function FundingDiscovery() {
 
               {/* Results */}
               {!loading && !error && filtered.length > 0 && (
-                <div role="list" aria-label="Funding listings">
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Funding listings">
                   {filtered.map(function(item) {
                     return (
                       <div key={item.id} role="listitem">
