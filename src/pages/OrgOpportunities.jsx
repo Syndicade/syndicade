@@ -7,7 +7,7 @@ import {
   Briefcase, Plus, X, ChevronDown, ChevronUp, Users, Globe, Lock,
   Eye, EyeOff, Pencil, Trash2, FileText, MapPin, Clock, Calendar,
   ExternalLink, Mail, AlertCircle, CheckCircle, Search, Filter,
-  Upload, DollarSign, Paperclip
+  Upload, DollarSign, Paperclip, Inbox
 } from 'lucide-react';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -413,7 +413,6 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
     setSaving(true);
     var toastId = toast.loading(existing ? 'Saving...' : 'Posting...');
 
-    // Upload posting file if provided
     var postingUrl = existingPostingUrl || null;
     if (postingFile) {
       var fileExt = postingFile.name.split('.').pop();
@@ -467,7 +466,7 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
     }
 
     mascotSuccessToast(existing ? 'Opportunity updated!' : 'Opportunity posted!');
-    onSaved(form.visibility);
+    onSaved();
     onClose();
   }
 
@@ -486,7 +485,6 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
     >
       <div style={{ background: cardBg, borderRadius: '16px', width: '100%', maxWidth: '600px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', marginTop: '16px' }}>
 
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + borderColor }}>
           <h2 id="opp-modal-title" style={{ fontSize: '17px', fontWeight: 800, color: textPrimary, margin: 0 }}>
             {existing ? 'Edit Opportunity' : 'Post an Opportunity'}
@@ -496,10 +494,8 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: '24px' }}>
 
-          {/* Title */}
           <div style={fieldStyle}>
             <label htmlFor="opp-title" style={labelStyle}>Title <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <input
@@ -515,14 +511,12 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
             {errors.title && <p id="err-title" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.title}</p>}
           </div>
 
-          {/* Role types */}
           <div style={fieldStyle}>
             <label style={labelStyle} id="role-types-label">Role Type <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <RoleTypeSelect selected={form.role_types} onChange={function(v) { setField('role_types', v); }} />
             {errors.role_types && <p style={errorStyle} role="alert"><AlertCircle size={11} />{errors.role_types}</p>}
           </div>
 
-          {/* Description */}
           <div style={fieldStyle}>
             <label htmlFor="opp-desc" style={labelStyle}>Description <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <textarea
@@ -539,7 +533,6 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
             {errors.description && <p id="err-desc" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.description}</p>}
           </div>
 
-          {/* Compensation + Location row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div>
               <label htmlFor="opp-comp" style={labelStyle}>Compensation</label>
@@ -555,7 +548,6 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Salary range — shown for paid + stipend */}
           {(form.compensation_type === 'paid' || form.compensation_type === 'stipend') && (
             <div style={{ marginBottom: '16px' }}>
               <label style={labelStyle}>
@@ -565,56 +557,27 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
-                  <input
-                    id="opp-salary-min"
-                    type="number"
-                    min="0"
-                    value={form.salary_min}
-                    onChange={function(e) { setField('salary_min', e.target.value); }}
-                    placeholder="Min"
-                    style={Object.assign({}, inputStyle, { paddingLeft: '28px' })}
-                    aria-label={form.compensation_type === 'paid' ? 'Minimum salary' : 'Minimum stipend'}
-                    className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input type="number" min="0" value={form.salary_min} onChange={function(e) { setField('salary_min', e.target.value); }} placeholder="Min" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label={form.compensation_type === 'paid' ? 'Minimum salary' : 'Minimum stipend'} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
-                  <input
-                    id="opp-salary-max"
-                    type="number"
-                    min="0"
-                    value={form.salary_max}
-                    onChange={function(e) { setField('salary_max', e.target.value); }}
-                    placeholder="Max"
-                    style={Object.assign({}, inputStyle, { paddingLeft: '28px' })}
-                    aria-label={form.compensation_type === 'paid' ? 'Maximum salary' : 'Maximum stipend'}
-                    className="focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input type="number" min="0" value={form.salary_max} onChange={function(e) { setField('salary_max', e.target.value); }} placeholder="Max" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label={form.compensation_type === 'paid' ? 'Maximum salary' : 'Maximum stipend'} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <p style={{ fontSize: '11px', color: textMuted, marginTop: '4px' }}>Annual salary or hourly rate — leave blank if not disclosing.</p>
             </div>
           )}
 
-          {/* Compensation / stipend details */}
           {(form.compensation_type === 'paid' || form.compensation_type === 'stipend') && (
             <div style={fieldStyle}>
               <label htmlFor="opp-comp-detail" style={labelStyle}>
                 {form.compensation_type === 'paid' ? 'Additional Pay Details' : 'Stipend Details'}
                 <span style={{ fontWeight: 400, color: textMuted, marginLeft: '4px' }}>(optional)</span>
               </label>
-              <input
-                id="opp-comp-detail"
-                value={form.compensation_details}
-                onChange={function(e) { setField('compensation_details', e.target.value); }}
-                placeholder={form.compensation_type === 'paid' ? 'e.g. plus benefits, equity, travel reimbursement' : 'e.g. paid monthly, includes travel'}
-                style={inputStyle}
-                className="focus:ring-2 focus:ring-blue-500"
-              />
+              <input id="opp-comp-detail" value={form.compensation_details} onChange={function(e) { setField('compensation_details', e.target.value); }} placeholder={form.compensation_type === 'paid' ? 'e.g. plus benefits, equity, travel reimbursement' : 'e.g. paid monthly, includes travel'} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
             </div>
           )}
 
-          {/* City + Commitment row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div>
               <label htmlFor="opp-city" style={labelStyle}>City / Region</label>
@@ -626,33 +589,20 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Deadline */}
           <div style={fieldStyle}>
             <label htmlFor="opp-deadline" style={labelStyle}>Application Deadline</label>
             <input id="opp-deadline" type="date" value={form.deadline} onChange={function(e) { setField('deadline', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
           </div>
 
-          {/* Apply method */}
           <div style={fieldStyle}>
             <label style={labelStyle}>How should people apply?</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               {APPLY_METHODS.map(function(m) {
                 var active = form.apply_method === m.value;
                 return (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={function() { setField('apply_method', m.value); }}
-                    style={{
-                      flex: 1, padding: '9px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                      border: '2px solid ' + (active ? '#3B82F6' : borderColor),
-                      background: active ? '#EFF6FF' : cardBg,
-                      color: active ? '#3B82F6' : textSecondary,
-                      cursor: 'pointer',
-                    }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-pressed={active}
-                  >
+                  <button key={m.value} type="button" onClick={function() { setField('apply_method', m.value); }}
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, border: '2px solid ' + (active ? '#3B82F6' : borderColor), background: active ? '#EFF6FF' : cardBg, color: active ? '#3B82F6' : textSecondary, cursor: 'pointer' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
                     {m.label}
                   </button>
                 );
@@ -663,26 +613,16 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
           {form.apply_method === 'link' && (
             <div style={fieldStyle}>
               <label htmlFor="opp-url" style={labelStyle}>Apply URL or Email <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-              <input
-                id="opp-url"
-                value={form.apply_url}
-                onChange={function(e) { setField('apply_url', e.target.value); }}
-                placeholder="https://yourorg.org/apply or hiring@yourorg.org"
-                style={Object.assign({}, inputStyle, errors.apply_url ? { borderColor: '#EF4444' } : {})}
-                aria-describedby={errors.apply_url ? 'err-url' : undefined}
-                className="focus:ring-2 focus:ring-blue-500"
-              />
+              <input id="opp-url" value={form.apply_url} onChange={function(e) { setField('apply_url', e.target.value); }} placeholder="https://yourorg.org/apply or hiring@yourorg.org" style={Object.assign({}, inputStyle, errors.apply_url ? { borderColor: '#EF4444' } : {})} aria-describedby={errors.apply_url ? 'err-url' : undefined} className="focus:ring-2 focus:ring-blue-500" />
               {errors.apply_url && <p id="err-url" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.apply_url}</p>}
             </div>
           )}
 
-          {/* Job posting file upload */}
           <div style={fieldStyle}>
             <label style={labelStyle}>
               Job Posting Document
               <span style={{ fontWeight: 400, color: textMuted, marginLeft: '4px' }}>(optional)</span>
             </label>
-
             {(postingFile || existingPostingUrl) ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid ' + borderColor, borderRadius: '8px', background: '#F0FDF4' }}>
                 <Paperclip size={14} color="#16A34A" aria-hidden="true" />
@@ -690,17 +630,9 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
                   {postingFile ? postingFile.name : 'Existing document attached'}
                 </span>
                 {existingPostingUrl && !postingFile && (
-                  <a href={existingPostingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3B82F6', textDecoration: 'none', fontWeight: 600, flexShrink: 0 }} aria-label="View current posting document">
-                    View
-                  </a>
+                  <a href={existingPostingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#3B82F6', textDecoration: 'none', fontWeight: 600, flexShrink: 0 }} aria-label="View current posting document">View</a>
                 )}
-                <button
-                  type="button"
-                  onClick={removeFile}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMuted, padding: '2px', display: 'flex', flexShrink: 0 }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                  aria-label="Remove file"
-                >
+                <button type="button" onClick={removeFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMuted, padding: '2px', display: 'flex', flexShrink: 0 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" aria-label="Remove file">
                   <X size={14} />
                 </button>
               </div>
@@ -708,8 +640,7 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
               <div
                 onClick={function() { if (fileInputRef.current) fileInputRef.current.click(); }}
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '20px', border: '2px dashed ' + borderColor, borderRadius: '8px', cursor: 'pointer', background: pageBg }}
-                role="button"
-                tabIndex={0}
+                role="button" tabIndex={0}
                 onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (fileInputRef.current) fileInputRef.current.click(); } }}
                 aria-label="Upload job posting document"
               >
@@ -718,25 +649,15 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
                 <p style={{ fontSize: '11px', color: textMuted, margin: 0 }}>PDF, Word, or image — max 10 MB</p>
               </div>
             )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_EXT}
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
-              aria-hidden="true"
-            />
+            <input ref={fileInputRef} type="file" accept={ACCEPTED_EXT} onChange={handleFileChange} style={{ display: 'none' }} aria-hidden="true" />
           </div>
 
-          {/* Tags */}
           <div style={fieldStyle}>
             <label style={labelStyle}>Tags</label>
             <TagInput tags={form.tags} onChange={function(v) { setField('tags', v); }} />
             <p style={{ fontSize: '11px', color: textMuted, marginTop: '4px' }}>Press Enter or comma to add. Helps people find this listing.</p>
           </div>
 
-          {/* Visibility */}
           <div style={fieldStyle}>
             <label style={labelStyle}>Visibility</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -745,20 +666,9 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
                 var active = form.visibility === v;
                 var IconComp = meta.icon;
                 return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={function() { setField('visibility', v); }}
-                    style={{
-                      flex: 1, minWidth: '100px', padding: '10px 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                      border: '2px solid ' + (active ? meta.color : borderColor),
-                      background: active ? meta.bg : cardBg,
-                      color: active ? meta.color : textMuted,
-                      cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                    }}
-                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-pressed={active}
-                  >
+                  <button key={v} type="button" onClick={function() { setField('visibility', v); }}
+                    style={{ flex: 1, minWidth: '100px', padding: '10px 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, border: '2px solid ' + (active ? meta.color : borderColor), background: active ? meta.bg : cardBg, color: active ? meta.color : textMuted, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
                     <IconComp size={14} aria-hidden="true" />
                     {meta.label}
                   </button>
@@ -773,21 +683,9 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '16px 24px', borderTop: '1px solid ' + borderColor }}>
-          <button
-            onClick={onClose}
-            style={{ padding: '9px 20px', background: 'transparent', color: textMuted, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{ padding: '9px 24px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
-            className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-          >
+          <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', color: textMuted, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1">Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '9px 24px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
             {saving ? 'Saving...' : existing ? 'Save Changes' : 'Post Opportunity'}
           </button>
         </div>
@@ -797,7 +695,7 @@ function OpportunityModal({ organizationId, existing, onClose, onSaved }) {
 }
 
 // ── Opportunity card ──────────────────────────────────────────────────────────
-function OpportunityCard({ item, onEdit, onDelete, onVisibilityChange }) {
+function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange, onViewApps }) {
   var [menuOpen, setMenuOpen] = useState(false);
   var menuRef = useRef(null);
 
@@ -810,6 +708,7 @@ function OpportunityCard({ item, onEdit, onDelete, onVisibilityChange }) {
   }, []);
 
   var isExpired = item.deadline && new Date(item.deadline) < new Date();
+  var hasFormApply = item.apply_method === 'form';
 
   return (
     <article
@@ -825,6 +724,18 @@ function OpportunityCard({ item, onEdit, onDelete, onVisibilityChange }) {
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
                 Expired
               </span>
+            )}
+            {/* Application count badge — only for form-apply listings */}
+            {hasFormApply && appCount > 0 && (
+              <button
+                onClick={function() { onViewApps(item); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE', cursor: 'pointer' }}
+                className="hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label={'View ' + appCount + ' application' + (appCount !== 1 ? 's' : '')}
+              >
+                <Inbox size={10} aria-hidden="true" />
+                {appCount} {appCount === 1 ? 'application' : 'applications'}
+              </button>
             )}
           </div>
 
@@ -891,12 +802,27 @@ function OpportunityCard({ item, onEdit, onDelete, onVisibilityChange }) {
 
           {menuOpen && (
             <div
-              style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', minWidth: '180px', zIndex: 20, overflow: 'hidden' }}
+              style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', minWidth: '190px', zIndex: 20, overflow: 'hidden' }}
               role="menu"
             >
               <button onClick={function() { setMenuOpen(false); onEdit(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textPrimary, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-slate-50 focus:outline-none focus:bg-slate-50" role="menuitem">
                 <Pencil size={13} aria-hidden="true" /> Edit
               </button>
+
+              {/* View Applications — only shown for in-platform form */}
+              {hasFormApply && (
+                <button onClick={function() { setMenuOpen(false); onViewApps(item); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#3B82F6', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-blue-50 focus:outline-none focus:bg-blue-50" role="menuitem">
+                  <Inbox size={13} aria-hidden="true" />
+                  View Applications
+                  {appCount > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, background: '#EFF6FF', color: '#3B82F6', padding: '1px 7px', borderRadius: '99px' }}>
+                      {appCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
 
               {item.visibility === 'draft' && (
                 <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none focus:bg-amber-50" role="menuitem">
@@ -957,7 +883,7 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
 }
 
 // ── Applications drawer ───────────────────────────────────────────────────────
-function ApplicationsDrawer({ item, organizationId, onClose }) {
+function ApplicationsDrawer({ item, organizationId, onClose, onCountChange }) {
   var [apps, setApps] = useState([]);
   var [loading, setLoading] = useState(true);
 
@@ -1007,7 +933,7 @@ function ApplicationsDrawer({ item, organizationId, onClose }) {
 
           {!loading && apps.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Mail size={32} color={textTertiary} style={{ margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
+              <Inbox size={32} color={textTertiary} style={{ margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
               <p style={{ fontSize: '14px', fontWeight: 700, color: textPrimary, marginBottom: '6px' }}>No applications yet</p>
               <p style={{ fontSize: '13px', color: textMuted }}>Applications submitted through the platform will appear here.</p>
             </div>
@@ -1057,6 +983,7 @@ function OrgOpportunities() {
   var isVerified = !!(organization && organization.is_verified_nonprofit);
 
   var [items, setItems] = useState([]);
+  var [appCounts, setAppCounts] = useState({});
   var [loading, setLoading] = useState(true);
   var [showModal, setShowModal] = useState(false);
   var [editing, setEditing] = useState(null);
@@ -1074,7 +1001,23 @@ function OrgOpportunities() {
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
-    setItems(r.data || []);
+    var rows = r.data || [];
+    setItems(rows);
+
+    // Load application counts for all form-apply listings
+    var formIds = rows.filter(function(i) { return i.apply_method === 'form'; }).map(function(i) { return i.id; });
+    if (formIds.length > 0) {
+      var countResult = await supabase
+        .from('opportunity_applications')
+        .select('opportunity_id')
+        .in('opportunity_id', formIds);
+      var counts = {};
+      (countResult.data || []).forEach(function(row) {
+        counts[row.opportunity_id] = (counts[row.opportunity_id] || 0) + 1;
+      });
+      setAppCounts(counts);
+    }
+
     setLoading(false);
   }
 
@@ -1086,8 +1029,9 @@ function OrgOpportunities() {
 
     if (r.error) { mascotErrorToast('Failed to update visibility.'); return; }
 
-    // Fire notification when publishing
-    if (newVisibility === 'members_only' || newVisibility === 'public') {
+    // Only notify when publishing from draft for the first time
+    var wasUnpublished = item.visibility === 'draft';
+    if (wasUnpublished && (newVisibility === 'members_only' || newVisibility === 'public')) {
       try {
         var { notifyOrganizationMembers } = await import('../lib/notificationService');
         await notifyOrganizationMembers(
@@ -1116,7 +1060,6 @@ function OrgOpportunities() {
     loadItems();
   }
 
-  // Filter
   var filtered = items.filter(function(item) {
     var matchSearch = !search || item.title.toLowerCase().includes(search.toLowerCase()) || (item.description && item.description.toLowerCase().includes(search.toLowerCase()));
     var matchVis = filterVis === 'all' || item.visibility === filterVis;
@@ -1129,7 +1072,6 @@ function OrgOpportunities() {
   return (
     <div style={{ background: pageBg, minHeight: '100vh' }}>
 
-      {/* Page header */}
       <div style={{ padding: '0 0 20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <div>
@@ -1151,7 +1093,6 @@ function OrgOpportunities() {
         </div>
       </div>
 
-      {/* Not verified gate */}
       {!isVerified && isAdmin && (
         <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '24px' }}>
           <EmptyState onAdd={function() {}} isVerified={false} />
@@ -1160,19 +1101,11 @@ function OrgOpportunities() {
 
       {isVerified && (
         <>
-          {/* Filters */}
           {items.length > 0 && (
             <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
                 <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
-                <input
-                  value={search}
-                  onChange={function(e) { setSearch(e.target.value); }}
-                  placeholder="Search opportunities..."
-                  style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textPrimary, background: cardBg, boxSizing: 'border-box', outline: 'none' }}
-                  aria-label="Search opportunities"
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <input value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search opportunities..." style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textPrimary, background: cardBg, boxSizing: 'border-box', outline: 'none' }} aria-label="Search opportunities" className="focus:ring-2 focus:ring-blue-500" />
               </div>
 
               <div style={{ display: 'flex', gap: '6px' }} role="group" aria-label="Filter by visibility">
@@ -1181,19 +1114,9 @@ function OrgOpportunities() {
                   var meta = VISIBILITY_META[v];
                   var label = v === 'all' ? 'All' : meta ? meta.label : v;
                   return (
-                    <button
-                      key={v}
-                      onClick={function() { setFilterVis(v); }}
-                      style={{
-                        padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
-                        border: '1px solid ' + (active ? '#3B82F6' : borderColor),
-                        background: active ? '#EFF6FF' : cardBg,
-                        color: active ? '#3B82F6' : textMuted,
-                        cursor: 'pointer',
-                      }}
-                      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-pressed={active}
-                    >
+                    <button key={v} onClick={function() { setFilterVis(v); }}
+                      style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#3B82F6' : borderColor), background: active ? '#EFF6FF' : cardBg, color: active ? '#3B82F6' : textMuted, cursor: 'pointer' }}
+                      className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
                       {label} {counts[v] > 0 ? '(' + counts[v] + ')' : ''}
                     </button>
                   );
@@ -1202,7 +1125,6 @@ function OrgOpportunities() {
             </div>
           )}
 
-          {/* Content */}
           {loading && <Skeleton />}
 
           {!loading && items.length === 0 && (
@@ -1224,16 +1146,17 @@ function OrgOpportunities() {
               <OpportunityCard
                 key={item.id}
                 item={item}
+                appCount={appCounts[item.id] || 0}
                 onEdit={function(i) { setEditing(i); setShowModal(true); }}
                 onDelete={function(i) { setDeleting(i); }}
                 onVisibilityChange={handleVisibilityChange}
+                onViewApps={function(i) { setViewingApps(i); }}
               />
             );
           })}
         </>
       )}
 
-      {/* Modals */}
       {showModal && (
         <OpportunityModal
           organizationId={organizationId}
