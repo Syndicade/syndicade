@@ -24,6 +24,7 @@ import ListedOrgDashboard from './pages/ListedOrgDashboard';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrgLayout from './pages/OrgLayout';
 import AdminInbox from './pages/AdminInbox';
+import Approvals from './pages/Approvals';
 import AdminContacts from './pages/AdminContacts';
 import EventDiscovery from './pages/EventDiscovery';
 import DocumentLibrary from './pages/DocumentLibrary';
@@ -33,6 +34,7 @@ import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
 import OrgChat from './pages/OrgChat';
 import SurveysList from './pages/SurveysList';
+import OrgForms from './pages/OrgForms';
 import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
 import ProgramDetail from './pages/ProgramDetail';
@@ -193,7 +195,7 @@ var hideChrome = (
               element={session ? <OrgLayout /> : <Navigate to="/login" replace />}>
               <Route index element={<OrganizationDashboard />} />
               <Route path="photos"    element={<OrganizationDashboard />} />
-              <Route path="approvals" element={<OrganizationDashboard />} />
+              <Route path="approvals" element={<Approvals />} />
               <Route path="analytics" element={<OrganizationDashboard />} />
               <Route path="settings"  element={<OrganizationDashboard />} />
               <Route path="invite"    element={<OrganizationDashboard />} />
@@ -207,6 +209,7 @@ var hideChrome = (
               <Route path="documents" element={<DocumentLibrary />} />
               <Route path="polls" element={<PollsList />} />
               <Route path="signup-forms" element={<SignupFormsList />} />
+              <Route path="forms" element={<OrgForms />} />
               <Route path="surveys" element={<SurveysList />} />
               <Route path="programs" element={<OrgPrograms />} />
               <Route path="opportunities" element={<OrgOpportunities />} />

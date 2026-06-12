@@ -99,6 +99,7 @@ function buildNavGroups(organizationId, pendingCount, unreadCount) {
         { id:'chat',          label:'Chat',          iconKey:'chat',       route:'chat',          path: base + '/chat',                  roles:['admin','member'] },
         { id:'documents',     label:'Documents',     iconKey:'folder',     route:'documents',     path: base + '/documents',             roles:['admin','member'] },
         { id:'photos',        label:'Photos',        iconKey:'photo',      route:'photos',        path: base + '/photos',                roles:['admin','member'] },
+        { id:'forms', label:'Forms', iconKey:'forms', route:'forms', path: base + '/forms', roles:['admin','member'] },
       ]
     },
     {
