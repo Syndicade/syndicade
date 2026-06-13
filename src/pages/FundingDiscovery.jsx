@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
+import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import {
   DollarSign, Search, Calendar, ExternalLink, Mail,
   X, AlertCircle, Paperclip, SlidersHorizontal,
-  BadgeCheck, ChevronDown, CheckCircle, BookOpen, Users
+  BadgeCheck, ChevronDown, CheckCircle
 } from 'lucide-react';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -94,7 +93,7 @@ function SidebarFilters({ filters, onChange, onReset }) {
     );
   }
 
-  var hasFilters = filters.fundingType !== 'all' || filters.city;
+  var hasFilters = filters.fundingType !== 'all' || filters.city || filters.deadline !== 'all';
 
   return (
     <div>
@@ -140,10 +139,10 @@ function SidebarFilters({ filters, onChange, onReset }) {
 
       <FilterSection label="Deadline">
         {[
-          { value: 'all',    label: 'All' },
-          { value: 'week',   label: 'Closing this week' },
-          { value: 'month',  label: 'Closing this month' },
-          { value: 'open',   label: 'No deadline' },
+          { value: 'all',   label: 'All' },
+          { value: 'week',  label: 'Closing this week' },
+          { value: 'month', label: 'Closing this month' },
+          { value: 'open',  label: 'No deadline' },
         ].map(function(opt) {
           var active = filters.deadline === opt.value;
           return (
@@ -165,11 +164,30 @@ function SidebarFilters({ filters, onChange, onReset }) {
 }
 
 // ── Apply modal ───────────────────────────────────────────────────────────────
-function ApplyModal({ item, onClose }) {
-  var [form, setForm] = useState({ name: '', email: '', message: '' });
-  var [saving, setSaving] = useState(false);
+function ApplyModal({ item, onClose, currentUser }) {
+  var [form, setForm] = useState({
+    name: (currentUser && (currentUser.first_name || currentUser.last_name))
+      ? ((currentUser.first_name || '') + ' ' + (currentUser.last_name || '')).trim()
+      : '',
+    email: (currentUser && currentUser.email) ? currentUser.email : '',
+    message: '',
+  });
+  var [saving, setSaving]       = useState(false);
   var [submitted, setSubmitted] = useState(false);
-  var [errors, setErrors] = useState({});
+  var [errors, setErrors]       = useState({});
+  var firstFieldRef             = useRef(null);
+
+  useEffect(function() {
+    if (firstFieldRef.current) firstFieldRef.current.focus();
+  }, []);
+
+  useEffect(function() {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return function() { document.removeEventListener('keydown', handleKeyDown); };
+  }, [onClose]);
 
   function setField(key, val) {
     setForm(function(prev) { var n = Object.assign({}, prev); n[key] = val; return n; });
@@ -188,15 +206,22 @@ function ApplyModal({ item, onClose }) {
     var errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setSaving(true);
-    var r = await supabase.from('funding_applications').insert({
+    var payload = {
       funding_id: item.id,
       organization_id: item.organization_id,
       applicant_name: form.name.trim(),
       applicant_email: form.email.trim(),
       message: form.message.trim() || null,
-    });
+    };
+    if (currentUser && currentUser.id) payload.user_id = currentUser.id;
+    var r = await supabase.from('funding_applications').insert(payload);
     setSaving(false);
-    if (r.error) { setErrors({ submit: 'Something went wrong. Please try again.' }); return; }
+    if (r.error) {
+      mascotErrorToast('Application failed.', 'Something went wrong. Please try again.');
+      setErrors({ submit: 'Something went wrong. Please try again.' });
+      return;
+    }
+    mascotSuccessToast('Application sent!', 'The organization will be in touch.');
     setSubmitted(true);
   }
 
@@ -236,20 +261,54 @@ function ApplyModal({ item, onClose }) {
             <>
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="fund-apply-name" style={labelStyle}>Your Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                <input id="fund-apply-name" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="Jane Smith" style={Object.assign({}, inputStyle, errors.name ? { borderColor: '#EF4444' } : {})} aria-required="true" className="focus:ring-2 focus:ring-blue-500" />
-                {errors.name && <p style={errorStyle} role="alert"><AlertCircle size={11} />{errors.name}</p>}
+                <input
+                  ref={firstFieldRef}
+                  id="fund-apply-name"
+                  value={form.name}
+                  onChange={function(e) { setField('name', e.target.value); }}
+                  placeholder="Jane Smith"
+                  style={Object.assign({}, inputStyle, errors.name ? { borderColor: '#EF4444' } : {})}
+                  aria-required="true"
+                  aria-describedby={errors.name ? 'fund-name-error' : undefined}
+                  className="focus:ring-2 focus:ring-blue-500"
+                />
+                {errors.name && <p id="fund-name-error" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.name}</p>}
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="fund-apply-email" style={labelStyle}>Email Address <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                <input id="fund-apply-email" type="email" value={form.email} onChange={function(e) { setField('email', e.target.value); }} placeholder="jane@example.com" style={Object.assign({}, inputStyle, errors.email ? { borderColor: '#EF4444' } : {})} aria-required="true" className="focus:ring-2 focus:ring-blue-500" />
-                {errors.email && <p style={errorStyle} role="alert"><AlertCircle size={11} />{errors.email}</p>}
+                <input
+                  id="fund-apply-email"
+                  type="email"
+                  value={form.email}
+                  onChange={function(e) { setField('email', e.target.value); }}
+                  placeholder="jane@example.com"
+                  style={Object.assign({}, inputStyle, errors.email ? { borderColor: '#EF4444' } : {})}
+                  aria-required="true"
+                  aria-describedby={errors.email ? 'fund-email-error' : undefined}
+                  className="focus:ring-2 focus:ring-blue-500"
+                />
+                {errors.email && <p id="fund-email-error" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.email}</p>}
               </div>
               <div style={{ marginBottom: '20px' }}>
                 <label htmlFor="fund-apply-message" style={labelStyle}>Message <span style={{ fontWeight: 400, color: textMuted }}>(optional)</span></label>
-                <textarea id="fund-apply-message" value={form.message} onChange={function(e) { setField('message', e.target.value); }} placeholder="Tell the organization about yourself and why you're applying..." rows={4} style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} className="focus:ring-2 focus:ring-blue-500" />
+                <textarea
+                  id="fund-apply-message"
+                  value={form.message}
+                  onChange={function(e) { setField('message', e.target.value); }}
+                  placeholder="Tell the organization about yourself and why you're applying..."
+                  rows={4}
+                  style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })}
+                  className="focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-              {errors.submit && <p style={Object.assign({}, errorStyle, { marginBottom: '12px' })} role="alert"><AlertCircle size={11} />{errors.submit}</p>}
-              <button onClick={handleSubmit} disabled={saving} style={{ width: '100%', padding: '11px', background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }} className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+              {errors.submit && <p style={Object.assign({}, errorStyle, { marginBottom: '12px' })} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.submit}</p>}
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                style={{ width: '100%', padding: '11px', background: '#16A34A', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
+                className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                aria-disabled={saving}
+              >
                 {saving ? 'Submitting...' : 'Submit Application'}
               </button>
             </>
@@ -267,11 +326,22 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
   var amount    = formatAmount(item);
   var isExpired = item.deadline && new Date(item.deadline) < new Date();
 
+  useEffect(function() {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return function() { document.removeEventListener('keydown', handleKeyDown); };
+  }, [onClose]);
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 50 }} role="dialog" aria-modal="true" aria-labelledby="fund-detail-title" onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 50 }}
+      role="dialog" aria-modal="true" aria-labelledby="fund-detail-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div style={{ width: '100%', maxWidth: '520px', background: cardBg, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 32px rgba(0,0,0,0.12)' }}>
 
-        {/* Header */}
         <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid ' + borderColor, position: 'sticky', top: 0, background: cardBg, zIndex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
             <div style={{ flex: 1 }}>
@@ -287,9 +357,7 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
               {typeLabel ? typeLabel.label : item.funding_type}
             </span>
             {amount && (
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', background: '#F0FDF4', color: '#16A34A' }}>
-                {amount}
-              </span>
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', background: '#F0FDF4', color: '#16A34A' }}>{amount}</span>
             )}
             {item.deadline && !isExpired && (
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '99px', background: elevatedBg, color: textMuted }}>
@@ -302,10 +370,7 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
           </div>
         </div>
 
-        {/* Body */}
         <div style={{ padding: '24px' }}>
-
-          {/* Amount callout */}
           {amount && (
             <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <DollarSign size={24} color="#16A34A" aria-hidden="true" />
@@ -316,13 +381,11 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
             </div>
           )}
 
-          {/* Description */}
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>About this Funding</h3>
             <p style={{ fontSize: '14px', color: textSecondary, lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{item.description}</p>
           </div>
 
-          {/* Eligibility */}
           {item.eligibility && (
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Eligibility</h3>
@@ -332,33 +395,50 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
             </div>
           )}
 
-          {/* Tags */}
           {item.tags && item.tags.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Tags</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {item.tags.map(function(tag) { return <span key={tag} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '99px', background: elevatedBg, color: textMuted, fontWeight: 600 }}>{tag}</span>; })}
+                {item.tags.map(function(tag) {
+                  return <span key={tag} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '99px', background: elevatedBg, color: textMuted, fontWeight: 600 }}>{tag}</span>;
+                })}
               </div>
             </div>
           )}
 
-          {/* Document */}
           {item.posting_url && (
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Supporting Document</h3>
-              <a href={item.posting_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: pageBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <a
+                href={item.posting_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: pageBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
+                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 <Paperclip size={14} aria-hidden="true" />View Document<ExternalLink size={12} aria-hidden="true" />
               </a>
             </div>
           )}
 
-          {/* CTA */}
           <div style={{ borderTop: '1px solid ' + borderColor, paddingTop: '20px' }}>
             {!isExpired ? (
               item.apply_method === 'form' ? (
-                <button onClick={onApply} style={{ width: '100%', padding: '13px', background: '#16A34A', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }} className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Apply for this Funding</button>
+                <button
+                  onClick={onApply}
+                  style={{ width: '100%', padding: '13px', background: '#16A34A', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
+                  className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  Apply for this Funding
+                </button>
               ) : (
-                <a href={item.apply_url && item.apply_url.includes('@') ? 'mailto:' + item.apply_url : item.apply_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px', background: '#16A34A', color: '#fff', borderRadius: '10px', fontSize: '15px', fontWeight: 800, textDecoration: 'none', boxSizing: 'border-box' }} className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                <a
+                  href={item.apply_url && item.apply_url.includes('@') ? 'mailto:' + item.apply_url : item.apply_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px', background: '#16A34A', color: '#fff', borderRadius: '10px', fontSize: '15px', fontWeight: 800, textDecoration: 'none', boxSizing: 'border-box' }}
+                  className="hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
                   {item.apply_url && item.apply_url.includes('@') ? <Mail size={16} aria-hidden="true" /> : <ExternalLink size={16} aria-hidden="true" />}
                   Apply Now
                 </a>
@@ -384,7 +464,7 @@ function FundingCard({ item, orgName, onClick }) {
 
   return (
     <article
-      style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '18px 20px', cursor: 'pointer', boxShadow: '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)' }}
+      style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '18px 20px', cursor: 'pointer', boxShadow: '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)', height: '100%', boxSizing: 'border-box' }}
       onClick={onClick}
       onMouseEnter={function(e) { e.currentTarget.style.borderColor = '#BBF7D0'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
       onMouseLeave={function(e) { e.currentTarget.style.borderColor = borderColor; e.currentTarget.style.boxShadow = '3px 4px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)'; }}
@@ -413,9 +493,7 @@ function FundingCard({ item, orgName, onClick }) {
               {typeLabel ? typeLabel.label : item.funding_type}
             </span>
             {amount && (
-              <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '99px', background: '#F0FDF4', color: '#16A34A' }}>
-                {amount}
-              </span>
+              <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '99px', background: '#F0FDF4', color: '#16A34A' }}>{amount}</span>
             )}
           </div>
 
@@ -429,22 +507,10 @@ function FundingCard({ item, orgName, onClick }) {
                 <Calendar size={11} aria-hidden="true" />Due {new Date(item.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
             )}
-            {item.eligibility && (
-              <span style={{ fontSize: '12px', color: textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Users size={11} aria-hidden="true" />Eligibility listed
-              </span>
-            )}
             {item.posting_url && (
               <span style={{ fontSize: '12px', color: textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Paperclip size={11} aria-hidden="true" />Document attached
               </span>
-            )}
-            {item.tags && item.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                {item.tags.slice(0, 3).map(function(tag) {
-                  return <span key={tag} style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '99px', background: elevatedBg, color: textMuted }}>{tag}</span>;
-                })}
-              </div>
             )}
             <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#16A34A' }}>View details →</span>
           </div>
@@ -456,16 +522,17 @@ function FundingCard({ item, orgName, onClick }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FundingDiscovery() {
-  var [items, setItems]             = useState([]);
-  var [orgs, setOrgs]               = useState({});
-  var [loading, setLoading]         = useState(true);
-  var [error, setError]             = useState(null);
-  var [keyword, setKeyword]         = useState('');
+  var [items, setItems]                       = useState([]);
+  var [orgs, setOrgs]                         = useState({});
+  var [loading, setLoading]                   = useState(true);
+  var [error, setError]                       = useState(null);
+  var [keyword, setKeyword]                   = useState('');
   var [debouncedKeyword, setDebouncedKeyword] = useState('');
-  var [filters, setFilters]         = useState({ fundingType: 'all', city: '', deadline: 'all' });
+  var [filters, setFilters]                   = useState({ fundingType: 'all', city: '', deadline: 'all' });
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  var [selected, setSelected]       = useState(null);
-  var [applying, setApplying]       = useState(null);
+  var [selected, setSelected]                 = useState(null);
+  var [applying, setApplying]                 = useState(null);
+  var [currentUser, setCurrentUser]           = useState(null);
   var searchRef = useRef(null);
 
   useEffect(function() {
@@ -473,7 +540,28 @@ export default function FundingDiscovery() {
     return function() { clearTimeout(t); };
   }, [keyword]);
 
-  useEffect(function() { loadItems(); }, []);
+  useEffect(function() {
+    loadItems();
+    loadCurrentUser();
+  }, []);
+
+  async function loadCurrentUser() {
+    var sessionRes = await supabase.auth.getSession();
+    var session = sessionRes.data && sessionRes.data.session;
+    if (!session) return;
+    var userId = session.user.id;
+    var profileRes = await supabase
+      .from('members')
+      .select('user_id,first_name,last_name')
+      .eq('user_id', userId)
+      .single();
+    setCurrentUser({
+      id: userId,
+      email: session.user.email,
+      first_name: profileRes.data ? profileRes.data.first_name : '',
+      last_name: profileRes.data ? profileRes.data.last_name : '',
+    });
+  }
 
   async function loadItems() {
     setLoading(true);
@@ -551,7 +639,6 @@ export default function FundingDiscovery() {
               <BadgeCheck size={13} color="#16A34A" aria-hidden="true" />
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#16A34A' }}>Verified Nonprofits</span>
             </div>
-
             <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
               <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
               <input
@@ -562,16 +649,21 @@ export default function FundingDiscovery() {
                 placeholder="Search scholarships, grants, organizations..."
                 aria-label="Search funding opportunities"
                 style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '14px', color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
-                className="focus:ring-2 focus:ring-green-500"
+                className="focus:ring-2 focus:ring-blue-500"
               />
               {keyword && (
-                <button onClick={function() { setKeyword(''); }} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMuted, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }} aria-label="Clear search" className="focus:outline-none focus:ring-2 focus:ring-green-500 rounded">
+                <button onClick={function() { setKeyword(''); }} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMuted, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }} aria-label="Clear search" className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                   <X size={14} />
                 </button>
               )}
             </div>
-
-            <button onClick={function() { setMobileFiltersOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }} className="lg:hidden focus:outline-none focus:ring-2 focus:ring-green-500" aria-label="Open filters" aria-expanded={mobileFiltersOpen}>
+            <button
+              onClick={function() { setMobileFiltersOpen(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Open filters"
+              aria-expanded={mobileFiltersOpen}
+            >
               <SlidersHorizontal size={14} aria-hidden="true" />Filters
             </button>
           </div>
@@ -594,7 +686,7 @@ export default function FundingDiscovery() {
                 <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '320px', maxWidth: '100%', background: cardBg, boxShadow: '4px 0 24px rgba(0,0,0,0.15)', overflowY: 'auto', padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                     <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, margin: 0 }}>Filters</h2>
-                    <button onClick={function() { setMobileFiltersOpen(false); }} style={{ padding: '6px', borderRadius: '8px', color: textMuted, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close filters" className="focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <button onClick={function() { setMobileFiltersOpen(false); }} style={{ padding: '6px', borderRadius: '8px', color: textMuted, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close filters" className="focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <X size={18} />
                     </button>
                   </div>
@@ -607,7 +699,7 @@ export default function FundingDiscovery() {
             {/* Main content */}
             <main style={{ flex: 1, minWidth: 0 }} aria-label="Funding listings">
               <div style={{ marginBottom: '16px' }}>
-                <h1 style={{ fontSize: '24px', fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>Grants & Scholarships</h1>
+                <h1 style={{ fontSize: '24px', fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>Grants &amp; Scholarships</h1>
                 <p style={{ color: textMuted, fontSize: '14px', margin: 0 }}>Funding opportunities from verified nonprofits — scholarships, grants, emergency funds, and more.</p>
               </div>
 
@@ -617,14 +709,12 @@ export default function FundingDiscovery() {
                 </p>
               </div>
 
-              {/* Skeletons */}
               {loading && (
                 <div aria-label="Loading funding" aria-busy="true">
                   {[1,2,3,4,5,6].map(function(i) { return <FundingCardSkeleton key={i} />; })}
                 </div>
               )}
 
-              {/* Error */}
               {!loading && error && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }} role="alert">
                   <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -636,7 +726,6 @@ export default function FundingDiscovery() {
                 </div>
               )}
 
-              {/* Empty — no data */}
               {!loading && !error && items.length === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }}>
                   <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F0FDF4', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -647,7 +736,6 @@ export default function FundingDiscovery() {
                 </div>
               )}
 
-              {/* Empty — no matches */}
               {!loading && !error && items.length > 0 && filtered.length === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }}>
                   <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid ' + borderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -659,9 +747,8 @@ export default function FundingDiscovery() {
                 </div>
               )}
 
-              {/* Results */}
               {!loading && !error && filtered.length > 0 && (
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Funding listings">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Funding listings">
                   {filtered.map(function(item) {
                     return (
                       <div key={item.id} role="listitem">
@@ -681,10 +768,19 @@ export default function FundingDiscovery() {
       </div>
 
       {selected && (
-        <DetailDrawer item={selected} orgName={orgs[selected.organization_id] || 'Verified Nonprofit'} onClose={function() { setSelected(null); }} onApply={function() { setApplying(selected); }} />
+        <DetailDrawer
+          item={selected}
+          orgName={orgs[selected.organization_id] || 'Verified Nonprofit'}
+          onClose={function() { setSelected(null); }}
+          onApply={function() { setApplying(selected); }}
+        />
       )}
       {applying && (
-        <ApplyModal item={applying} onClose={function() { setApplying(null); }} />
+        <ApplyModal
+          item={applying}
+          currentUser={currentUser}
+          onClose={function() { setApplying(null); }}
+        />
       )}
     </>
   );
