@@ -1,211 +1,12 @@
-/**
- * GroupDetail.jsx
- * Task 13 changes:
- *   - Page header: 30px / weight 800 / #0E1523, count-based subtitle
- *   - window.confirm → ConfirmModal (4 locations: remove member, unlink event, delete doc, delete announcement)
- *   - isAdmin from useOutletContext() — consistent with rest of app
- *   - var only, string concat className, no template literals
- *
- * DB MIGRATIONS NEEDED (run once in Supabase SQL editor):
- *
- * -- Role column on org_group_members:
- * ALTER TABLE public.org_group_members
- *   ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'member';
- *
- * -- event_groups junction table:
- * CREATE TABLE IF NOT EXISTS public.event_groups (
- *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- *   event_id uuid REFERENCES public.events(id) ON DELETE CASCADE NOT NULL,
- *   group_id uuid REFERENCES public.org_groups(id) ON DELETE CASCADE NOT NULL,
- *   created_at timestamptz DEFAULT now(),
- *   UNIQUE(event_id, group_id)
- * );
- */
-
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useNavigate, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import { notifyGroupMembers } from '../lib/notificationService';
 import CreateEvent from '../components/CreateEvent';
 import FileUploadModal from '../components/FileUploadModal';
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
-var PlusIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  );
-};
-
-var TrashIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6"/>
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/><path d="M14 11v6"/>
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-    </svg>
-  );
-};
-
-var EditIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-    </svg>
-  );
-};
-
-var MailIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-      <polyline points="22,6 12,13 2,6"/>
-    </svg>
-  );
-};
-
-var SearchIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8"/>
-      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-  );
-};
-
-var XIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
-};
-
-var CheckIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  );
-};
-
-var DownloadIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
-  );
-};
-
-var LinkIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-    </svg>
-  );
-};
-
-var ChevronRightIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6"/>
-    </svg>
-  );
-};
-
-var ChevronLeftIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  );
-};
-
-var UsersIcon = function(props) {
-  var size = props.size || 16;
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  );
-};
-
-var CalendarIcon = function(props) {
-  var size = props.size || 16;
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-  );
-};
-
-var FolderIcon = function(props) {
-  var size = props.size || 16;
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-    </svg>
-  );
-};
-
-var MegaphoneIcon = function(props) {
-  var size = props.size || 16;
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 11l19-9-9 19-2-8-8-2z"/>
-    </svg>
-  );
-};
-
-var AlertCircleIcon = function(props) {
-  var size = props.size || 40;
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-      <line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  );
-};
-
-var AlertTriangleIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
-  );
-};
+import MemberCard from '../components/MemberCard';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -247,19 +48,38 @@ function formatDate(iso) {
 
 // ─── Skeletons ────────────────────────────────────────────────────────────────
 
-var RowSkeleton = function(props) {
+var CardGridSkeleton = function(props) {
   var count = props.count || 3;
+  var cols = props.cols || 3;
+  var gridClass = cols === 4
+    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'
+    : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
   return (
-    <div className="space-y-2" aria-busy="true">
+    <div className={gridClass} aria-busy="true">
       {Array.from({ length: count }).map(function(_, i) {
         return (
-          <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 animate-pulse">
-            <div className="w-9 h-9 rounded-full bg-slate-200 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3.5 bg-slate-200 rounded w-36" />
-              <div className="h-3 bg-slate-100 rounded w-24" />
-            </div>
-            <div className="h-7 w-20 bg-slate-100 rounded-lg" />
+          <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 animate-pulse space-y-3">
+            <div className="h-4 bg-slate-200 rounded w-3/4" />
+            <div className="h-3 bg-slate-100 rounded w-1/2" />
+            <div className="h-3 bg-slate-100 rounded w-2/3" />
+            <div className="h-7 bg-slate-100 rounded-lg w-24 mt-2" />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+var MemberGridSkeleton = function() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" aria-busy="true">
+      {Array.from({ length: 6 }).map(function(_, i) {
+        return (
+          <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 animate-pulse flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-slate-200" />
+            <div className="h-3.5 bg-slate-200 rounded w-20" />
+            <div className="h-3 bg-slate-100 rounded w-16" />
+            <div className="h-7 bg-slate-100 rounded-lg w-full mt-1" />
           </div>
         );
       })}
@@ -277,25 +97,16 @@ var PageSkeleton = function() {
             <div className="h-8 w-52 bg-slate-200 rounded" />
             <div className="h-4 w-32 bg-slate-100 rounded" />
           </div>
-          <div className="flex gap-2">
-            <div className="h-9 w-28 bg-slate-100 rounded-lg" />
-            <div className="h-9 w-28 bg-slate-100 rounded-lg" />
-          </div>
+          <div className="h-9 w-28 bg-slate-100 rounded-lg" />
         </div>
         <div className="flex gap-3 mb-5">
-          {[1,2,3].map(function(i) {
-            return <div key={i} className="h-14 w-32 bg-slate-100 rounded-xl" />;
-          })}
+          {[1,2,3].map(function(i) { return <div key={i} className="h-14 w-28 bg-slate-100 rounded-xl" />; })}
         </div>
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="border-b border-slate-200 flex">
-            {[1,2,3,4].map(function(i) {
-              return <div key={i} className="px-5 py-3.5 h-12 w-28 bg-slate-100 m-1 rounded" />;
-            })}
+            {[1,2,3,4].map(function(i) { return <div key={i} className="px-5 py-3.5 h-12 w-28 bg-slate-100 m-1 rounded" />; })}
           </div>
-          <div className="p-6">
-            <RowSkeleton count={4} />
-          </div>
+          <div className="p-6"><MemberGridSkeleton /></div>
         </div>
       </div>
     </main>
@@ -308,6 +119,7 @@ var ConfirmModal = function(props) {
   var title = props.title;
   var message = props.message;
   var confirmLabel = props.confirmLabel || 'Delete';
+  var confirmClass = props.confirmClass || 'bg-red-500 hover:bg-red-600 focus:ring-red-500';
   var onConfirm = props.onConfirm;
   var onCancel = props.onCancel;
 
@@ -324,32 +136,97 @@ var ConfirmModal = function(props) {
       onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-        <div className="flex items-start gap-4 mb-5">
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-            <AlertTriangleIcon />
-          </div>
-          <div>
-            <h2 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h2>
-            <p className="text-sm text-[#475569]">{message}</p>
-          </div>
+        <div className="mb-5">
+          <h2 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h2>
+          <p className="text-sm text-[#475569]">{message}</p>
         </div>
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            autoFocus
-            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-          >
+          <button onClick={onCancel} autoFocus
+            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
             Cancel
           </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-          >
+          <button onClick={onConfirm}
+            className={'px-4 py-2 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ' + confirmClass}>
             {confirmLabel}
           </button>
         </div>
       </div>
     </div>
+  );
+};
+
+// ─── Actions Dropdown ─────────────────────────────────────────────────────────
+// openDir: 'up' (default) or 'down'
+
+var ActionsDropdown = function(props) {
+  var items = props.items;
+  var label = props.label || 'Actions';
+  var openDir = props.openDir || 'up';
+  var [open, setOpen] = useState(false);
+  var ref = useRef(null);
+
+  useEffect(function() {
+    if (!open) return;
+    function outside(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', outside);
+    return function() { document.removeEventListener('mousedown', outside); };
+  }, [open]);
+
+  useEffect(function() {
+    if (!open) return;
+    function onKey(e) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  var menuPositionClass = openDir === 'up'
+    ? 'right-0 bottom-full mb-1.5'
+    : 'right-0 top-full mt-1.5';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v; }); }}
+        className={'flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (open ? 'bg-slate-100 border-slate-300 text-[#0E1523]' : 'bg-white border-slate-200 text-[#475569] hover:bg-slate-50 hover:border-slate-300')}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        {label}
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className={'absolute w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 overflow-hidden ' + menuPositionClass}
+          role="menu"
+        >
+          {items.map(function(item, i) {
+            if (item.separator) return <div key={i} className="h-px bg-slate-100 mx-3 my-1" role="separator" />;
+            return (
+              <button key={i} role="menuitem"
+                onClick={function(e) { e.stopPropagation(); setOpen(false); item.onClick(); }}
+                className={'w-full text-left px-4 py-2.5 text-sm transition-colors focus:outline-none ' + (item.danger ? 'text-red-500 hover:bg-red-50 focus:bg-red-50' : 'text-[#475569] hover:bg-slate-50 hover:text-[#0E1523] focus:bg-slate-50')}>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── XIcon (modal close only) ─────────────────────────────────────────────────
+
+var XIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
   );
 };
 
@@ -374,90 +251,70 @@ var EditGroupModal = function(props) {
     setForm(function(f) { var n = Object.assign({}, f); n[key] = val; return n; });
   }
 
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
   var handleSave = async function() {
     if (!form.name.trim()) { toast.error('Group name is required'); return; }
     setSaving(true);
     try {
       var res = await supabase.from('org_groups').update({
-        name: form.name.trim(),
-        description: form.description.trim(),
-        type: form.type,
-        visibility: form.visibility,
+        name: form.name.trim(), description: form.description.trim(),
+        type: form.type, visibility: form.visibility,
         join_approval_required: form.join_approval_required,
-        color: form.color,
-        updated_at: new Date().toISOString(),
+        color: form.color, updated_at: new Date().toISOString(),
       }).eq('id', group.id);
       if (res.error) throw res.error;
       mascotSuccessToast('Group updated');
       onSaved();
-    } catch (e) {
-      mascotErrorToast('Failed to update group', e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { mascotErrorToast('Failed to update group', e.message); }
+    finally { setSaving(false); }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4"
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4"
       role="dialog" aria-modal="true" aria-labelledby="edit-group-title"
-      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
-    >
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 id="edit-group-title" className="text-xl font-bold text-[#0E1523]">Edit Group</h2>
-          <button onClick={onClose}
-            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close">
-            <XIcon />
-          </button>
+          <button onClick={onClose} className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Close"><XIcon /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label htmlFor="eg-name" className="block text-sm font-medium text-[#0E1523] mb-1">
-              Group Name <span className="text-red-500" aria-hidden="true">*</span>
-            </label>
-            <input id="eg-name" type="text" value={form.name}
-              onChange={function(e) { updateForm('name', e.target.value); }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              maxLength={100} aria-required="true" />
+            <label htmlFor="eg-name" className="block text-sm font-medium text-[#0E1523] mb-1">Group Name <span className="text-red-500" aria-hidden="true">*</span></label>
+            <input id="eg-name" type="text" value={form.name} onChange={function(e) { updateForm('name', e.target.value); }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" maxLength={100} aria-required="true" />
           </div>
           <div>
             <label htmlFor="eg-desc" className="block text-sm font-medium text-[#0E1523] mb-1">Description</label>
-            <textarea id="eg-desc" value={form.description}
-              onChange={function(e) { updateForm('description', e.target.value); }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              rows={3} placeholder="What does this group do?" />
+            <textarea id="eg-desc" value={form.description} onChange={function(e) { updateForm('description', e.target.value); }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" rows={3} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="eg-type" className="block text-sm font-medium text-[#0E1523] mb-1">Type</label>
-              <select id="eg-type" value={form.type}
-                onChange={function(e) { updateForm('type', e.target.value); }}
+              <select id="eg-type" value={form.type} onChange={function(e) { updateForm('type', e.target.value); }}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="committee">Committee</option>
-                <option value="board">Board</option>
-                <option value="team">Team</option>
-                <option value="volunteer">Volunteer</option>
-                <option value="other">Other</option>
+                <option value="committee">Committee</option><option value="board">Board</option>
+                <option value="team">Team</option><option value="volunteer">Volunteer</option><option value="other">Other</option>
               </select>
             </div>
             <div>
               <label htmlFor="eg-vis" className="block text-sm font-medium text-[#0E1523] mb-1">Visibility</label>
-              <select id="eg-vis" value={form.visibility}
-                onChange={function(e) { updateForm('visibility', e.target.value); }}
+              <select id="eg-vis" value={form.visibility} onChange={function(e) { updateForm('visibility', e.target.value); }}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="public">Public</option>
-                <option value="members">All Members</option>
-                <option value="group_only">Group Members Only</option>
+                <option value="public">Public</option><option value="members">All Members</option><option value="group_only">Group Members Only</option>
               </select>
             </div>
           </div>
           <div>
             <label htmlFor="eg-color" className="block text-sm font-medium text-[#0E1523] mb-1">Color</label>
             <div className="flex items-center gap-3">
-              <input id="eg-color" type="color" value={form.color}
-                onChange={function(e) { updateForm('color', e.target.value); }}
+              <input id="eg-color" type="color" value={form.color} onChange={function(e) { updateForm('color', e.target.value); }}
                 className="w-10 h-10 border border-slate-300 rounded cursor-pointer p-0.5" />
               <span className="text-sm text-[#64748B]">Group identifier color</span>
             </div>
@@ -472,21 +329,10 @@ var EditGroupModal = function(props) {
           </div>
         </div>
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
           <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            aria-busy={saving}>
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status">
-                  <span className="sr-only">Saving...</span>
-                </div>
-                Saving...
-              </>
-            ) : 'Save Changes'}
+            className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2" aria-busy={saving}>
+            {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status"><span className="sr-only">Saving...</span></div>Saving...</>) : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -510,48 +356,32 @@ var AddMemberModal = function(props) {
   var [saving, setSaving] = useState(false);
 
   useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  useEffect(function() {
     async function load() {
       try {
-        // Step 1: get all active membership member_ids for this org
-        var memRes = await supabase
-          .from('memberships')
-          .select('member_id')
-          .eq('organization_id', organizationId)
-          .eq('status', 'active');
+        var memRes = await supabase.from('memberships').select('member_id').eq('organization_id', organizationId).eq('status', 'active');
         if (memRes.error) throw memRes.error;
-
         var allIds = (memRes.data || []).map(function(m) { return m.member_id; });
-        var availableIds = allIds.filter(function(id) {
-          return existingMemberIds.indexOf(id) === -1;
-        });
-
-        if (availableIds.length === 0) {
-          setOrgMembers([]);
-          setLoading(false);
-          return;
-        }
-
-        // Step 2: get names from members table
-        var namesRes = await supabase
-          .from('members')
-          .select('user_id, first_name, last_name')
-          .in('user_id', availableIds);
+        var availableIds = allIds.filter(function(id) { return existingMemberIds.indexOf(id) === -1; });
+        if (availableIds.length === 0) { setOrgMembers([]); setLoading(false); return; }
+        var namesRes = await supabase.from('members').select('user_id, first_name, last_name').in('user_id', availableIds);
         if (namesRes.error) throw namesRes.error;
-
-        var available = (namesRes.data || []).map(function(m) {
+        setOrgMembers((namesRes.data || []).map(function(m) {
           return {
             member_id: m.user_id,
             full_name: ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id,
           };
-        }).sort(function(a, b) { return a.full_name.localeCompare(b.full_name); });
-
-        setOrgMembers(available);
-      } catch (e) {
-        console.error('AddMemberModal load error:', e);
-        mascotErrorToast('Failed to load members', e.message);
-      } finally {
-        setLoading(false);
-      }
+        }).filter(function(m) {
+          // Only show members who have an actual name (not just a UUID fallback)
+          return m.full_name && m.full_name !== m.member_id && m.full_name.trim() !== '';
+        }).sort(function(a, b) { return a.full_name.localeCompare(b.full_name); }));
+      } catch (e) { mascotErrorToast('Failed to load members', e.message); }
+      finally { setLoading(false); }
     }
     load();
   }, [groupId, organizationId, existingMemberIds]);
@@ -560,20 +390,12 @@ var AddMemberModal = function(props) {
     if (!selected) { toast.error('Select a member'); return; }
     setSaving(true);
     try {
-      var res = await supabase.from('org_group_members').insert({
-        group_id: groupId,
-        member_id: selected,
-        organization_id: organizationId,
-        role: role.trim() || 'Member',
-      });
+      var res = await supabase.from('org_group_members').insert({ group_id: groupId, member_id: selected, organization_id: organizationId, role: role.trim() || 'Member' });
       if (res.error) throw res.error;
       mascotSuccessToast('Member added');
       onSaved();
-    } catch (e) {
-      mascotErrorToast('Failed to add member', e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { mascotErrorToast('Failed to add member', e.message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -583,89 +405,49 @@ var AddMemberModal = function(props) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 id="add-member-title" className="text-xl font-bold text-[#0E1523]">Add Member</h2>
-          <button onClick={onClose}
-            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close">
-            <XIcon />
-          </button>
+          <button onClick={onClose} className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Close"><XIcon /></button>
         </div>
         <div className="p-6 space-y-4">
           {loading ? (
             <div className="space-y-3 animate-pulse">
-              <div className="h-4 bg-slate-200 rounded w-24" />
-              <div className="h-10 bg-slate-200 rounded" />
-              <div className="h-4 bg-slate-200 rounded w-16" />
-              <div className="h-10 bg-slate-200 rounded" />
+              <div className="h-4 bg-slate-200 rounded w-24" /><div className="h-10 bg-slate-200 rounded" />
+              <div className="h-4 bg-slate-200 rounded w-16" /><div className="h-10 bg-slate-200 rounded" />
             </div>
           ) : orgMembers.length === 0 ? (
             <div className="text-center py-6">
-              <div className="flex justify-center text-slate-300 mb-3"><UsersIcon size={36} /></div>
               <p className="text-sm font-semibold text-[#0E1523]">Everyone's already in</p>
               <p className="text-sm text-[#475569] mt-1">All active members are already in this group.</p>
             </div>
           ) : (
             <>
               <div>
-                <label htmlFor="am-member" className="block text-sm font-medium text-[#0E1523] mb-1">
-                  Member <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <select id="am-member" value={selected}
-                  onChange={function(e) { setSelected(e.target.value); }}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-required="true">
+                <label htmlFor="am-member" className="block text-sm font-medium text-[#0E1523] mb-1">Member <span className="text-red-500" aria-hidden="true">*</span></label>
+                <select id="am-member" value={selected} onChange={function(e) { setSelected(e.target.value); }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" aria-required="true">
                   <option value="">— Select a member —</option>
-                  {orgMembers.map(function(m) {
-                    return (
-                      <option key={m.member_id} value={m.member_id}>
-                        {m.full_name}
-                      </option>
-                    );
-                  })}
+                  {orgMembers.map(function(m) { return <option key={m.member_id} value={m.member_id}>{m.full_name}</option>; })}
                 </select>
               </div>
               <div>
                 <label htmlFor="am-role" className="block text-sm font-medium text-[#0E1523] mb-1">Role</label>
-                <input
-                  id="am-role"
-                  type="text"
-                  value={role}
-                  onChange={function(e) { setRole(e.target.value); }}
-                  list="am-role-suggestions"
-                  placeholder="e.g. Member, Chair, Treasurer..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input id="am-role" type="text" value={role} onChange={function(e) { setRole(e.target.value); }}
+                  list="am-role-suggestions" placeholder="e.g. Member, Chair, Treasurer..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <datalist id="am-role-suggestions">
-                  <option value="Member" />
-                  <option value="Chair" />
-                  <option value="Co-Chair" />
-                  <option value="Vice Chair" />
-                  <option value="Secretary" />
-                  <option value="Treasurer" />
-                  <option value="President" />
-                  <option value="Vice President" />
-                  <option value="Coordinator" />
+                  <option value="Member" /><option value="Chair" /><option value="Co-Chair" />
+                  <option value="Vice Chair" /><option value="Secretary" /><option value="Treasurer" />
+                  <option value="President" /><option value="Vice President" /><option value="Coordinator" />
                 </datalist>
               </div>
             </>
           )}
         </div>
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
           {orgMembers.length > 0 && (
             <button onClick={handleAdd} disabled={saving || !selected}
-              className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-busy={saving}>
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status">
-                    <span className="sr-only">Adding...</span>
-                  </div>
-                  Adding...
-                </>
-              ) : 'Add Member'}
+              className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2" aria-busy={saving}>
+              {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status"><span className="sr-only">Adding...</span></div>Adding...</>) : 'Add Member'}
             </button>
           )}
         </div>
@@ -682,24 +464,21 @@ var LinkEventModal = function(props) {
   var linkedEventIds = props.linkedEventIds;
   var onClose = props.onClose;
   var onSaved = props.onSaved;
-
   var [events, setEvents] = useState([]);
   var [selected, setSelected] = useState('');
   var [loading, setLoading] = useState(true);
   var [saving, setSaving] = useState(false);
 
   useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  useEffect(function() {
     async function load() {
-      var res = await supabase
-        .from('events')
-        .select('id, title, start_time')
-        .eq('organization_id', organizationId)
-        .order('start_time', { ascending: false })
-        .limit(50);
-      var available = (res.data || []).filter(function(e) {
-        return linkedEventIds.indexOf(e.id) === -1;
-      });
-      setEvents(available);
+      var res = await supabase.from('events').select('id, title, start_time').eq('organization_id', organizationId).order('start_time', { ascending: false }).limit(50);
+      setEvents((res.data || []).filter(function(e) { return linkedEventIds.indexOf(e.id) === -1; }));
       setLoading(false);
     }
     load();
@@ -713,11 +492,8 @@ var LinkEventModal = function(props) {
       if (res.error) throw res.error;
       mascotSuccessToast('Event linked to group');
       onSaved();
-    } catch (e) {
-      mascotErrorToast('Failed to link event', e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { mascotErrorToast('Failed to link event', e.message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -727,59 +503,32 @@ var LinkEventModal = function(props) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 id="link-event-title" className="text-xl font-bold text-[#0E1523]">Link Existing Event</h2>
-          <button onClick={onClose}
-            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close">
-            <XIcon />
-          </button>
+          <button onClick={onClose} className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Close"><XIcon /></button>
         </div>
         <div className="p-6">
-          {loading ? (
-            <div className="h-10 bg-slate-200 rounded animate-pulse" />
-          ) : events.length === 0 ? (
+          {loading ? <div className="h-10 bg-slate-200 rounded animate-pulse" />
+          : events.length === 0 ? (
             <div className="text-center py-6">
-              <div className="flex justify-center text-slate-300 mb-3"><CalendarIcon size={36} /></div>
               <p className="text-sm font-semibold text-[#0E1523]">No events available</p>
               <p className="text-sm text-[#475569] mt-1">All org events are already linked to this group.</p>
             </div>
           ) : (
             <div>
-              <label htmlFor="le-event" className="block text-sm font-medium text-[#0E1523] mb-1">
-                Select Event <span className="text-red-500" aria-hidden="true">*</span>
-              </label>
-              <select id="le-event" value={selected}
-                onChange={function(e) { setSelected(e.target.value); }}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-required="true">
+              <label htmlFor="le-event" className="block text-sm font-medium text-[#0E1523] mb-1">Select Event <span className="text-red-500" aria-hidden="true">*</span></label>
+              <select id="le-event" value={selected} onChange={function(e) { setSelected(e.target.value); }}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" aria-required="true">
                 <option value="">— Select an event —</option>
-                {events.map(function(ev) {
-                  return (
-                    <option key={ev.id} value={ev.id}>
-                      {ev.title} — {new Date(ev.start_time).toLocaleDateString()}
-                    </option>
-                  );
-                })}
+                {events.map(function(ev) { return <option key={ev.id} value={ev.id}>{ev.title} — {new Date(ev.start_time).toLocaleDateString()}</option>; })}
               </select>
             </div>
           )}
         </div>
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
           {events.length > 0 && (
             <button onClick={handleLink} disabled={saving || !selected}
-              className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-busy={saving}>
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status">
-                    <span className="sr-only">Linking...</span>
-                  </div>
-                  Linking...
-                </>
-              ) : 'Link Event'}
+              className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2" aria-busy={saving}>
+              {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status"><span className="sr-only">Linking...</span></div>Linking...</>) : 'Link Event'}
             </button>
           )}
         </div>
@@ -788,7 +537,392 @@ var LinkEventModal = function(props) {
   );
 };
 
-// ─── Members Tab ──────────────────────────────────────────────────────────────
+// ─── EditRoleModal ────────────────────────────────────────────────────────────
+
+var EditRoleModal = function(props) {
+  var gm = props.gm;
+  var name = props.name;
+  var onClose = props.onClose;
+  var onSaved = props.onSaved;
+  var [role, setRole] = useState(gm.role || 'Member');
+  var [saving, setSaving] = useState(false);
+
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  var handleSave = async function() {
+    setSaving(true);
+    try {
+      var res = await supabase.from('org_group_members').update({ role: role.trim() || 'Member' }).eq('id', gm.id);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Role updated');
+      onSaved();
+    } catch (e) {
+      mascotErrorToast('Failed to update role', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] p-4"
+      role="dialog" aria-modal="true" aria-labelledby="edit-role-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <h2 id="edit-role-title" className="text-base font-bold text-[#0E1523] mb-1">Edit Role</h2>
+        <p className="text-sm text-[#64748B] mb-4">{name}</p>
+        <input
+          type="text"
+          value={role}
+          onChange={function(e) { setRole(e.target.value); }}
+          list="er-role-suggestions"
+          placeholder="e.g. Member, Chair, Treasurer..."
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+          aria-label={'Role for ' + name}
+          autoFocus
+        />
+        <datalist id="er-role-suggestions">
+          <option value="Member" /><option value="Chair" /><option value="Co-Chair" />
+          <option value="Vice Chair" /><option value="Secretary" /><option value="Treasurer" />
+          <option value="President" /><option value="Vice President" /><option value="Coordinator" />
+        </datalist>
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose}
+            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2"
+            aria-busy={saving}>
+            {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status"><span className="sr-only">Saving...</span></div>Saving...</>) : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── MemberCardModal ──────────────────────────────────────────────────────────
+
+var MemberCardModal = function(props) {
+  var gm = props.gm;
+  var onClose = props.onClose;
+
+  var profile = gm.profile || {};
+  var member = Object.assign({}, profile, { user_id: gm.member_id });
+  var name = member.display_name || (((member.first_name || '') + ' ' + (member.last_name || '')).trim()) || member.user_id;
+  var avatarUrl = member.avatar_url || member.profile_photo_url;
+
+  var AVATAR_BG = ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444','#14B8A6','#EC4899','#6366F1'];
+  var avatarBg = AVATAR_BG[(name.charCodeAt(0) || 65) % AVATAR_BG.length];
+
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog" aria-modal="true" aria-labelledby="gd-member-modal-name">
+      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} aria-hidden="true" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+
+        {/* Gradient header */}
+        <div className="px-6 pt-6 pb-10 flex-shrink-0" style={{ background: 'linear-gradient(135deg, ' + avatarBg + ' 0%, ' + avatarBg + 'cc 100%)' }}>
+          <button onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+            aria-label="Close member profile">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <div className="flex items-center gap-4">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg flex-shrink-0" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-2xl font-bold shadow-lg flex-shrink-0" style={{ color: avatarBg }} aria-hidden="true">
+                {getInitials(name)}
+              </div>
+            )}
+            <div>
+              <h2 id="gd-member-modal-name" className="text-2xl font-bold text-white">{name}</h2>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {gm.role && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white bg-opacity-25 text-white">
+                    {gm.role}
+                  </span>
+                )}
+                {member.pronouns && member.show_pronouns && (
+                  <span className="text-white text-opacity-75 text-xs">{member.pronouns}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 -mt-4 mx-4 mb-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-5 space-y-4">
+
+            {/* Contact */}
+            {(member.city && member.state) && (
+              <p className="text-sm text-[#475569]">{member.city + ', ' + member.state}</p>
+            )}
+
+            {/* Bio */}
+            {member.bio && (
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">About</p>
+                <p className="text-sm text-[#475569] leading-relaxed">{member.bio}</p>
+              </div>
+            )}
+
+            {/* Interests */}
+            {member.interests && member.interests.length > 0 && (
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Interests</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {member.interests.map(function(interest) {
+                    return <span key={interest} className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-[#475569] border border-slate-200">{interest}</span>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Group role context */}
+            <div className="pt-3 border-t border-slate-100">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Role in this group</p>
+              <p className="text-sm font-semibold text-[#0E1523]">{gm.role || 'Member'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-5 flex-shrink-0 flex justify-end">
+          <button onClick={onClose}
+            className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-[#475569] text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Manage Members Modal ─────────────────────────────────────────────────────
+// Admin-only drawer for editing roles and removing members from the group.
+
+var ManageMembersModal = function(props) {
+  var groupId = props.groupId;
+  var organizationId = props.organizationId;
+  var onClose = props.onClose;
+  var onChanged = props.onChanged; // called when any change is made so MembersTab refetches
+
+  var [members, setMembers] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [editingRole, setEditingRole] = useState({});
+  var [confirmRemove, setConfirmRemove] = useState(null);
+  var [hasChanges, setHasChanges] = useState(false);
+
+  var COLORS = ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444','#14B8A6','#EC4899','#6366F1'];
+
+  var getProfileName = function(gm) {
+    var p = gm.profile;
+    if (!p) return 'Unknown';
+    return p.display_name || (((p.first_name || '') + ' ' + (p.last_name || '')).trim()) || p.user_id || 'Unknown';
+  };
+
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(hasChanges); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose, hasChanges]);
+
+  var fetchMembers = useCallback(async function() {
+    setLoading(true);
+    try {
+      var res = await supabase.from('org_group_members')
+        .select('id, member_id, role, status, created_at')
+        .eq('group_id', groupId).eq('status', 'active').order('created_at');
+      var activeData = res.data || [];
+      var ids = activeData.map(function(r) { return r.member_id; });
+
+      var profileMap = {};
+      if (ids.length > 0) {
+        var rpcRes = await supabase.rpc('get_member_profiles', { member_ids: ids });
+        if (!rpcRes.error) {
+          (rpcRes.data || []).forEach(function(m) { profileMap[m.user_id] = m; });
+        }
+      }
+
+      var withProfiles = activeData.map(function(r) {
+        return Object.assign({}, r, {
+          profile: profileMap[r.member_id] || { user_id: r.member_id, first_name: '', last_name: '' }
+        });
+      });
+      setMembers(withProfiles);
+      var roles = {};
+      activeData.forEach(function(r) { roles[r.id] = r.role || 'Member'; });
+      setEditingRole(roles);
+    } catch (_err) { mascotErrorToast('Failed to load members'); }
+    finally { setLoading(false); }
+  }, [groupId]);
+
+  useEffect(function() { fetchMembers(); }, [fetchMembers]);
+
+  var handleRoleSave = async function(gm) {
+    var newRole = (editingRole[gm.id] || '').trim() || 'Member';
+    try {
+      var res = await supabase.from('org_group_members').update({ role: newRole }).eq('id', gm.id);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Role updated');
+      setHasChanges(true);
+    } catch (e) { mascotErrorToast('Failed to update role', e.message); }
+  };
+
+  var handleRemoveConfirmed = async function() {
+    if (!confirmRemove) return;
+    var gmId = confirmRemove.id;
+    setConfirmRemove(null);
+    try {
+      var res = await supabase.from('org_group_members').delete().eq('id', gmId);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Member removed');
+      setHasChanges(true);
+      fetchMembers(); // refresh the list inside the modal — do NOT close
+    } catch (e) { mascotErrorToast('Failed to remove member', e.message); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+      role="dialog" aria-modal="true" aria-labelledby="manage-members-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(hasChanges); }}>
+      <div className="bg-white w-full sm:rounded-xl sm:max-w-lg shadow-xl flex flex-col max-h-[90vh] rounded-t-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 flex-shrink-0">
+          <div>
+            <h2 id="manage-members-title" className="text-lg font-bold text-[#0E1523]">Manage Members</h2>
+            <p className="text-sm text-[#64748B] mt-0.5">Edit roles or remove members from this group</p>
+          </div>
+          <button onClick={function() { onClose(hasChanges); }}
+            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Member list */}
+        <div className="overflow-y-auto flex-1 p-4">
+          {loading ? (
+            <div className="space-y-3">
+              {[1,2,3,4].map(function(i) {
+                return (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg animate-pulse">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3.5 bg-slate-200 rounded w-32" />
+                      <div className="h-3 bg-slate-100 rounded w-20" />
+                    </div>
+                    <div className="h-8 w-28 bg-slate-100 rounded-lg" />
+                  </div>
+                );
+              })}
+            </div>
+          ) : members.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-sm font-semibold text-[#0E1523]">No members yet</p>
+              <p className="text-xs text-[#64748B] mt-1">Add members from the Members tab.</p>
+            </div>
+          ) : (
+            <ul className="space-y-2" role="list" aria-label="Manage group members">
+              {members.map(function(gm) {
+                var name = getProfileName(gm);
+                var avatarUrl = gm.profile && (gm.profile.avatar_url || gm.profile.profile_photo_url);
+                var bg = COLORS[(name.charCodeAt(0) || 65) % COLORS.length];
+                var isDirty = editingRole[gm.id] !== (gm.role || 'Member');
+
+                return (
+                  <li key={gm.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    {/* Avatar */}
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" aria-hidden="true" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        style={{ background: bg }} aria-hidden="true">
+                        {getInitials(name)}
+                      </div>
+                    )}
+
+                    {/* Name */}
+                    <p className="font-medium text-[#0E1523] text-sm flex-1 min-w-0 truncate">{name}</p>
+
+                    {/* Role input + Save */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <input
+                        type="text"
+                        value={editingRole[gm.id] || ''}
+                        onChange={function(e) {
+                          var val = e.target.value;
+                          setEditingRole(function(prev) {
+                            var next = Object.assign({}, prev);
+                            next[gm.id] = val;
+                            return next;
+                          });
+                        }}
+                        list="mm-role-suggestions"
+                        placeholder="Role"
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-[#475569] focus:outline-none focus:ring-2 focus:ring-blue-500 w-28"
+                        aria-label={'Role for ' + name}
+                      />
+                      {isDirty && (
+                        <button onClick={function() { handleRoleSave(gm); }}
+                          className="px-2 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label={'Save role for ' + name}>
+                          Save
+                        </button>
+                      )}
+                      <button onClick={function() { setConfirmRemove({ id: gm.id, name: name }); }}
+                        className="px-2 py-1.5 text-xs font-semibold text-red-500 border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                        aria-label={'Remove ' + name + ' from group'}>
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <datalist id="mm-role-suggestions">
+            <option value="Member" /><option value="Chair" /><option value="Co-Chair" />
+            <option value="Vice Chair" /><option value="Secretary" /><option value="Treasurer" />
+            <option value="President" /><option value="Vice President" /><option value="Coordinator" />
+          </datalist>
+        </div>
+
+        <div className="p-4 border-t border-slate-200 flex-shrink-0">
+          <button onClick={function() { if (props.onClose) props.onClose(true); }}
+            className="w-full px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
+            Done
+          </button>
+        </div>
+      </div>
+
+      {confirmRemove && (
+        <ConfirmModal title={'Remove ' + confirmRemove.name + '?'}
+          message="They will be removed from this group. They can be re-added at any time."
+          confirmLabel="Remove" confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleRemoveConfirmed} onCancel={function() { setConfirmRemove(null); }} />
+      )}
+    </div>
+  );
+};
+
+// ─── Members Tab — responsive card grid ──────────────────────────────────────
 
 var MembersTab = function(props) {
   var groupId = props.groupId;
@@ -801,88 +935,56 @@ var MembersTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showAddModal, setShowAddModal] = useState(false);
   var [search, setSearch] = useState('');
-  var [confirmRemove, setConfirmRemove] = useState(null); // { id, name }
+  var [profileModal, setProfileModal] = useState(null);
+
+  var COLORS = ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444','#14B8A6','#EC4899','#6366F1'];
+
+  var getProfileName = function(gm) {
+    var p = gm.profile;
+    if (!p) return 'Unknown';
+    var n = p.display_name || (((p.first_name || '') + ' ' + (p.last_name || '')).trim());
+    return (n && n.length > 0) ? n : 'Unknown';
+  };
 
   var fetchMembers = useCallback(async function() {
     setLoading(true);
     try {
       var [activeRes, pendingRes] = await Promise.all([
-        supabase
-          .from('org_group_members')
+        supabase.from('org_group_members')
           .select('id, member_id, role, status, created_at')
-          .eq('group_id', groupId)
-          .eq('status', 'active')
-          .order('created_at'),
-        supabase
-          .from('org_group_members')
-          .select('id, member_id, created_at')
-          .eq('group_id', groupId)
-          .eq('status', 'pending'),
+          .eq('group_id', groupId).eq('status', 'active').order('created_at'),
+        supabase.from('org_group_members')
+          .select('id, member_id, status, created_at')
+          .eq('group_id', groupId).eq('status', 'pending'),
       ]);
-
       var activeData = activeRes.data || [];
       var pendingData = pendingRes.data || [];
-
-      // Fetch member names separately
-      var allMemberIds = activeData.map(function(r) { return r.member_id; })
+      var allIds = activeData.map(function(r) { return r.member_id; })
         .concat(pendingData.map(function(r) { return r.member_id; }));
 
-      var nameMap = {};
-      if (allMemberIds.length > 0) {
-        var namesRes = await supabase
-          .from('members')
-          .select('user_id, first_name, last_name')
-          .in('user_id', allMemberIds);
-        (namesRes.data || []).forEach(function(m) {
-          nameMap[m.user_id] = ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id;
-        });
+      var profileMap = {};
+      if (allIds.length > 0) {
+        var rpcRes = await supabase.rpc('get_member_profiles', { member_ids: allIds });
+        if (!rpcRes.error) {
+          (rpcRes.data || []).forEach(function(m) { profileMap[m.user_id] = m; });
+        }
       }
 
       var normalize = function(rows) {
         return rows.map(function(r) {
-          return Object.assign({}, r, { members: { full_name: nameMap[r.member_id] || r.member_id } });
+          return Object.assign({}, r, {
+            profile: profileMap[r.member_id] || { user_id: r.member_id, first_name: '', last_name: '' }
+          });
         });
       };
-
-      var normalizedActive = normalize(activeData);
-      var normalizedPending = normalize(pendingData);
-      setMembers(normalizedActive);
-      setPending(normalizedPending);
-      if (onCountChange) onCountChange(normalizedActive.length);
-    } catch (err) {
-      console.error('fetchMembers error:', err);
-      mascotErrorToast('Failed to load members');
-    } finally {
-      setLoading(false);
-    }
+      setMembers(normalize(activeData));
+      setPending(normalize(pendingData));
+      if (onCountChange) onCountChange(activeData.length);
+    } catch (_err) { mascotErrorToast('Failed to load members'); }
+    finally { setLoading(false); }
   }, [groupId, onCountChange]);
 
   useEffect(function() { fetchMembers(); }, [fetchMembers]);
-
-  var handleRemoveConfirmed = async function() {
-    if (!confirmRemove) return;
-    var gmId = confirmRemove.id;
-    setConfirmRemove(null);
-    try {
-      var res = await supabase.from('org_group_members').delete().eq('id', gmId);
-      if (res.error) throw res.error;
-      mascotSuccessToast('Member removed');
-      fetchMembers();
-    } catch (e) {
-      mascotErrorToast('Failed to remove member', e.message);
-    }
-  };
-
-  var handleRoleChange = async function(gm, newRole) {
-    try {
-      var res = await supabase.from('org_group_members').update({ role: newRole }).eq('id', gm.id);
-      if (res.error) throw res.error;
-      mascotSuccessToast('Role updated');
-      fetchMembers();
-    } catch (e) {
-      mascotErrorToast('Failed to update role', e.message);
-    }
-  };
 
   var handleApprove = async function(row) {
     try {
@@ -890,9 +992,7 @@ var MembersTab = function(props) {
       if (res.error) throw res.error;
       mascotSuccessToast('Request approved');
       fetchMembers();
-    } catch (e) {
-      mascotErrorToast('Failed to approve request', e.message);
-    }
+    } catch (e) { mascotErrorToast('Failed to approve', e.message); }
   };
 
   var handleDeny = async function(row) {
@@ -901,23 +1001,17 @@ var MembersTab = function(props) {
       if (res.error) throw res.error;
       mascotSuccessToast('Request denied');
       fetchMembers();
-    } catch (e) {
-      mascotErrorToast('Failed to deny request', e.message);
-    }
+    } catch (e) { mascotErrorToast('Failed to deny', e.message); }
   };
 
   var filtered = search
-    ? members.filter(function(gm) {
-        var name = (gm.members && gm.members.full_name) || '';
-        return name.toLowerCase().indexOf(search.toLowerCase()) !== -1;
-      })
+    ? members.filter(function(gm) { return getProfileName(gm).toLowerCase().indexOf(search.toLowerCase()) !== -1; })
     : members;
 
   var existingIds = members.map(function(m) { return m.member_id; });
 
   return (
     <div>
-      {/* Pending requests */}
       {isAdmin && pending.length > 0 && (
         <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-sm font-semibold text-amber-800 mb-3">
@@ -925,26 +1019,20 @@ var MembersTab = function(props) {
           </p>
           <ul className="space-y-2" role="list" aria-label="Pending join requests">
             {pending.map(function(row) {
-              var name = (row.members && row.members.full_name) || 'Unknown';
-              var bg = getAvatarColor(name);
+              var name = getProfileName(row);
+              var bg = COLORS[(name.charCodeAt(0) || 65) % COLORS.length];
               return (
                 <li key={row.id} className="flex items-center gap-3 bg-white rounded-lg border border-amber-100 p-3">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ background: bg }} aria-hidden="true">
-                    {getInitials(name)}
-                  </div>
+                    style={{ background: bg }} aria-hidden="true">{getInitials(name)}</div>
                   <span className="flex-1 text-sm font-medium text-[#0E1523]">{name}</span>
                   <div className="flex items-center gap-2">
                     <button onClick={function() { handleApprove(row); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
-                      aria-label={'Approve ' + name}>
-                      <CheckIcon />Approve
-                    </button>
+                      className="px-3 py-1.5 text-xs font-semibold bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
+                      aria-label={'Approve ' + name}>Approve</button>
                     <button onClick={function() { handleDeny(row); }}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-transparent border border-slate-300 text-[#475569] rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                      aria-label={'Deny ' + name}>
-                      Deny
-                    </button>
+                      className="px-3 py-1.5 text-xs font-semibold border border-slate-300 text-[#475569] rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      aria-label={'Deny ' + name}>Deny</button>
                   </div>
                 </li>
               );
@@ -953,104 +1041,64 @@ var MembersTab = function(props) {
         </div>
       )}
 
-      {/* Header row */}
       <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#94A3B8]">
-            <SearchIcon />
-          </div>
-          <input type="search" value={search}
-            onChange={function(e) { setSearch(e.target.value); }}
+        <div className="flex items-center gap-3">
+          <input type="search" value={search} onChange={function(e) { setSearch(e.target.value); }}
             placeholder="Search members..."
-            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
             aria-label="Search members" />
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <p className="text-sm text-[#64748B]">
+          <span className="text-sm text-[#64748B]">
             {loading ? '' : filtered.length + ' ' + (filtered.length === 1 ? 'member' : 'members')}
-          </p>
-          {isAdmin && (
-            <button onClick={function() { setShowAddModal(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              aria-label="Add member to group">
-              <PlusIcon />Add Member
-            </button>
-          )}
+          </span>
         </div>
+        {isAdmin && (
+          <button onClick={function() { setShowAddModal(true); }}
+            className="px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            Add Member
+          </button>
+        )}
       </div>
 
-      {loading ? <RowSkeleton count={3} /> : filtered.length === 0 ? (
+      {loading ? <MemberGridSkeleton /> : filtered.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-          <div className="flex justify-center text-slate-300 mb-3"><UsersIcon size={40} /></div>
-          <p className="font-semibold text-[#0E1523] mb-1">
-            {members.length === 0 ? 'No members yet' : 'No results'}
-          </p>
+          <p className="font-semibold text-[#0E1523] mb-1">{members.length === 0 ? 'No members yet' : 'No results'}</p>
           <p className="text-sm text-[#475569] mb-4">
-            {members.length === 0
-              ? 'Add organization members to get this group started.'
-              : 'No members match your search.'}
+            {members.length === 0 ? 'Add organization members to get this group started.' : 'No members match your search.'}
           </p>
           {isAdmin && members.length === 0 && (
             <button onClick={function() { setShowAddModal(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />Add First Member
+              className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Add First Member
             </button>
           )}
         </div>
       ) : (
-        <ul className="space-y-2" role="list" aria-label="Group members">
+        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"
+          role="list" aria-label="Group members">
           {filtered.map(function(gm) {
-            var name = (gm.members && gm.members.full_name) || 'Unknown';
-            var bg = getAvatarColor(name);
+            var name = getProfileName(gm);
+            var avatarUrl = gm.profile && (gm.profile.avatar_url || gm.profile.profile_photo_url);
+            var bg = COLORS[(name.charCodeAt(0) || 65) % COLORS.length];
             var roleLabel = gm.role || 'Member';
             return (
-              <li key={gm.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ background: bg }} aria-hidden="true">
-                  {getInitials(name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#0E1523] text-sm">{name}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {isAdmin ? (
-                    <input
-                      type="text"
-                      defaultValue={roleLabel}
-                      onBlur={function(e) {
-                        var newRole = e.target.value.trim() || 'Member';
-                        if (newRole !== roleLabel) handleRoleChange(gm, newRole);
-                      }}
-                      list={'role-suggestions-' + gm.id}
-                      placeholder="Role"
-                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-[#475569] focus:outline-none focus:ring-2 focus:ring-blue-500 w-32"
-                      aria-label={'Role for ' + name}
-                    />
-                  ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-[#475569]">
-                      {roleLabel}
-                    </span>
-                  )}
-                  <datalist id={'role-suggestions-' + gm.id}>
-                    <option value="Member" />
-                    <option value="Chair" />
-                    <option value="Co-Chair" />
-                    <option value="Vice Chair" />
-                    <option value="Secretary" />
-                    <option value="Treasurer" />
-                    <option value="President" />
-                    <option value="Vice President" />
-                    <option value="Coordinator" />
-                  </datalist>
-                  {isAdmin && (
-                    <button
-                      onClick={function() { setConfirmRemove({ id: gm.id, name: name }); }}
-                      className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                      aria-label={'Remove ' + name}>
-                      <TrashIcon />
-                    </button>
-                  )}
-                </div>
+              <li key={gm.id}
+                className="bg-white rounded-xl border border-slate-200 flex flex-col items-center text-center p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                onClick={function() { setProfileModal(gm); }}
+                role="button"
+                tabIndex={0}
+                aria-label={'View profile for ' + name}
+                onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfileModal(gm); } }}
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover mb-2 flex-shrink-0" aria-hidden="true" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-bold mb-2 flex-shrink-0"
+                    style={{ background: bg }} aria-hidden="true">
+                    {getInitials(name)}
+                  </div>
+                )}
+                <p className="font-semibold text-[#0E1523] text-sm leading-snug mb-1 w-full truncate">{name}</p>
+                <p className="text-xs text-[#64748B]">{roleLabel}</p>
               </li>
             );
           })}
@@ -1058,29 +1106,19 @@ var MembersTab = function(props) {
       )}
 
       {showAddModal && (
-        <AddMemberModal
-          groupId={groupId}
-          organizationId={organizationId}
-          existingMemberIds={existingIds}
+        <AddMemberModal groupId={groupId} organizationId={organizationId} existingMemberIds={existingIds}
           onClose={function() { setShowAddModal(false); }}
-          onSaved={function() { setShowAddModal(false); fetchMembers(); }}
-        />
+          onSaved={function() { setShowAddModal(false); fetchMembers(); }} />
+      )}
+      {profileModal && (
+        <MemberCardModal gm={profileModal} onClose={function() { setProfileModal(null); }} />
       )}
 
-      {confirmRemove && (
-        <ConfirmModal
-          title={'Remove ' + confirmRemove.name + '?'}
-          message={'They will be removed from this group. They can be re-added at any time.'}
-          confirmLabel="Remove"
-          onConfirm={handleRemoveConfirmed}
-          onCancel={function() { setConfirmRemove(null); }}
-        />
-      )}
     </div>
   );
 };
 
-// ─── Events Tab ───────────────────────────────────────────────────────────────
+// ─── Events Tab — grid cards ──────────────────────────────────────────────────
 
 var EventsTab = function(props) {
   var groupId = props.groupId;
@@ -1093,26 +1131,18 @@ var EventsTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showCreateEvent, setShowCreateEvent] = useState(false);
   var [showLinkModal, setShowLinkModal] = useState(false);
-  var [confirmUnlink, setConfirmUnlink] = useState(null); // { id, title }
+  var [confirmUnlink, setConfirmUnlink] = useState(null);
 
   var fetchEvents = useCallback(async function() {
     setLoading(true);
     try {
-      var res = await supabase
-        .from('event_groups')
-        .select('event_id, events(id, title, start_time, location)')
-        .eq('group_id', groupId);
-      var extracted = (res.data || [])
-        .map(function(r) { return r.events; })
-        .filter(Boolean)
+      var res = await supabase.from('event_groups').select('event_id, events(id, title, start_time, location)').eq('group_id', groupId);
+      var extracted = (res.data || []).map(function(r) { return r.events; }).filter(Boolean)
         .sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
       setEvents(extracted);
       if (onCountChange) onCountChange(extracted.length);
-    } catch (_err) {
-      mascotErrorToast('Failed to load events');
-    } finally {
-      setLoading(false);
-    }
+    } catch (_err) { mascotErrorToast('Failed to load events'); }
+    finally { setLoading(false); }
   }, [groupId, onCountChange]);
 
   useEffect(function() { fetchEvents(); }, [fetchEvents]);
@@ -1122,16 +1152,11 @@ var EventsTab = function(props) {
     var eventId = confirmUnlink.id;
     setConfirmUnlink(null);
     try {
-      var res = await supabase.from('event_groups')
-        .delete()
-        .eq('event_id', eventId)
-        .eq('group_id', groupId);
+      var res = await supabase.from('event_groups').delete().eq('event_id', eventId).eq('group_id', groupId);
       if (res.error) throw res.error;
       mascotSuccessToast('Event removed from group');
       fetchEvents();
-    } catch (e) {
-      mascotErrorToast('Failed to unlink event', e.message);
-    }
+    } catch (e) { mascotErrorToast('Failed to unlink event', e.message); }
   };
 
   var linkedIds = events.map(function(e) { return e.id; });
@@ -1139,21 +1164,17 @@ var EventsTab = function(props) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-[#64748B]">
-          {loading ? '' : events.length + ' ' + (events.length === 1 ? 'event' : 'events')}
-        </p>
+        <p className="text-sm text-[#64748B]">{loading ? '' : events.length + ' ' + (events.length === 1 ? 'event' : 'events')}</p>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <>
               <button onClick={function() { setShowLinkModal(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                aria-label="Link existing event to group">
-                <LinkIcon />Link Event
+                className="px-3 py-1.5 border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
+                Link Event
               </button>
               <button onClick={function() { setShowCreateEvent(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                aria-label="Create new event for group">
-                <PlusIcon />Create Event
+                className="px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                Create Event
               </button>
             </>
           )}
@@ -1164,9 +1185,8 @@ var EventsTab = function(props) {
         </div>
       </div>
 
-      {loading ? <RowSkeleton count={3} /> : events.length === 0 ? (
+      {loading ? <CardGridSkeleton count={3} cols={3} /> : events.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-          <div className="flex justify-center text-slate-300 mb-3"><CalendarIcon size={40} /></div>
           <p className="font-semibold text-[#0E1523] mb-1">No events yet</p>
           <p className="text-sm text-[#475569] mb-4">
             {isAdmin ? 'Create a new event or link an existing one to this group.' : 'No events assigned to this group yet.'}
@@ -1174,45 +1194,39 @@ var EventsTab = function(props) {
           {isAdmin && (
             <div className="flex justify-center gap-2">
               <button onClick={function() { setShowLinkModal(true); }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                <LinkIcon />Link Event
+                className="px-4 py-2 border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                Link Event
               </button>
               <button onClick={function() { setShowCreateEvent(true); }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <PlusIcon />Create Event
+                className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Create Event
               </button>
             </div>
           )}
         </div>
       ) : (
-        <ul className="space-y-2" role="list" aria-label="Group events">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Group events">
           {events.map(function(event) {
+            var isPast = new Date(event.start_time) < new Date();
+            var actions = [];
+            if (isAdmin) {
+              actions.push({ label: 'View', onClick: function() { window.location.href = '/organizations/' + organizationId + '/events/' + event.id; } });
+              actions.push({ separator: true });
+              actions.push({ label: 'Remove from group', danger: true, onClick: function() { setConfirmUnlink({ id: event.id, title: event.title }); } });
+            } else {
+              actions.push({ label: 'View', onClick: function() { window.location.href = '/organizations/' + organizationId + '/events/' + event.id; } });
+            }
             return (
-              <li key={event.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <Link
-                  to={'/organizations/' + organizationId + '/events/' + event.id}
-                  className="flex-1 min-w-0 focus:outline-none focus:underline"
-                  aria-label={'View event ' + event.title}>
-                  <p className="font-medium text-[#0E1523] text-sm">{event.title}</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">
-                    {formatDate(event.start_time)}
-                    {event.location ? ' — ' + event.location : ''}
-                  </p>
-                </Link>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {isAdmin && (
-                    <button
-                      onClick={function() { setConfirmUnlink({ id: event.id, title: event.title }); }}
-                      className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                      aria-label={'Remove ' + event.title + ' from group'}>
-                      <TrashIcon />
-                    </button>
-                  )}
-                  <Link to={'/organizations/' + organizationId + '/events/' + event.id}
-                    className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    aria-label={'View ' + event.title}>
-                    <ChevronRightIcon />
-                  </Link>
+              <li key={event.id} className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col hover:shadow-sm transition-shadow">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="font-semibold text-[#0E1523] text-sm leading-snug flex-1">{event.title}</p>
+                  {isPast && <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-[#64748B] flex-shrink-0">Past</span>}
+                </div>
+                <p className="text-xs text-[#64748B] mb-1">{formatDate(event.start_time)}</p>
+                {event.location && <p className="text-xs text-[#94A3B8] mb-3 line-clamp-1">{event.location}</p>}
+                <div className="flex-1" />
+                <div className="pt-3 mt-2 border-t border-slate-100">
+                  <ActionsDropdown label="Actions" openDir="up" items={actions} />
                 </div>
               </li>
             );
@@ -1220,61 +1234,41 @@ var EventsTab = function(props) {
         </ul>
       )}
 
- <CreateEvent isOpen={showCreateEvent}
+      <CreateEvent isOpen={showCreateEvent}
         onClose={function() { setShowCreateEvent(false); }}
         onSuccess={async function(newEvent) {
           setShowCreateEvent(false);
           fetchEvents();
-          // Notify group members about the new event (CreateEvent already notifies
-          // all org members via notifyOrganizationMembers — here we additionally
-          // notify group members who may not be org-wide but are in this group,
-          // and provide a group-contextual message)
           try {
-            var evAuthRes = await supabase.auth.getUser();
-            var evUser = evAuthRes.data.user;
-            var eventTitle = (newEvent && newEvent.title) ? newEvent.title : 'New Event';
+            var evRes = await supabase.auth.getUser();
             await notifyGroupMembers({
-              groupId: groupId,
-              organizationId: organizationId,
-              type: 'new_event',
-              title: eventTitle,
+              groupId: groupId, organizationId: organizationId, type: 'new_event',
+              title: (newEvent && newEvent.title) ? newEvent.title : 'New Event',
               message: 'A new event has been added to your group.',
               link: '/organizations/' + organizationId + '/groups/' + groupId,
-              excludeUserId: evUser ? evUser.id : null,
+              excludeUserId: evRes.data.user ? evRes.data.user.id : null,
             });
             window.dispatchEvent(new CustomEvent('notificationCreated'));
-          } catch (notifErr) {
-            console.error('Group event notification failed (event still created):', notifErr);
-          }
+          } catch (_err) { console.error('Group event notification failed'); }
         }}
-        organizationId={organizationId}
-        organizationName={orgName}
-        groupId={groupId} />
- 
+        organizationId={organizationId} organizationName={orgName} groupId={groupId} />
 
       {showLinkModal && (
-        <LinkEventModal
-          groupId={groupId}
-          organizationId={organizationId}
-          linkedEventIds={linkedIds}
+        <LinkEventModal groupId={groupId} organizationId={organizationId} linkedEventIds={linkedIds}
           onClose={function() { setShowLinkModal(false); }}
           onSaved={function() { setShowLinkModal(false); fetchEvents(); }} />
       )}
-
       {confirmUnlink && (
-        <ConfirmModal
-          title={'Remove "' + confirmUnlink.title + '" from this group?'}
+        <ConfirmModal title={'Remove "' + confirmUnlink.title + '" from this group?'}
           message="The event itself won't be deleted — it will just be unlinked from this group."
-          confirmLabel="Remove"
-          onConfirm={handleUnlinkConfirmed}
-          onCancel={function() { setConfirmUnlink(null); }}
-        />
+          confirmLabel="Remove" confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleUnlinkConfirmed} onCancel={function() { setConfirmUnlink(null); }} />
       )}
     </div>
   );
 };
 
-// ─── Documents Tab ────────────────────────────────────────────────────────────
+// ─── Documents Tab — grid cards ───────────────────────────────────────────────
 
 var DocumentsTab = function(props) {
   var groupId = props.groupId;
@@ -1285,13 +1279,12 @@ var DocumentsTab = function(props) {
   var [documents, setDocuments] = useState([]);
   var [loading, setLoading] = useState(true);
   var [showUpload, setShowUpload] = useState(false);
-  var [confirmDelete, setConfirmDelete] = useState(null); // { id, title, storage_path }
+  var [confirmDelete, setConfirmDelete] = useState(null);
 
   var fetchDocs = useCallback(async function() {
     setLoading(true);
     try {
-      var res = await supabase
-        .from('documents')
+      var res = await supabase.from('documents')
         .select('id, title, file_name, file_type, file_size_bytes, uploaded_at, storage_path')
         .eq('organization_id', organizationId)
         .contains('allowed_groups', [groupId])
@@ -1300,11 +1293,8 @@ var DocumentsTab = function(props) {
       var data = res.data || [];
       setDocuments(data);
       if (onCountChange) onCountChange(data.length);
-    } catch (_err) {
-      mascotErrorToast('Failed to load documents');
-    } finally {
-      setLoading(false);
-    }
+    } catch (_err) { mascotErrorToast('Failed to load documents'); }
+    finally { setLoading(false); }
   }, [groupId, organizationId, onCountChange]);
 
   useEffect(function() { fetchDocs(); }, [fetchDocs]);
@@ -1314,9 +1304,7 @@ var DocumentsTab = function(props) {
       var res = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 3600);
       if (res.error) throw res.error;
       window.open(res.data.signedUrl, '_blank', 'noopener,noreferrer');
-    } catch (_e) {
-      toast.error('Failed to generate download link');
-    }
+    } catch (_e) { toast.error('Failed to generate download link'); }
   };
 
   var handleDeleteConfirmed = async function() {
@@ -1324,30 +1312,23 @@ var DocumentsTab = function(props) {
     var doc = confirmDelete;
     setConfirmDelete(null);
     try {
-      if (doc.storage_path) {
-        await supabase.storage.from('documents').remove([doc.storage_path]);
-      }
+      if (doc.storage_path) await supabase.storage.from('documents').remove([doc.storage_path]);
       var res = await supabase.from('documents').delete().eq('id', doc.id);
       if (res.error) throw res.error;
       mascotSuccessToast('Document deleted');
       fetchDocs();
-    } catch (e) {
-      mascotErrorToast('Failed to delete document', e.message);
-    }
+    } catch (e) { mascotErrorToast('Failed to delete document', e.message); }
   };
 
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-[#64748B]">
-          {loading ? '' : documents.length + ' ' + (documents.length === 1 ? 'document' : 'documents')}
-        </p>
+        <p className="text-sm text-[#64748B]">{loading ? '' : documents.length + ' ' + (documents.length === 1 ? 'document' : 'documents')}</p>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button onClick={function() { setShowUpload(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              aria-label="Upload document for group">
-              <PlusIcon />Upload
+              className="px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Upload
             </button>
           )}
           <Link to={'/organizations/' + organizationId + '/documents'}
@@ -1357,51 +1338,44 @@ var DocumentsTab = function(props) {
         </div>
       </div>
 
-      {loading ? <RowSkeleton count={3} /> : documents.length === 0 ? (
+      {loading ? <CardGridSkeleton count={3} cols={3} /> : documents.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-          <div className="flex justify-center text-slate-300 mb-3"><FolderIcon size={40} /></div>
           <p className="font-semibold text-[#0E1523] mb-1">No documents yet</p>
           <p className="text-sm text-[#475569] mb-4">
-            {isAdmin
-              ? 'Upload a document or assign existing ones from the document library.'
-              : 'No documents have been shared with this group yet.'}
+            {isAdmin ? 'Upload a document or assign existing ones from the document library.' : 'No documents have been shared with this group yet.'}
           </p>
           {isAdmin && (
             <button onClick={function() { setShowUpload(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />Upload Document
+              className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Upload Document
             </button>
           )}
         </div>
       ) : (
-        <ul className="space-y-2" role="list" aria-label="Group documents">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Group documents">
           {documents.map(function(doc) {
             var ext = (doc.file_name || '').split('.').pop().toUpperCase() || 'FILE';
+            var actions = [
+              { label: 'Download', onClick: function() { handleDownload(doc); } },
+            ];
+            if (isAdmin) {
+              actions.push({ separator: true });
+              actions.push({ label: 'Delete', danger: true, onClick: function() { setConfirmDelete({ id: doc.id, title: doc.title, storage_path: doc.storage_path }); } });
+            }
             return (
-              <li key={doc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#0E1523] text-sm truncate">{doc.title}</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">
-                    {ext}
-                    {doc.file_size_bytes ? ' — ' + formatSize(doc.file_size_bytes) : ''}
-                    {' — '}
-                    {new Date(doc.uploaded_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={function() { handleDownload(doc); }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#475569] border border-slate-300 rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    aria-label={'Download ' + doc.title}>
-                    <DownloadIcon />Download
-                  </button>
-                  {isAdmin && (
-                    <button
-                      onClick={function() { setConfirmDelete({ id: doc.id, title: doc.title, storage_path: doc.storage_path }); }}
-                      className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                      aria-label={'Delete ' + doc.title}>
-                      <TrashIcon />
-                    </button>
-                  )}
+              <li key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col hover:shadow-sm transition-shadow">
+                {/* File type badge */}
+                <span className="inline-block text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-[#475569] mb-2 self-start">
+                  {ext}
+                </span>
+                <p className="font-semibold text-[#0E1523] text-sm leading-snug mb-1 line-clamp-2">{doc.title}</p>
+                <p className="text-xs text-[#94A3B8] mb-3">
+                  {doc.file_size_bytes ? formatSize(doc.file_size_bytes) + ' — ' : ''}
+                  {new Date(doc.uploaded_at).toLocaleDateString()}
+                </p>
+                <div className="flex-1" />
+                <div className="pt-3 mt-2 border-t border-slate-100">
+                  <ActionsDropdown label="Actions" openDir="up" items={actions} />
                 </div>
               </li>
             );
@@ -1413,19 +1387,13 @@ var DocumentsTab = function(props) {
         <FileUploadModal isOpen={showUpload}
           onClose={function() { setShowUpload(false); }}
           onSuccess={function() { setShowUpload(false); mascotSuccessToast('Document uploaded'); fetchDocs(); }}
-          organizationId={organizationId}
-          folderId={null}
-          groupId={groupId} />
+          organizationId={organizationId} folderId={null} groupId={groupId} />
       )}
-
       {confirmDelete && (
-        <ConfirmModal
-          title={'Delete "' + confirmDelete.title + '"?'}
+        <ConfirmModal title={'Delete "' + confirmDelete.title + '"?'}
           message="This document will be permanently deleted and cannot be recovered."
-          confirmLabel="Delete Document"
-          onConfirm={handleDeleteConfirmed}
-          onCancel={function() { setConfirmDelete(null); }}
-        />
+          confirmLabel="Delete Document" confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleDeleteConfirmed} onCancel={function() { setConfirmDelete(null); }} />
       )}
     </div>
   );
@@ -1447,9 +1415,13 @@ var GroupAnnouncementModal = function(props) {
   });
   var [saving, setSaving] = useState(false);
 
-  function updateForm(key, val) {
-    setForm(function(f) { var n = Object.assign({}, f); n[key] = val; return n; });
-  }
+  useEffect(function() {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  function updateForm(key, val) { setForm(function(f) { var n = Object.assign({}, f); n[key] = val; return n; }); }
 
   var handleSave = async function() {
     if (!form.title.trim()) { toast.error('Title is required'); return; }
@@ -1457,91 +1429,47 @@ var GroupAnnouncementModal = function(props) {
     setSaving(true);
     try {
       var userRes = await supabase.auth.getUser();
-      var payload = {
-        title: form.title.trim(),
-        content: form.content.trim(),
-        is_pinned: form.is_pinned,
-        group_id: groupId,
-        organization_id: organizationId,
-        updated_at: new Date().toISOString(),
-      };
+      var payload = { title: form.title.trim(), content: form.content.trim(), is_pinned: form.is_pinned, group_id: groupId, organization_id: organizationId, updated_at: new Date().toISOString() };
       var err;
-      if (editAnn) {
-        var upd = await supabase.from('announcements').update(payload).eq('id', editAnn.id);
-        err = upd.error;
-      } else {
-        payload.created_by = userRes.data.user.id;
-        var ins = await supabase.from('announcements').insert(payload);
-        err = ins.error;
-      }
+      if (editAnn) { var upd = await supabase.from('announcements').update(payload).eq('id', editAnn.id); err = upd.error; }
+      else { payload.created_by = userRes.data.user.id; var ins = await supabase.from('announcements').insert(payload); err = ins.error; }
       if (err) throw err;
       mascotSuccessToast(editAnn ? 'Announcement updated' : 'Announcement posted');
-      // Notify group members for new announcements (skip on edit — members already saw it)
       if (!editAnn) {
         try {
-          var notifAuthRes = await supabase.auth.getUser();
-          var notifUser = notifAuthRes.data.user;
-          await notifyGroupMembers({
-            groupId: groupId,
-            organizationId: organizationId,
-            type: 'new_announcement',
-            title: form.title.trim(),
-            message: 'A new announcement has been posted to your group.',
-            link: '/organizations/' + organizationId + '/groups/' + groupId,
-            excludeUserId: notifUser ? notifUser.id : null,
-          });
+          await notifyGroupMembers({ groupId, organizationId, type: 'new_announcement', title: form.title.trim(), message: 'A new announcement has been posted to your group.', link: '/organizations/' + organizationId + '/groups/' + groupId, excludeUserId: userRes.data.user.id });
           window.dispatchEvent(new CustomEvent('notificationCreated'));
-        } catch (notifErr) {
-          console.error('Group announcement notification failed (announcement still saved):', notifErr);
-        }
+        } catch (_err) {}
       }
       onSaved();
-    } catch (e) {
-      mascotErrorToast('Failed to save announcement', e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { mascotErrorToast('Failed to save announcement', e.message); }
+    finally { setSaving(false); }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4"
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4"
       role="dialog" aria-modal="true" aria-labelledby="ann-modal-title"
-      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
-    >
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 id="ann-modal-title" className="text-xl font-bold text-[#0E1523]">
-            {editAnn ? 'Edit Announcement' : 'New Announcement'}
-          </h2>
-          <button onClick={onClose}
-            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close">
-            <XIcon />
-          </button>
+          <h2 id="ann-modal-title" className="text-xl font-bold text-[#0E1523]">{editAnn ? 'Edit Announcement' : 'New Announcement'}</h2>
+          <button onClick={onClose} className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Close"><XIcon /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label htmlFor="ann-title" className="block text-sm font-medium text-[#0E1523] mb-1">
-              Title <span className="text-red-500" aria-hidden="true">*</span>
-            </label>
-            <input id="ann-title" type="text" value={form.title}
-              onChange={function(e) { updateForm('title', e.target.value); }}
+            <label htmlFor="ann-title" className="block text-sm font-medium text-[#0E1523] mb-1">Title <span className="text-red-500" aria-hidden="true">*</span></label>
+            <input id="ann-title" type="text" value={form.title} onChange={function(e) { updateForm('title', e.target.value); }}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Announcement title" maxLength={200} aria-required="true" />
           </div>
           <div>
-            <label htmlFor="ann-content" className="block text-sm font-medium text-[#0E1523] mb-1">
-              Content <span className="text-red-500" aria-hidden="true">*</span>
-            </label>
-            <textarea id="ann-content" value={form.content}
-              onChange={function(e) { updateForm('content', e.target.value); }}
+            <label htmlFor="ann-content" className="block text-sm font-medium text-[#0E1523] mb-1">Content <span className="text-red-500" aria-hidden="true">*</span></label>
+            <textarea id="ann-content" value={form.content} onChange={function(e) { updateForm('content', e.target.value); }}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-[#0E1523] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               rows={4} placeholder="Write your announcement..." aria-required="true" />
           </div>
           <div className="flex items-center gap-3">
-            <input id="ann-pinned" type="checkbox" checked={form.is_pinned}
-              onChange={function(e) { updateForm('is_pinned', e.target.checked); }}
+            <input id="ann-pinned" type="checkbox" checked={form.is_pinned} onChange={function(e) { updateForm('is_pinned', e.target.checked); }}
               className="w-4 h-4 border-slate-300 rounded text-blue-500 focus:ring-blue-500 cursor-pointer" />
             <label htmlFor="ann-pinned" className="text-sm text-[#475569] cursor-pointer">
               <span className="font-medium text-[#0E1523]">Pin this announcement</span> — shows at the top
@@ -1549,21 +1477,10 @@ var GroupAnnouncementModal = function(props) {
           </div>
         </div>
         <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
           <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            aria-busy={saving}>
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status">
-                  <span className="sr-only">Saving...</span>
-                </div>
-                Saving...
-              </>
-            ) : (editAnn ? 'Save Changes' : 'Post Announcement')}
+            className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center gap-2" aria-busy={saving}>
+            {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" role="status"><span className="sr-only">Saving...</span></div>Saving...</>) : (editAnn ? 'Save Changes' : 'Post Announcement')}
           </button>
         </div>
       </div>
@@ -1571,7 +1488,7 @@ var GroupAnnouncementModal = function(props) {
   );
 };
 
-// ─── Announcements Tab ────────────────────────────────────────────────────────
+// ─── Announcements Tab — grid cards ──────────────────────────────────────────
 
 var AnnouncementsTab = function(props) {
   var organizationId = props.organizationId;
@@ -1582,24 +1499,17 @@ var AnnouncementsTab = function(props) {
   var [loading, setLoading] = useState(true);
   var [showModal, setShowModal] = useState(false);
   var [editAnn, setEditAnn] = useState(null);
-  var [confirmDelete, setConfirmDelete] = useState(null); // { id, title }
+  var [confirmDelete, setConfirmDelete] = useState(null);
 
   var fetchAnnouncements = useCallback(async function() {
     setLoading(true);
     try {
-      var res = await supabase
-        .from('announcements')
-        .select('id, title, content, created_at, is_pinned')
-        .eq('organization_id', organizationId)
-        .eq('group_id', groupId)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false });
+      var res = await supabase.from('announcements').select('id, title, content, created_at, is_pinned')
+        .eq('organization_id', organizationId).eq('group_id', groupId)
+        .order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
       setAnnouncements(res.data || []);
-    } catch (_err) {
-      mascotErrorToast('Failed to load announcements');
-    } finally {
-      setLoading(false);
-    }
+    } catch (_err) { mascotErrorToast('Failed to load announcements'); }
+    finally { setLoading(false); }
   }, [organizationId, groupId]);
 
   useEffect(function() { fetchAnnouncements(); }, [fetchAnnouncements]);
@@ -1613,9 +1523,7 @@ var AnnouncementsTab = function(props) {
       if (res.error) throw res.error;
       mascotSuccessToast('Announcement deleted');
       fetchAnnouncements();
-    } catch (e) {
-      mascotErrorToast('Failed to delete announcement', e.message);
-    }
+    } catch (e) { mascotErrorToast('Failed to delete announcement', e.message); }
   };
 
   var AnnCardSkeleton = function() {
@@ -1624,7 +1532,7 @@ var AnnouncementsTab = function(props) {
         <div className="h-4 bg-slate-200 rounded w-3/4" />
         <div className="h-3 bg-slate-100 rounded w-full" />
         <div className="h-3 bg-slate-100 rounded w-2/3" />
-        <div className="h-3 bg-slate-100 rounded w-1/3 mt-2" />
+        <div className="h-7 bg-slate-100 rounded-lg w-20 mt-3" />
       </div>
     );
   };
@@ -1632,15 +1540,11 @@ var AnnouncementsTab = function(props) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-[#64748B]">
-          {loading ? '' : announcements.length + ' ' + (announcements.length === 1 ? 'announcement' : 'announcements')}
-        </p>
+        <p className="text-sm text-[#64748B]">{loading ? '' : announcements.length + ' ' + (announcements.length === 1 ? 'announcement' : 'announcements')}</p>
         {isAdmin && (
-          <button
-            onClick={function() { setEditAnn(null); setShowModal(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            aria-label="Create new announcement for this group">
-            <PlusIcon />New Announcement
+          <button onClick={function() { setEditAnn(null); setShowModal(true); }}
+            className="px-3 py-1.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            New Announcement
           </button>
         )}
       </div>
@@ -1651,16 +1555,14 @@ var AnnouncementsTab = function(props) {
         </div>
       ) : announcements.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-          <div className="flex justify-center text-slate-300 mb-3"><MegaphoneIcon size={40} /></div>
           <p className="font-semibold text-[#0E1523] mb-1">No announcements yet</p>
           <p className="text-sm text-[#475569] mb-4">
             {isAdmin ? 'Post the first announcement for this group.' : 'No announcements have been posted to this group yet.'}
           </p>
           {isAdmin && (
-            <button
-              onClick={function() { setEditAnn(null); setShowModal(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <PlusIcon />Post First Announcement
+            <button onClick={function() { setEditAnn(null); setShowModal(true); }}
+              className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Post First Announcement
             </button>
           )}
         </div>
@@ -1668,40 +1570,26 @@ var AnnouncementsTab = function(props) {
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Group announcements">
           {announcements.map(function(ann) {
             return (
-              <li key={ann.id}
-                className={'rounded-xl border flex flex-col ' + (ann.is_pinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200')}>
+              <li key={ann.id} className={'rounded-xl border flex flex-col ' + (ann.is_pinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200')}>
                 <div className="p-4 flex-1">
                   <div className="flex items-start gap-2 mb-2">
                     <p className="font-semibold text-[#0E1523] text-sm flex-1 leading-snug">{ann.title}</p>
-                    {ann.is_pinned && (
-                      <span className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                        Pinned
-                      </span>
-                    )}
+                    {ann.is_pinned && <span className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pinned</span>}
                   </div>
-                  {ann.content && (
-                    <p className="text-sm text-[#475569] leading-relaxed line-clamp-3">{ann.content}</p>
-                  )}
+                  {ann.content && <p className="text-sm text-[#475569] leading-relaxed line-clamp-3">{ann.content}</p>}
                 </div>
                 <div className={'flex items-center justify-between px-4 py-2.5 border-t ' + (ann.is_pinned ? 'border-amber-200' : 'border-slate-100')}>
                   <span className="text-xs text-[#64748B]">
                     {new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                   {isAdmin && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={function() { setEditAnn(ann); setShowModal(true); }}
-                        className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                        aria-label={'Edit ' + ann.title}>
-                        <EditIcon />
-                      </button>
-                      <button
-                        onClick={function() { setConfirmDelete({ id: ann.id, title: ann.title }); }}
-                        className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                        aria-label={'Delete ' + ann.title}>
-                        <TrashIcon />
-                      </button>
-                    </div>
+                    <ActionsDropdown label="Actions" openDir="up"
+                      items={[
+                        { label: 'Edit', onClick: function() { setEditAnn(ann); setShowModal(true); } },
+                        { separator: true },
+                        { label: 'Delete', danger: true, onClick: function() { setConfirmDelete({ id: ann.id, title: ann.title }); } },
+                      ]}
+                    />
                   )}
                 </div>
               </li>
@@ -1711,22 +1599,15 @@ var AnnouncementsTab = function(props) {
       )}
 
       {showModal && (
-        <GroupAnnouncementModal
-          groupId={groupId}
-          organizationId={organizationId}
-          editAnn={editAnn}
+        <GroupAnnouncementModal groupId={groupId} organizationId={organizationId} editAnn={editAnn}
           onClose={function() { setShowModal(false); setEditAnn(null); }}
           onSaved={function() { setShowModal(false); setEditAnn(null); fetchAnnouncements(); }} />
       )}
-
       {confirmDelete && (
-        <ConfirmModal
-          title={'Delete "' + confirmDelete.title + '"?'}
+        <ConfirmModal title={'Delete "' + confirmDelete.title + '"?'}
           message="This announcement will be permanently deleted."
-          confirmLabel="Delete"
-          onConfirm={handleDeleteConfirmed}
-          onCancel={function() { setConfirmDelete(null); }}
-        />
+          confirmLabel="Delete" confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleDeleteConfirmed} onCancel={function() { setConfirmDelete(null); }} />
       )}
     </div>
   );
@@ -1736,6 +1617,7 @@ var AnnouncementsTab = function(props) {
 
 function GroupDetail() {
   var { organizationId, groupId } = useParams();
+  var [searchParams] = useSearchParams();
   var navigate = useNavigate();
   var context = useOutletContext();
   var isAdmin = context ? context.isAdmin : false;
@@ -1743,10 +1625,17 @@ function GroupDetail() {
   var [group, setGroup] = useState(null);
   var [orgName, setOrgName] = useState('');
   var [loading, setLoading] = useState(true);
-  var [activeTab, setActiveTab] = useState('members');
   var [showEditModal, setShowEditModal] = useState(false);
+  var [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
+  var [showManageMembers, setShowManageMembers] = useState(false);
+
+  var [activeTab, setActiveTab] = useState('members');
+  useEffect(function() {
+    if (searchParams.get('tab') === 'pending') setActiveTab('members');
+  }, [searchParams]);
 
   var [memberCount, setMemberCount] = useState(0);
+  var [memberRefreshKey, setMemberRefreshKey] = useState(0);
   var [eventCount, setEventCount] = useState(0);
   var [docCount, setDocCount] = useState(0);
 
@@ -1758,20 +1647,27 @@ function GroupDetail() {
       ]);
       setGroup(groupRes.data);
       setOrgName(orgRes.data ? orgRes.data.name : '');
-    } catch (_err) {
-      mascotErrorToast('Failed to load group', 'Please try refreshing.');
-    } finally {
-      setLoading(false);
-    }
+    } catch (_err) { mascotErrorToast('Failed to load group', 'Please try refreshing.'); }
+    finally { setLoading(false); }
   }, [organizationId, groupId]);
 
   useEffect(function() { fetchGroup(); }, [fetchGroup]);
 
+  var handleDeleteGroupConfirmed = async function() {
+    setConfirmDeleteGroup(false);
+    try {
+      var res = await supabase.from('org_groups').update({ is_active: false }).eq('id', groupId);
+      if (res.error) throw res.error;
+      mascotSuccessToast('Group deleted');
+      navigate('/organizations/' + organizationId + '/groups');
+    } catch (e) { mascotErrorToast('Failed to delete group', e.message); }
+  };
+
   var tabs = [
-    { id: 'members',       label: 'Members',      icon: <UsersIcon size={15} /> },
-    { id: 'events',        label: 'Events',        icon: <CalendarIcon size={15} /> },
-    { id: 'documents',     label: 'Documents',     icon: <FolderIcon size={15} /> },
-    { id: 'announcements', label: 'Announcements', icon: <MegaphoneIcon size={15} /> },
+    { id: 'members', label: 'Members' },
+    { id: 'events', label: 'Events' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'announcements', label: 'Announcements' },
   ];
 
   if (loading) return <PageSkeleton />;
@@ -1779,7 +1675,6 @@ function GroupDetail() {
   if (!group) return (
     <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
       <div className="text-center">
-        <div className="flex justify-center text-slate-300 mb-4"><AlertCircleIcon size={52} /></div>
         <p className="font-semibold text-lg text-[#0E1523] mb-1">Group not found</p>
         <p className="text-sm text-[#475569] mb-5">This group may have been deleted or you may not have access.</p>
         <button onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
@@ -1792,103 +1687,69 @@ function GroupDetail() {
 
   var typeStyle = { background: '#F1F5F9', color: '#475569' };
 
+  var headerActions = [
+    { label: 'Email Group', onClick: function() { navigate('/organizations/' + organizationId + '/email-blasts?group=' + groupId); } },
+  ];
+  if (isAdmin) {
+    headerActions.push({ label: 'Edit Group', onClick: function() { setShowEditModal(true); } });
+    headerActions.push({ label: 'Manage Members', onClick: function() { setShowManageMembers(true); } });
+    headerActions.push({ separator: true });
+    headerActions.push({ label: 'Delete Group', danger: true, onClick: function() { setConfirmDeleteGroup(true); } });
+  }
+
   return (
     <main className="min-h-screen bg-[#F8FAFC]" aria-label={group.name + ' detail'}>
       <div className="px-6 py-6">
 
-        {/* ── Back link ── */}
         <div className="mb-4">
-          <button
-            onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
-            className="flex items-center gap-1.5 text-sm text-[#64748B] hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
-            aria-label="Back to Groups and Committees"
-          >
-            <ChevronLeftIcon />
-            Groups &amp; Committees
+          <button onClick={function() { navigate('/organizations/' + organizationId + '/groups'); }}
+            className="text-sm text-[#64748B] hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded transition-colors"
+            aria-label="Back to Groups and Committees">
+            ← Groups &amp; Committees
           </button>
         </div>
 
-        {/* ── Page Header (standard: 30px/800, count-based subtitle) ── */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: group.color || '#3B82F6' }} aria-hidden="true" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
-                  {group.name}
-                </h1>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={typeStyle}>
-                  {TYPE_LABELS[group.type] || group.type}
-                </span>
+                <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>{group.name}</h1>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={typeStyle}>{TYPE_LABELS[group.type] || group.type}</span>
               </div>
-              <p className="text-sm text-[#64748B] mt-1">
-                {memberCount + ' ' + (memberCount === 1 ? 'member' : 'members')}
-              </p>
+              <p className="text-sm text-[#64748B] mt-1">{memberCount + ' ' + (memberCount === 1 ? 'member' : 'members')}</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={function() { navigate('/organizations/' + organizationId + '/email-blasts?group=' + groupId); }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-              aria-label={'Email ' + group.name}>
-              <MailIcon />Email Group
-            </button>
-            {isAdmin && (
-              <button onClick={function() { setShowEditModal(true); }}
-                className="flex items-center gap-1.5 px-3 py-2 bg-transparent border border-slate-300 text-[#475569] text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                aria-label={'Edit ' + group.name}>
-                <EditIcon />Edit Group
-              </button>
-            )}
-          </div>
+          <ActionsDropdown label="Actions" openDir="down" items={headerActions} />
         </div>
 
-        {/* ── Stats Strip ── */}
         <div className="flex items-center gap-3 mb-5 flex-wrap" role="list" aria-label="Group statistics">
           {[
-            { label: 'Members',   count: memberCount, tab: 'members',   icon: <UsersIcon size={15} /> },
-            { label: 'Events',    count: eventCount,  tab: 'events',    icon: <CalendarIcon size={15} /> },
-            { label: 'Documents', count: docCount,    tab: 'documents', icon: <FolderIcon size={15} /> },
+            { label: 'Members', count: memberCount, tab: 'members' },
+            { label: 'Events', count: eventCount, tab: 'events' },
+            { label: 'Documents', count: docCount, tab: 'documents' },
           ].map(function(stat) {
             return (
-              <button
-                key={stat.tab}
-                role="listitem"
-                onClick={function() { setActiveTab(stat.tab); }}
-                className={'flex items-center gap-2 px-4 py-3 rounded-xl border text-left transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (activeTab === stat.tab ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:border-slate-300')}
-                aria-label={stat.count + ' ' + stat.label + ', switch to ' + stat.label + ' tab'}
-              >
-                <span className={'flex-shrink-0 ' + (activeTab === stat.tab ? 'text-blue-500' : 'text-[#64748B]')}>
-                  {stat.icon}
-                </span>
-                <div>
-                  <p className={'text-xl font-bold leading-none ' + (activeTab === stat.tab ? 'text-blue-600' : 'text-[#0E1523]')}>
-                    {stat.count}
-                  </p>
-                  <p className="text-xs text-[#64748B] mt-0.5">{stat.label}</p>
-                </div>
+              <button key={stat.tab} role="listitem" onClick={function() { setActiveTab(stat.tab); }}
+                className={'px-5 py-3 rounded-xl border text-left transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (activeTab === stat.tab ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:border-slate-300')}
+                aria-label={stat.count + ' ' + stat.label + ', switch to ' + stat.label + ' tab'}>
+                <p className={'text-xl font-bold leading-none ' + (activeTab === stat.tab ? 'text-blue-600' : 'text-[#0E1523]')}>{stat.count}</p>
+                <p className="text-xs text-[#64748B] mt-0.5">{stat.label}</p>
               </button>
             );
           })}
         </div>
 
-        {/* ── Tabs ── */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="border-b border-slate-200" role="tablist" aria-label="Group sections">
             <div className="flex overflow-x-auto">
               {tabs.map(function(tab) {
                 var isActive = activeTab === tab.id;
                 return (
-                  <button
-                    key={tab.id}
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-controls={'tabpanel-' + tab.id}
-                    id={'tab-' + tab.id}
+                  <button key={tab.id} role="tab" aria-selected={isActive}
+                    aria-controls={'tabpanel-' + tab.id} id={'tab-' + tab.id}
                     onClick={function() { setActiveTab(tab.id); }}
-                    className={'flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (isActive ? 'border-blue-500 text-blue-500' : 'border-transparent text-[#64748B] hover:text-[#475569] hover:border-slate-300')}>
-                    {tab.icon}
+                    className={'px-5 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ' + (isActive ? 'border-blue-500 text-blue-500' : 'border-transparent text-[#64748B] hover:text-[#475569] hover:border-slate-300')}>
                     {tab.label}
                   </button>
                 );
@@ -1897,44 +1758,38 @@ function GroupDetail() {
           </div>
 
           <div id={'tabpanel-' + activeTab} role="tabpanel" aria-labelledby={'tab-' + activeTab} className="p-6">
-            {activeTab === 'members' && (
-              <MembersTab
-                groupId={groupId}
-                organizationId={organizationId}
-                isAdmin={isAdmin}
-                onCountChange={setMemberCount} />
-            )}
-            {activeTab === 'events' && (
-              <EventsTab
-                groupId={groupId}
-                organizationId={organizationId}
-                orgName={orgName}
-                isAdmin={isAdmin}
-                onCountChange={setEventCount} />
-            )}
-            {activeTab === 'documents' && (
-              <DocumentsTab
-                groupId={groupId}
-                organizationId={organizationId}
-                isAdmin={isAdmin}
-                onCountChange={setDocCount} />
-            )}
-            {activeTab === 'announcements' && (
-              <AnnouncementsTab
-                organizationId={organizationId}
-                groupId={groupId}
-                isAdmin={isAdmin} />
-            )}
+            {activeTab === 'members' && <MembersTab key={memberRefreshKey} groupId={groupId} organizationId={organizationId} isAdmin={isAdmin} onCountChange={setMemberCount} />}
+            {activeTab === 'events' && <EventsTab groupId={groupId} organizationId={organizationId} orgName={orgName} isAdmin={isAdmin} onCountChange={setEventCount} />}
+            {activeTab === 'documents' && <DocumentsTab groupId={groupId} organizationId={organizationId} isAdmin={isAdmin} onCountChange={setDocCount} />}
+            {activeTab === 'announcements' && <AnnouncementsTab organizationId={organizationId} groupId={groupId} isAdmin={isAdmin} />}
           </div>
         </div>
 
       </div>
 
       {showEditModal && (
-        <EditGroupModal
-          group={group}
+        <EditGroupModal group={group}
           onClose={function() { setShowEditModal(false); }}
           onSaved={function() { setShowEditModal(false); fetchGroup(); }} />
+      )}
+
+      {showManageMembers && (
+        <ManageMembersModal
+          groupId={groupId}
+          organizationId={organizationId}
+          onClose={function(didChange) {
+            setShowManageMembers(false);
+            if (didChange) {
+              setMemberRefreshKey(function(k) { return k + 1; });
+            }
+          }} />
+      )}
+
+      {confirmDeleteGroup && (
+        <ConfirmModal title={'Delete "' + group.name + '"?'}
+          message="This group will be deactivated and removed from all member views. This cannot be undone."
+          confirmLabel="Delete Group" confirmClass="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+          onConfirm={handleDeleteGroupConfirmed} onCancel={function() { setConfirmDeleteGroup(false); }} />
       )}
     </main>
   );

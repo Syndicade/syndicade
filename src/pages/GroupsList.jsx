@@ -1,20 +1,3 @@
-/**
- * GroupsList.jsx
- * Task 13 changes:
- *   - Page header: 30px / weight 800 / #0E1523, count-based subtitle
- *   - window.confirm → ConfirmModal
- *   - Auto-create chat channel in CreateGroupModal after group insert
- *   - var only, string concat className, no template literals
- *
- * Session Jun 10 improvements:
- *   - #1 Chat channel insert now passes visibility: 'all'
- *   - #2 Cancel pending join request
- *   - #3 Leave Group (with ConfirmModal)
- *   - #4 Pending requests count badge for admins
- *   - #5 Email Group quick action for admins
- *   - #7 Keyboard reorder (Up/Down buttons) as ADA fallback
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -41,28 +24,6 @@ var PlusIcon = function() {
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  );
-};
-
-var EditIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-    </svg>
-  );
-};
-
-var TrashIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6"/>
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/><path d="M14 11v6"/>
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   );
 };
@@ -129,16 +90,6 @@ var AlertTriangleIcon = function() {
   );
 };
 
-var MailIcon = function() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-      <polyline points="22,6 12,13 2,6"/>
-    </svg>
-  );
-};
-
 var LogOutIcon = function() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -173,6 +124,15 @@ var ChevronUpIcon = function() {
 var ChevronDownIcon = function() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+};
+
+var ChevronDownSmIcon = function() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
@@ -229,11 +189,7 @@ var CardSkeleton = function() {
         <div className="h-px bg-slate-100 w-full" />
         <div className="flex items-center justify-between pt-1">
           <div className="h-3.5 bg-slate-100 rounded w-20" />
-          <div className="flex gap-1">
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-          </div>
+          <div className="h-7 bg-slate-100 rounded-lg w-24" />
         </div>
       </div>
     </div>
@@ -285,130 +241,6 @@ var ConfirmModal = function(props) {
             className={'px-4 py-2 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ' + confirmClass}
           >
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Members Modal ────────────────────────────────────────────────────────────
-
-var MembersModal = function(props) {
-  var group = props.group;
-  var onClose = props.onClose;
-  var [members, setMembers] = useState([]);
-  var [loading, setLoading] = useState(true);
-
-  useEffect(function() {
-    async function load() {
-      try {
-        var gmRes = await supabase
-          .from('org_group_members')
-          .select('member_id')
-          .eq('group_id', group.id)
-          .eq('status', 'active');
-        var ids = (gmRes.data || []).map(function(r) { return r.member_id; });
-        if (ids.length === 0) { setMembers([]); setLoading(false); return; }
-        var namesRes = await supabase
-          .from('members')
-          .select('user_id, first_name, last_name')
-          .in('user_id', ids);
-        var normalized = (namesRes.data || []).map(function(m) {
-          return {
-            member_id: m.user_id,
-            full_name: ((m.first_name || '') + ' ' + (m.last_name || '')).trim() || m.user_id,
-          };
-        });
-        setMembers(normalized);
-      } catch (_err) {
-        // show empty state silently
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [group.id]);
-
-  useEffect(function() {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', onKey);
-    return function() { document.removeEventListener('keydown', onKey); };
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="members-modal-title"
-      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <div>
-            <h2 id="members-modal-title" className="text-lg font-bold text-[#0E1523]">
-              {group.name}
-            </h2>
-            <p className="text-sm text-[#64748B] mt-0.5">Group Members</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close members list"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div className="p-4 max-h-80 overflow-y-auto">
-          {loading ? (
-            <div className="space-y-3" aria-busy="true" aria-label="Loading members">
-              {[1, 2, 3].map(function(i) {
-                return (
-                  <div key={i} className="flex items-center gap-3 animate-pulse">
-                    <div className="w-9 h-9 rounded-full bg-slate-200 flex-shrink-0" />
-                    <div className="h-4 w-36 bg-slate-200 rounded" />
-                  </div>
-                );
-              })}
-            </div>
-          ) : members.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="flex justify-center text-slate-300 mb-3">
-                <UsersIcon size={40} />
-              </div>
-              <p className="text-sm font-semibold text-[#0E1523]">No members yet</p>
-              <p className="text-xs text-[#64748B] mt-1">Members assigned to this group will appear here.</p>
-            </div>
-          ) : (
-            <ul className="space-y-2" role="list" aria-label="Group member list">
-              {members.map(function(m) {
-                var name = m.full_name || 'Unknown';
-                var bg = getAvatarColor(name);
-                return (
-                  <li key={m.member_id} className="flex items-center gap-3 py-1">
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                      style={{ background: bg }}
-                      aria-hidden="true"
-                    >
-                      {getInitials(name)}
-                    </div>
-                    <span className="text-sm font-medium text-[#0E1523]">{name}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-slate-200">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-          >
-            Close
           </button>
         </div>
       </div>
@@ -485,7 +317,7 @@ var CreateGroupModal = function(props) {
       }
       if (err) throw err;
 
-      // #1 Fix: pass visibility: 'all' to org_chat_channels (required column)
+      // Auto-create chat channel on new group
       if (newGroupId) {
         var channelRes = await supabase.from('org_chat_channels').insert({
           name: form.name.trim(),
@@ -650,6 +482,82 @@ var CreateGroupModal = function(props) {
   );
 };
 
+// ─── Actions Dropdown ─────────────────────────────────────────────────────────
+
+var ActionsDropdown = function(props) {
+  var group = props.group;
+  var onEdit = props.onEdit;
+  var onDelete = props.onDelete;
+  var onEmail = props.onEmail;
+
+  var [open, setOpen] = useState(false);
+  var dropdownRef = useRef(null);
+
+  useEffect(function() {
+    if (!open) return;
+    function handleOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return function() { document.removeEventListener('mousedown', handleOutside); };
+  }, [open]);
+
+  useEffect(function() {
+    if (!open) return;
+    function onKey(e) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={function(e) { e.preventDefault(); e.stopPropagation(); setOpen(function(v) { return !v; }); }}
+        className={'flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (open ? 'bg-slate-100 border-slate-300 text-[#0E1523]' : 'bg-white border-slate-200 text-[#475569] hover:bg-slate-50 hover:border-slate-300')}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={'Actions for ' + group.name}
+      >
+        Actions
+        <ChevronDownSmIcon />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 bottom-full mb-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden"
+          role="menu"
+          aria-label={'Actions for ' + group.name}
+        >
+          <button
+            role="menuitem"
+            onClick={function(e) { e.preventDefault(); e.stopPropagation(); setOpen(false); onEmail(); }}
+            className="w-full text-left px-4 py-2.5 text-sm text-[#475569] hover:bg-slate-50 hover:text-[#0E1523] focus:outline-none focus:bg-slate-50 transition-colors"
+          >
+            Email Group
+          </button>
+          <button
+            role="menuitem"
+            onClick={function(e) { e.preventDefault(); e.stopPropagation(); setOpen(false); onEdit(); }}
+            className="w-full text-left px-4 py-2.5 text-sm text-[#475569] hover:bg-slate-50 hover:text-[#0E1523] focus:outline-none focus:bg-slate-50 transition-colors"
+          >
+            Edit
+          </button>
+          <div className="h-px bg-slate-100 mx-3 my-1" role="separator" />
+          <button
+            role="menuitem"
+            onClick={function(e) { e.preventDefault(); e.stopPropagation(); setOpen(false); onDelete(); }}
+            className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 focus:outline-none focus:bg-red-50 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function GroupsList() {
@@ -662,16 +570,18 @@ function GroupsList() {
   var [loading, setLoading] = useState(true);
   var [currentUserId, setCurrentUserId] = useState(null);
   var [memberCounts, setMemberCounts] = useState({});
-  var [pendingCounts, setPendingCounts] = useState({}); // #4 admin pending request counts
+  var [pendingCounts, setPendingCounts] = useState({});
   var [userGroupIds, setUserGroupIds] = useState(new Set());
   var [pendingGroupIds, setPendingGroupIds] = useState(new Set());
 
+  // #6 — track which group is currently being joined to prevent double-tap
+  var [joiningGroupId, setJoiningGroupId] = useState(null);
+
   var [showModal, setShowModal] = useState(false);
   var [editGroup, setEditGroup] = useState(null);
-  var [membersModal, setMembersModal] = useState(null);
-  var [confirmDelete, setConfirmDelete] = useState(null);   // { id, name }
-  var [confirmLeave, setConfirmLeave] = useState(null);     // #3 { id, name }
-  var [confirmCancel, setConfirmCancel] = useState(null);   // #2 { id, name }
+  var [confirmDelete, setConfirmDelete] = useState(null);
+  var [confirmLeave, setConfirmLeave] = useState(null);
+  var [confirmCancel, setConfirmCancel] = useState(null);
 
   var [search, setSearch] = useState('');
   var [typeFilter, setTypeFilter] = useState('all');
@@ -712,7 +622,6 @@ function GroupsList() {
 
         await Promise.all(
           groupsData.map(async function(g) {
-            // Active member count
             var cntRes = await supabase
               .from('org_group_members')
               .select('member_id', { count: 'exact', head: true })
@@ -720,7 +629,6 @@ function GroupsList() {
               .eq('status', 'active');
             counts[g.id] = cntRes.count || 0;
 
-            // #4 Pending request count for admins
             if (isAdmin) {
               var pendingRes = await supabase
                 .from('org_group_members')
@@ -730,7 +638,6 @@ function GroupsList() {
               pending[g.id] = pendingRes.count || 0;
             }
 
-            // Current user membership status
             var myRow = await supabase
               .from('org_group_members')
               .select('member_id, status')
@@ -763,18 +670,11 @@ function GroupsList() {
 
   // ─── Drag to Reorder ───────────────────────────────────────────────────────
 
-  var handleDragStart = function(index) {
-    dragSrcIndexRef.current = index;
-  };
+  var handleDragStart = function(index) { dragSrcIndexRef.current = index; };
 
-  var handleDragOver = function(e, index) {
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
+  var handleDragOver = function(e, index) { e.preventDefault(); setDragOverIndex(index); };
 
-  var handleDragLeave = function() {
-    setDragOverIndex(null);
-  };
+  var handleDragLeave = function() { setDragOverIndex(null); };
 
   var handleDrop = async function(dropIndex) {
     setDragOverIndex(null);
@@ -784,7 +684,6 @@ function GroupsList() {
     await reorderGroups(srcIndex, dropIndex);
   };
 
-  // #7 Keyboard reorder — move up/down
   var handleMoveUp = async function(index) {
     if (index === 0) return;
     await reorderGroups(index, index - 1);
@@ -800,7 +699,6 @@ function GroupsList() {
     var moved = reordered.splice(srcIndex, 1)[0];
     reordered.splice(dropIndex, 0, moved);
     setGroups(reordered);
-
     setSavingOrder(true);
     try {
       await Promise.all(
@@ -833,7 +731,7 @@ function GroupsList() {
     }
   };
 
-  // ─── #2 Cancel Join Request ────────────────────────────────────────────────
+  // ─── Cancel Join Request ───────────────────────────────────────────────────
 
   var handleCancelRequestConfirmed = async function() {
     if (!confirmCancel) return;
@@ -857,7 +755,7 @@ function GroupsList() {
     }
   };
 
-  // ─── #3 Leave Group ────────────────────────────────────────────────────────
+  // ─── Leave Group ───────────────────────────────────────────────────────────
 
   var handleLeaveConfirmed = async function() {
     if (!confirmLeave) return;
@@ -886,9 +784,11 @@ function GroupsList() {
     }
   };
 
-  // ─── Request to Join ───────────────────────────────────────────────────────
+  // ─── #6 Request to Join — with in-flight disabled state ───────────────────
 
   var handleRequestJoin = async function(group) {
+    if (joiningGroupId) return;
+    setJoiningGroupId(group.id);
     try {
       var payload = {
         group_id: group.id,
@@ -920,6 +820,8 @@ function GroupsList() {
       }
     } catch (e) {
       mascotErrorToast('Could not join group', e.message);
+    } finally {
+      setJoiningGroupId(null);
     }
   };
 
@@ -1031,6 +933,7 @@ function GroupsList() {
           </div>
 
         ) : filteredGroups.length === 0 && groups.length === 0 ? (
+          /* No groups exist at all */
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="flex justify-center text-slate-300 mb-4">
               <UsersIcon size={52} />
@@ -1052,17 +955,32 @@ function GroupsList() {
             )}
           </div>
 
+        ) : filteredGroups.length === 0 && myGroupsOnly ? (
+          /* #5 — My Groups filter active but user is in no groups */
+          <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+            <div className="flex justify-center text-slate-300 mb-4">
+              <UsersIcon size={52} />
+            </div>
+            <h2 className="text-lg font-semibold text-[#0E1523] mb-2">You haven't joined any groups yet</h2>
+            <p className="text-sm text-[#475569] max-w-xs mx-auto mb-6">
+              Browse all groups to find committees, boards, or teams to join.
+            </p>
+            <button
+              onClick={function() { setMyGroupsOnly(false); setSearch(''); setTypeFilter('all'); }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Browse All Groups
+            </button>
+          </div>
+
         ) : filteredGroups.length === 0 ? (
+          /* Search / type filter returned nothing */
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <div className="flex justify-center text-slate-300 mb-4">
               <SearchIcon />
             </div>
             <h2 className="text-lg font-semibold text-[#0E1523] mb-2">No results found</h2>
-            <p className="text-sm text-[#475569] mb-6">
-              {myGroupsOnly
-                ? "You're not in any groups that match those filters."
-                : 'No groups match your current filters.'}
-            </p>
+            <p className="text-sm text-[#475569] mb-6">No groups match your current filters.</p>
             <button
               onClick={function() { setSearch(''); setTypeFilter('all'); setMyGroupsOnly(false); }}
               className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
@@ -1084,7 +1002,8 @@ function GroupsList() {
               var typeStyle = TYPE_STYLES[group.type] || TYPE_STYLES.other;
               var isDragTarget = dragOverIndex === index;
               var count = memberCounts[group.id] || 0;
-              var pendingCount = pendingCounts[group.id] || 0; // #4
+              var pendingCount = pendingCounts[group.id] || 0;
+              var isJoining = joiningGroupId === group.id;
 
               return (
                 <div
@@ -1095,7 +1014,7 @@ function GroupsList() {
                   onDragOver={canDrag ? function(e) { handleDragOver(e, index); } : undefined}
                   onDragLeave={canDrag ? handleDragLeave : undefined}
                   onDrop={canDrag ? function() { handleDrop(index); } : undefined}
-                  className={'bg-white rounded-xl border flex overflow-hidden transition-all ' + (isDragTarget ? 'border-blue-400 shadow-lg' : 'border-slate-200 hover:shadow-md hover:border-slate-300')}
+                  className={'group/card bg-white rounded-xl border flex overflow-hidden transition-all ' + (isDragTarget ? 'border-blue-400 shadow-lg' : 'border-slate-200 hover:shadow-md hover:border-slate-300')}
                   style={Object.assign({ minHeight: '160px' }, isDragTarget ? { opacity: 0.85 } : {})}
                 >
                   <div
@@ -1109,28 +1028,29 @@ function GroupsList() {
                     className="flex-1 flex flex-col p-4 min-w-0 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     aria-label={'Open ' + group.name}
                   >
-                    {/* #7 Keyboard reorder buttons — only shown for admins, no filters active */}
+                    {/* Keyboard reorder — visible on card hover for admins */}
                     {isAdmin && !filtersActive && groups.length > 1 && (
                       <div className="flex justify-between items-center mb-1">
-                        <div className="text-[#CBD5E1] cursor-grab active:cursor-grabbing" aria-hidden="true" title="Drag to reorder">
-                          {canDrag && <GripIcon />}
+                        <div
+                          className={'text-[#CBD5E1] cursor-grab active:cursor-grabbing transition-opacity ' + (canDrag ? 'opacity-0 group-hover/card:opacity-100' : 'opacity-0')}
+                          aria-hidden="true"
+                        >
+                          <GripIcon />
                         </div>
                         <div className="flex gap-0.5">
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleMoveUp(index); }}
                             disabled={index === 0 || savingOrder}
-                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
+                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 group-hover/card:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
                             aria-label={'Move ' + group.name + ' up'}
-                            title="Move up"
                           >
                             <ChevronUpIcon />
                           </button>
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleMoveDown(index); }}
                             disabled={index === groups.length - 1 || savingOrder}
-                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
+                            className="p-1 text-[#CBD5E1] hover:text-[#64748B] hover:bg-slate-100 rounded opacity-0 group-hover/card:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-0 disabled:cursor-not-allowed transition-opacity"
                             aria-label={'Move ' + group.name + ' down'}
-                            title="Move down"
                           >
                             <ChevronDownIcon />
                           </button>
@@ -1161,14 +1081,19 @@ function GroupsList() {
                           Pending
                         </span>
                       )}
-                      {/* #4 Pending requests badge for admins */}
+                      {/* #2 — Pending requests badge: clickable, navigates to group ?tab=pending */}
                       {isAdmin && pendingCount > 0 && (
-                        <span
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700"
-                          title={pendingCount + ' pending join ' + (pendingCount === 1 ? 'request' : 'requests')}
+                        <button
+                          onClick={function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate('/organizations/' + organizationId + '/groups/' + group.id + '?tab=pending');
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1 transition-colors"
+                          aria-label={'Review ' + pendingCount + ' pending join ' + (pendingCount === 1 ? 'request' : 'requests') + ' for ' + group.name}
                         >
                           {pendingCount} pending
-                        </span>
+                        </button>
                       )}
                     </div>
 
@@ -1179,17 +1104,13 @@ function GroupsList() {
                     <div className="flex-1" />
 
                     <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
-                      <button
-                        onClick={function(e) { e.preventDefault(); e.stopPropagation(); setMembersModal(group); }}
-                        className="flex items-center gap-1 text-xs text-[#64748B] hover:text-blue-500 focus:outline-none focus:underline transition-colors"
-                        aria-label={'View ' + count + ' ' + (count === 1 ? 'member' : 'members') + ' in ' + group.name}
-                      >
-                        <UsersIcon size={12} />
-                        <span>{count} {count === 1 ? 'member' : 'members'}</span>
-                      </button>
+                      {/* #3 — Member count: plain label, no modal */}
+                      <span className="text-xs text-[#64748B]">
+                        {count} {count === 1 ? 'member' : 'members'}
+                      </span>
 
-                      <div className="flex items-center gap-1">
-                        {/* #2 Cancel request */}
+                      <div className="flex items-center gap-1.5">
+                        {/* Cancel pending request (non-admin) */}
                         {!isAdmin && isPending && (
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmCancel({ id: group.id, name: group.name }); }}
@@ -1201,7 +1122,7 @@ function GroupsList() {
                           </button>
                         )}
 
-                        {/* #3 Leave group */}
+                        {/* Leave group (non-admin) */}
                         {!isAdmin && isMember && (
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmLeave({ id: group.id, name: group.name }); }}
@@ -1213,46 +1134,34 @@ function GroupsList() {
                           </button>
                         )}
 
+                        {/* #6 — Join/Request with in-flight disabled state */}
                         {canJoin && (
                           <button
                             onClick={function(e) { e.preventDefault(); e.stopPropagation(); handleRequestJoin(group); }}
-                            className="px-2.5 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+                            disabled={isJoining}
+                            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             aria-label={(group.join_approval_required ? 'Request to join ' : 'Join ') + group.name}
+                            aria-busy={isJoining}
                           >
-                            {group.join_approval_required ? 'Request' : 'Join'}
+                            {isJoining ? (
+                              <>
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                                {group.join_approval_required ? 'Requesting...' : 'Joining...'}
+                              </>
+                            ) : (
+                              group.join_approval_required ? 'Request' : 'Join'
+                            )}
                           </button>
                         )}
 
+                        {/* Actions dropdown (admin only) */}
                         {isAdmin && (
-                          <>
-                            {/* #5 Email Group quick action */}
-                            <button
-                              onClick={function(e) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate('/organizations/' + organizationId + '/email-blasts?group=' + group.id);
-                              }}
-                              className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                              aria-label={'Email ' + group.name}
-                              title="Email this group"
-                            >
-                              <MailIcon />
-                            </button>
-                            <button
-                              onClick={function(e) { e.preventDefault(); e.stopPropagation(); setEditGroup(group); setShowModal(true); }}
-                              className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                              aria-label={'Edit ' + group.name}
-                            >
-                              <EditIcon />
-                            </button>
-                            <button
-                              onClick={function(e) { e.preventDefault(); e.stopPropagation(); setConfirmDelete({ id: group.id, name: group.name }); }}
-                              className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                              aria-label={'Delete ' + group.name}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </>
+                          <ActionsDropdown
+                            group={group}
+                            onEmail={function() { navigate('/organizations/' + organizationId + '/email-blasts?group=' + group.id); }}
+                            onEdit={function() { setEditGroup(group); setShowModal(true); }}
+                            onDelete={function() { setConfirmDelete({ id: group.id, name: group.name }); }}
+                          />
                         )}
                       </div>
                     </div>
@@ -1275,15 +1184,6 @@ function GroupsList() {
         />
       )}
 
-      {membersModal && (
-        <MembersModal
-          group={membersModal}
-          organizationId={organizationId}
-          onClose={function() { setMembersModal(null); }}
-        />
-      )}
-
-      {/* Delete group */}
       {confirmDelete && (
         <ConfirmModal
           title={'Delete "' + confirmDelete.name + '"?'}
@@ -1295,7 +1195,6 @@ function GroupsList() {
         />
       )}
 
-      {/* #2 Cancel join request */}
       {confirmCancel && (
         <ConfirmModal
           title={'Cancel request to join "' + confirmCancel.name + '"?'}
@@ -1307,7 +1206,6 @@ function GroupsList() {
         />
       )}
 
-      {/* #3 Leave group */}
       {confirmLeave && (
         <ConfirmModal
           title={'Leave "' + confirmLeave.name + '"?'}

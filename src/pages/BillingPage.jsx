@@ -56,7 +56,7 @@ var PLANS = [
     annualMonthly: 58.32,
     members: 300,
     storage: '30 GB',
-    features: ['Everything in Growth', 'Custom domain included', 'Remove Syndicade branding', 'Unlimited email blasts', 'AI content assistant', 'Priority support'],
+    features: ['Everything in Growth', 'Custom domain included', 'Remove Syndicade branding', 'Unlimited email blasts', 'Priority support'],
   },
   {
     id: 'student',
