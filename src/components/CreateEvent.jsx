@@ -14,6 +14,9 @@ var EVENT_TYPES = [
   'Health & Wellness','Networking','Religious & Spiritual',
   'Social & Mixer','Sports & Recreation','Volunteer',
 ];
+var CAUSE_AREA_TAGS = [
+  'Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access',"Women's Rights",'Workforce Development','Youth Development',
+];
 var AUDIENCE_OPTIONS = [
   'Adults (18+)','Children','Families','LGBTQ+',
   'Seniors','Students','Veterans','Women','Youth (13–17)',
@@ -390,6 +393,7 @@ visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
   var [audience, setAudience] = useState([]);
   var [languages, setLanguages] = useState([]);
   var [eventTags, setEventTags] = useState([]);
+  var [causeAreas, setCauseAreas] = useState([]);
   var [volunteerSignup, setVolunteerSignup] = useState(false);
   var [donationDropoff, setDonationDropoff] = useState(false);
 
@@ -484,6 +488,7 @@ visibility:editingEvent.visibility||'members',
     setAudience(editingEvent.audience||[]);
     setLanguages(editingEvent.languages||[]);
     setEventTags(editingEvent.event_tags||[]);
+    setCauseAreas(editingEvent.cause_areas||[]);
     setVolunteerSignup(editingEvent.volunteer_signup||false);
     setDonationDropoff(editingEvent.donation_dropoff||false);
     setPublishToDiscovery(editingEvent.publish_to_discovery||false);
@@ -547,6 +552,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
     setIsRecurring(false); setRecurrenceType('monthly'); setDayOfWeek(1); setWeekOfMonth(1);
     setWeeklyDays([1]); setDailyInterval(1); setWeekdaysOnly(false); setRecurrenceEndDate('');
     setEventTypes([]); setAudience([]); setLanguages([]); setEventTags([]);
+    setEventTypes([]); setAudience([]); setLanguages([]); setEventTags([]); setCauseAreas([]);
     setVolunteerSignup(false); setDonationDropoff(false);
     setPublishToDiscovery(false); setPublishToWebsite(false); setIsFeatured(false);
     setFlierFile(null);
@@ -907,6 +913,7 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
         audience:audience.length>0?audience:null,
         languages:languages.length>0?languages:null,
         event_tags:eventTags.length>0?eventTags:null,
+        cause_areas:causeAreas.length>0?causeAreas:null,
         volunteer_signup:volunteerSignup, donation_dropoff:donationDropoff,
         is_public:form.visibility==='public'||publishToDiscovery,
         publish_to_discovery:publishToDiscovery, publish_to_website:publishToWebsite,
@@ -1421,6 +1428,25 @@ if (!editingEvent && approvalStatus==='approved') {
   function renderAudience() {
     return (
       <div className="space-y-6">
+
+        {/* Cause Area */}
+        <div>
+          <p className={labelCls}>Cause Area</p>
+          <p className="text-xs text-gray-500 mb-3">Select all cause areas this event relates to.</p>
+          <div className="flex flex-wrap gap-2">
+            {CAUSE_AREA_TAGS.map(function(tag) {
+              var selected = causeAreas.includes(tag);
+              return (
+                <button key={tag} type="button" onClick={function() { setCauseAreas(function(prev) { return prev.includes(tag) ? prev.filter(function(t) { return t !== tag; }) : prev.concat([tag]); }); }} className={'px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (selected ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50')} aria-pressed={selected}>
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+          {causeAreas.length > 0 && <p className="text-xs text-gray-400 mt-2">{causeAreas.length} selected</p>}
+        </div>
+
+        <div className="border-t border-gray-100"/>
 
         {/* Event Types */}
         <div>

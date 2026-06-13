@@ -17,10 +17,11 @@ var MUTED    = '#64748B';
 var INPUT_BG = '#F8FAFC';
 
 // ── Predefined tags ───────────────────────────────────────────────────────────
-var PROGRAM_TAGS = [
-  'Education','Youth','Seniors','Health','Food Access','Housing',
-  'Employment','Legal Aid','Arts','Environment','Immigration',
-  'Disability','Mental Health','Sports','Technology','Financial Aid',
+var PROGRAM_TAG_GROUPS = [
+  { label: 'Cause Area', tags: ['Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access',"Women's Rights",'Workforce Development','Youth Development'] },
+  { label: 'Audience Served', tags: ['Adults (18+)','Black Community','Children (under 13)','English Learners','Families','First-Generation Students','Foster Youth','General Public','Immigrants & Refugees','Indigenous Communities','Justice-Involved Individuals','Latino Community','LGBTQ+ Community','Low-Income Individuals','Men','Older Adults (65+)','People with Disabilities','Rural Communities','Seniors','Single Parents','Students','Survivors of Domestic Violence','Unhoused Individuals','Veterans','Women','Youth (13–17)'] },
+  { label: 'Activity Type', tags: ['Advocacy','Arts & Performance','Blood Drive','Career Fair','Celebration','Clothing Drive','Community Meeting','Conference','Cultural Event','Discussion / Dialogue','Distribution Event','Donation Drive','Education / Workshop','Faith-Based Event','Fieldtrip','Fundraiser','Health Fair','Hiring Event','Networking','Outdoor / Recreation','Panel Discussion','Resource Fair','Screening','Service Project','Social / Mixer','Sports & Athletics','Town Hall','Training','Vigil / Memorial','Volunteer Day','Webinar','Youth Event'] },
+  { label: 'Language', tags: ['Arabic','Bengali','Chinese (Cantonese)','Chinese (Mandarin)','English','French','German','Haitian Creole','Hindi','Hmong','Italian','Japanese','Korean','Nepali','Polish','Portuguese','Russian','Somali','Spanish','Swahili','Tagalog','Ukrainian','Urdu','Vietnamese'] },
 ];
 
 // ── SVG Icon ──────────────────────────────────────────────────────────────────
@@ -418,6 +419,7 @@ function OrgPrograms() {
   var [form, setForm]                       = useState(EMPTY_FORM);
   var [saving, setSaving]                   = useState(false);
   var [newTagInput, setNewTagInput]         = useState('');
+  var [progTagInput, setProgTagInput] = useState('');
   var [showSettingsTab, setShowSettingsTab] = useState(false);
   var modalTrapRef = useFocusTrap(showModal);
 
@@ -1409,33 +1411,54 @@ async function handleRegister(e, program) {
                   <input id="prog-capacity" type="number" min="0" value={form.capacity} onChange={function(e) { setField('capacity', e.target.value); }} placeholder="Leave blank for unlimited" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
 
-                {/* Tags */}
-                <div>
-                  <label style={labelStyle}>Tags</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                    {PROGRAM_TAGS.map(function(tag) {
-                      var sel = (form.tags || []).indexOf(tag) !== -1;
-                      return <button key={tag} type="button" onClick={function() { toggleTag(tag); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: sel ? 'none' : '1px solid ' + BDR, background: sel ? '#3B82F6' : 'transparent', color: sel ? '#FFFFFF' : TEXT2 }} className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={sel}>{tag}</button>;
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input type="text" value={newTagInput} onChange={function(e) { setNewTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }} placeholder="Custom tag — press Enter to add" aria-label="Add custom tag" style={Object.assign({}, inputStyle, { flex: 1 })} className="focus:ring-2 focus:ring-blue-500" />
-                    <button type="button" onClick={addCustomTag} style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px', minHeight: '28px' }}>
-                    {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).map(function(tag) {
-                      return (
-                        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: '#0E1523', color: '#FFFFFF' }}>
-                          {tag}
-                          <button type="button" onClick={function() { removeTag(tag); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', color: 'rgba(255,255,255,0.7)' }} className="hover:text-white focus:outline-none" aria-label={'Remove tag ' + tag}>
-                            <Icon path={ICONS.x} className="h-3 w-3" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                    {(form.tags || []).filter(function(t) { return PROGRAM_TAGS.indexOf(t) === -1; }).length === 0 && newTagInput.trim() === '' && <span style={{ fontSize: '12px', color: MUTED, fontStyle: 'italic', lineHeight: '28px' }}>Custom tags will appear here</span>}
-                  </div>
-                </div>
+{/* Tags */}
+<div>
+  <label style={labelStyle}>Tags &amp; Keywords</label>
+
+  {(form.tags || []).length > 0 && (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+      {(form.tags || []).map(function(tag) {
+        var allPlatform = [];
+        PROGRAM_TAG_GROUPS.forEach(function(g) { g.tags.forEach(function(t) { allPlatform.push(t); }); });
+        var isPlatform = allPlatform.includes(tag);
+        return (
+          <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: isPlatform ? '#EFF6FF' : '#0E1523', color: isPlatform ? '#3B82F6' : '#FFFFFF', border: isPlatform ? '1px solid #BFDBFE' : 'none' }}>
+            {tag}
+            <button type="button" onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).filter(function(t) { return t !== tag; }) }); }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isPlatform ? '#3B82F6' : 'rgba(255,255,255,0.7)', padding: '0', lineHeight: 1, display: 'flex' }} aria-label={'Remove tag ' + tag} className="focus:outline-none rounded">
+              <Icon path={ICONS.x} className="h-3 w-3" />
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  )}
+
+  {PROGRAM_TAG_GROUPS.map(function(group, gi) {
+    return (
+      <div key={group.label} style={{ marginBottom: gi < PROGRAM_TAG_GROUPS.length - 1 ? '14px' : '0' }}>
+        <p style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '7px' }}>{group.label}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {group.tags.map(function(tag) {
+            var selected = (form.tags || []).includes(tag);
+            return (
+              <button key={tag} type="button" onClick={function() { setForm(function(prev) { var tags = prev.tags || []; var idx = tags.indexOf(tag); return Object.assign({}, prev, { tags: idx === -1 ? tags.concat([tag]) : tags.filter(function(t) { return t !== tag; }) }); }); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, border: '1px solid ' + (selected ? '#3B82F6' : '#E2E8F0'), background: selected ? '#EFF6FF' : '#FFFFFF', color: selected ? '#3B82F6' : '#475569', cursor: 'pointer' }} className="hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400" aria-pressed={selected}>
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  })}
+
+  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
+    <p style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '7px' }}>Custom Tag</p>
+    <div style={{ display: 'flex', gap: '8px' }}>
+      <input type="text" value={progTagInput} onChange={function(e) { setProgTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); var tag = progTagInput.trim(); if (tag && !(form.tags || []).includes(tag)) { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).concat([tag]) }); }); } setProgTagInput(''); } }} placeholder="Type a custom tag and press Enter" aria-label="Add custom tag" style={{ flex: 1, padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+      <button type="button" onClick={function() { var tag = progTagInput.trim(); if (tag && !(form.tags || []).includes(tag)) { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).concat([tag]) }); }); } setProgTagInput(''); }} style={{ padding: '8px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
+    </div>
+  </div>
+</div>
 
                 <div>
                   <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>

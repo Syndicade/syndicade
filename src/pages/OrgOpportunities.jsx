@@ -5,9 +5,8 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import toast from 'react-hot-toast';
 import {
   Briefcase, Plus, X, ChevronDown, ChevronUp, Users, Globe, Lock,
-  Eye, EyeOff, Pencil, Trash2, FileText, MapPin, Clock, Calendar,
-  ExternalLink, Mail, AlertCircle, CheckCircle, Search, Filter,
-  Upload, DollarSign, Paperclip, Inbox
+  Pencil, Trash2, MapPin, Clock, AlertCircle, CheckCircle, Search,
+  Upload, DollarSign, Paperclip, Inbox, Tag
 } from 'lucide-react';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -77,6 +76,21 @@ var EMPTY_FORM = {
   deadline: '',
 };
 
+// ── Fuzzy match helper (client-side soft-block) ───────────────────────────────
+function fuzzyScore(a, b) {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  if (a === b) return 1;
+  if (b.includes(a) || a.includes(b)) return 0.85;
+  var matches = 0;
+  var shorter = a.length < b.length ? a : b;
+  var longer  = a.length < b.length ? b : a;
+  for (var i = 0; i < shorter.length; i++) {
+    if (longer.includes(shorter[i])) matches++;
+  }
+  return matches / longer.length;
+}
+
 // ── Visibility badge ──────────────────────────────────────────────────────────
 function VisibilityBadge({ visibility }) {
   var meta = VISIBILITY_META[visibility] || VISIBILITY_META.draft;
@@ -93,123 +107,190 @@ function VisibilityBadge({ visibility }) {
   );
 }
 
-// ── Tag input ─────────────────────────────────────────────────────────────────
-var TAG_SUGGESTIONS = [
-  'volunteer','fundraising','nonprofit','community','education','youth',
-  'environment','health','arts','housing','food','legal','mentorship',
-  'advocacy','senior','veterans','disability','literacy','job-training','stemm',
+// ── Static tag groups (by content type) ──────────────────────────────────────
+var TAG_GROUPS_OPPORTUNITY = [
+  {
+    label: 'Cause Area',
+    tags: ['Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access','Women\'s Rights','Workforce Development','Youth Development'],
+  },
+  {
+    label: 'Audience Served',
+    tags: ['Adults (18+)','Black Community','Children (under 13)','English Learners','Families','First-Generation Students','Foster Youth','General Public','Immigrants & Refugees','Indigenous Communities','Justice-Involved Individuals','Latino Community','LGBTQ+ Community','Low-Income Individuals','Men','Older Adults (65+)','People with Disabilities','Rural Communities','Seniors','Single Parents','Students','Survivors of Domestic Violence','Unhoused Individuals','Veterans','Women','Youth (13–17)'],
+  },
+  {
+    label: 'Role Type',
+    tags: ['Administrative','Advocacy','Board Member','Communications & Marketing','Community Outreach','Data & Research','Event Support','Executive Director','Finance & Accounting','Fundraising','Grant Writing','Graphic Design','Human Resources','IT & Technology','Legal','Mentorship','Photography / Videography','Program Coordination','Social Media','Teaching & Tutoring','Translation & Interpretation','Transportation','Volunteer Coordination','Web Development'],
+  },
+  {
+    label: 'Format',
+    tags: ['Hybrid','In-Person','Remote / Virtual'],
+  },
+  {
+    label: 'Language',
+    tags: ['Arabic','Bengali','Chinese (Cantonese)','Chinese (Mandarin)','English','French','German','Haitian Creole','Hindi','Hmong','Italian','Japanese','Korean','Nepali','Polish','Portuguese','Russian','Somali','Spanish','Swahili','Tagalog','Ukrainian','Urdu','Vietnamese'],
+  },
 ];
 
-var TAG_SUGGESTIONS = [
-  'volunteer','fundraising','nonprofit','community','education','youth',
-  'environment','health','arts','housing','food','legal','mentorship',
-  'advocacy','senior','veterans','disability','literacy','job-training','stem',
+var TAG_GROUPS_FUNDING = [
+  {
+    label: 'Cause Area',
+    tags: ['Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access','Women\'s Rights','Workforce Development','Youth Development'],
+  },
+  {
+    label: 'Audience Served',
+    tags: ['Adults (18+)','Black Community','Children (under 13)','English Learners','Families','First-Generation Students','Foster Youth','General Public','Immigrants & Refugees','Indigenous Communities','Justice-Involved Individuals','Latino Community','LGBTQ+ Community','Low-Income Individuals','Men','Older Adults (65+)','People with Disabilities','Rural Communities','Seniors','Single Parents','Students','Survivors of Domestic Violence','Unhoused Individuals','Veterans','Women','Youth (13–17)'],
+  },
+  {
+    label: 'Funding Type',
+    tags: ['Award','Capacity Building Grant','Community Grant','Emergency Fund','Equipment Grant','Fellowship','General Operating Support','Matching Grant','Micro-Grant','Program Grant','Research Grant','Scholarship','Seed Funding','Stipend','Travel Grant'],
+  },
+  {
+    label: 'Language',
+    tags: ['Arabic','Bengali','Chinese (Cantonese)','Chinese (Mandarin)','English','French','German','Haitian Creole','Hindi','Hmong','Italian','Japanese','Korean','Nepali','Polish','Portuguese','Russian','Somali','Spanish','Swahili','Tagalog','Ukrainian','Urdu','Vietnamese'],
+  },
 ];
 
-function TagInput({ tags, onChange }) {
-  var [input, setInput] = useState('');
+// ── Platform Tag Picker ───────────────────────────────────────────────────────
+function PlatformTagPicker({ tags, onChange, contentType }) {
+  var [customInput, setCustomInput]             = useState('');
+  var [softBlockSuggestion, setSoftBlockSuggestion] = useState(null);
 
-  var suggestions = input.length > 0
-    ? TAG_SUGGESTIONS.filter(function(s) {
-        return s.includes(input.toLowerCase()) && !tags.includes(s);
-      }).slice(0, 5)
-    : [];
+  var groups = contentType === 'funding' ? TAG_GROUPS_FUNDING : TAG_GROUPS_OPPORTUNITY;
 
-  function addTag(val) {
-    var trimmed = val.trim().toLowerCase();
-    if (!trimmed || tags.includes(trimmed)) return;
-    onChange(tags.concat([trimmed]));
-    setInput('');
-  }
+  var allPlatformLabels = [];
+  groups.forEach(function(g) { g.tags.forEach(function(t) { allPlatformLabels.push(t); }); });
 
-  function removeTag(tag) {
-    onChange(tags.filter(function(t) { return t !== tag; }));
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag(input);
-    } else if (e.key === 'Backspace' && !input && tags.length) {
-      removeTag(tags[tags.length - 1]);
+  function toggleTag(label) {
+    if (tags.includes(label)) {
+      onChange(tags.filter(function(t) { return t !== label; }));
+    } else {
+      onChange(tags.concat([label]));
     }
+  }
+
+  function handleCustomInput(val) {
+    setCustomInput(val);
+    if (!val.trim()) { setSoftBlockSuggestion(null); return; }
+    var best = null;
+    var bestScore = 0;
+    allPlatformLabels.forEach(function(label) {
+      var score = fuzzyScore(val.trim(), label);
+      if (score > bestScore && score >= 0.8 && !tags.includes(label)) {
+        bestScore = score;
+        best = label;
+      }
+    });
+    setSoftBlockSuggestion(best);
+  }
+
+  function addCustomTag(val) {
+    var trimmed = (val || customInput).trim();
+    if (!trimmed || tags.includes(trimmed)) { setCustomInput(''); setSoftBlockSuggestion(null); return; }
+    onChange(tags.concat([trimmed]));
+    setCustomInput('');
+    setSoftBlockSuggestion(null);
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div
-        style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', background: cardBg, minHeight: '42px', cursor: 'text' }}
-        onClick={function(e) { e.currentTarget.querySelector('input').focus(); }}
-      >
-        {tags.map(function(tag) {
-          return (
-            <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', background: '#EFF6FF', color: '#3B82F6', fontSize: '12px', fontWeight: 600 }}>
-              {tag}
-              <button
-                type="button"
-                onClick={function() { removeTag(tag); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3B82F6', padding: '0', lineHeight: 1, display: 'flex' }}
-                aria-label={'Remove tag ' + tag}
-              >
-                <X size={10} />
-              </button>
-            </span>
-          );
-        })}
-        <input
-          value={input}
-          onChange={function(e) { setInput(e.target.value); }}
-          onKeyDown={handleKeyDown}
-          onBlur={function() { if (input) addTag(input); }}
-          placeholder={tags.length ? '' : 'Type a tag and press Enter'}
-          style={{ border: 'none', outline: 'none', fontSize: '13px', color: textPrimary, flex: 1, minWidth: '120px', background: 'transparent' }}
-          aria-label="Add tags"
-          aria-autocomplete="list"
-          aria-expanded={suggestions.length > 0}
-        />
-      </div>
-      {suggestions.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 10, overflow: 'hidden' }} role="listbox" aria-label="Tag suggestions">
-          {suggestions.map(function(s) {
-            return (
-              <button
-                key={s}
-                type="button"
-                role="option"
-                aria-selected="false"
-                onMouseDown={function(e) { e.preventDefault(); addTag(s); }}
-                style={{ width: '100%', padding: '7px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: textPrimary, textAlign: 'left' }}
-                className="hover:bg-slate-50"
-              >
-                {s}
-              </button>
-            );
-          })}
+    <div>
+      {/* Groups */}
+      {groups.map(function(group, gi) {
+        return (
+          <div key={group.label} style={{ marginBottom: gi < groups.length - 1 ? '16px' : '0' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '8px' }}>{group.label}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {group.tags.map(function(label) {
+                var selected = tags.includes(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={function() { toggleTag(label); }}
+                    style={{
+                      padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+                      border: '1px solid ' + (selected ? '#3B82F6' : borderColor),
+                      background: selected ? '#EFF6FF' : cardBg,
+                      color: selected ? '#3B82F6' : textSecondary,
+                      cursor: 'pointer',
+                    }}
+                    className="hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    aria-pressed={selected}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Custom tag input */}
+      <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid ' + borderColor }}>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: textMuted, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '8px' }}>Custom Tag</p>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <input
+            value={customInput}
+            onChange={function(e) { handleCustomInput(e.target.value); }}
+            onKeyDown={function(e) {
+              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCustomTag(); }
+            }}
+            onBlur={function() { if (customInput.trim() && !softBlockSuggestion) addCustomTag(); }}
+            placeholder="Type a tag and press Enter..."
+            style={{ flex: 1, padding: '7px 10px', border: '1px solid ' + borderColor, borderRadius: '6px', fontSize: '13px', color: textPrimary, outline: 'none', background: cardBg }}
+            aria-label="Add custom tag"
+            className="focus:ring-2 focus:ring-blue-400"
+          />
+          <button
+            type="button"
+            onClick={function() { addCustomTag(); }}
+            style={{ padding: '7px 14px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Add
+          </button>
         </div>
-      )}
+
+        {/* Soft-block suggestion */}
+        {softBlockSuggestion && (
+          <div style={{ marginTop: '8px', padding: '8px 10px', background: '#FFFBEB', border: '1px solid rgba(245,183,49,0.4)', borderRadius: '6px', fontSize: '12px', color: '#92400E' }}>
+            Did you mean <strong>"{softBlockSuggestion}"</strong>? Using platform tags improves discoverability.
+            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+              <button type="button" onClick={function() { toggleTag(softBlockSuggestion); setCustomInput(''); setSoftBlockSuggestion(null); }}
+                style={{ padding: '3px 10px', background: '#F5B731', color: '#0E1523', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                className="focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                Use "{softBlockSuggestion}"
+              </button>
+              <button type="button" onClick={function() { addCustomTag(customInput); }}
+                style={{ padding: '3px 10px', background: 'transparent', color: textMuted, border: '1px solid ' + borderColor, borderRadius: '5px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                className="focus:outline-none focus:ring-2 focus:ring-slate-400">
+                Keep my tag
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Custom tags display */}
+        {tags.filter(function(t) { return !allPlatformLabels.includes(t); }).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+            {tags.filter(function(t) { return !allPlatformLabels.includes(t); }).map(function(tag) {
+              return (
+                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: '#F1F5F9', color: textSecondary, border: '1px solid ' + borderColor }}>
+                  {tag}
+                  <button type="button" onClick={function() { onChange(tags.filter(function(t2) { return t2 !== tag; })); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMuted, padding: '0', lineHeight: 1, display: 'flex' }}
+                    aria-label={'Remove tag ' + tag} className="focus:outline-none rounded">
+                    <X size={10} />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
-  function addTag(val) {
-    var trimmed = val.trim().toLowerCase();
-    if (!trimmed || tags.includes(trimmed)) return;
-    onChange(tags.concat([trimmed]));
-    setInput('');
-  }
-
-  function removeTag(tag) {
-    onChange(tags.filter(function(t) { return t !== tag; }));
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag(input);
-    } else if (e.key === 'Backspace' && !input && tags.length) {
-      removeTag(tags[tags.length - 1]);
-    }
-  }
 
 // ── Role type multi-select ────────────────────────────────────────────────────
 function RoleTypeSelect({ selected, onChange }) {
@@ -224,6 +305,12 @@ function RoleTypeSelect({ selected, onChange }) {
     document.addEventListener('mousedown', handleClick);
     return function() { document.removeEventListener('mousedown', handleClick); };
   }, []);
+
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') setOpen(false); }
+    if (open) document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [open]);
 
   function toggleOption(opt) {
     if (selected.includes(opt)) {
@@ -255,8 +342,10 @@ function RoleTypeSelect({ selected, onChange }) {
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span>{selected.length ? selected.join(', ') : 'Select role types'}</span>
-        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {selected.length ? selected.join(', ') : 'Select role types'}
+        </span>
+        {open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
       </button>
 
       {open && (
@@ -301,7 +390,7 @@ function RoleTypeSelect({ selected, onChange }) {
               );
             })}
           </div>
-<div style={{ padding: '8px 12px', borderTop: '1px solid ' + borderColor, display: 'flex', gap: '6px' }}>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid ' + borderColor, display: 'flex', gap: '6px' }}>
             <input
               value={customInput}
               onChange={function(e) { setCustomInput(e.target.value); }}
@@ -309,6 +398,7 @@ function RoleTypeSelect({ selected, onChange }) {
               placeholder="Add custom role type..."
               style={{ flex: 1, fontSize: '12px', padding: '5px 8px', border: '1px solid ' + borderColor, borderRadius: '6px', outline: 'none', color: textPrimary }}
               aria-label="Custom role type"
+              className="focus:ring-2 focus:ring-blue-400"
             />
             <button
               type="button"
@@ -339,7 +429,7 @@ function Skeleton() {
     <div aria-busy="true" aria-label="Loading opportunities">
       {[1, 2, 3].map(function(i) {
         return (
-          <div key={i} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '20px', marginBottom: '12px' }}>
+          <div key={i} style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '20px', marginBottom: '12px' }} className="animate-pulse">
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ height: '16px', width: '55%', background: elevatedBg, borderRadius: '6px', marginBottom: '10px' }} />
@@ -426,20 +516,21 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
   var [existingPostingUrl, setExistingPostingUrl] = useState(existing ? existing.posting_url || null : null);
   var fileInputRef = useRef(null);
 
+  // Escape key to close
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, []);
+
   var ACCEPTED_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
   var ACCEPTED_EXT = '.pdf, .docx, .jpg, .jpeg, .png';
 
   function handleFileChange(e) {
     var file = e.target.files[0];
     if (!file) return;
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      toast.error('Please upload a PDF, Word document, or image.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File must be under 10 MB.');
-      return;
-    }
+    if (!ACCEPTED_TYPES.includes(file.type)) { toast.error('Please upload a PDF, Word document, or image.'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('File must be under 10 MB.'); return; }
     setPostingFile(file);
   }
 
@@ -451,15 +542,13 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
 
   function setField(key, val) {
     setForm(function(prev) {
-      var next = {};
-      Object.keys(prev).forEach(function(k) { next[k] = prev[k]; });
+      var next = Object.assign({}, prev);
       next[key] = val;
       return next;
     });
     if (errors[key]) {
       setErrors(function(prev) {
-        var next = {};
-        Object.keys(prev).forEach(function(k) { next[k] = prev[k]; });
+        var next = Object.assign({}, prev);
         delete next[key];
         return next;
       });
@@ -493,8 +582,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
         mascotErrorToast('File upload failed.', uploadResult.error.message);
         return;
       }
-      var urlResult = supabase.storage.from('opportunity-docs').getPublicUrl(filePath);
-      postingUrl = urlResult.data.publicUrl;
+      postingUrl = supabase.storage.from('opportunity-docs').getPublicUrl(filePath).data.publicUrl;
     }
 
     var payload = {
@@ -519,25 +607,16 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
       updated_at: new Date().toISOString(),
     };
 
-    if (!existing) {
-      payload.created_by = currentUserId;
-    }
+    if (!existing) payload.created_by = currentUserId;
 
-    var result;
-    if (existing) {
-      result = await supabase.from('org_opportunities').update(payload).eq('id', existing.id);
-    } else {
-      result = await supabase.from('org_opportunities').insert(payload);
-    }
+    var result = existing
+      ? await supabase.from('org_opportunities').update(payload).eq('id', existing.id)
+      : await supabase.from('org_opportunities').insert(payload);
 
     toast.dismiss(toastId);
     setSaving(false);
 
-    if (result.error) {
-      mascotErrorToast('Failed to save opportunity.', result.error.message);
-      return;
-    }
-
+    if (result.error) { mascotErrorToast('Failed to save opportunity.', result.error.message); return; }
     mascotSuccessToast(existing ? 'Opportunity updated!' : 'Opportunity posted!');
     onSaved();
     onClose();
@@ -558,6 +637,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
     >
       <div style={{ background: cardBg, borderRadius: '16px', width: '100%', maxWidth: '600px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', marginTop: '16px' }}>
 
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + borderColor }}>
           <h2 id="opp-modal-title" style={{ fontSize: '17px', fontWeight: 800, color: textPrimary, margin: 0 }}>
             {existing ? 'Edit Opportunity' : 'Post an Opportunity'}
@@ -569,6 +649,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
 
         <div style={{ padding: '24px' }}>
 
+          {/* Title */}
           <div style={fieldStyle}>
             <label htmlFor="opp-title" style={labelStyle}>Title <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <input
@@ -578,18 +659,20 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
               placeholder="e.g. Board Member — Finance Committee"
               style={Object.assign({}, inputStyle, errors.title ? { borderColor: '#EF4444' } : {})}
               aria-required="true"
-              aria-describedby={errors.title ? 'err-title' : undefined}
+              aria-describedby={errors.title ? 'err-opp-title' : undefined}
               className="focus:ring-2 focus:ring-blue-500"
             />
-            {errors.title && <p id="err-title" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.title}</p>}
+            {errors.title && <p id="err-opp-title" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.title}</p>}
           </div>
 
+          {/* Role Type */}
           <div style={fieldStyle}>
             <label style={labelStyle} id="role-types-label">Role Type <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <RoleTypeSelect selected={form.role_types} onChange={function(v) { setField('role_types', v); }} />
-            {errors.role_types && <p style={errorStyle} role="alert"><AlertCircle size={11} />{errors.role_types}</p>}
+            {errors.role_types && <p style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.role_types}</p>}
           </div>
 
+          {/* Description */}
           <div style={fieldStyle}>
             <label htmlFor="opp-desc" style={labelStyle}>Description <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
             <textarea
@@ -600,12 +683,13 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
               rows={5}
               style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 }, errors.description ? { borderColor: '#EF4444' } : {})}
               aria-required="true"
-              aria-describedby={errors.description ? 'err-desc' : undefined}
+              aria-describedby={errors.description ? 'err-opp-desc' : undefined}
               className="focus:ring-2 focus:ring-blue-500"
             />
-            {errors.description && <p id="err-desc" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.description}</p>}
+            {errors.description && <p id="err-opp-desc" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.description}</p>}
           </div>
 
+          {/* Compensation + Location */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div>
               <label htmlFor="opp-comp" style={labelStyle}>Compensation</label>
@@ -621,6 +705,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
             </div>
           </div>
 
+          {/* Salary range (paid/stipend) */}
           {(form.compensation_type === 'paid' || form.compensation_type === 'stipend') && (
             <div style={{ marginBottom: '16px' }}>
               <label style={labelStyle}>
@@ -630,27 +715,29 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
-                  <input type="number" min="0" value={form.salary_min} onChange={function(e) { setField('salary_min', e.target.value); }} placeholder="Min" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label={form.compensation_type === 'paid' ? 'Minimum salary' : 'Minimum stipend'} className="focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" min="0" value={form.salary_min} onChange={function(e) { setField('salary_min', e.target.value); }} placeholder="Min" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label="Minimum salary" className="focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div style={{ position: 'relative' }}>
                   <DollarSign size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
-                  <input type="number" min="0" value={form.salary_max} onChange={function(e) { setField('salary_max', e.target.value); }} placeholder="Max" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label={form.compensation_type === 'paid' ? 'Maximum salary' : 'Maximum stipend'} className="focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" min="0" value={form.salary_max} onChange={function(e) { setField('salary_max', e.target.value); }} placeholder="Max" style={Object.assign({}, inputStyle, { paddingLeft: '28px' })} aria-label="Maximum salary" className="focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <p style={{ fontSize: '11px', color: textMuted, marginTop: '4px' }}>Annual salary or hourly rate — leave blank if not disclosing.</p>
             </div>
           )}
 
+          {/* Comp details */}
           {(form.compensation_type === 'paid' || form.compensation_type === 'stipend') && (
             <div style={fieldStyle}>
               <label htmlFor="opp-comp-detail" style={labelStyle}>
                 {form.compensation_type === 'paid' ? 'Additional Pay Details' : 'Stipend Details'}
                 <span style={{ fontWeight: 400, color: textMuted, marginLeft: '4px' }}>(optional)</span>
               </label>
-              <input id="opp-comp-detail" value={form.compensation_details} onChange={function(e) { setField('compensation_details', e.target.value); }} placeholder={form.compensation_type === 'paid' ? 'e.g. plus benefits, equity, travel reimbursement' : 'e.g. paid monthly, includes travel'} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+              <input id="opp-comp-detail" value={form.compensation_details} onChange={function(e) { setField('compensation_details', e.target.value); }} placeholder="e.g. plus benefits, travel reimbursement" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
             </div>
           )}
 
+          {/* City + Commitment */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div>
               <label htmlFor="opp-city" style={labelStyle}>City / Region</label>
@@ -662,11 +749,13 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
             </div>
           </div>
 
+          {/* Deadline */}
           <div style={fieldStyle}>
             <label htmlFor="opp-deadline" style={labelStyle}>Application Deadline</label>
             <input id="opp-deadline" type="date" value={form.deadline} onChange={function(e) { setField('deadline', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
           </div>
 
+          {/* Apply method */}
           <div style={fieldStyle}>
             <label style={labelStyle}>How should people apply?</label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -686,11 +775,12 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
           {form.apply_method === 'link' && (
             <div style={fieldStyle}>
               <label htmlFor="opp-url" style={labelStyle}>Apply URL or Email <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-              <input id="opp-url" value={form.apply_url} onChange={function(e) { setField('apply_url', e.target.value); }} placeholder="https://yourorg.org/apply or hiring@yourorg.org" style={Object.assign({}, inputStyle, errors.apply_url ? { borderColor: '#EF4444' } : {})} aria-describedby={errors.apply_url ? 'err-url' : undefined} className="focus:ring-2 focus:ring-blue-500" />
-              {errors.apply_url && <p id="err-url" style={errorStyle} role="alert"><AlertCircle size={11} />{errors.apply_url}</p>}
+              <input id="opp-url" value={form.apply_url} onChange={function(e) { setField('apply_url', e.target.value); }} placeholder="https://yourorg.org/apply or hiring@yourorg.org" style={Object.assign({}, inputStyle, errors.apply_url ? { borderColor: '#EF4444' } : {})} aria-describedby={errors.apply_url ? 'err-opp-url' : undefined} className="focus:ring-2 focus:ring-blue-500" />
+              {errors.apply_url && <p id="err-opp-url" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.apply_url}</p>}
             </div>
           )}
 
+          {/* File upload */}
           <div style={fieldStyle}>
             <label style={labelStyle}>
               Job Posting Document
@@ -725,12 +815,19 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
             <input ref={fileInputRef} type="file" accept={ACCEPTED_EXT} onChange={handleFileChange} style={{ display: 'none' }} aria-hidden="true" />
           </div>
 
+          {/* Tags — Platform Tag Picker */}
           <div style={fieldStyle}>
-            <label style={labelStyle}>Tags</label>
-            <TagInput tags={form.tags} onChange={function(v) { setField('tags', v); }} />
-            <p style={{ fontSize: '11px', color: textMuted, marginTop: '4px' }}>Press Enter or comma to add. Helps people find this listing.</p>
+            <label style={labelStyle}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Tag size={12} aria-hidden="true" />
+                Tags &amp; Keywords
+              </span>
+            </label>
+            <PlatformTagPicker tags={form.tags} onChange={function(v) { setField('tags', v); }} contentType="opportunity" />
+            <p style={{ fontSize: '11px', color: textMuted, marginTop: '6px' }}>Platform tags improve discoverability on the public directory. Custom tags appear in search.</p>
           </div>
 
+          {/* Visibility */}
           <div style={fieldStyle}>
             <label style={labelStyle}>Visibility</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -756,6 +853,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
           </div>
         </div>
 
+        {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '16px 24px', borderTop: '1px solid ' + borderColor }}>
           <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', color: textMuted, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1">Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{ padding: '9px 24px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
@@ -773,12 +871,16 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
   var menuRef = useRef(null);
 
   useEffect(function() {
-    function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    }
+    function handleClick(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); }
     document.addEventListener('mousedown', handleClick);
     return function() { document.removeEventListener('mousedown', handleClick); };
   }, []);
+
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') setMenuOpen(false); }
+    if (menuOpen) document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, [menuOpen]);
 
   var isExpired = item.deadline && new Date(item.deadline) < new Date();
   var hasFormApply = item.apply_method === 'form';
@@ -786,10 +888,10 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
 
   return (
     <article
-      style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+      style={{ background: cardBg, border: '1px solid ' + (isExpired ? '#FECACA' : borderColor), borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', height: '100%', boxSizing: 'border-box' }}
       aria-label={item.title + ' opportunity'}
     >
-      {/* Title row */}
+      {/* Title + Actions */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
         <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, margin: 0, lineHeight: 1.4, flex: 1 }}>{item.title}</h3>
         <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
@@ -797,7 +899,7 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
             onClick={function() { setMenuOpen(!menuOpen); }}
             style={{ background: elevatedBg, border: '1px solid ' + borderColor, borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: textSecondary, display: 'flex', alignItems: 'center', gap: '3px' }}
             className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Opportunity actions"
+            aria-label={'Actions for ' + item.title}
             aria-haspopup="true"
             aria-expanded={menuOpen}
           >
@@ -833,7 +935,7 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
               )}
               {item.visibility === 'public' && (
                 <button onClick={function() { setMenuOpen(false); onVisibilityChange(item, 'members_only'); }} style={{ width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#D97706', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }} className="hover:bg-amber-50 focus:outline-none" role="menuitem">
-                  <EyeOff size={13} aria-hidden="true" /> Unpublish
+                  <Lock size={13} aria-hidden="true" /> Unpublish
                 </button>
               )}
               {item.visibility !== 'draft' && (
@@ -850,7 +952,7 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
         </div>
       </div>
 
-      {/* Badges row */}
+      {/* Badges */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
         <VisibilityBadge visibility={item.visibility} />
         {isExpired && (
@@ -868,7 +970,7 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
         )}
       </div>
 
-      {/* Meta row */}
+      {/* Meta */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {item.role_types && item.role_types.length > 0 && (
           <p style={{ fontSize: '12px', color: textSecondary, margin: 0 }}>
@@ -890,8 +992,14 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onVisibilityChange,
 
 // ── Confirm delete modal ──────────────────────────────────────────────────────
 function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, []);
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }} role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }} role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title" onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}>
       <div style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
         <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }} aria-hidden="true">
           <Trash2 size={22} color="#EF4444" />
@@ -901,7 +1009,7 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
           <strong style={{ color: textPrimary }}>{item.title}</strong> will be permanently removed. This cannot be undone.
         </p>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: textMuted, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
+          <button autoFocus onClick={onCancel} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: textMuted, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
           <button onClick={onConfirm} style={{ flex: 1, padding: '10px', background: '#EF4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }} className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">Delete</button>
         </div>
       </div>
@@ -910,9 +1018,15 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
 }
 
 // ── Applications drawer ───────────────────────────────────────────────────────
-function ApplicationsDrawer({ item, organizationId, onClose, onCountChange }) {
+function ApplicationsDrawer({ item, organizationId, onClose }) {
   var [apps, setApps] = useState([]);
   var [loading, setLoading] = useState(true);
+
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, []);
 
   useEffect(function() {
     async function load() {
@@ -954,7 +1068,7 @@ function ApplicationsDrawer({ item, organizationId, onClose, onCountChange }) {
         <div style={{ padding: '16px 24px' }}>
           {loading && (
             <div aria-busy="true" aria-label="Loading applications">
-              {[1, 2, 3].map(function(i) { return <div key={i} style={{ height: '80px', background: elevatedBg, borderRadius: '10px', marginBottom: '10px' }} />; })}
+              {[1, 2, 3].map(function(i) { return <div key={i} style={{ height: '80px', background: elevatedBg, borderRadius: '10px', marginBottom: '10px' }} className="animate-pulse" />; })}
             </div>
           )}
 
@@ -1006,19 +1120,18 @@ function OrgOpportunities() {
   var organizationId = context.organizationId;
   var organization = context.organization;
   var isAdmin = context.isAdmin;
-
   var isVerified = !!(organization && organization.is_verified_nonprofit);
 
   var [currentUserId, setCurrentUserId] = useState(null);
-  var [items, setItems] = useState([]);
-  var [appCounts, setAppCounts] = useState({});
-  var [loading, setLoading] = useState(true);
-  var [showModal, setShowModal] = useState(false);
-  var [editing, setEditing] = useState(null);
-  var [deleting, setDeleting] = useState(null);
+  var [items, setItems]           = useState([]);
+  var [appCounts, setAppCounts]   = useState({});
+  var [loading, setLoading]       = useState(true);
+  var [showModal, setShowModal]   = useState(false);
+  var [editing, setEditing]       = useState(null);
+  var [deleting, setDeleting]     = useState(null);
   var [viewingApps, setViewingApps] = useState(null);
-  var [search, setSearch] = useState('');
-  var [filterVis, setFilterVis] = useState('all');
+  var [search, setSearch]         = useState('');
+  var [filterVis, setFilterVis]   = useState('all');
 
   useEffect(function() {
     supabase.auth.getUser().then(function(r) {
@@ -1028,46 +1141,32 @@ function OrgOpportunities() {
 
   useEffect(function() { loadItems(); }, [organizationId, isAdmin]);
 
-async function loadItems() {
+  async function loadItems() {
     setLoading(true);
     var query = supabase
       .from('org_opportunities')
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
-    if (!isAdmin) {
-      query = query.neq('visibility', 'draft');
-    }
+    if (!isAdmin) query = query.neq('visibility', 'draft');
     var r = await query;
     var rows = r.data || [];
     setItems(rows);
 
-    // Load application counts for all form-apply listings
     var formIds = rows.filter(function(i) { return i.apply_method === 'form'; }).map(function(i) { return i.id; });
     if (formIds.length > 0) {
-      var countResult = await supabase
-        .from('opportunity_applications')
-        .select('opportunity_id')
-        .in('opportunity_id', formIds);
+      var countResult = await supabase.from('opportunity_applications').select('opportunity_id').in('opportunity_id', formIds);
       var counts = {};
-      (countResult.data || []).forEach(function(row) {
-        counts[row.opportunity_id] = (counts[row.opportunity_id] || 0) + 1;
-      });
+      (countResult.data || []).forEach(function(row) { counts[row.opportunity_id] = (counts[row.opportunity_id] || 0) + 1; });
       setAppCounts(counts);
     }
-
     setLoading(false);
   }
 
   async function handleVisibilityChange(item, newVisibility) {
-    var r = await supabase
-      .from('org_opportunities')
-      .update({ visibility: newVisibility, updated_at: new Date().toISOString() })
-      .eq('id', item.id);
-
+    var r = await supabase.from('org_opportunities').update({ visibility: newVisibility, updated_at: new Date().toISOString() }).eq('id', item.id);
     if (r.error) { mascotErrorToast('Failed to update visibility.'); return; }
 
-    // Only notify when publishing from draft for the first time
     var wasUnpublished = item.visibility === 'draft';
     if (wasUnpublished && (newVisibility === 'members_only' || newVisibility === 'public')) {
       try {
@@ -1079,9 +1178,7 @@ async function loadItems() {
           item.title + ' is now available. Check it out.',
           '/organizations/' + organizationId + '/opportunities'
         );
-      } catch (e) {
-        console.warn('Notification failed:', e);
-      }
+      } catch (e) { console.warn('Notification failed:', e); }
     }
 
     var label = VISIBILITY_META[newVisibility] ? VISIBILITY_META[newVisibility].label : newVisibility;
@@ -1110,6 +1207,7 @@ async function loadItems() {
   return (
     <div style={{ background: pageBg, minHeight: '100vh' }}>
 
+      {/* Header */}
       <div style={{ padding: '0 0 20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <div>
@@ -1131,6 +1229,7 @@ async function loadItems() {
         </div>
       </div>
 
+      {/* Unverified gate */}
       {!isVerified && isAdmin && (
         <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '24px' }}>
           <EmptyState onAdd={function() {}} isVerified={false} />
@@ -1139,13 +1238,13 @@ async function loadItems() {
 
       {isVerified && (
         <>
+          {/* Search + filters */}
           {items.length > 0 && (
             <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
                 <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: textMuted, pointerEvents: 'none' }} aria-hidden="true" />
                 <input value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search opportunities..." style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textPrimary, background: cardBg, boxSizing: 'border-box', outline: 'none' }} aria-label="Search opportunities" className="focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div style={{ display: 'flex', gap: '6px' }} role="group" aria-label="Filter by visibility">
                 {(isAdmin ? ['all', 'draft', 'members_only', 'public'] : ['all', 'members_only', 'public']).map(function(v) {
                   var active = filterVis === v;
@@ -1155,7 +1254,7 @@ async function loadItems() {
                     <button key={v} onClick={function(val) { return function() { setFilterVis(val); }; }(v)}
                       style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#3B82F6' : borderColor), background: active ? '#EFF6FF' : cardBg, color: active ? '#3B82F6' : textMuted, cursor: 'pointer' }}
                       className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
-                      {label} {counts[v] > 0 ? '(' + counts[v] + ')' : ''}
+                      {label}{counts[v] > 0 ? ' (' + counts[v] + ')' : ''}
                     </button>
                   );
                 })}
@@ -1179,27 +1278,28 @@ async function loadItems() {
             </div>
           )}
 
-      {!loading && filtered.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} role="list" aria-label="Opportunities">
-                    {filtered.map(function(item) {
-                      return (
-                        <div key={item.id} role="listitem">
-                          <OpportunityCard
-                            item={item}
-                            appCount={appCounts[item.id] || 0}
-                            onEdit={function(i) { setEditing(i); setShowModal(true); }}
-                            onDelete={function(i) { setDeleting(i); }}
-                            onVisibilityChange={handleVisibilityChange}
-                            onViewApps={function(i) { setViewingApps(i); }}
-                          />
-                        </div>
-                      );
-                    })}
+          {!loading && filtered.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} role="list" aria-label="Opportunities">
+              {filtered.map(function(item) {
+                return (
+                  <div key={item.id} role="listitem">
+                    <OpportunityCard
+                      item={item}
+                      appCount={appCounts[item.id] || 0}
+                      onEdit={function(i) { setEditing(i); setShowModal(true); }}
+                      onDelete={function(i) { setDeleting(i); }}
+                      onVisibilityChange={handleVisibilityChange}
+                      onViewApps={function(i) { setViewingApps(i); }}
+                    />
                   </div>
-                )}
-              </>
-            )}
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
 
+      {/* Modals */}
       {showModal && (
         <OpportunityModal
           organizationId={organizationId}
