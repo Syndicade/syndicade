@@ -150,13 +150,17 @@ export default function OrganizationDiscovery() {
   useEffect(function () { fetchOrgs(); }, [fetchOrgs]);
 
   // Client-side cause area filter (orgs store cause areas in tags[])
-  var displayOrgs = (filters.causeAreas || []).length === 0
-    ? orgs
-    : orgs.filter(function (org) {
-        return (filters.causeAreas || []).every(function (tag) {
-          return (org.tags || []).includes(tag);
-        });
+var displayOrgs = orgs.filter(function (org) {
+    var matchCause = (filters.causeAreas || []).length === 0 ||
+      (filters.causeAreas || []).every(function (tag) {
+        return (org.tags || []).includes(tag);
       });
+    var matchAudience = (filters.categories || []).length === 0 ||
+      (filters.categories || []).every(function (cat) {
+        return (org.audience || []).includes(cat);
+      });
+    return matchCause && matchAudience;
+  });
 
   function handleFilterChange(key, value) {
     setFilters(function (p) { return Object.assign({}, p, { [key]: value }); });

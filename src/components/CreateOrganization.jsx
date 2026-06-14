@@ -39,14 +39,21 @@ var ORG_TYPES = [
   { value: 'union',           label: 'Union or Labor Organization' },
 ]
 
-var SERVICE_CATEGORIES = [
-  'Arts & Culture', 'Animal Welfare', 'Civic Engagement', 'Community Building',
-  'Disability Services', 'Education & Literacy', 'Environment & Conservation',
-  'Faith-Based Services', 'Food & Hunger', 'Health & Wellness',
-  'Housing & Homelessness', 'Immigrant & Refugee Services', 'LGBTQ+ Services',
-  'Legal Aid', 'Mental Health', 'Senior Services', 'Sports & Recreation',
-  'Technology & Digital Equity', 'Workforce Development', 'Youth Development',
-]
+// SERVICE_CATEGORIES merged into CAUSE_AREA_TAGS below
+
+var CAUSE_AREA_TAGS = [
+  'Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights',
+  'Community Building','Criminal Justice Reform','Disability Services',
+  'Disaster Relief','Domestic Violence','Economic Development','Education',
+  'Emergency Assistance','Employment & Workforce','Environment & Conservation',
+  'Faith & Spirituality','Financial Literacy','Food Access','Food Security',
+  'Health & Wellness','Homeless Services','Housing','Human Trafficking',
+  'Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights',
+  'Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction',
+  'Public Safety','Racial Equity','Senior Services','Substance Use Recovery',
+  'Transportation Access','Veterans Services','Violence Prevention','Voting Rights',
+  'Water Access',"Women's Rights",'Workforce Development','Youth Development',
+];
 
 var PLANS = [
   {
@@ -136,25 +143,6 @@ function PillInput({ label, id, values, onChange, placeholder, maxItems, hint })
         <input id={id} type="text" value={inputVal} onChange={function(e){setInputVal(e.target.value)}} onKeyDown={handleKey} onBlur={function(){if(inputVal.trim())addTag(inputVal)}} placeholder={values.length===0?placeholder:''} style={{flex:1,minWidth:'100px',background:'transparent',border:'none',outline:'none',color:'#FFFFFF',fontSize:'13px',fontFamily:'inherit'}} aria-label={label+' — type and press Enter to add'} disabled={!!(maxItems&&values.length>=maxItems)} />
       </div>
       {hint&&<p style={{fontSize:'11px',color:'#64748B',marginTop:'4px'}}>{hint}</p>}
-    </div>
-  )
-}
-
-function CategorySelector({ selected, onChange, max }) {
-  function toggle(cat) {
-    if (selected.includes(cat)) { onChange(selected.filter(function(c){return c!==cat})) }
-    else { if (selected.length>=max){toast.error('Maximum '+max+' categories.');return} onChange([...selected,cat]) }
-  }
-  return (
-    <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}} role="group" aria-label="Service categories">
-      {SERVICE_CATEGORIES.map(function(cat){
-        var isOn=selected.includes(cat)
-        return (
-          <button key={cat} type="button" onClick={function(){toggle(cat)}} aria-pressed={isOn} style={{padding:'5px 12px',borderRadius:'99px',fontSize:'12px',fontWeight:600,border:'1px solid '+(isOn?'#3B82F6':'#2A3550'),background:isOn?'rgba(59,130,246,0.15)':'transparent',color:isOn?'#93C5FD':'#64748B',cursor:'pointer',transition:'all 0.15s'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {isOn&&<span style={{marginRight:'4px',display:'inline-flex',verticalAlign:'middle'}}><IconCheck /></span>}{cat}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -305,12 +293,28 @@ function Step3({ data, onChange, onNext, onBack, saving, orgId }) {
           <textarea id="co-discovery" value={data.discovery_about} onChange={function(e){onChange('discovery_about',e.target.value)}} placeholder="A 1–2 sentence description shown on the public discovery board. What makes your org unique?" rows={2} maxLength={280} style={Object.assign({},inputStyle,{resize:'none'})} onFocus={focusIn} onBlur={focusOut} aria-describedby="co-discovery-hint" />
           <p id="co-discovery-hint" style={{fontSize:'11px',color:'#64748B',marginTop:'4px'}}>{data.discovery_about.length}/280</p>
         </div>
-        <div>
-          <p style={labelStyle}>Service Categories <span style={optStyle}>(up to 6)</span></p>
-          <CategorySelector selected={data.service_categories} onChange={function(v){onChange('service_categories',v)}} max={6} />
+<div>
+          <p style={labelStyle}>Cause Areas <span style={optStyle}>(select all that apply)</span></p>
+          <p style={{fontSize:'11px',color:'#64748B',marginBottom:'8px'}}>These appear on your discovery card and pre-fill tags when creating events, programs, and listings.</p>
+          <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}} role="group" aria-label="Cause areas">
+            {CAUSE_AREA_TAGS.map(function(tag) {
+              var isOn = data.cause_areas.includes(tag);
+              return (
+                <button key={tag} type="button" onClick={function(){onChange('cause_areas', isOn ? data.cause_areas.filter(function(t){return t!==tag;}) : data.cause_areas.concat([tag]));}} aria-pressed={isOn} style={{padding:'5px 12px',borderRadius:'99px',fontSize:'12px',fontWeight:600,border:'1px solid '+(isOn?'#3B82F6':'#2A3550'),background:isOn?'rgba(59,130,246,0.15)':'transparent',color:isOn?'#93C5FD':'#64748B',cursor:'pointer',transition:'all 0.15s'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {isOn&&<span style={{marginRight:'4px',display:'inline-flex',verticalAlign:'middle'}}><IconCheck /></span>}{tag}
+                </button>
+              );
+            })}
+          </div>
+          {data.cause_areas.length > 0 && (
+            <button type="button" onClick={function(){onChange('cause_areas',[]);}} style={{marginTop:'8px',fontSize:'11px',color:'#64748B',background:'none',border:'none',cursor:'pointer',textDecoration:'underline',padding:0}} className="focus:outline-none focus:ring-1 focus:ring-gray-500 rounded">
+              Clear all
+            </button>
+          )}
         </div>
-        <PillInput label="Search Tags" id="co-tags" values={data.search_tags} onChange={function(v){onChange('search_tags',v)}} placeholder="Type a tag and press Enter…" hint="e.g. 'food bank', 'tutoring', 'veterans'" />
-        <PillInput label="Additional Keywords" id="co-keywords" values={data.keywords} onChange={function(v){onChange('keywords',v)}} placeholder="Type a keyword and press Enter…" hint="Internal search only — not shown publicly." />
+
+        <PillInput label="Search Tags" id="co-tags" values={data.search_tags} onChange={function(v){onChange('search_tags',v)}} placeholder="Type a tag and press Enter…" hint="Shown on your discovery card. Add anything missing from the cause areas above — e.g. 'food pantry', 'after school', 'veterans'." />
+        <PillInput label="Additional Keywords" id="co-keywords" values={data.keywords} onChange={function(v){onChange('keywords',v)}} placeholder="Type a keyword and press Enter…" hint="Used for search matching only — not displayed on your discovery card. Add neighborhood names, acronyms, or alternate names people might search for." />
       </div>
       <div style={{display:'flex',gap:'12px',marginTop:'28px'}}>
         <button type="button" onClick={onBack} style={{padding:'12px 20px',background:'transparent',color:'#94A3B8',border:'1px solid #2A3550',borderRadius:'10px',fontSize:'14px',fontWeight:600,cursor:'pointer'}} className="focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">Back</button>
@@ -500,6 +504,61 @@ function Step5({ orgId, onNext, onBack }) {
   )
 }
 
+// ─── STEP 3b — Cause Areas ────────────────────────────────────────────────────
+function Step3b({ causeAreas, onChange, onNext, onBack, saving }) {
+  function toggleTag(tag) {
+    onChange(causeAreas.includes(tag)
+      ? causeAreas.filter(function(t) { return t !== tag; })
+      : causeAreas.concat([tag])
+    );
+  }
+  return (
+    <div>
+      <div style={{marginBottom:'20px'}}>
+        <p style={{fontSize:'11px',fontWeight:700,letterSpacing:'4px',textTransform:'uppercase',color:'#F5B731',marginBottom:'4px'}}>STEP 4 OF 6</p>
+        <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'}}>
+          <h2 style={{fontSize:'20px',fontWeight:800,color:'#FFFFFF',margin:0}}>What does your org work on?</h2>
+          <span style={{padding:'2px 10px',borderRadius:'99px',fontSize:'10px',fontWeight:700,background:'rgba(100,116,139,0.2)',color:'#94A3B8',border:'1px solid #2A3550',flexShrink:0}}>Optional</span>
+        </div>
+        <p style={{fontSize:'13px',color:'#94A3B8',lineHeight:1.6}}>
+          Select your cause areas. These appear on your discovery card and pre-fill tags when you create events, programs, and listings. You can change these anytime in Settings.
+        </p>
+      </div>
+      {causeAreas.length > 0 && (
+        <div style={{marginBottom:'12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <span style={{fontSize:'12px',color:'#94A3B8'}}>{causeAreas.length} selected</span>
+          <button type="button" onClick={function(){onChange([]);}} style={{fontSize:'11px',color:'#64748B',background:'none',border:'none',cursor:'pointer',textDecoration:'underline',padding:0}} className="focus:outline-none focus:ring-1 focus:ring-gray-500 rounded">
+            Clear all
+          </button>
+        </div>
+      )}
+      <div style={{display:'flex',flexWrap:'wrap',gap:'7px',maxHeight:'280px',overflowY:'auto',padding:'4px 2px',marginBottom:'20px'}}>
+        {CAUSE_AREA_TAGS.map(function(tag) {
+          var isOn = causeAreas.includes(tag);
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={function(){toggleTag(tag);}}
+              aria-pressed={isOn}
+              style={{padding:'5px 13px',borderRadius:'99px',fontSize:'12px',fontWeight:600,border:'1px solid '+(isOn?'#3B82F6':'#2A3550'),background:isOn?'rgba(59,130,246,0.15)':'transparent',color:isOn?'#93C5FD':'#64748B',cursor:'pointer',transition:'all 0.15s'}}
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {isOn && <span style={{marginRight:'4px',display:'inline-flex',verticalAlign:'middle'}}><IconCheck /></span>}{tag}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{display:'flex',gap:'12px'}}>
+        <button type="button" onClick={onBack} style={{padding:'12px 20px',background:'transparent',color:'#94A3B8',border:'1px solid #2A3550',borderRadius:'10px',fontSize:'14px',fontWeight:600,cursor:'pointer'}} className="focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">Back</button>
+        <button type="button" onClick={onNext} disabled={saving} style={{flex:1,padding:'12px',background:'#3B82F6',color:'#FFFFFF',border:'none',borderRadius:'10px',fontSize:'14px',fontWeight:700,cursor:saving?'not-allowed':'pointer',opacity:saving?0.6:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          {saving?'Saving…':causeAreas.length===0?'Skip for now':'Save and Continue'}{!saving&&<IconChevronRight />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 function CreateOrganization({ isOpen, onClose, onSuccess }) {
   var navigate = useNavigate()
@@ -512,7 +571,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
     contact_email:'', contact_phone:'', address:'', city:'', state:'', zip_code:'',
     logo_url:'', tagline:'', discovery_about:'',
     service_categories:[], search_tags:[], keywords:[],
-    selected_plan:'',
+    cause_areas:[], selected_plan:'',
   })
 
   function setField(key, value) {
@@ -523,7 +582,7 @@ function CreateOrganization({ isOpen, onClose, onSuccess }) {
 
   function resetState() {
     setStep(1); setCreatedOrgId(null)
-    setData({name:'',type:'nonprofit_501c3',description:'',website:'',contact_email:'',contact_phone:'',address:'',city:'',state:'',zip_code:'',logo_url:'',tagline:'',discovery_about:'',service_categories:[],search_tags:[],keywords:[],selected_plan:''})
+    setData({name:'',type:'nonprofit_501c3',description:'',website:'',contact_email:'',contact_phone:'',address:'',city:'',state:'',zip_code:'',logo_url:'',tagline:'',discovery_about:'',service_categories:[],search_tags:[],keywords:[],cause_areas:[],selected_plan:''})
   }
 
   function resetAndClose() { resetState(); onClose() }
@@ -568,12 +627,27 @@ setStep(3)
   async function handleStep3Next() {
     setSaving(true)
     try {
-      var updates={tagline:data.tagline.trim()||null,discovery_about:data.discovery_about.trim()||null,service_categories:data.service_categories.length>0?data.service_categories:null,search_tags:data.search_tags.length>0?data.search_tags:null,keywords:data.keywords.length>0?data.keywords:null}
+      var tagDefaults = data.cause_areas.length > 0 ? {org:data.cause_areas,event:data.cause_areas,program:data.cause_areas,opportunity:data.cause_areas,funding:data.cause_areas} : null;
+      var updates={tagline:data.tagline.trim()||null,discovery_about:data.discovery_about.trim()||null,search_tags:data.search_tags.length>0?data.search_tags:null,keywords:data.keywords.length>0?data.keywords:null,tags:data.cause_areas.length>0?data.cause_areas:null,tag_defaults:tagDefaults}
       if(data.logo_url) updates.logo_url=data.logo_url
       var {error}=await supabase.from('organizations').update(updates).eq('id',createdOrgId)
       if(error) throw error; setStep(4)
     } catch(err){toast.error(err.message||'Could not save brand info.')}
     finally{setSaving(false)}
+  }
+
+async function handleStep3bNext() {
+    setSaving(true);
+    try {
+      var tagDefaults = { org: data.cause_areas, event: data.cause_areas, program: data.cause_areas, opportunity: data.cause_areas, funding: data.cause_areas };
+      var { error } = await supabase.from('organizations').update({
+        tags: data.cause_areas.length > 0 ? data.cause_areas : null,
+        tag_defaults: data.cause_areas.length > 0 ? tagDefaults : null,
+      }).eq('id', createdOrgId);
+      if (error) throw error;
+      setStep(5);
+    } catch(err) { toast.error(err.message || 'Could not save cause areas.'); }
+    finally { setSaving(false); }
   }
 
 async function handleStep4Next(planOptions) {

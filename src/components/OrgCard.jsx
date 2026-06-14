@@ -36,6 +36,47 @@ function MapPinIcon() {
   );
 }
 
+function OrgTagChips({ tags }) {
+  var [expanded, setExpanded] = useState(false);
+  var visible = expanded ? tags : tags.slice(0, 3);
+  var overflow = tags.length - 3;
+  return (
+    <div style={{ marginBottom: '10px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+        {visible.map(function(tag) {
+          return (
+            <span key={tag} style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 600, background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
+              {tag}
+            </span>
+          );
+        })}
+        {!expanded && overflow > 0 && (
+          <button
+            type="button"
+            onClick={function(e) { e.preventDefault(); setExpanded(true); }}
+            style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 600, background: 'none', border: '1px solid #E2E8F0', color: '#94A3B8', cursor: 'pointer' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label={'Show ' + overflow + ' more tags'}
+          >
+            + {overflow} more
+          </button>
+        )}
+        {expanded && (
+          <button
+            type="button"
+            onClick={function(e) { e.preventDefault(); setExpanded(false); }}
+            style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 600, background: 'none', border: '1px solid #E2E8F0', color: '#94A3B8', cursor: 'pointer' }}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Show fewer tags"
+          >
+            Show less
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function OrgCard({ org, lang, session, initialFollowed }) {
   lang = lang || 'en';
   initialFollowed = initialFollowed || false;
@@ -162,8 +203,14 @@ export default function OrgCard({ org, lang, session, initialFollowed }) {
           )}
         </div>
 
-        {/* ── Footer: events + sample data | View ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0', marginTop: 'auto' }}>
+{/* ── Footer: events + sample data | View ── */}
+        <div style={{ paddingTop: '10px', borderTop: '1px solid #E2E8F0', marginTop: 'auto' }}>
+          {(org.tags || []).length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <OrgTagChips tags={org.tags} />
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
 
           {/* Left: events badge + sample data pill */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -190,6 +237,7 @@ export default function OrgCard({ org, lang, session, initialFollowed }) {
           >
             View
           </Link>
+</div>
         </div>
 
       </div>
