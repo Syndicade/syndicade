@@ -24,6 +24,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import ContentEditor from '../components/ContentEditor';
 import StaffFinancials from '../components/StaffFinancials';
 import StaffPromoCodes from '../components/StaffPromoCodes';
+import { invalidateTagCache } from '../lib/platformTags';
 import StaffGoals from '../components/StaffGoals';
 import {
   Users, Building2, DollarSign, ShieldCheck, Tag, TrendingUp, AlertTriangle,
@@ -1429,6 +1430,7 @@ function ManageTagsTab() {
     if (res.error) { mascotErrorToast('Failed to add tag.', res.error.message); setSaving(false); return; }
     setTags(function(prev) { return prev.concat([res.data]).sort(function(a, b) { return a.group_name.localeCompare(b.group_name) || a.label.localeCompare(b.label); }); });
     setNewLabel(''); setNewAppliesTo([]);
+    invalidateTagCache();
     mascotSuccessToast('Tag added!', '"' + res.data.label + '" is now available as a platform tag.');
     setSaving(false);
   }
@@ -1439,6 +1441,7 @@ function ManageTagsTab() {
     if (res.error) { mascotErrorToast('Failed to delete tag.', res.error.message); setDeletingId(null); return; }
     setTags(function(prev) { return prev.filter(function(t) { return t.id !== tag.id; }); });
     setDeleteConfirmId(null);
+    invalidateTagCache();
     mascotSuccessToast('Tag retired.', '"' + tag.label + '" removed from platform tags.');
     setDeletingId(null);
   }
