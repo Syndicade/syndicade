@@ -34,7 +34,7 @@ import GuestCheckInPage from './pages/GuestCheckInPage';
 import PollsList from './pages/PollsList';
 import OrgChat from './pages/OrgChat';
 import SurveysList from './pages/SurveysList';
-import OrgForms from './pages/OrgForms';
+import OrgForms from './pages/Orgforms';
 import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
 import ProgramDetail from './pages/ProgramDetail';
