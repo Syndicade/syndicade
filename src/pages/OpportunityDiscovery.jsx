@@ -4,7 +4,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import {
   Briefcase, Search, Clock, Calendar,
   DollarSign, ExternalLink, Mail, X, AlertCircle, Paperclip,
-  SlidersHorizontal, BadgeCheck, ChevronDown, CheckCircle
+  SlidersHorizontal, BadgeCheck, ChevronDown
 } from 'lucide-react';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -39,6 +39,37 @@ var COMP_COLORS = {
   stipend: { bg: '#FFF7ED', color: '#D97706' },
 };
 
+var CAUSE_AREA_TAGS = [
+  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
+  'Community Building', 'Criminal Justice Reform', 'Disability Services',
+  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
+  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
+  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
+  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
+  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
+  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
+  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
+  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
+  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
+];
+
+var AUDIENCE_TAGS = [
+  'Adults (18+)', 'Black Community', 'Children (under 13)', 'English Learners',
+  'Families', 'First-Generation Students', 'Foster Youth', 'General Public',
+  'Immigrants & Refugees', 'Indigenous Communities', 'Justice-Involved Individuals',
+  'Latino Community', 'LGBTQ+ Community', 'Low-Income Individuals', 'Men',
+  'Older Adults (65+)', 'People with Disabilities', 'Rural Communities', 'Seniors',
+  'Single Parents', 'Students', 'Survivors of Domestic Violence',
+  'Unhoused Individuals', 'Veterans', 'Women', 'Youth (13–17)',
+];
+
+var LANGUAGE_TAGS = [
+  'Arabic', 'Bengali', 'Bosnian', 'Burmese', 'Chinese (Cantonese)', 'Chinese (Mandarin)',
+  'English', 'French', 'German', 'Greek', 'Haitian Creole', 'Hindi', 'Hmong',
+  'Italian', 'Japanese', 'Karen', 'Khmer', 'Korean', 'Nepali', 'Polish',
+  'Portuguese', 'Romanian', 'Russian', 'Somali',
+];
+
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 function OpportunityCardSkeleton() {
   return (
@@ -66,139 +97,220 @@ function OpportunityCardSkeleton() {
 }
 
 // ── Sidebar filters ───────────────────────────────────────────────────────────
-function SidebarFilters({ filters, onChange, onReset }) {
-  function FilterSection({ label, children }) {
-    var [open, setOpen] = useState(true);
-    return (
-      <div style={{ borderBottom: '1px solid ' + borderColor, paddingBottom: '12px', marginBottom: '12px' }}>
-        <button
-          onClick={function() { setOpen(!open); }}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: open ? '10px' : 0 }}
-          className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-          aria-expanded={open}
-        >
-          <span style={{ fontSize: '10px', fontWeight: 800, color: '#F5B731', letterSpacing: '3px', textTransform: 'uppercase' }}>{label}</span>
-          <ChevronDown size={13} style={{ color: textMuted, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true" />
-        </button>
-        {open && children}
-      </div>
-    );
-  }
+function OppFilterSection({ label, children, defaultOpen }) {
+  var [open, setOpen] = useState(defaultOpen === true);
+  return (
+    <div style={{ borderBottom: '1px solid ' + borderColor, paddingBottom: '12px', marginBottom: '12px' }}>
+      <button
+        onClick={function() { setOpen(!open); }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: open ? '10px' : 0 }}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        aria-expanded={open}
+      >
+        <span style={{ fontSize: '10px', fontWeight: 800, color: '#F5B731', letterSpacing: '3px', textTransform: 'uppercase' }}>{label}</span>
+        <ChevronDown size={13} style={{ color: textMuted, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true" />
+      </button>
+      {open && children}
+    </div>
+  );
+}
 
-  var hasFilters = filters.roleType !== 'all' || filters.compensation !== 'all' || filters.location !== 'all' || filters.city;
-
+function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, margin: 0 }}>Filters</h2>
-        {hasFilters && (
+        <h2 style={{ fontSize: '15px', fontWeight: 700, color: textPrimary, margin: 0 }}>
+          Filters
+          {activeCount > 0 && (
+            <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 700, background: '#3B82F6', color: '#fff', borderRadius: '99px', padding: '1px 7px' }} aria-label={activeCount + ' active filters'}>
+              {activeCount}
+            </span>
+          )}
+        </h2>
+        {activeCount > 0 && (
           <button
             onClick={onReset}
             style={{ fontSize: '12px', fontWeight: 700, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
             className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           >
-            Reset Filters
+            Reset all
           </button>
         )}
       </div>
 
-      <FilterSection label="Role Type">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {['all'].concat(ROLE_TYPE_OPTIONS).map(function(opt) {
-            var active = filters.roleType === opt;
+      {/* ── Location (always first, open by default) ── */}
+      <OppFilterSection label="Location" defaultOpen={true}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <input
+            value={filters.city}
+            onChange={function(e) { onChange('city', e.target.value); }}
+            placeholder="City (e.g. Toledo)"
+            style={{ width: '100%', padding: '7px 10px', border: '1px solid ' + borderColor, borderRadius: '7px', fontSize: '13px', color: textPrimary, background: cardBg, outline: 'none', boxSizing: 'border-box' }}
+            aria-label="Filter by city"
+            className="focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            value={filters.state || ''}
+            onChange={function(e) { onChange('state', e.target.value); }}
+            placeholder="State (e.g. Ohio)"
+            style={{ width: '100%', padding: '7px 10px', border: '1px solid ' + borderColor, borderRadius: '7px', fontSize: '13px', color: textPrimary, background: cardBg, outline: 'none', boxSizing: 'border-box' }}
+            aria-label="Filter by state"
+            className="focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            value={filters.zip || ''}
+            onChange={function(e) { onChange('zip', e.target.value); }}
+            placeholder="ZIP Code"
+            style={{ width: '100%', padding: '7px 10px', border: '1px solid ' + borderColor, borderRadius: '7px', fontSize: '13px', color: textPrimary, background: cardBg, outline: 'none', boxSizing: 'border-box' }}
+            aria-label="Filter by ZIP code"
+            className="focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </OppFilterSection>
+
+      <OppFilterSection label="Work Location">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[
+            { value: 'in_person', label: 'In-Person' },
+            { value: 'remote', label: 'Remote' },
+            { value: 'hybrid', label: 'Hybrid' },
+          ].map(function(opt) {
+            var checked = (filters.locations || []).includes(opt.value);
+            return (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '3px 0', fontSize: '13px', color: checked ? '#0E1523' : textSecondary }}>
+                <input type="checkbox" checked={checked} onChange={function() { onToggleTag('locations', opt.value); }} style={{ width: '14px', height: '14px', accentColor: '#3B82F6', flexShrink: 0 }} aria-label={opt.label} className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" />
+                {opt.label}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
+
+      <OppFilterSection label="Role Type">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {ROLE_TYPE_OPTIONS.map(function(opt) {
+            var checked = (filters.roleTypes || []).includes(opt);
+            return (
+              <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '3px 0', fontSize: '13px', color: checked ? '#0E1523' : textSecondary }}>
+                <input type="checkbox" checked={checked} onChange={function() { onToggleTag('roleTypes', opt); }} style={{ width: '14px', height: '14px', accentColor: '#3B82F6', flexShrink: 0 }} aria-label={opt} className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" />
+                {opt}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
+
+      <OppFilterSection label="Compensation">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[
+            { value: 'paid', label: 'Paid' },
+            { value: 'unpaid', label: 'Unpaid / Volunteer' },
+            { value: 'stipend', label: 'Stipend' },
+          ].map(function(opt) {
+            var checked = (filters.compensations || []).includes(opt.value);
+            return (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '3px 0', fontSize: '13px', color: checked ? '#0E1523' : textSecondary }}>
+                <input type="checkbox" checked={checked} onChange={function() { onToggleTag('compensations', opt.value); }} style={{ width: '14px', height: '14px', accentColor: '#3B82F6', flexShrink: 0 }} aria-label={opt.label} className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" />
+                {opt.label}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
+
+      <OppFilterSection label="Work Location">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[
+            { value: 'in_person', label: 'In-Person' },
+            { value: 'remote', label: 'Remote' },
+            { value: 'hybrid', label: 'Hybrid' },
+          ].map(function(opt) {
+            var checked = (filters.locations || []).includes(opt.value);
+            return (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '3px 0', fontSize: '13px', color: checked ? '#0E1523' : textSecondary }}>
+                <input type="checkbox" checked={checked} onChange={function() { onToggleTag('locations', opt.value); }} style={{ width: '14px', height: '14px', accentColor: '#3B82F6', flexShrink: 0 }} aria-label={opt.label} className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" />
+                {opt.label}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
+
+      {/* ── Cause Area ── */}
+      <OppFilterSection label="Cause Area" defaultOpen={false}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+          {CAUSE_AREA_TAGS.map(function(tag) {
+            var active = filters.causeAreas.includes(tag);
             return (
               <button
-                key={opt}
-                onClick={function() { onChange('roleType', opt); }}
+                key={tag}
+                onClick={function() { onToggleTag('causeAreas', tag); }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '6px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  padding: '3px 9px', borderRadius: '99px', fontSize: '11px', fontWeight: active ? 700 : 500,
+                  border: '1px solid ' + (active ? '#3B82F6' : borderColor),
                   background: active ? '#EFF6FF' : 'transparent',
                   color: active ? '#3B82F6' : textSecondary,
-                  fontSize: '13px', fontWeight: active ? 700 : 400, textAlign: 'left',
+                  cursor: 'pointer', transition: 'all 0.1s',
                 }}
-                className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="focus:outline-none focus:ring-2 focus:ring-blue-400"
                 aria-pressed={active}
               >
-                {active && <CheckCircle size={12} color="#3B82F6" aria-hidden="true" />}
-                {!active && <div style={{ width: '12px', flexShrink: 0 }} />}
-                {opt === 'all' ? 'All Types' : opt}
+                {tag}
               </button>
             );
           })}
         </div>
-      </FilterSection>
+      </OppFilterSection>
 
-      <FilterSection label="Compensation">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'paid', label: 'Paid' },
-          { value: 'unpaid', label: 'Unpaid / Volunteer' },
-          { value: 'stipend', label: 'Stipend' },
-        ].map(function(opt) {
-          var active = filters.compensation === opt.value;
-          return (
-            <button
-              key={opt.value}
-              onClick={function() { onChange('compensation', opt.value); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
-                padding: '6px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                background: active ? '#EFF6FF' : 'transparent',
-                color: active ? '#3B82F6' : textSecondary,
-                fontSize: '13px', fontWeight: active ? 700 : 400, textAlign: 'left',
-              }}
-              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
-              aria-pressed={active}
-            >
-              {active && <CheckCircle size={12} color="#3B82F6" aria-hidden="true" />}
-              {!active && <div style={{ width: '12px', flexShrink: 0 }} />}
-              {opt.label}
-            </button>
-          );
-        })}
-      </FilterSection>
+      {/* ── Audience Served ── */}
+      <OppFilterSection label="Audience Served" defaultOpen={false}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {AUDIENCE_TAGS.map(function(tag) {
+            var checked = filters.audience.includes(tag);
+            return (
+              <label
+                key={tag}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: checked ? '#3B82F6' : textSecondary, fontWeight: checked ? 700 : 400 }}
+                className="hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={function() { onToggleTag('audience', tag); }}
+                  style={{ accentColor: '#3B82F6', width: '13px', height: '13px', flexShrink: 0 }}
+                  aria-label={tag}
+                />
+                {tag}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
 
-      <FilterSection label="Location">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'in_person', label: 'In-Person' },
-          { value: 'remote', label: 'Remote' },
-          { value: 'hybrid', label: 'Hybrid' },
-        ].map(function(opt) {
-          var active = filters.location === opt.value;
-          return (
-            <button
-              key={opt.value}
-              onClick={function() { onChange('location', opt.value); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
-                padding: '6px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                background: active ? '#EFF6FF' : 'transparent',
-                color: active ? '#3B82F6' : textSecondary,
-                fontSize: '13px', fontWeight: active ? 700 : 400, textAlign: 'left',
-              }}
-              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
-              aria-pressed={active}
-            >
-              {active && <CheckCircle size={12} color="#3B82F6" aria-hidden="true" />}
-              {!active && <div style={{ width: '12px', flexShrink: 0 }} />}
-              {opt.label}
-            </button>
-          );
-        })}
-      </FilterSection>
-
-      <FilterSection label="City">
-        <input
-          value={filters.city}
-          onChange={function(e) { onChange('city', e.target.value); }}
-          placeholder="e.g. Toledo"
-          style={{ width: '100%', padding: '7px 10px', border: '1px solid ' + borderColor, borderRadius: '7px', fontSize: '13px', color: textPrimary, background: cardBg, outline: 'none', boxSizing: 'border-box' }}
-          aria-label="Filter by city"
-          className="focus:ring-2 focus:ring-blue-500"
-        />
-      </FilterSection>
+      {/* ── Languages ── */}
+      <OppFilterSection label="Languages" defaultOpen={false}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {LANGUAGE_TAGS.map(function(tag) {
+            var checked = filters.languages.includes(tag);
+            return (
+              <label
+                key={tag}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: checked ? '#3B82F6' : textSecondary, fontWeight: checked ? 700 : 400 }}
+                className="hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={function() { onToggleTag('languages', tag); }}
+                  style={{ accentColor: '#3B82F6', width: '13px', height: '13px', flexShrink: 0 }}
+                  aria-label={tag}
+                />
+                {tag}
+              </label>
+            );
+          })}
+        </div>
+      </OppFilterSection>
     </div>
   );
 }
@@ -217,12 +329,10 @@ function ApplyModal({ item, onClose, currentUser }) {
   var [errors, setErrors] = useState({});
   var firstFieldRef = useRef(null);
 
-  // Focus first field on open
   useEffect(function() {
     if (firstFieldRef.current) firstFieldRef.current.focus();
   }, []);
 
-  // Trap focus inside modal
   useEffect(function() {
     function handleKeyDown(e) {
       if (e.key === 'Escape') onClose();
@@ -563,7 +673,7 @@ function OpportunityCard({ item, orgName, onClick }) {
                 <Paperclip size={11} aria-hidden="true" />Posting attached
               </span>
             )}
-            <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#3B82F6' }}>View details →</span>
+            <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#3B82F6' }}>View details</span>
           </div>
         </div>
       </div>
@@ -579,7 +689,10 @@ export default function OpportunityDiscovery() {
   var [error, setError]                       = useState(null);
   var [keyword, setKeyword]                   = useState('');
   var [debouncedKeyword, setDebouncedKeyword] = useState('');
-  var [filters, setFilters]                   = useState({ roleType: 'all', compensation: 'all', location: 'all', city: '' });
+  var [filters, setFilters]                   = useState({
+    roleTypes: [], compensations: [], locations: [], city: '', state: '', zip: '',
+    causeAreas: [], audience: [], languages: [],
+  });
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   var [selected, setSelected]                 = useState(null);
   var [applying, setApplying]                 = useState(null);
@@ -647,11 +760,37 @@ export default function OpportunityDiscovery() {
     setFilters(function(prev) { var n = Object.assign({}, prev); n[key] = val; return n; });
   }
 
+  function handleToggleTag(key, tag) {
+    setFilters(function(prev) {
+      var current = prev[key] || [];
+      var next = current.includes(tag)
+        ? current.filter(function(t) { return t !== tag; })
+        : current.concat(tag);
+      var n = Object.assign({}, prev);
+      n[key] = next;
+      return n;
+    });
+  }
+
   function handleReset() {
-    setFilters({ roleType: 'all', compensation: 'all', location: 'all', city: '' });
+    setFilters({ roleTypes: [], compensations: [], locations: [], city: '', state: '', zip: '', causeAreas: [], audience: [], languages: [] });
     setKeyword('');
     if (searchRef.current) searchRef.current.focus();
   }
+
+  // Count active filters for badge
+  var activeCount = (
+    filters.roleTypes.length +
+    filters.compensations.length +
+    filters.locations.length +
+    (filters.city && filters.city.length >= 2 ? 1 : 0) +
+    (filters.state && filters.state.length >= 2 ? 1 : 0) +
+    (filters.zip && filters.zip.length >= 3 ? 1 : 0) +
+    filters.causeAreas.length +
+    filters.audience.length +
+    filters.languages.length +
+    (keyword ? 1 : 0)
+  );
 
   var filtered = items.filter(function(item) {
     var kw = debouncedKeyword.toLowerCase();
@@ -659,18 +798,29 @@ export default function OpportunityDiscovery() {
       item.title.toLowerCase().includes(kw) ||
       (item.description && item.description.toLowerCase().includes(kw)) ||
       (orgs[item.organization_id] && orgs[item.organization_id].toLowerCase().includes(kw)) ||
-      (item.tags && item.tags.some(function(t) { return t.includes(kw); })) ||
+      (item.tags && item.tags.some(function(t) { return t.toLowerCase().includes(kw); })) ||
       (item.city && item.city.toLowerCase().includes(kw));
-    var matchType = filters.roleType === 'all' || (item.role_types && item.role_types.includes(filters.roleType));
-    var matchComp = filters.compensation === 'all' || item.compensation_type === filters.compensation;
-    var matchLoc  = filters.location === 'all' || item.location_type === filters.location;
+    var matchType = filters.roleTypes.length === 0 || (item.role_types && filters.roleTypes.some(function(r) { return item.role_types.includes(r); }));
+    var matchComp = filters.compensations.length === 0 || filters.compensations.includes(item.compensation_type);
+    var matchLoc  = filters.locations.length === 0 || filters.locations.includes(item.location_type);
     var matchCity = !filters.city || (item.city && item.city.toLowerCase().includes(filters.city.toLowerCase()));
-    return matchSearch && matchType && matchComp && matchLoc && matchCity;
+    var matchState = !filters.state || (item.state && item.state.toLowerCase().includes(filters.state.toLowerCase()));
+    var matchZip = !filters.zip || (item.zip && item.zip.includes(filters.zip));
+    var matchCause = filters.causeAreas.length === 0 || filters.causeAreas.every(function(t) {
+      return (item.tags || []).includes(t);
+    });
+    var matchAudience = filters.audience.length === 0 || filters.audience.every(function(t) {
+      return (item.tags || []).includes(t);
+    });
+    var matchLanguages = filters.languages.length === 0 || filters.languages.every(function(t) {
+      return (item.tags || []).includes(t);
+    });
+    return matchSearch && matchType && matchComp && matchLoc && matchCity && matchState && matchZip && matchCause && matchAudience && matchLanguages;
   });
 
   return (
     <>
-      <div style={{ minHeight: '100vh', background: '#FFFFFF', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+      <div style={{ minHeight: '100vh', background: pageBg, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
         {/* Sticky search bar */}
         <div style={{ background: pageBg, borderBottom: '1px solid ' + borderColor, position: 'sticky', top: 64, zIndex: 30 }}>
@@ -697,15 +847,21 @@ export default function OpportunityDiscovery() {
                 </button>
               )}
             </div>
+            {/* Mobile filter button with active count badge */}
             <button
               onClick={function() { setMobileFiltersOpen(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: cardBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', color: textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: activeCount > 0 ? '#EFF6FF' : cardBg, border: '1px solid ' + (activeCount > 0 ? '#3B82F6' : borderColor), borderRadius: '8px', fontSize: '13px', color: activeCount > 0 ? '#3B82F6' : textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
               className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Open filters"
+              aria-label={'Open filters' + (activeCount > 0 ? ', ' + activeCount + ' active' : '')}
               aria-expanded={mobileFiltersOpen}
             >
               <SlidersHorizontal size={14} aria-hidden="true" />
               Filters
+              {activeCount > 0 && (
+                <span style={{ background: '#3B82F6', color: '#fff', borderRadius: '99px', fontSize: '11px', fontWeight: 700, padding: '0px 6px', lineHeight: '18px' }} aria-hidden="true">
+                  {activeCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -716,7 +872,13 @@ export default function OpportunityDiscovery() {
             {/* Desktop sidebar */}
             <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
               <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px', position: 'sticky', top: 144 }}>
-                <SidebarFilters filters={filters} onChange={handleFilterChange} onReset={handleReset} />
+                <SidebarFilters
+                  filters={filters}
+                  onChange={handleFilterChange}
+                  onToggleTag={handleToggleTag}
+                  onReset={handleReset}
+                  activeCount={activeCount}
+                />
               </div>
             </div>
 
@@ -731,7 +893,13 @@ export default function OpportunityDiscovery() {
                       <X size={18} />
                     </button>
                   </div>
-                  <SidebarFilters filters={filters} onChange={handleFilterChange} onReset={handleReset} />
+                  <SidebarFilters
+                    filters={filters}
+                    onChange={handleFilterChange}
+                    onToggleTag={handleToggleTag}
+                    onReset={handleReset}
+                    activeCount={activeCount}
+                  />
                   <button onClick={function() { setMobileFiltersOpen(false); }} style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#fff', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     Show Results
                   </button>
@@ -745,6 +913,36 @@ export default function OpportunityDiscovery() {
                 <h1 style={{ fontSize: '24px', fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>Opportunities at Nonprofits</h1>
                 <p style={{ color: textMuted, fontSize: '14px', margin: 0 }}>Board seats, jobs, volunteer roles, and more from verified 501(c)(3) organizations.</p>
               </div>
+
+              {/* Active filter chips */}
+              {(function() {
+                var chips = [];
+                (filters.roleTypes || []).forEach(function(r) { chips.push({ key: 'rt-' + r, label: r, clear: function() { handleToggleTag('roleTypes', r); } }); });
+                (filters.compensations || []).forEach(function(c) { chips.push({ key: 'co-' + c, label: COMPENSATION_LABELS[c] || c, clear: function() { handleToggleTag('compensations', c); } }); });
+                (filters.locations || []).forEach(function(l) { chips.push({ key: 'lo-' + l, label: LOCATION_LABELS[l] || l, clear: function() { handleToggleTag('locations', l); } }); });
+                if (filters.city && filters.city.length >= 2) chips.push({ key: 'city', label: 'City: ' + filters.city, clear: function() { handleFilterChange('city', ''); } });
+                if (filters.state && filters.state.length >= 2) chips.push({ key: 'state', label: 'State: ' + filters.state, clear: function() { handleFilterChange('state', ''); } });
+                if (filters.zip && filters.zip.length >= 3) chips.push({ key: 'zip', label: 'ZIP: ' + filters.zip, clear: function() { handleFilterChange('zip', ''); } });
+                (filters.causeAreas || []).forEach(function(t) { chips.push({ key: 'ca-' + t, label: t, clear: function() { handleToggleTag('causeAreas', t); } }); });
+                (filters.audience || []).forEach(function(t) { chips.push({ key: 'au-' + t, label: t, clear: function() { handleToggleTag('audience', t); } }); });
+                (filters.languages || []).forEach(function(t) { chips.push({ key: 'la-' + t, label: t, clear: function() { handleToggleTag('languages', t); } }); });
+                if (chips.length === 0) return null;
+                return (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role='list' aria-label='Active filters'>
+                    {chips.map(function(chip) {
+                      return (
+                        <span key={chip.key} role='listitem' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}>
+                          {chip.label}
+                          <button onClick={chip.clear} aria-label={'Remove filter: ' + chip.label} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }} className='focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full'>
+                            <X size={10} aria-hidden='true' />
+                          </button>
+                        </span>
+                      );
+                    })}
+                    <button onClick={handleReset} style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }} className='focus:outline-none focus:ring-2 focus:ring-blue-500 rounded'>Clear all</button>
+                  </div>
+                );
+              })()}
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <p style={{ fontSize: '14px', color: textMuted, margin: 0 }} aria-live="polite" aria-atomic="true">
@@ -771,9 +969,7 @@ export default function OpportunityDiscovery() {
 
               {!loading && !error && items.length === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }}>
-                  <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid ' + borderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <Briefcase size={28} color={textTertiary} aria-hidden="true" />
-                  </div>
+                  <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '180px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply' }} />
                   <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>No opportunities yet</h2>
                   <p style={{ color: textMuted, fontSize: '14px', maxWidth: '360px', lineHeight: 1.6 }}>Verified nonprofits will post roles here. Check back soon — new opportunities are added regularly.</p>
                 </div>
@@ -781,9 +977,7 @@ export default function OpportunityDiscovery() {
 
               {!loading && !error && items.length > 0 && filtered.length === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0', textAlign: 'center' }}>
-                  <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F1F5F9', border: '1px solid ' + borderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <Search size={28} color={textTertiary} aria-hidden="true" />
-                  </div>
+                  <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '180px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply' }} />
                   <h2 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>No matches found</h2>
                   <p style={{ color: textMuted, fontSize: '14px', marginBottom: '24px' }}>Try adjusting your search or filters.</p>
                   <button onClick={handleReset} style={{ padding: '10px 20px', background: '#3B82F6', color: '#fff', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Reset Filters</button>

@@ -1,19 +1,33 @@
 import { useState } from 'react';
-import { RotateCcw, ChevronDown, ChevronUp, X, Tag } from 'lucide-react';
-import { t, SUPPORTED_LANGUAGES } from '../lib/discoveryTranslations';
+import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 
 var CATEGORIES = [
-  { value: 'black',           label: 'Black' },
-  { value: 'education',       label: 'Education' },
-  { value: 'faith-based',     label: 'Faith-Based' },
-  { value: 'food-assistance', label: 'Food Assistance' },
-  { value: 'health',          label: 'Health & Wellness' },
-  { value: 'housing',         label: 'Housing' },
-  { value: 'latino',          label: 'Latino' },
-  { value: 'lgbtq',           label: 'LGBTQ+' },
-  { value: 'veteran',         label: 'Veteran Services' },
-  { value: 'women',           label: 'Women' },
-  { value: 'youth',           label: 'Youth & Families' },
+  { value: 'adults',                    label: 'Adults (18+)' },
+  { value: 'black',                     label: 'Black Community' },
+  { value: 'children',                  label: 'Children (under 13)' },
+  { value: 'english-learners',          label: 'English Learners' },
+  { value: 'families',                  label: 'Families' },
+  { value: 'first-gen-students',        label: 'First-Generation Students' },
+  { value: 'foster-youth',              label: 'Foster Youth' },
+  { value: 'general-public',            label: 'General Public' },
+  { value: 'immigrants-refugees',       label: 'Immigrants & Refugees' },
+  { value: 'indigenous',                label: 'Indigenous Communities' },
+  { value: 'justice-involved',          label: 'Justice-Involved Individuals' },
+  { value: 'latino',                    label: 'Latino Community' },
+  { value: 'lgbtq',                     label: 'LGBTQ+ Community' },
+  { value: 'low-income',                label: 'Low-Income Individuals' },
+  { value: 'men',                       label: 'Men' },
+  { value: 'older-adults',              label: 'Older Adults (65+)' },
+  { value: 'people-with-disabilities',  label: 'People with Disabilities' },
+  { value: 'rural',                     label: 'Rural Communities' },
+  { value: 'seniors',                   label: 'Seniors' },
+  { value: 'single-parents',            label: 'Single Parents' },
+  { value: 'students',                  label: 'Students' },
+  { value: 'survivors-dv',              label: 'Survivors of Domestic Violence' },
+  { value: 'unhoused',                  label: 'Unhoused Individuals' },
+  { value: 'veterans',                  label: 'Veterans' },
+  { value: 'women',                     label: 'Women' },
+  { value: 'youth',                     label: 'Youth (13-17)' },
 ];
 
 var ORG_TYPES = [
@@ -24,12 +38,51 @@ var ORG_TYPES = [
 ];
 
 var LANGUAGE_OPTIONS = [
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Español' },
-  { code: 'zh', label: '中文' },
-  { code: 'tl', label: 'Tagalog' },
-  { code: 'vi', label: 'Tiếng Việt' },
-  { code: 'ar', label: 'العربية' },
+  { code: 'arabic',            label: 'Arabic' },
+  { code: 'bengali',           label: 'Bengali' },
+  { code: 'bosnian',           label: 'Bosnian' },
+  { code: 'burmese',           label: 'Burmese' },
+  { code: 'cantonese',         label: 'Chinese (Cantonese)' },
+  { code: 'mandarin',          label: 'Chinese (Mandarin)' },
+  { code: 'english',           label: 'English' },
+  { code: 'french',            label: 'French' },
+  { code: 'german',            label: 'German' },
+  { code: 'greek',             label: 'Greek' },
+  { code: 'haitian-creole',    label: 'Haitian Creole' },
+  { code: 'hindi',             label: 'Hindi' },
+  { code: 'hmong',             label: 'Hmong' },
+  { code: 'italian',           label: 'Italian' },
+  { code: 'japanese',          label: 'Japanese' },
+  { code: 'karen',             label: 'Karen' },
+  { code: 'khmer',             label: 'Khmer' },
+  { code: 'korean',            label: 'Korean' },
+  { code: 'nepali',            label: 'Nepali' },
+  { code: 'polish',            label: 'Polish' },
+  { code: 'portuguese',        label: 'Portuguese' },
+  { code: 'romanian',          label: 'Romanian' },
+  { code: 'russian',           label: 'Russian' },
+  { code: 'somali',            label: 'Somali' },
+  { code: 'spanish',           label: 'Spanish' },
+  { code: 'swahili',           label: 'Swahili' },
+  { code: 'tagalog',           label: 'Tagalog' },
+  { code: 'tigrinya',          label: 'Tigrinya' },
+  { code: 'ukrainian',         label: 'Ukrainian' },
+  { code: 'urdu',              label: 'Urdu' },
+  { code: 'vietnamese',        label: 'Vietnamese' },
+];
+
+var CAUSE_AREA_TAGS = [
+  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
+  'Community Building', 'Criminal Justice Reform', 'Disability Services',
+  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
+  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
+  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
+  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
+  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
+  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
+  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
+  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
+  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
 ];
 
 var sectionBdr = '#E5E7EB';
@@ -92,24 +145,12 @@ function CheckItem({ checked, onChange, label }) {
 }
 
 export default function DiscoveryFilters({ lang, filters, onFilterChange, onReset }) {
-  var [tagInput, setTagInput] = useState('');
 
-  function handleTagKeyDown(e) {
-    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-      e.preventDefault();
-      var val = tagInput.trim().replace(/,$/, '');
-      if (!val) return;
-      var current = filters.tags || [];
-      if (!current.includes(val)) onFilterChange('tags', current.concat([val]));
-      setTagInput('');
-    } else if (e.key === 'Backspace' && !tagInput) {
-      var current = filters.tags || [];
-      if (current.length > 0) onFilterChange('tags', current.slice(0, -1));
-    }
-  }
-
-  function removeTag(tag) {
-    onFilterChange('tags', (filters.tags || []).filter(function(t) { return t !== tag; }));
+  function handleCauseArea(tag) {
+    var current = filters.causeAreas || [];
+    onFilterChange('causeAreas', current.includes(tag)
+      ? current.filter(function(t) { return t !== tag; })
+      : current.concat([tag]));
   }
 
   function handleCategory(cat) {
@@ -130,11 +171,14 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
       : current.concat([code]));
   }
 
-  var selectedCatCount  = (filters.categories || []).length;
-  var selectedLangCount = (filters.languagesServed || []).length;
-  var selectedOrgCount  = filters.orgType ? 1 : 0;
-  var hasAny = selectedCatCount + selectedLangCount + selectedOrgCount + (filters.tags || []).length > 0
-    || filters.state || filters.city || filters.zip;
+  var selectedCatCount   = (filters.categories || []).length;
+  var selectedCauseCount = (filters.causeAreas || []).length;
+  var selectedLangCount  = (filters.languagesServed || []).length;
+  var selectedOrgCount   = filters.orgType ? 1 : 0;
+  var hasAny = selectedCatCount + selectedCauseCount + selectedLangCount + selectedOrgCount > 0
+    || (filters.state && filters.state.length >= 2)
+    || (filters.city && filters.city.length >= 2)
+    || (filters.zip && filters.zip.length >= 3);
 
   return (
     <aside aria-label="Filters" style={{ fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
@@ -157,76 +201,16 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
 
-        {/* Display Language */}
-        <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + sectionBdr }}>
-          <label htmlFor="ui-language" style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '8px', paddingTop: '10px' }}>
-            Display Language
-          </label>
-          <div style={{ position: 'relative' }}>
-            <select
-              id="ui-language"
-              value={lang}
-              onChange={function(e) { onFilterChange('uiLang', e.target.value); }}
-              style={Object.assign({}, inp, { paddingRight: '28px', appearance: 'none', cursor: 'pointer' })}
-              className="focus:ring-2 focus:ring-blue-500"
-            >
-              {SUPPORTED_LANGUAGES.map(function(l) {
-                return <option key={l.code} value={l.code}>{l.label}</option>;
-              })}
-            </select>
-            <ChevronDown size={13} color="#94A3B8" aria-hidden="true" style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-          </div>
-        </div>
-
-        {/* Keywords / Tags */}
-        <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + sectionBdr }}>
-          <label htmlFor="keyword-tags" style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '8px', paddingTop: '10px' }}>
-            Keywords / Tags
-          </label>
-          <div
-            style={{ background: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', padding: '6px 8px', display: 'flex', flexWrap: 'wrap', gap: '5px', minHeight: '40px', alignItems: 'center', cursor: 'text' }}
-            onClick={function() { document.getElementById('keyword-tags').focus(); }}
-          >
-            {(filters.tags || []).map(function(tag) {
-              return (
-                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DBEAFE', border: '1px solid #BFDBFE', color: '#1E40AF', borderRadius: '99px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>
-                  <Tag size={9} aria-hidden="true" />
-                  {tag}
-                  <button
-                    onClick={function(e) { e.stopPropagation(); removeTag(tag); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', padding: '0', display: 'flex', alignItems: 'center' }}
-                    aria-label={'Remove keyword ' + tag}
-                    className="focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full"
-                  >
-                    <X size={9} aria-hidden="true" />
-                  </button>
-                </span>
-              );
-            })}
-            <input
-              id="keyword-tags"
-              type="text"
-              value={tagInput}
-              onChange={function(e) { setTagInput(e.target.value); }}
-              onKeyDown={handleTagKeyDown}
-              placeholder={(filters.tags || []).length === 0 ? 'Type and press Enter...' : ''}
-              style={{ flex: 1, minWidth: '80px', background: 'none', border: 'none', outline: 'none', fontSize: '12px', color: '#111827', padding: '2px 4px' }}
-              aria-label="Add keyword tag"
-            />
-          </div>
-          <p style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>Press Enter or comma to add</p>
-        </div>
-
-        {/* Location */}
+        {/* Location — always first, always visible (not collapsible) */}
         <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + sectionBdr }}>
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginBottom: '8px', paddingTop: '10px' }}>
             Location
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { id: 'filter-state', key: 'state', label: 'State',    ph: 'e.g. OH',    max: 2,  upper: true },
               { id: 'filter-city',  key: 'city',  label: 'City',     ph: 'e.g. Toledo' },
-              { id: 'filter-zip',   key: 'zip',   label: 'ZIP Code', ph: 'e.g. 43604', max: 10 },
+              { id: 'filter-state', key: 'state', label: 'State',    ph: 'e.g. Ohio' },
+              { id: 'filter-zip',   key: 'zip',   label: 'ZIP Code', ph: 'e.g. 43604' },
             ].map(function(f) {
               return (
                 <div key={f.id}>
@@ -237,8 +221,7 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
                     value={filters[f.key] || ''}
                     onChange={function(e) { onFilterChange(f.key, e.target.value); }}
                     placeholder={f.ph}
-                    maxLength={f.max}
-                    style={Object.assign({}, inp, f.upper ? { textTransform: 'uppercase' } : {})}
+                    style={inp}
                     className="focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -246,6 +229,32 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
             })}
           </div>
         </div>
+
+        {/* Cause Area */}
+        <FilterSection id="filter-cause-area" label="Cause Area" count={selectedCauseCount}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} role="group" aria-label="Cause Area">
+            {CAUSE_AREA_TAGS.map(function(tag) {
+              var active = (filters.causeAreas || []).includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={function() { handleCauseArea(tag); }}
+                  style={{
+                    padding: '3px 9px', borderRadius: '99px', fontSize: '11px', fontWeight: active ? 700 : 500,
+                    border: '1px solid ' + (active ? '#3B82F6' : '#E2E8F0'),
+                    background: active ? '#EFF6FF' : 'transparent',
+                    color: active ? '#3B82F6' : '#475569',
+                    cursor: 'pointer', transition: 'all 0.1s',
+                  }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-pressed={active}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </FilterSection>
 
         {/* Audience Served */}
         <FilterSection id="filter-categories" label="Audience Served" count={selectedCatCount}>

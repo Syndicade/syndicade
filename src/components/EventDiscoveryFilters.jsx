@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { et, EVENT_SUPPORTED_LANGUAGES } from '../lib/eventDiscoveryTranslations';
-import { X, Tag } from 'lucide-react';
+import { et } from '../lib/eventDiscoveryTranslations';
 
 var EVENT_TYPES = [
   'advocacy-event', 'blood-drive', 'clothing-drive', 'community-meeting',
@@ -22,6 +21,20 @@ var LANGUAGE_OPTIONS = [
   { code: 'tl', label: 'Tagalog' },
   { code: 'vi', label: 'Tiếng Việt' },
   { code: 'ar', label: 'العربية' },
+];
+
+var CAUSE_AREA_TAGS = [
+  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
+  'Community Building', 'Criminal Justice Reform', 'Disability Services',
+  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
+  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
+  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
+  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
+  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
+  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
+  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
+  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
+  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
 ];
 
 var borderColor = '#E2E8F0';
@@ -106,26 +119,6 @@ function CheckItem({ checked, onChange, label }) {
 }
 
 export default function EventDiscoveryFilters({ lang, filters, onFilterChange, onReset }) {
-  var [tagInput, setTagInput] = useState('');
-
-  function handleTagKeyDown(e) {
-    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-      e.preventDefault();
-      var val = tagInput.trim().replace(/,$/, '');
-      if (!val) return;
-      var current = filters.tags || [];
-      if (!current.includes(val)) onFilterChange('tags', current.concat([val]));
-      setTagInput('');
-    } else if (e.key === 'Backspace' && !tagInput) {
-      var current = filters.tags || [];
-      if (current.length > 0) onFilterChange('tags', current.slice(0, -1));
-    }
-  }
-
-  function removeTag(tag) {
-    onFilterChange('tags', (filters.tags || []).filter(function(t) { return t !== tag; }));
-  }
-
   function handleMultiSelect(filterKey, value) {
     var current = filters[filterKey] || [];
     onFilterChange(filterKey, current.includes(value)
@@ -137,10 +130,18 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
     onFilterChange(filterKey, filters[filterKey] === value ? '' : value);
   }
 
-  var eventTypeCount = (filters.eventTypes || []).length;
-  var audienceCount  = (filters.audience   || []).length;
-  var langCount      = (filters.languages  || []).length;
-  var orgTypeCount   = filters.orgType ? 1 : 0;
+  function toggleCauseArea(tag) {
+    var current = filters.causeAreas || [];
+    onFilterChange('causeAreas', current.includes(tag)
+      ? current.filter(function(t) { return t !== tag; })
+      : current.concat([tag]));
+  }
+
+  var eventTypeCount  = (filters.eventTypes  || []).length;
+  var audienceCount   = (filters.audience    || []).length;
+  var langCount       = (filters.languages   || []).length;
+  var orgTypeCount    = filters.orgType ? 1 : 0;
+  var causeAreaCount  = (filters.causeAreas  || []).length;
 
   return (
     <aside style={{ width: '100%', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }} aria-label={et(lang, 'filtersHeading')}>
@@ -160,74 +161,14 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
 
-        {/* Display Language */}
-        <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + borderColor }}>
-          <label htmlFor="event-ui-language" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px', paddingTop: '10px' }}>
-            Display Language
-          </label>
-          <div style={{ position: 'relative' }}>
-            <select
-              id="event-ui-language"
-              value={lang}
-              onChange={function(e) { onFilterChange('uiLang', e.target.value); }}
-              style={Object.assign({}, inputStyle, { paddingRight: '32px', appearance: 'none', cursor: 'pointer' })}
-              className="focus:ring-2 focus:ring-blue-500"
-            >
-              {EVENT_SUPPORTED_LANGUAGES.map(function(l) { return <option key={l.code} value={l.code}>{l.label}</option>; })}
-            </select>
-            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }}>
-              <ChevronDownIcon />
-            </span>
-          </div>
-        </div>
-
-        {/* Keywords / Tags */}
-        <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + borderColor }}>
-          <label htmlFor="event-keyword-tags" style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px', paddingTop: '10px' }}>
-            Keywords / Tags
-          </label>
-          <div
-            style={{ background: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', padding: '6px 8px', display: 'flex', flexWrap: 'wrap', gap: '5px', minHeight: '40px', alignItems: 'center', cursor: 'text' }}
-            onClick={function() { document.getElementById('event-keyword-tags').focus(); }}
-          >
-            {(filters.tags || []).map(function(tag) {
-              return (
-                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DBEAFE', border: '1px solid #BFDBFE', color: '#1E40AF', borderRadius: '99px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>
-                  <Tag size={9} aria-hidden="true" />
-                  {tag}
-                  <button
-                    onClick={function(e) { e.stopPropagation(); removeTag(tag); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', padding: '0', display: 'flex', alignItems: 'center' }}
-                    aria-label={'Remove keyword ' + tag}
-                    className="focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full"
-                  >
-                    <X size={9} aria-hidden="true" />
-                  </button>
-                </span>
-              );
-            })}
-            <input
-              id="event-keyword-tags"
-              type="text"
-              value={tagInput}
-              onChange={function(e) { setTagInput(e.target.value); }}
-              onKeyDown={handleTagKeyDown}
-              placeholder={(filters.tags || []).length === 0 ? 'Type and press Enter...' : ''}
-              style={{ flex: 1, minWidth: '80px', background: 'none', border: 'none', outline: 'none', fontSize: '12px', color: '#111827', padding: '2px 4px' }}
-              aria-label="Add keyword tag"
-            />
-          </div>
-          <p style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>Press Enter or comma to add</p>
-        </div>
-
-        {/* Location */}
+        {/* Location — always first per UX/UI Standards §6 */}
         <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + borderColor }}>
           <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px', paddingTop: '10px' }}>
             {et(lang, 'locationLabel')}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { id: 'event-filter-state', key: 'state', label: et(lang, 'stateLabel'), placeholder: 'E.G. OH', maxLength: 2, upper: true },
+              { id: 'event-filter-state', key: 'state', label: et(lang, 'stateLabel'), placeholder: 'e.g. Ohio' },
               { id: 'event-filter-city',  key: 'city',  label: et(lang, 'cityLabel'),  placeholder: 'e.g. Toledo' },
               { id: 'event-filter-zip',   key: 'zip',   label: et(lang, 'zipLabel'),   placeholder: 'e.g. 43623', maxLength: 10 },
             ].map(function(f) {
@@ -276,6 +217,32 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="group" aria-label={et(lang, 'eventTypeLabel')}>
             {EVENT_TYPES.map(function(type) {
               return <CheckItem key={type} checked={(filters.eventTypes || []).includes(type)} onChange={function() { handleMultiSelect('eventTypes', type); }} label={et(lang, type)} />;
+            })}
+          </div>
+        </FilterSection>
+
+        {/* Cause Area — chip style, client-side filter on cause_areas column */}
+        <FilterSection id="filter-cause-area" label="Cause Area" count={causeAreaCount}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} role="group" aria-label="Cause Area">
+            {CAUSE_AREA_TAGS.map(function(tag) {
+              var active = (filters.causeAreas || []).includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={function() { toggleCauseArea(tag); }}
+                  style={{
+                    padding: '3px 9px', borderRadius: '99px', fontSize: '11px', fontWeight: active ? 700 : 500,
+                    border: '1px solid ' + (active ? '#3B82F6' : borderColor),
+                    background: active ? '#EFF6FF' : 'transparent',
+                    color: active ? '#3B82F6' : '#475569',
+                    cursor: 'pointer', transition: 'all 0.1s',
+                  }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-pressed={active}
+                >
+                  {tag}
+                </button>
+              );
             })}
           </div>
         </FilterSection>
