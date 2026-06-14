@@ -1,9 +1,9 @@
 /**
- * StaffDashboard.jsx — V4.0
- * Rewritten June 2, 2026
+ * StaffDashboard.jsx — V4.1
+ * Updated June 14, 2026
  *
  * Tab order:
- * 1. Overview       — metrics, at-risk, recent signups (NO verification queue)
+ * 1. Overview       — metrics, at-risk, recent signups
  * 2. Members        — search, staff filter, account tools
  * 3. Organizations  — full table with all new filters + member counts
  * 4. Verifications  — dedicated tab with pending/approved/rejected filter
@@ -11,15 +11,9 @@
  * 6. Promo Codes    — StaffPromoCodes
  * 7. Goals          — StaffGoals
  * 8. Contacts       — custom categories, date range inputs, CategoryModal
- * 9. Bug Reports    — unchanged
- * 10. Content       — ContentEditor
- *
- * New features:
- * - Badge counts on Verifications + Contacts tabs (realtime)
- * - VerificationsTab (moved + upgraded from Overview)
- * - OrgsTab: type, state dropdowns; member count column; most members sort
- * - ContactsTab: custom categories via site_content, CategoryModal, date range inputs
- * - OrgDrawer: org number, org type, member count, billing interval, View Public Page
+ * 9. Manage Tags    — TAG6: add/retire platform_tags, usage counts, custom keyword insights
+ * 10. Bug Reports   — unchanged
+ * 11. Content       — ContentEditor
  */
 
 import { useState, useEffect } from 'react';
@@ -38,6 +32,7 @@ import {
   FileText, Download, Mail, Bug, ChevronUp, ExternalLink, Filter,
   Receipt, AlertCircle, Pin, PinOff, Trash2, Eye, EyeOff, StickyNote,
   CheckSquare, Square, Tag as TagIcon, Pencil, Plus, Check, Globe,
+  Layers, TrendingDown, BarChart, Sparkles, ArrowUpCircle,
 } from 'lucide-react';
 
 // ─── Plan config ──────────────────────────────────────────────────────────────
@@ -71,6 +66,26 @@ var ORG_TYPE_LABELS = {
   pta:             'PTA',
   union:           'Union',
 };
+
+// ─── Tag system config ────────────────────────────────────────────────────────
+var TAG_GROUP_NAMES = [
+  'Cause Area',
+  'Audience Served',
+  'Activity Type',
+  'Role Type',
+  'Funding Type',
+  'Format',
+  'Language',
+  'Organization Type',
+];
+
+var TAG_APPLIES_TO_OPTIONS = [
+  { value: 'event',       label: 'Events' },
+  { value: 'program',     label: 'Programs' },
+  { value: 'opportunity', label: 'Opportunities' },
+  { value: 'funding',     label: 'Funding' },
+  { value: 'org',         label: 'Organizations' },
+];
 
 // ─── Contact categories ───────────────────────────────────────────────────────
 var DEFAULT_CATEGORIES = [
@@ -202,6 +217,18 @@ function TableSkeleton() {
     </div>
   );
 }
+function TagGroupSkeleton() {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden animate-pulse" aria-hidden="true">
+      <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+        <div className="h-4 w-32 rounded bg-slate-200" />
+      </div>
+      <div className="px-5 py-4 flex flex-wrap gap-2">
+        {[1,2,3,4,5].map(function(i) { return <div key={i} className="h-7 rounded-full bg-slate-100" style={{ width: (60 + i * 12) + 'px' }} />; })}
+      </div>
+    </div>
+  );
+}
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 function SectionLabel(props) {
@@ -221,10 +248,9 @@ function MetricCard(props) {
   );
 }
 function EmptyState(props) {
-  var Icon = props.icon;
   return (
     <div className="px-6 py-12 text-center">
-      <Icon size={36} className="text-slate-300 mx-auto mb-3" aria-hidden="true" />
+      <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '160px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply', display: 'block', margin: '0 auto 16px' }} />
       <p style={{ fontWeight: 700, fontSize: '15px', color: '#0E1523', marginBottom: '4px' }}>{props.title}</p>
       <p style={{ fontSize: '13px', color: '#64748B', marginBottom: props.action ? '16px' : '0' }}>{props.description}</p>
       {props.action && props.onAction && (
@@ -488,8 +514,8 @@ function MembersTab() {
       </div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? <TableSkeleton />
-          : !searched ? <EmptyState icon={Search} title="Search for a member" description="Enter a name, phone number, or member number." />
-          : results.length === 0 ? <EmptyState icon={UserX} title="No members found" description={staffOnly ? 'No staff accounts found.' : 'No results for "' + query + '".'} />
+          : !searched ? <EmptyState title="Search for a member" description="Enter a name, phone number, or member number." />
+          : results.length === 0 ? <EmptyState title="No members found" description={staffOnly ? 'No staff accounts found.' : 'No results for "' + query + '".'} />
           : (
             <div role="list" aria-label="Member search results">
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50"><span style={{ fontSize: '12px', color: '#64748B' }}>{results.length} result{results.length !== 1 ? 's' : ''}</span></div>
@@ -515,7 +541,7 @@ function MembersTab() {
   );
 }
 
-// ─── Orgs tab (rewritten) ─────────────────────────────────────────────────────
+// ─── Orgs tab ─────────────────────────────────────────────────────────────────
 function OrgsTab() {
   var [query, setQuery] = useState('');
   var [filterPlan, setFilterPlan] = useState('');
@@ -673,7 +699,7 @@ function OrgsTab() {
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? <TableSkeleton />
-          : sortedResults.length === 0 ? <EmptyState icon={Building2} title="No organizations found" description={searched ? 'No results match your search or filters.' : 'No organizations yet.'} action={hasFilters ? 'Clear filters' : null} onAction={clearFilters} />
+          : sortedResults.length === 0 ? <EmptyState title="No organizations found" description={searched ? 'No results match your search or filters.' : 'No organizations yet.'} action={hasFilters ? 'Clear filters' : null} onAction={clearFilters} />
           : (
             <div>
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -725,7 +751,7 @@ function OrgsTab() {
   );
 }
 
-// ─── Verifications tab (NEW) ──────────────────────────────────────────────────
+// ─── Verifications tab ────────────────────────────────────────────────────────
 function VerificationsTab(props) {
   var [verifications, setVerifications] = useState([]);
   var [loading, setLoading] = useState(true);
@@ -789,7 +815,7 @@ function VerificationsTab(props) {
           : verifications.length === 0 ? (
             filterStatus === 'pending'
               ? <div className="px-6 py-12 text-center"><CheckCircle size={36} className="text-green-500 mx-auto mb-3" aria-hidden="true" /><p style={{ fontWeight: 700, fontSize: '15px', color: '#0E1523', marginBottom: '4px' }}>Queue is clear</p><p style={{ fontSize: '13px', color: '#64748B' }}>No pending verification requests.</p></div>
-              : <EmptyState icon={ShieldCheck} title={'No ' + filterStatus + ' verifications'} description="None found for this filter." />
+              : <EmptyState title={'No ' + filterStatus + ' verifications'} description="None found for this filter." />
           ) : (
             <div role="list" aria-label="Verification requests">
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50"><span style={{ fontSize: '12px', color: '#64748B' }}>{verifications.length} {filterStatus !== 'all' ? filterStatus : ''} request{verifications.length !== 1 ? 's' : ''}</span></div>
@@ -942,7 +968,7 @@ function CategoryModal(props) {
   );
 }
 
-// ─── Contacts tab (rewritten) ─────────────────────────────────────────────────
+// ─── Contacts tab ─────────────────────────────────────────────────────────────
 function ContactsTab() {
   var [contacts, setContacts] = useState([]);
   var [loading, setLoading] = useState(true);
@@ -1188,8 +1214,8 @@ function ContactsTab() {
       )}
 
       {loading && <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" aria-busy="true"><TableSkeleton /></div>}
-      {!loading && contacts.length === 0 && <div className="bg-white border border-slate-200 rounded-xl"><EmptyState icon={Mail} title="No contacts yet" description="Contacts appear when people submit the landing page form." /></div>}
-      {!loading && contacts.length > 0 && filtered.length === 0 && <div className="bg-white border border-slate-200 rounded-xl"><EmptyState icon={Search} title="No contacts match your filters" description="Try adjusting your search or filters." action="Clear filters" onAction={function() { setSearch(''); setFilterCategory(''); setFilterRead(''); setDateFrom(''); setDateTo(''); }} /></div>}
+      {!loading && contacts.length === 0 && <div className="bg-white border border-slate-200 rounded-xl"><EmptyState title="No contacts yet" description="Contacts appear when people submit the landing page form." /></div>}
+      {!loading && contacts.length > 0 && filtered.length === 0 && <div className="bg-white border border-slate-200 rounded-xl"><EmptyState title="No contacts match your filters" description="Try adjusting your search or filters." action="Clear filters" onAction={function() { setSearch(''); setFilterCategory(''); setFilterRead(''); setDateFrom(''); setDateTo(''); }} /></div>}
       {!loading && filtered.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Marketing contacts">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
@@ -1298,7 +1324,496 @@ function ContactsTab() {
   );
 }
 
-// ─── Bug Reports tab (unchanged) ──────────────────────────────────────────────
+// ─── Manage Tags tab (TAG6) ───────────────────────────────────────────────────
+function ManageTagsTab() {
+  var [tags, setTags] = useState([]);
+  var [usageCounts, setUsageCounts] = useState({});
+  var [customKeywords, setCustomKeywords] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [loadingUsage, setLoadingUsage] = useState(true);
+  var [filterGroup, setFilterGroup] = useState('');
+  var [filterUnused, setFilterUnused] = useState(false);
+  var [search, setSearch] = useState('');
+  var [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  var [deletingId, setDeletingId] = useState(null);
+  var [promoting, setPromoting] = useState(null);
+
+  // Add form state
+  var [newLabel, setNewLabel] = useState('');
+  var [newGroup, setNewGroup] = useState(TAG_GROUP_NAMES[0]);
+  var [newAppliesTo, setNewAppliesTo] = useState([]);
+  var [saving, setSaving] = useState(false);
+
+  // Stats
+  var [totalContentItems, setTotalContentItems] = useState(0);
+
+  useEffect(function() { loadTags(); loadUsageCounts(); }, []);
+
+  async function loadTags() {
+    setLoading(true);
+    var res = await supabase.from('platform_tags').select('*').order('group_name').order('sort_order').order('label');
+    if (res.error) { mascotErrorToast('Failed to load tags.', 'Check your connection.'); }
+    else { setTags(res.data || []); }
+    setLoading(false);
+  }
+
+  async function loadUsageCounts() {
+    setLoadingUsage(true);
+    try {
+      // Fetch all tags arrays from all content tables in parallel
+      var results = await Promise.all([
+        supabase.from('events').select('tags, cause_areas'),
+        supabase.from('org_programs').select('tags'),
+        supabase.from('org_opportunities').select('tags'),
+        supabase.from('org_funding').select('tags'),
+        supabase.from('organizations').select('tags'),
+      ]);
+
+      var counts = {};
+      var allCustom = {};
+      var totalItems = 0;
+
+      // Load platform tag labels for custom keyword detection
+      var platformLabelsRes = await supabase.from('platform_tags').select('label');
+      var platformLabelSet = new Set((platformLabelsRes.data || []).map(function(t) { return t.label.toLowerCase(); }));
+
+      results.forEach(function(res) {
+        if (res.error || !res.data) return;
+        res.data.forEach(function(row) {
+          totalItems++;
+          // Handle both tags and cause_areas columns
+          var allTagArrays = [row.tags, row.cause_areas].filter(Boolean);
+          allTagArrays.forEach(function(tagArray) {
+            if (!Array.isArray(tagArray)) return;
+            tagArray.forEach(function(tag) {
+              if (!tag) return;
+              var tagLower = tag.toLowerCase();
+              // Count usage for all tags
+              counts[tag] = (counts[tag] || 0) + 1;
+              // Track custom keywords (not in platform_tags)
+              if (!platformLabelSet.has(tagLower)) {
+                allCustom[tag] = (allCustom[tag] || 0) + 1;
+              }
+            });
+          });
+        });
+      });
+
+      setUsageCounts(counts);
+      setTotalContentItems(totalItems);
+
+      // Top custom keywords sorted by frequency
+      var customList = Object.keys(allCustom).map(function(k) { return { keyword: k, count: allCustom[k] }; });
+      customList.sort(function(a, b) { return b.count - a.count; });
+      setCustomKeywords(customList.slice(0, 20));
+
+    } catch(err) {
+      mascotErrorToast('Failed to load usage data.');
+    }
+    setLoadingUsage(false);
+  }
+
+  async function handleAdd() {
+    if (!newLabel.trim()) { toast.error('Tag label is required.'); return; }
+    if (newAppliesTo.length === 0) { toast.error('Select at least one content type.'); return; }
+    // Check for duplicate
+    var duplicate = tags.find(function(t) { return t.label.toLowerCase() === newLabel.trim().toLowerCase() && t.group_name === newGroup; });
+    if (duplicate) { toast.error('A tag with that label already exists in this group.'); return; }
+    setSaving(true);
+    var res = await supabase.from('platform_tags').insert({
+      label: newLabel.trim(),
+      group_name: newGroup,
+      applies_to: newAppliesTo,
+      sort_order: 0,
+    }).select().single();
+    if (res.error) { mascotErrorToast('Failed to add tag.', res.error.message); setSaving(false); return; }
+    setTags(function(prev) { return prev.concat([res.data]).sort(function(a, b) { return a.group_name.localeCompare(b.group_name) || a.label.localeCompare(b.label); }); });
+    setNewLabel(''); setNewAppliesTo([]);
+    mascotSuccessToast('Tag added!', '"' + res.data.label + '" is now available as a platform tag.');
+    setSaving(false);
+  }
+
+  async function handleDelete(tag) {
+    setDeletingId(tag.id);
+    var res = await supabase.from('platform_tags').delete().eq('id', tag.id);
+    if (res.error) { mascotErrorToast('Failed to delete tag.', res.error.message); setDeletingId(null); return; }
+    setTags(function(prev) { return prev.filter(function(t) { return t.id !== tag.id; }); });
+    setDeleteConfirmId(null);
+    mascotSuccessToast('Tag retired.', '"' + tag.label + '" removed from platform tags.');
+    setDeletingId(null);
+  }
+
+  async function handlePromoteKeyword(keyword) {
+    setPromoting(keyword);
+    // Pre-fill the add form with the keyword
+    setNewLabel(keyword);
+    setNewGroup(TAG_GROUP_NAMES[0]);
+    setNewAppliesTo([]);
+    // Scroll to add form
+    var el = document.getElementById('add-tag-form');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setPromoting(null);
+  }
+
+  function toggleAppliesTo(val) {
+    setNewAppliesTo(function(prev) {
+      if (prev.includes(val)) return prev.filter(function(v) { return v !== val; });
+      return prev.concat([val]);
+    });
+  }
+
+  // Group tags
+  var groupedTags = {};
+  var filteredTags = tags.filter(function(t) {
+    var matchGroup = !filterGroup || t.group_name === filterGroup;
+    var matchSearch = !search || t.label.toLowerCase().includes(search.toLowerCase());
+    var matchUnused = !filterUnused || !(usageCounts[t.label] > 0);
+    return matchGroup && matchSearch && matchUnused;
+  });
+  filteredTags.forEach(function(t) {
+    if (!groupedTags[t.group_name]) groupedTags[t.group_name] = [];
+    groupedTags[t.group_name].push(t);
+  });
+
+  var totalTags = tags.length;
+  var unusedCount = tags.filter(function(t) { return !usageCounts[t.label]; }).length;
+  var usedCount = totalTags - unusedCount;
+  var topTagsByUsage = Object.keys(usageCounts)
+    .filter(function(label) { return tags.find(function(t) { return t.label === label; }); })
+    .map(function(label) { return { label: label, count: usageCounts[label] }; })
+    .sort(function(a, b) { return b.count - a.count; })
+    .slice(0, 10);
+
+  return (
+    <div>
+      {/* ── Summary stats ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#0E1523' }}>{totalTags}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginTop: '4px' }}>Platform Tags</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#16A34A' }}>{loadingUsage ? '—' : usedCount}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginTop: '4px' }}>In Use</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <div style={{ fontSize: '28px', fontWeight: 800, color: unusedCount > 0 ? '#D97706' : '#0E1523' }}>{loadingUsage ? '—' : unusedCount}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginTop: '4px' }}>Never Used</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#3B82F6' }}>{loadingUsage ? '—' : customKeywords.length}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#F5B731', marginTop: '4px' }}>Custom Tags in Use</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+        {/* ── Left: Tag list ── */}
+        <div className="xl:col-span-2 space-y-6">
+
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1" style={{ minWidth: '200px' }}>
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <label htmlFor="tag-search" className="sr-only">Search tags</label>
+              <input id="tag-search" type="search" value={search} onChange={function(e) { setSearch(e.target.value); }} placeholder="Search tags..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="relative">
+              <label htmlFor="tag-filter-group" className="sr-only">Filter by group</label>
+              <select id="tag-filter-group" value={filterGroup} onChange={function(e) { setFilterGroup(e.target.value); }} className="appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2.5 pr-7 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All groups</option>
+                {TAG_GROUP_NAMES.map(function(g) { return <option key={g} value={g}>{g}</option>; })}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+            </div>
+            <button onClick={function() { setFilterUnused(!filterUnused); }} className={'flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ' + (filterUnused ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:bg-amber-50')} aria-pressed={filterUnused}>
+              <TrendingDown size={13} aria-hidden="true" /> Never used only
+            </button>
+            <button onClick={function() { setSearch(''); setFilterGroup(''); setFilterUnused(false); loadTags(); loadUsageCounts(); }} className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors" aria-label="Refresh tag data">
+              <RefreshCw size={13} aria-hidden="true" /> Refresh
+            </button>
+          </div>
+
+          {/* Tag groups */}
+          {loading ? (
+            <div className="space-y-4">
+              {[1,2,3].map(function(i) { return <TagGroupSkeleton key={i} />; })}
+            </div>
+          ) : filteredTags.length === 0 ? (
+            <EmptyState title="No tags found" description={filterUnused ? 'All tags have been used at least once.' : 'No tags match your search or filters.'} action={(search || filterGroup || filterUnused) ? 'Clear filters' : null} onAction={function() { setSearch(''); setFilterGroup(''); setFilterUnused(false); }} />
+          ) : (
+            <div className="space-y-4" role="list" aria-label="Platform tags by group">
+              {Object.keys(groupedTags).sort().map(function(groupName) {
+                var groupTags = groupedTags[groupName];
+                return (
+                  <div key={groupName} className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="listitem">
+                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Layers size={14} className="text-slate-400" aria-hidden="true" />
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>{groupName}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '99px', padding: '1px 8px' }}>{groupTags.length}</span>
+                      </div>
+                    </div>
+                    <div className="px-5 py-4">
+                      <div className="flex flex-wrap gap-2" role="list" aria-label={groupName + ' tags'}>
+                        {groupTags.map(function(tag) {
+                          var count = usageCounts[tag.label] || 0;
+                          var isUnused = count === 0;
+                          var isDeleting = deletingId === tag.id;
+                          var isConfirming = deleteConfirmId === tag.id;
+                          return (
+                            <div key={tag.id} role="listitem" className={'flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full border transition-colors ' + (isUnused ? 'bg-slate-50 border-slate-200' : 'bg-blue-50 border-blue-200')} style={{ maxWidth: '100%' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 600, color: isUnused ? '#94A3B8' : '#1D4ED8', whiteSpace: 'nowrap' }}>{tag.label}</span>
+                              {/* Usage count badge */}
+                              {loadingUsage ? (
+                                <span className="w-8 h-4 rounded-full bg-slate-100 animate-pulse inline-block" aria-hidden="true" />
+                              ) : count > 0 ? (
+                                <span style={{ fontSize: '10px', fontWeight: 700, background: '#3B82F6', color: '#FFFFFF', borderRadius: '99px', padding: '1px 6px', whiteSpace: 'nowrap' }} aria-label={count + ' uses'}>{count}</span>
+                              ) : (
+                                <span style={{ fontSize: '10px', fontWeight: 600, background: '#F1F5F9', color: '#94A3B8', borderRadius: '99px', padding: '1px 6px', border: '1px solid #E2E8F0', whiteSpace: 'nowrap' }} aria-label="Unused">0</span>
+                              )}
+                              {/* Applies-to dots */}
+                              <div className="flex gap-0.5 ml-0.5" aria-label={'Applies to: ' + (tag.applies_to || []).join(', ')}>
+                                {(tag.applies_to || []).map(function(type) {
+                                  var colors = { event: '#3B82F6', program: '#8B5CF6', opportunity: '#22C55E', funding: '#F59E0B', org: '#EF4444' };
+                                  return <span key={type} style={{ width: '5px', height: '5px', borderRadius: '50%', background: colors[type] || '#94A3B8', display: 'inline-block', flexShrink: 0 }} title={type} />;
+                                })}
+                              </div>
+                              {/* Delete action */}
+                              {isConfirming ? (
+                                <div className="flex items-center gap-1 ml-0.5">
+                                  <button onClick={function() { handleDelete(tag); }} disabled={isDeleting} className="px-2 py-0.5 bg-red-500 text-white text-xs font-semibold rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors" aria-label={'Confirm retire ' + tag.label}>{isDeleting ? '...' : 'Retire'}</button>
+                                  <button onClick={function() { setDeleteConfirmId(null); }} className="px-2 py-0.5 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-full hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors" aria-label="Cancel">Cancel</button>
+                                </div>
+                              ) : (
+                                <button onClick={function() { setDeleteConfirmId(tag.id); }} className="w-5 h-5 flex items-center justify-center rounded-full text-slate-300 hover:text-red-400 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors ml-0.5 flex-shrink-0" aria-label={'Retire tag: ' + tag.label}>
+                                  <X size={10} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Add new tag form ── */}
+          <div id="add-tag-form" className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Add new platform tag">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <Plus size={14} className="text-blue-500" aria-hidden="true" />
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>Add New Platform Tag</span>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="new-tag-label" style={{ fontSize: '13px', fontWeight: 600, color: '#0E1523', display: 'block', marginBottom: '6px' }}>
+                    Tag Label <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <input
+                    id="new-tag-label"
+                    type="text"
+                    value={newLabel}
+                    onChange={function(e) { setNewLabel(e.target.value); }}
+                    placeholder="e.g. Food Justice"
+                    className="w-full bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    aria-required="true"
+                    onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+                  />
+                  <p style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>Exact label shown to admins in content forms.</p>
+                </div>
+                <div>
+                  <label htmlFor="new-tag-group" style={{ fontSize: '13px', fontWeight: 600, color: '#0E1523', display: 'block', marginBottom: '6px' }}>
+                    Group <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="new-tag-group"
+                      value={newGroup}
+                      onChange={function(e) { setNewGroup(e.target.value); }}
+                      className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-required="true"
+                    >
+                      {TAG_GROUP_NAMES.map(function(g) { return <option key={g} value={g}>{g}</option>; })}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: '#0E1523', marginBottom: '8px' }}>
+                  Applies to <span style={{ color: '#EF4444' }}>*</span>
+                </p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Content types this tag applies to">
+                  {TAG_APPLIES_TO_OPTIONS.map(function(opt) {
+                    var isChecked = newAppliesTo.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={function() { toggleAppliesTo(opt.value); }}
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (isChecked ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:bg-blue-50')}
+                        aria-pressed={isChecked}
+                      >
+                        {isChecked ? <Check size={12} aria-hidden="true" /> : <Square size={12} aria-hidden="true" />}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: '11px', color: '#64748B', marginTop: '6px' }}>Controls which content type modals show this tag group.</p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleAdd}
+                  disabled={saving || !newLabel.trim() || newAppliesTo.length === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  {saving ? 'Adding...' : 'Add Tag'}
+                </button>
+                {newLabel && (
+                  <button onClick={function() { setNewLabel(''); setNewAppliesTo([]); }} className="text-sm text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 rounded underline transition-colors">Clear</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: Insights panel ── */}
+        <div className="space-y-6">
+
+          {/* Top used platform tags */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Top used platform tags">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <BarChart size={14} className="text-blue-500" aria-hidden="true" />
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>Top Used Platform Tags</span>
+            </div>
+            {loadingUsage ? (
+              <div className="px-5 py-4 space-y-3">
+                {[1,2,3,4,5].map(function(i) { return <div key={i} className="h-6 rounded bg-slate-100 animate-pulse" aria-hidden="true" />; })}
+              </div>
+            ) : topTagsByUsage.length === 0 ? (
+              <div className="px-5 py-6 text-center">
+                <p style={{ fontSize: '13px', color: '#94A3B8' }}>No tag usage data yet.</p>
+              </div>
+            ) : (
+              <div className="px-5 py-4 space-y-2" role="list" aria-label="Most used tags">
+                {topTagsByUsage.map(function(item, idx) {
+                  var maxCount = topTagsByUsage[0].count;
+                  var pct = Math.round((item.count / maxCount) * 100);
+                  return (
+                    <div key={item.label} role="listitem" className="flex items-center gap-3">
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', width: '16px', textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#0E1523' }} className="truncate">{item.label}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#3B82F6', flexShrink: 0, marginLeft: '8px' }}>{item.count}</span>
+                        </div>
+                        <div style={{ height: '4px', background: '#F1F5F9', borderRadius: '99px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: pct + '%', background: '#3B82F6', borderRadius: '99px', transition: 'width 0.3s ease' }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Never used tags */}
+          {!loadingUsage && unusedCount > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden" role="region" aria-label="Unused platform tags">
+              <div className="px-5 py-4 border-b border-amber-100 flex items-center gap-2">
+                <AlertTriangle size={14} className="text-amber-600" aria-hidden="true" />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>{unusedCount} Never Used</span>
+                <span style={{ fontSize: '11px', color: '#B45309' }}>— consider retiring</span>
+              </div>
+              <div className="px-5 py-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {tags.filter(function(t) { return !usageCounts[t.label]; }).slice(0, 15).map(function(t) {
+                    return (
+                      <span key={t.id} style={{ fontSize: '11px', fontWeight: 600, color: '#B45309', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '99px', padding: '2px 8px' }}>
+                        {t.label}
+                      </span>
+                    );
+                  })}
+                  {unusedCount > 15 && <span style={{ fontSize: '11px', color: '#B45309' }}>+{unusedCount - 15} more — use "Never used only" filter</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Trending custom keywords */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden" role="region" aria-label="Trending custom tags from admins">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <Sparkles size={14} className="text-yellow-500" aria-hidden="true" />
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0E1523' }}>Trending Custom Tags</span>
+            </div>
+            <div className="px-5 py-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
+              <p style={{ fontSize: '12px', color: '#64748B' }}>Tags admins are adding that are NOT platform tags. Promote frequently-used ones to platform tags.</p>
+            </div>
+            {loadingUsage ? (
+              <div className="px-5 py-4 space-y-2">
+                {[1,2,3,4].map(function(i) { return <div key={i} className="h-8 rounded bg-slate-100 animate-pulse" aria-hidden="true" />; })}
+              </div>
+            ) : customKeywords.length === 0 ? (
+              <div className="px-5 py-6 text-center">
+                <p style={{ fontSize: '13px', color: '#94A3B8' }}>No custom tags found. All tags in use are platform tags.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100" role="list" aria-label="Custom keywords used by admins">
+                {customKeywords.map(function(item) {
+                  return (
+                    <div key={item.keyword} role="listitem" className="flex items-center justify-between px-5 py-2.5 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#0E1523' }} className="truncate">{item.keyword}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '99px', padding: '1px 6px', flexShrink: 0 }}>{item.count}x</span>
+                      </div>
+                      <button
+                        onClick={function() { handlePromoteKeyword(item.keyword); }}
+                        disabled={promoting === item.keyword}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-600 text-xs font-semibold rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex-shrink-0 ml-2"
+                        aria-label={'Promote ' + item.keyword + ' to platform tag'}
+                      >
+                        <ArrowUpCircle size={11} aria-hidden="true" />
+                        Promote
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="bg-white border border-slate-200 rounded-xl px-5 py-4" role="region" aria-label="Tag color legend">
+            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#94A3B8', marginBottom: '10px' }}>Content Type Legend</p>
+            <div className="space-y-1.5">
+              {TAG_APPLIES_TO_OPTIONS.map(function(opt) {
+                var colors = { event: '#3B82F6', program: '#8B5CF6', opportunity: '#22C55E', funding: '#F59E0B', org: '#EF4444' };
+                return (
+                  <div key={opt.value} className="flex items-center gap-2">
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: colors[opt.value], flexShrink: 0, display: 'inline-block' }} aria-hidden="true" />
+                    <span style={{ fontSize: '12px', color: '#475569' }}>{opt.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bug Reports tab ──────────────────────────────────────────────────────────
 function BugReportsTab() {
   var [reports, setReports] = useState([]);
   var [loading, setLoading] = useState(true);
@@ -1344,8 +1859,8 @@ function BugReportsTab() {
       </div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? <TableSkeleton />
-          : reports.length === 0 ? <EmptyState icon={Bug} title="No bug reports yet" description="Reports submitted through the beta form will appear here." />
-          : filtered.length === 0 ? <EmptyState icon={Filter} title="No reports match your filters" description="Try adjusting the status, type, or severity filter." action="Clear filters" onAction={function() { setFilterStatus(''); setFilterType(''); setFilterSeverity(''); }} />
+          : reports.length === 0 ? <EmptyState title="No bug reports yet" description="Reports submitted through the beta form will appear here." />
+          : filtered.length === 0 ? <EmptyState title="No reports match your filters" description="Try adjusting the status, type, or severity filter." action="Clear filters" onAction={function() { setFilterStatus(''); setFilterType(''); setFilterSeverity(''); }} />
           : (
             <div role="list" aria-label="Bug reports">
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50"><span style={{ fontSize: '12px', color: '#64748B' }}>{filtered.length} of {reports.length} report{reports.length !== 1 ? 's' : ''}</span></div>
@@ -1404,7 +1919,7 @@ function BugReportsTab() {
   );
 }
 
-// ─── Overview tab (modified — no verification queue, receives pendingVerifCount) ──
+// ─── Overview tab ─────────────────────────────────────────────────────────────
 function OverviewTab(props) {
   var pendingVerifCount = props.pendingVerifCount || 0;
   var [loading, setLoading] = useState(true);
@@ -1549,7 +2064,7 @@ function OverviewTab(props) {
         <SectionLabel>Revenue by Plan</SectionLabel>
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           {loading ? <div className="p-6">{[1,2,3].map(function(i) { return <div key={i} className="mb-3"><RowSkeleton /></div>; })}</div>
-            : planBreakdown.length === 0 ? <EmptyState icon={Zap} title="No paid subscriptions yet" description="Revenue breakdown appears once orgs start paying." />
+            : planBreakdown.length === 0 ? <EmptyState title="No paid subscriptions yet" description="Revenue breakdown appears once orgs start paying." />
             : (
               <table className="w-full" role="table" aria-label="Plan revenue breakdown">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">{['Plan', 'Orgs', 'MRR'].map(function(h) { return <th key={h} className="text-left px-6 py-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', color: '#F5B731' }} scope="col">{h}</th>; })}</tr></thead>
@@ -1597,7 +2112,7 @@ function OverviewTab(props) {
             <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50"><Clock size={13} className="text-slate-400" aria-hidden="true" /><span style={{ fontSize: '12px', color: '#64748B' }}>Most recently created orgs</span></div>
             <div className="divide-y divide-slate-100">
               {loading ? [1,2,3].map(function(i) { return <div key={i} className="px-5 py-3"><RowSkeleton /></div>; })
-                : recentOrgs.length === 0 ? <EmptyState icon={Building2} title="No organizations yet" description="New orgs will appear here." />
+                : recentOrgs.length === 0 ? <EmptyState title="No organizations yet" description="New orgs will appear here." />
                 : recentOrgs.map(function(org) {
                   return (
                     <div key={org.id} className="flex items-center gap-3 px-5 py-3">
@@ -1628,16 +2143,17 @@ export default function StaffDashboard() {
   var [unreadContactCount, setUnreadContactCount] = useState(0);
 
   var TABS = [
-    { key: 'overview',       label: 'Overview',       icon: BarChart2 },
-    { key: 'members',        label: 'Members',         icon: Users },
-    { key: 'orgs',           label: 'Organizations',   icon: Building2 },
-    { key: 'verifications',  label: 'Verifications',   icon: ShieldCheck, badgeKey: 'verif' },
-    { key: 'financials',     label: 'Financials',      icon: Receipt },
-    { key: 'promo_codes',    label: 'Promo Codes',     icon: Tag },
-    { key: 'goals',          label: 'Goals',           icon: TrendingUp },
-    { key: 'contacts',       label: 'Contacts',        icon: Mail, badgeKey: 'contacts' },
-    { key: 'bug_reports',    label: 'Bug Reports',     icon: Bug },
-    { key: 'content',        label: 'Content',         icon: FileText },
+    { key: 'overview',      label: 'Overview',      icon: BarChart2 },
+    { key: 'members',       label: 'Members',        icon: Users },
+    { key: 'orgs',          label: 'Organizations',  icon: Building2 },
+    { key: 'verifications', label: 'Verifications',  icon: ShieldCheck, badgeKey: 'verif' },
+    { key: 'financials',    label: 'Financials',     icon: Receipt },
+    { key: 'promo_codes',   label: 'Promo Codes',    icon: Tag },
+    { key: 'goals',         label: 'Goals',          icon: TrendingUp },
+    { key: 'contacts',      label: 'Contacts',       icon: Mail, badgeKey: 'contacts' },
+    { key: 'manage_tags',   label: 'Manage Tags',    icon: TagIcon },
+    { key: 'bug_reports',   label: 'Bug Reports',    icon: Bug },
+    { key: 'content',       label: 'Content',        icon: FileText },
   ];
 
   useEffect(function() {
@@ -1723,6 +2239,7 @@ export default function StaffDashboard() {
         {activeTab === 'promo_codes'   && <StaffPromoCodes />}
         {activeTab === 'goals'         && <StaffGoals />}
         {activeTab === 'contacts'      && <ContactsTab />}
+        {activeTab === 'manage_tags'   && <ManageTagsTab />}
         {activeTab === 'bug_reports'   && <BugReportsTab />}
         {activeTab === 'content'       && <ContentEditor staffUserId={staffMember && staffMember.user_id} />}
       </main>
