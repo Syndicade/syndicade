@@ -39,7 +39,7 @@ import SignupFormsList from './pages/SignupFormsList';
 import OrgPrograms from './pages/OrgPrograms';
 import ProgramDetail from './pages/ProgramDetail';
 import OrgOpportunities from './pages/OrgOpportunities';
-import OrgFunding from './pages/OrgFunding';
+import OrgFunding from './pages/Orgfunding';
 import FundingDiscovery from './pages/FundingDiscovery';
 import PublicOrganizationPage from './pages/PublicOrganizationPage';
 import OrgPageEditor from './pages/OrgPageEditor';
