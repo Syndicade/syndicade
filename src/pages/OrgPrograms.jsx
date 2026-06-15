@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
-import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw } from 'lucide-react';
+import { getContentModalTags } from '../lib/platformTags';
+import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw, Globe, Lock, ChevronDown } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
 var PAGE_BG  = '#F8FAFC';
@@ -16,77 +17,55 @@ var TEXT2    = '#475569';
 var MUTED    = '#64748B';
 var INPUT_BG = '#F8FAFC';
 
-// ── Predefined tags ───────────────────────────────────────────────────────────
-var PROGRAM_TAG_GROUPS = [
-  { label: 'Cause Area', tags: ['Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access',"Women's Rights",'Workforce Development','Youth Development'] },
-  { label: 'Audience Served', tags: ['Adults (18+)','Black Community','Children (under 13)','English Learners','Families','First-Generation Students','Foster Youth','General Public','Immigrants & Refugees','Indigenous Communities','Justice-Involved Individuals','Latino Community','LGBTQ+ Community','Low-Income Individuals','Men','Older Adults (65+)','People with Disabilities','Rural Communities','Seniors','Single Parents','Students','Survivors of Domestic Violence','Unhoused Individuals','Veterans','Women','Youth (13–17)'] },
-  { label: 'Activity Type', tags: ['Advocacy','Arts & Performance','Blood Drive','Career Fair','Celebration','Clothing Drive','Community Meeting','Conference','Cultural Event','Discussion / Dialogue','Distribution Event','Donation Drive','Education / Workshop','Faith-Based Event','Fieldtrip','Fundraiser','Health Fair','Hiring Event','Networking','Outdoor / Recreation','Panel Discussion','Resource Fair','Screening','Service Project','Social / Mixer','Sports & Athletics','Town Hall','Training','Vigil / Memorial','Volunteer Day','Webinar','Youth Event'] },
-  { label: 'Language', tags: ['Arabic','Bengali','Chinese (Cantonese)','Chinese (Mandarin)','English','French','German','Haitian Creole','Hindi','Hmong','Italian','Japanese','Korean','Nepali','Polish','Portuguese','Russian','Somali','Spanish','Swahili','Tagalog','Ukrainian','Urdu','Vietnamese'] },
+var PROGRAM_TYPES = [
+  'After-School Program',
+  'Class / Course',
+  'Distribution',
+  'Job Training',
+  'Support Group',
+  'Training',
+  'Workshop',
+  'Youth Program',
+  'Other',
 ];
 
-// ── SVG Icon ──────────────────────────────────────────────────────────────────
-function Icon(props) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={props.className || 'h-5 w-5'}
-      style={props.style}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      {Array.isArray(props.path)
-        ? props.path.map(function(d, i) {
-            return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={props.sw || 2} d={d} />;
-          })
-        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={props.sw || 2} d={props.path} />}
-    </svg>
-  );
-}
+var US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC',
+];
 
-var ICONS = {
-  programs:    ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
-  plus:        'M12 4v16m8-8H4',
-  pencil:      ['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
-  trash:       ['M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'],
-  copy:        ['M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'],
-  x:           'M6 18L18 6M6 6l12 12',
-  mail:        ['M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
-  user:        'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
-  users:       ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'],
-  clock:       ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
-  calendar:    ['M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
-  globe:       ['M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
-  tag:         ['M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z'],
-  search:      'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0',
-  chevronDown: 'M19 9l-7 7-7-7',
-  chevronUp:   'M5 15l7-7 7 7',
-  grip:        'M4 6h16M4 10h16M4 14h16',
-  check:       'M5 13l4 4L19 7',
-  settings:    ['M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', 'M15 12a3 3 0 11-6 0 3 3 0 016 0z'],
-  lock:        ['M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
-  unlock:      ['M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z'],
-  xCircle:     ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'],
-  refresh:     ['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'],
-  photo:       ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
-  dollar:      ['M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
-  upload:      ['M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
+var VISIBILITY_META = {
+  draft:        { label: 'Draft',         color: '#64748B', bg: '#F1F5F9' },
+  members_only: { label: 'Members Only',  color: '#D97706', bg: 'rgba(245,183,49,0.1)' },
+  groups:       { label: 'Groups',        color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
+  public:       { label: 'Public',        color: '#16A34A', bg: 'rgba(34,197,94,0.1)' },
 };
 
 var SUPABASE_URL = 'https://zktmhqrygknkodydbumq.supabase.co';
 
 var EMPTY_FORM = {
-  name: '', description: '', audience: '', schedule: '',
+  name: '', description: '', type: '', audience: '', schedule: '',
   start_date: '', end_date: '', start_time: '', end_time: '',
-  capacity: '', enrolled_count: '',
-  how_to_apply: '', contact_name: '', contact_email: '',
+  location_city: '', location_state: '',
+  capacity: '',
+  how_to_apply: '', apply_method: 'form', apply_url: '',
+  contact_name: '', contact_email: '',
   cost_type: 'free', cost_amount: '',
-  status: 'active', is_public: true, publish_to_discovery: false,
+  status: 'active',
   requires_approval: false, registration_open: true,
   show_enrolled_public: true,
   tags: [],
   image_url: '',
+  // publishing
+  visibility: 'draft',
+  group_ids: [],
+  show_on_website: false,
+  show_on_discover: false,
+  is_featured: false,
+  reach: 'local',
 };
 
 function formatDate(ds) {
@@ -130,6 +109,51 @@ function useFocusTrap(isActive) {
   }, [isActive]);
   return ref;
 }
+
+// ── SVG Icon ──────────────────────────────────────────────────────────────────
+function Icon(props) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={props.className || 'h-5 w-5'}
+      style={props.style}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      {Array.isArray(props.path)
+        ? props.path.map(function(d, i) {
+            return <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={props.sw || 2} d={d} />;
+          })
+        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={props.sw || 2} d={props.path} />}
+    </svg>
+  );
+}
+
+var ICONS = {
+  programs:    ['M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'],
+  plus:        'M12 4v16m8-8H4',
+  pencil:      ['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
+  trash:       ['M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'],
+  copy:        ['M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'],
+  x:           'M6 18L18 6M6 6l12 12',
+  user:        'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+  users:       ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'],
+  clock:       ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
+  calendar:    ['M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
+  globe:       ['M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
+  tag:         ['M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z'],
+  search:      'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0',
+  grip:        'M4 6h16M4 10h16M4 14h16',
+  check:       'M5 13l4 4L19 7',
+  lock:        ['M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
+  photo:       ['M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
+  dollar:      ['M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
+  upload:      ['M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
+  mapPin:      ['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z', 'M15 11a3 3 0 11-6 0 3 3 0 016 0z'],
+  refresh:     ['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'],
+};
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 function Toggle(props) {
@@ -193,15 +217,215 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
             <AlertTriangle size={20} style={{ color: '#EF4444' }} aria-hidden="true" />
           </div>
           <div>
-            <h2 id="confirm-prog-title" style={{ fontSize: '16px', fontWeight: 800, color: '#0E1523', margin: '0 0 4px' }}>{title}</h2>
-            <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{message}</p>
+            <h2 id="confirm-prog-title" style={{ fontSize: '16px', fontWeight: 800, color: TEXT, margin: '0 0 4px' }}>{title}</h2>
+            <p style={{ fontSize: '13px', color: TEXT2, margin: 0, lineHeight: 1.5 }}>{message}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '10px', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'transparent', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px', border: '1px solid ' + BDR, borderRadius: '8px', background: 'transparent', color: TEXT2, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancel</button>
           <button onClick={onConfirm} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', background: '#EF4444', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }} className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">{confirmLabel || 'Delete'}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Actions dropdown ──────────────────────────────────────────────────────────
+function ActionsDropdown({ onEdit, onDuplicate, onViewRegistrations, onDelete }) {
+  var [open, setOpen] = useState(false);
+  var ref = useRef(null);
+
+  useEffect(function() {
+    if (!open) return;
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    function handleKey(e) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return function() {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  function handleItem(fn) {
+    setOpen(false);
+    fn();
+  }
+
+  var menuItems = [
+    { label: 'Edit', fn: onEdit },
+    { label: 'Duplicate', fn: onDuplicate },
+    { label: 'View Registrations', fn: onViewRegistrations },
+    { divider: true },
+    { label: 'Delete', fn: onDelete, danger: true },
+  ];
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }} onClick={function(e) { e.preventDefault(); e.stopPropagation(); }}>
+      <button
+        onClick={function() { setOpen(function(v) { return !v; }); }}
+        style={{ fontSize: '12px', fontWeight: 500, color: TEXT2, background: PAGE_BG, border: '0.5px solid ' + BDR, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+        className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label="Program actions"
+      >
+        Actions <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: '4px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: '160px', zIndex: 10, padding: '4px 0' }}
+          role="menu"
+        >
+          {menuItems.map(function(item, i) {
+            if (item.divider) return <div key={i} style={{ height: '1px', background: BDR, margin: '4px 0' }} role="separator" />;
+            return (
+              <button
+                key={item.label}
+                role="menuitem"
+                onClick={function() { handleItem(item.fn); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: item.danger ? '#EF4444' : TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
+                className={item.danger ? 'hover:bg-red-50 focus:outline-none' : 'hover:bg-slate-50 focus:outline-none'}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PlatformTagPicker ─────────────────────────────────────────────────────────
+function PlatformTagPicker({ groups, selectedTags, onChange }) {
+  var [customInput, setCustomInput] = useState('');
+
+  var allPlatformTags = groups.reduce(function(acc, g) {
+    return acc.concat(g.tags);
+  }, []);
+
+  function toggleTag(tag) {
+    var tags = selectedTags || [];
+    var idx = tags.indexOf(tag);
+    onChange(idx === -1 ? tags.concat([tag]) : tags.filter(function(t) { return t !== tag; }));
+  }
+
+  function addCustom() {
+    var tag = customInput.trim();
+    if (!tag) return;
+    if ((selectedTags || []).indexOf(tag) === -1) {
+      onChange((selectedTags || []).concat([tag]));
+    }
+    setCustomInput('');
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {groups.map(function(group) {
+        return (
+          <div key={group.label}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '3px', margin: '0 0 8px' }}>{group.label}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {group.tags.map(function(tag) {
+                var selected = (selectedTags || []).indexOf(tag) !== -1;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={function() { toggleTag(tag); }}
+                    style={{
+                      padding: '4px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+                      border: selected ? '1.5px solid #3B82F6' : '1px solid ' + BDR,
+                      background: selected ? '#EFF6FF' : CARD_BG,
+                      color: selected ? '#3B82F6' : TEXT2,
+                      cursor: 'pointer',
+                    }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-pressed={selected}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Custom tag input */}
+      <div style={{ paddingTop: '12px', borderTop: '1px solid ' + BDR }}>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '3px', margin: '0 0 8px' }}>Custom Tag</p>
+        <p style={{ fontSize: '11px', color: MUTED, margin: '0 0 8px' }}>Helps people find this listing on Discover pages.</p>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            type="text"
+            value={customInput}
+            onChange={function(e) { setCustomInput(e.target.value); }}
+            onKeyDown={function(e) {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustom();
+              }
+            }}
+            placeholder="Type a tag and press Enter"
+            aria-label="Add custom tag"
+            style={{ flex: 1, padding: '8px 12px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box' }}
+            className="focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={addCustom}
+            style={{ padding: '8px 14px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+
+      {/* Selected tags summary */}
+      {(selectedTags || []).length > 0 && (
+        <div style={{ paddingTop: '12px', borderTop: '1px solid ' + BDR }}>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '3px', margin: '0 0 8px' }}>Selected Tags</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {(selectedTags || []).map(function(tag) {
+              var isPlatform = allPlatformTags.indexOf(tag) !== -1;
+              return (
+                <span
+                  key={tag}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600,
+                    background: isPlatform ? '#EFF6FF' : '#0E1523',
+                    color: isPlatform ? '#3B82F6' : '#FFFFFF',
+                    border: isPlatform ? '1px solid #BFDBFE' : 'none',
+                  }}
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={function() { onChange((selectedTags || []).filter(function(t) { return t !== tag; })); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: isPlatform ? '#3B82F6' : 'rgba(255,255,255,0.7)', padding: '0', lineHeight: 1, display: 'flex' }}
+                    aria-label={'Remove tag ' + tag}
+                    className="focus:outline-none rounded"
+                  >
+                    <Icon path={ICONS.x} className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+            })}
+            <button
+              type="button"
+              onClick={function() { onChange([]); }}
+              style={{ fontSize: '11px', color: MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: '3px 6px', borderRadius: '4px' }}
+              className="hover:text-red-500 focus:outline-none"
+            >
+              Clear all
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -273,10 +497,10 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
 
   function statusBadge(status) {
     var cfg = {
-      enrolled:  { bg: 'rgba(34,197,94,0.1)',  color: '#22C55E', label: 'Enrolled' },
-      pending:   { bg: 'rgba(245,183,49,0.15)', color: '#B45309', label: 'Pending' },
-      declined:  { bg: 'rgba(239,68,68,0.1)',   color: '#EF4444', label: 'Declined' },
-      cancelled: { bg: 'rgba(100,116,139,0.1)', color: '#64748B', label: 'Cancelled' },
+      enrolled:  { bg: 'rgba(34,197,94,0.1)',   color: '#22C55E', label: 'Enrolled' },
+      pending:   { bg: 'rgba(245,183,49,0.15)',  color: '#B45309', label: 'Pending' },
+      declined:  { bg: 'rgba(239,68,68,0.1)',    color: '#EF4444', label: 'Declined' },
+      cancelled: { bg: 'rgba(100,116,139,0.1)',  color: '#64748B', label: 'Cancelled' },
     };
     var c = cfg[status] || cfg.pending;
     return <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', background: c.bg, color: c.color }}>{c.label}</span>;
@@ -302,7 +526,6 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
             {!props.showActions && statusBadge(r.status)}
           </div>
         </div>
-        {/* Admin notes */}
         {isEditing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <textarea
@@ -322,7 +545,7 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
         ) : (
           <button
             onClick={function() { setEditingNoteId(r.id); setNoteText(r.notes || ''); }}
-            style={{ alignSelf: 'flex-start', fontSize: '11px', color: r.notes ? '#3B82F6' : MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: '0', textDecoration: r.notes ? 'none' : 'none' }}
+            style={{ alignSelf: 'flex-start', fontSize: '11px', color: r.notes ? '#3B82F6' : MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: '0' }}
             className="hover:underline focus:outline-none"
             aria-label={(r.notes ? 'Edit note for ' : 'Add note for ') + r.member_name}
           >
@@ -409,19 +632,27 @@ function OrgPrograms() {
   var [loadError, setLoadError]         = useState(false);
   var [organization, setOrganization]   = useState(null);
   var [currentUserId, setCurrentUserId] = useState(null);
+  var [orgGroups, setOrgGroups]         = useState([]);
 
   var [savedIds, setSavedIds]               = useState(new Set());
   var [myRegistrations, setMyRegistrations] = useState({});
 
   // Modal
-  var [showModal, setShowModal]             = useState(false);
-  var [editingProgram, setEditingProgram]   = useState(null);
-  var [form, setForm]                       = useState(EMPTY_FORM);
-  var [saving, setSaving]                   = useState(false);
-  var [newTagInput, setNewTagInput]         = useState('');
-  var [progTagInput, setProgTagInput] = useState('');
-  var [showSettingsTab, setShowSettingsTab] = useState(false);
+  var [showModal, setShowModal]           = useState(false);
+  var [editingProgram, setEditingProgram] = useState(null);
+  var [form, setForm]                     = useState(EMPTY_FORM);
+  var [saving, setSaving]                 = useState(false);
+  var [activeTab, setActiveTab]           = useState('details');
   var modalTrapRef = useFocusTrap(showModal);
+
+  // Tag groups from DB
+  var [tagGroups, setTagGroups] = useState({ causeAreas: [], audience: [], activityTypes: [], languages: [] });
+  // Org default tags
+  var [orgDefaults, setOrgDefaults] = useState(null);
+
+  useEffect(function() {
+    getContentModalTags('program').then(function(g) { setTagGroups(g); });
+  }, []);
 
   // Image upload
   var [imageFile, setImageFile]       = useState(null);
@@ -431,7 +662,6 @@ function OrgPrograms() {
 
   var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   var [drawerProgram, setDrawerProgram] = useState(null);
-  var [expandedId, setExpandedId]       = useState(null);
 
   // Drag & drop
   var [draggingId, setDraggingId]   = useState(null);
@@ -467,9 +697,22 @@ function OrgPrograms() {
       if (!authResult.data.user) { navigate('/login'); return; }
       setCurrentUserId(authResult.data.user.id);
 
-      var orgResult = await supabase.from('organizations').select('id, name, logo_url').eq('id', organizationId).single();
+      var orgResult = await supabase
+        .from('organizations')
+        .select('id, name, logo_url, tag_defaults')
+        .eq('id', organizationId)
+        .single();
       if (orgResult.error) throw orgResult.error;
       setOrganization(orgResult.data);
+      setOrgDefaults(orgResult.data.tag_defaults || null);
+
+      var groupsResult = await supabase
+        .from('org_groups')
+        .select('id, name')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name');
+      setOrgGroups(groupsResult.data || []);
 
       await Promise.all([
         fetchPrograms(),
@@ -485,7 +728,12 @@ function OrgPrograms() {
   }
 
   async function fetchPrograms() {
-    var result = await supabase.from('org_programs').select('*').eq('organization_id', organizationId).order('sort_order').order('created_at');
+    var result = await supabase
+      .from('org_programs')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('sort_order')
+      .order('created_at');
     if (result.error) throw result.error;
     setPrograms(result.data || []);
   }
@@ -497,7 +745,11 @@ function OrgPrograms() {
   }
 
   async function fetchMyRegistrations(uid) {
-    var result = await supabase.from('program_registrations').select('program_id, id, status').eq('user_id', uid).eq('organization_id', organizationId);
+    var result = await supabase
+      .from('program_registrations')
+      .select('program_id, id, status')
+      .eq('user_id', uid)
+      .eq('organization_id', organizationId);
     if (result.error) return;
     var map = {};
     (result.data || []).forEach(function(r) { map[r.program_id] = r; });
@@ -538,8 +790,7 @@ function OrgPrograms() {
   function openNew() {
     setEditingProgram(null);
     setForm(EMPTY_FORM);
-    setNewTagInput('');
-    setShowSettingsTab(false);
+    setActiveTab('details');
     setImageFile(null);
     setImagePreview('');
     setShowModal(true);
@@ -548,120 +799,132 @@ function OrgPrograms() {
   function openEdit(program) {
     setEditingProgram(program);
     setForm({
-      name:                 program.name || '',
-      description:          program.description || '',
-      audience:             program.audience || '',
-      schedule:             program.schedule || '',
-      start_date:           program.start_date || '',
-      end_date:             program.end_date || '',
-      start_time:           program.start_time || '',
-      end_time:             program.end_time || '',
-      capacity:             program.capacity != null ? String(program.capacity) : '',
-      enrolled_count:       '',
-      how_to_apply:         program.how_to_apply || '',
-      contact_name:         program.contact_name || '',
-      contact_email:        program.contact_email || '',
-      cost_type:            program.cost_type || 'free',
-      cost_amount:          program.cost_amount != null ? String(program.cost_amount) : '',
-      status:               program.status || 'active',
-      is_public:            program.is_public !== false,
-      publish_to_discovery: program.publish_to_discovery === true,
-      requires_approval:    program.requires_approval === true,
-      registration_open:    program.registration_open !== false,
+      name:              program.name || '',
+      description:       program.description || '',
+      type:              program.type || '',
+      audience:          program.audience || '',
+      schedule:          program.schedule || '',
+      start_date:        program.start_date || '',
+      end_date:          program.end_date || '',
+      start_time:        program.start_time || '',
+      end_time:          program.end_time || '',
+      location_city:     program.location_city || '',
+      location_state:    program.location_state || '',
+      capacity:          program.capacity != null ? String(program.capacity) : '',
+      how_to_apply:      program.how_to_apply || '',
+      apply_method:      program.apply_method || 'form',
+      apply_url:         program.apply_url || '',
+      contact_name:      program.contact_name || '',
+      contact_email:     program.contact_email || '',
+      cost_type:         program.cost_type || 'free',
+      cost_amount:       program.cost_amount != null ? String(program.cost_amount) : '',
+      status:            program.status || 'active',
+      requires_approval: program.requires_approval === true,
+      registration_open: program.registration_open !== false,
       show_enrolled_public: program.show_enrolled_public !== false,
-      tags:                 program.tags || [],
-      image_url:            program.image_url || '',
+      tags:              program.tags || [],
+      image_url:         program.image_url || '',
+      // publishing
+      visibility:        program.visibility || (program.is_public ? 'public' : 'draft'),
+      group_ids:         program.group_ids || [],
+      show_on_website:   program.show_on_website === true,
+      show_on_discover:  program.show_on_discover === true,
+      is_featured:       program.is_featured === true,
+      reach:             program.reach || 'local',
     });
-    setNewTagInput('');
-    setShowSettingsTab(false);
+    setActiveTab('details');
     setImageFile(null);
     setImagePreview(program.image_url || '');
     setShowModal(true);
   }
 
-  async function saveProgram() {
-    if (!form.name.trim()) { toast.error('Program name is required'); return; }
-    setSaving(true);
+  function applyDefaultTags() {
+    if (!orgDefaults || !orgDefaults.program) return;
+    var defaults = orgDefaults.program || [];
+    setForm(function(prev) {
+      var merged = (prev.tags || []).slice();
+      defaults.forEach(function(tag) {
+        if (merged.indexOf(tag) === -1) merged.push(tag);
+      });
+      return Object.assign({}, prev, { tags: merged });
+    });
+    mascotSuccessToast('Default tags applied.');
+  }
 
-    var safeForm = Object.assign({}, form);
-    if (!safeForm.is_public) safeForm.publish_to_discovery = false;
-
-    // If new program, insert first to get ID for image path
-    var programId = editingProgram ? editingProgram.id : null;
-    var imageUrl  = form.image_url || null;
-
-    if (!editingProgram && imageFile) {
-      // Insert without image first to get ID
-      var insertPayload = {
-        organization_id:      organizationId,
-        name:                 safeForm.name.trim(),
-        description:          safeForm.description || null,
-        audience:             safeForm.audience || null,
-        schedule:             safeForm.schedule || null,
-        start_date:           safeForm.start_date || null,
-        end_date:             safeForm.end_date || null,
-        start_time:           safeForm.start_time || null,
-        end_time:             safeForm.end_time || null,
-        capacity:             safeForm.capacity !== '' ? parseInt(safeForm.capacity, 10) : null,
-        how_to_apply:         safeForm.how_to_apply || null,
-        contact_name:         safeForm.contact_name || null,
-        contact_email:        safeForm.contact_email || null,
-        cost_type:            safeForm.cost_type,
-        cost_amount:          safeForm.cost_type !== 'free' && safeForm.cost_amount !== '' ? parseFloat(safeForm.cost_amount) : null,
-        status:               safeForm.status,
-        is_public:            safeForm.is_public,
-        publish_to_discovery: safeForm.publish_to_discovery,
-        requires_approval:    safeForm.requires_approval,
-        registration_open:    safeForm.registration_open,
-        show_enrolled_public: safeForm.show_enrolled_public,
-        tags:                 safeForm.tags || [],
-        image_url:            null,
-        updated_at:           new Date().toISOString(),
-      };
-      var initRes = await supabase.from('org_programs').insert(insertPayload).select('id').single();
-      if (initRes.error) { setSaving(false); mascotErrorToast('Failed to save program.'); return; }
-      programId = initRes.data.id;
-      imageUrl  = await uploadImage(programId);
-      await supabase.from('org_programs').update({ image_url: imageUrl }).eq('id', programId);
-      setSaving(false);
-      mascotSuccessToast('Program created!');
-      setShowModal(false);
-      fetchPrograms();
-      notifyNewProgram(safeForm.name.trim());
-      return;
-    }
-
-    // Upload image for existing program or new without image
-    if (imageFile) {
-      imageUrl = await uploadImage(editingProgram ? editingProgram.id : programId);
-    }
-
-    var payload = {
+  function buildPayload(safeForm, imageUrl) {
+    return {
       organization_id:      organizationId,
       name:                 safeForm.name.trim(),
       description:          safeForm.description || null,
+      type:                 safeForm.type || null,
       audience:             safeForm.audience || null,
       schedule:             safeForm.schedule || null,
       start_date:           safeForm.start_date || null,
       end_date:             safeForm.end_date || null,
       start_time:           safeForm.start_time || null,
       end_time:             safeForm.end_time || null,
+      location_city:        safeForm.location_city || null,
+      location_state:       safeForm.location_state || null,
       capacity:             safeForm.capacity !== '' ? parseInt(safeForm.capacity, 10) : null,
       how_to_apply:         safeForm.how_to_apply || null,
+      apply_method:         safeForm.apply_method || 'form',
+      apply_url:            safeForm.apply_url || null,
       contact_name:         safeForm.contact_name || null,
       contact_email:        safeForm.contact_email || null,
       cost_type:            safeForm.cost_type,
       cost_amount:          safeForm.cost_type !== 'free' && safeForm.cost_amount !== '' ? parseFloat(safeForm.cost_amount) : null,
       status:               safeForm.status,
-      is_public:            safeForm.is_public,
-      publish_to_discovery: safeForm.publish_to_discovery,
       requires_approval:    safeForm.requires_approval,
       registration_open:    safeForm.registration_open,
       show_enrolled_public: safeForm.show_enrolled_public,
       tags:                 safeForm.tags || [],
       image_url:            imageUrl,
+      // new publishing columns
+      visibility:           safeForm.visibility,
+      group_ids:            safeForm.group_ids || [],
+      show_on_website:      safeForm.show_on_website,
+      show_on_discover:     safeForm.show_on_discover,
+      is_featured:          safeForm.is_featured,
+      reach:                safeForm.reach || 'local',
+      // keep legacy columns in sync
+      is_public:            safeForm.visibility !== 'draft',
+      publish_to_discovery: safeForm.show_on_discover,
       updated_at:           new Date().toISOString(),
     };
+  }
+
+  async function saveProgram(asDraft) {
+    if (!form.name.trim()) { toast.error('Program name is required.'); return; }
+    setSaving(true);
+
+    var safeForm = Object.assign({}, form);
+    if (asDraft) safeForm.visibility = 'draft';
+
+    var isNew = !editingProgram;
+    var programId = editingProgram ? editingProgram.id : null;
+    var imageUrl  = form.image_url || null;
+
+    // New program: insert first to get ID for image path
+    if (isNew && imageFile) {
+      var initPayload = buildPayload(safeForm, null);
+      var initRes = await supabase.from('org_programs').insert(initPayload).select('id').single();
+      if (initRes.error) { setSaving(false); mascotErrorToast('Failed to save program.', 'Check your connection and try again.'); return; }
+      programId = initRes.data.id;
+      imageUrl  = await uploadImage(programId);
+      await supabase.from('org_programs').update({ image_url: imageUrl }).eq('id', programId);
+      setSaving(false);
+      mascotSuccessToast(asDraft ? 'Program saved as draft.' : 'Program created!');
+      setShowModal(false);
+      fetchPrograms();
+      if (!asDraft && safeForm.visibility !== 'draft') notifyNewProgram(safeForm.name.trim());
+      return;
+    }
+
+    if (imageFile) {
+      imageUrl = await uploadImage(editingProgram ? editingProgram.id : programId);
+    }
+
+    var payload = buildPayload(safeForm, imageUrl);
 
     var result = editingProgram
       ? await supabase.from('org_programs').update(payload).eq('id', editingProgram.id)
@@ -669,10 +932,14 @@ function OrgPrograms() {
 
     setSaving(false);
     if (result.error) { mascotErrorToast('Failed to save program.', 'Check your connection and try again.'); return; }
-    mascotSuccessToast(editingProgram ? 'Program updated!' : 'Program created!');
+
+    mascotSuccessToast(
+      asDraft ? 'Program saved as draft.' :
+      editingProgram ? 'Program updated!' : 'Program created!'
+    );
     setShowModal(false);
     fetchPrograms();
-    if (!editingProgram) notifyNewProgram(safeForm.name.trim());
+    if (!editingProgram && !asDraft && safeForm.visibility !== 'draft') notifyNewProgram(safeForm.name.trim());
   }
 
   async function notifyNewProgram(name) {
@@ -707,42 +974,24 @@ function OrgPrograms() {
   }
 
   async function copyProgram(program) {
-    var payload = {
-      organization_id: organizationId, name: program.name + ' (Copy)',
-      description: program.description || null, audience: program.audience || null,
-      schedule: program.schedule || null, start_date: program.start_date || null,
-      end_date: program.end_date || null, start_time: program.start_time || null,
-      end_time: program.end_time || null, capacity: program.capacity || null,
-      how_to_apply: program.how_to_apply || null, contact_name: program.contact_name || null,
-      contact_email: program.contact_email || null, cost_type: program.cost_type || 'free',
-      cost_amount: program.cost_amount || null, status: program.status,
-      is_public: false, publish_to_discovery: false, requires_approval: program.requires_approval,
-      registration_open: program.registration_open, show_enrolled_public: program.show_enrolled_public !== false,
-      tags: program.tags || [], image_url: program.image_url || null,
-      sort_order: programs.length, updated_at: new Date().toISOString(),
-    };
+    var payload = Object.assign({}, program, {
+      id: undefined,
+      name: program.name + ' (Copy)',
+      visibility: 'draft',
+      is_public: false,
+      publish_to_discovery: false,
+      show_on_website: false,
+      show_on_discover: false,
+      is_featured: false,
+      sort_order: programs.length,
+      updated_at: new Date().toISOString(),
+    });
+    delete payload.id;
+    delete payload.created_at;
     var result = await supabase.from('org_programs').insert(payload);
     if (result.error) { mascotErrorToast('Failed to copy program.', result.error.message); return; }
-    mascotSuccessToast('Program copied — it is hidden until you publish it.');
+    mascotSuccessToast('Program copied — it is saved as a draft.');
     fetchPrograms();
-  }
-
-  // ── Visibility toggles ────────────────────────────────────────────────────
-  async function togglePublic(program) {
-    var updates = { is_public: !program.is_public };
-    if (!updates.is_public) updates.publish_to_discovery = false;
-    var result = await supabase.from('org_programs').update(updates).eq('id', program.id);
-    if (result.error) { mascotErrorToast('Failed to update visibility.'); return; }
-    setPrograms(function(prev) { return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, updates) : p; }); });
-  }
-
-  async function toggleDiscovery(program) {
-    if (!program.is_public) { toast.error('Enable "Show on org page" first'); return; }
-    var newVal = !program.publish_to_discovery;
-    var result = await supabase.from('org_programs').update({ publish_to_discovery: newVal }).eq('id', program.id);
-    if (result.error) { mascotErrorToast('Failed to update Discover visibility.'); return; }
-    setPrograms(function(prev) { return prev.map(function(p) { return p.id === program.id ? Object.assign({}, p, { publish_to_discovery: newVal }) : p; }); });
-    mascotSuccessToast(newVal ? 'Added to Discover.' : 'Removed from Discover.');
   }
 
   // ── Bookmark ──────────────────────────────────────────────────────────────
@@ -762,74 +1011,67 @@ function OrgPrograms() {
   }
 
   // ── Registration ──────────────────────────────────────────────────────────
-async function handleRegister(e, program) {
-  e.preventDefault(); e.stopPropagation();
-  if (!currentUserId) { navigate('/login'); return; }
+  async function handleRegister(e, program) {
+    e.preventDefault(); e.stopPropagation();
+    if (!currentUserId) { navigate('/login'); return; }
 
-  // Paid programs — route through Stripe
-  if (program.cost_type === 'paid' && program.cost_amount && parseFloat(program.cost_amount) > 0) {
-    var orgResult = await supabase.from('organizations').select('stripe_connect_account_id, stripe_connect_status').eq('id', organizationId).single();
-    var hasConnect = orgResult.data && orgResult.data.stripe_connect_account_id && orgResult.data.stripe_connect_status === 'active';
-    if (!hasConnect) { toast.error('This program cannot accept payments right now.'); return; }
-    try {
-      var authRes = await supabase.auth.getSession();
-      var token = authRes.data.session ? authRes.data.session.access_token : '';
-      var res = await fetch(SUPABASE_URL + '/functions/v1/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({
-          type: 'program',
-          program_id: program.id,
-          organization_id: organizationId,
-          success_url: window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=success',
-          cancel_url: window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=cancelled',
-        }),
-      });
-      var data = await res.json();
-      if (!res.ok || !data.url) { mascotErrorToast('Could not start checkout.', data.error || 'Please try again.'); return; }
-      window.location.href = data.url;
-      return;
-    } catch(err) {
-      mascotErrorToast('Checkout failed.', 'Check your connection and try again.');
+    if (program.cost_type === 'paid' && program.cost_amount && parseFloat(program.cost_amount) > 0) {
+      var orgResult = await supabase.from('organizations').select('stripe_connect_account_id, stripe_connect_status').eq('id', organizationId).single();
+      var hasConnect = orgResult.data && orgResult.data.stripe_connect_account_id && orgResult.data.stripe_connect_status === 'active';
+      if (!hasConnect) { toast.error('This program cannot accept payments right now.'); return; }
+      try {
+        var authRes = await supabase.auth.getSession();
+        var token = authRes.data.session ? authRes.data.session.access_token : '';
+        var res = await fetch(SUPABASE_URL + '/functions/v1/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            type: 'program', program_id: program.id, organization_id: organizationId,
+            success_url: window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=success',
+            cancel_url:  window.location.origin + '/organizations/' + organizationId + '/programs/' + program.id + '?payment=cancelled',
+          }),
+        });
+        var data = await res.json();
+        if (!res.ok || !data.url) { mascotErrorToast('Could not start checkout.', data.error || 'Please try again.'); return; }
+        window.location.href = data.url;
+        return;
+      } catch(err) {
+        mascotErrorToast('Checkout failed.', 'Check your connection and try again.');
+        return;
+      }
+    }
+
+    var countRes = await supabase.from('program_registrations').select('id', { count: 'exact', head: true }).eq('program_id', program.id).eq('status', 'enrolled');
+    var cap = program.capacity;
+    if (cap != null && countRes.count >= cap) { toast.error('This program is full.'); return; }
+    var status = program.requires_approval ? 'pending' : 'enrolled';
+    var result = await supabase.from('program_registrations').insert({
+      program_id: program.id, user_id: currentUserId, organization_id: organizationId,
+      status: status, payment_status: 'not_required',
+    });
+    if (result.error) {
+      if (result.error.code === '23505') { toast.error('You are already registered.'); return; }
+      mascotErrorToast('Registration failed.', 'Please try again.');
       return;
     }
+    setMyRegistrations(function(prev) {
+      var next = Object.assign({}, prev);
+      next[program.id] = { program_id: program.id, status: status };
+      return next;
+    });
+    mascotSuccessToast(
+      status === 'enrolled' ? 'Registered!' : 'Request submitted!',
+      status === 'enrolled' ? 'You are now enrolled in ' + program.name + '.' : 'Your registration is pending approval.'
+    );
+    try {
+      var notifModule = await import('../lib/notificationService');
+      var authRes2 = await supabase.auth.getUser();
+      var membersRes = await supabase.from('members').select('first_name, last_name').eq('user_id', authRes2.data.user.id).single();
+      var memberName = membersRes.data ? membersRes.data.first_name + ' ' + membersRes.data.last_name : 'A member';
+      await notifModule.notifyOrgAdmins({ organizationId, type: 'program_registration', title: program.name, message: memberName + (status === 'enrolled' ? ' registered for ' : ' requested to join ') + program.name + '.', link: '/organizations/' + organizationId + '/programs', excludeUserId: currentUserId });
+      window.dispatchEvent(new CustomEvent('notificationCreated'));
+    } catch(ne) { console.error('Registration notification failed:', ne); }
   }
-
-  // Free / donation programs — direct insert
-  var countRes = await supabase.from('program_registrations').select('id', { count: 'exact', head: true }).eq('program_id', program.id).eq('status', 'enrolled');
-  var cap = program.capacity;
-  if (cap != null && countRes.count >= cap) { toast.error('This program is full.'); return; }
-  var status = program.requires_approval ? 'pending' : 'enrolled';
-  var result = await supabase.from('program_registrations').insert({
-    program_id: program.id,
-    user_id: currentUserId,
-    organization_id: organizationId,
-    status: status,
-    payment_status: 'not_required',
-  });
-  if (result.error) {
-    if (result.error.code === '23505') { toast.error('You are already registered.'); return; }
-    mascotErrorToast('Registration failed.', 'Please try again.');
-    return;
-  }
-  setMyRegistrations(function(prev) {
-    var next = Object.assign({}, prev);
-    next[program.id] = { program_id: program.id, status: status };
-    return next;
-  });
-  mascotSuccessToast(
-    status === 'enrolled' ? 'Registered!' : 'Request submitted!',
-    status === 'enrolled' ? 'You are now enrolled in ' + program.name + '.' : 'Your registration is pending approval.'
-  );
-  try {
-    var notifModule = await import('../lib/notificationService');
-    var authRes2 = await supabase.auth.getUser();
-    var membersRes = await supabase.from('members').select('first_name, last_name').eq('user_id', authRes2.data.user.id).single();
-    var memberName = membersRes.data ? membersRes.data.first_name + ' ' + membersRes.data.last_name : 'A member';
-    await notifModule.notifyOrgAdmins({ organizationId, type: 'program_registration', title: program.name, message: memberName + (status === 'enrolled' ? ' registered for ' : ' requested to join ') + program.name + '.', link: '/organizations/' + organizationId + '/programs', excludeUserId: currentUserId });
-    window.dispatchEvent(new CustomEvent('notificationCreated'));
-  } catch(ne) { console.error('Registration notification failed:', ne); }
-}
 
   async function handleCancelRegistration(e, program) {
     e.preventDefault(); e.stopPropagation();
@@ -849,36 +1091,12 @@ async function handleRegister(e, program) {
     );
   }
 
-  // ── Tags ──────────────────────────────────────────────────────────────────
-  function toggleTag(tag) {
-    setForm(function(prev) {
-      var tags = prev.tags || [];
-      var idx  = tags.indexOf(tag);
-      return Object.assign({}, prev, { tags: idx === -1 ? tags.concat([tag]) : tags.filter(function(t) { return t !== tag; }) });
-    });
-  }
-
-  function addCustomTag() {
-    var tag = newTagInput.trim();
-    if (!tag) return;
-    setForm(function(prev) {
-      var tags = prev.tags || [];
-      if (tags.indexOf(tag) === -1) tags = tags.concat([tag]);
-      return Object.assign({}, prev, { tags });
-    });
-    setNewTagInput('');
-  }
-
-  function removeTag(tag) {
-    setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).filter(function(t) { return t !== tag; }) }); });
-  }
-
   function setField(key, value) {
     setForm(function(prev) {
       var update = {};
       update[key] = value;
-      if (key === 'is_public' && !value) update.publish_to_discovery = false;
       if (key === 'cost_type' && value === 'free') update.cost_amount = '';
+      if (key === 'visibility' && value !== 'groups') update.group_ids = [];
       return Object.assign({}, prev, update);
     });
   }
@@ -921,7 +1139,7 @@ async function handleRegister(e, program) {
 
   var displayPrograms = programs
     .filter(function(p) {
-      if (!isAdmin && !p.is_public) return false;
+      if (!isAdmin && p.visibility === 'draft') return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (searchQuery.trim()) {
         var q = searchQuery.toLowerCase();
@@ -941,16 +1159,37 @@ async function handleRegister(e, program) {
       return (a.sort_order || 0) - (b.sort_order || 0);
     });
 
-  var inputStyle = { width: '100%', padding: '8px 12px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT, outline: 'none', boxSizing: 'border-box' };
-  var labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '6px' };
+  var inputStyle = {
+    width: '100%', padding: '8px 12px', background: INPUT_BG,
+    border: '1px solid ' + BDR, borderRadius: '8px',
+    fontSize: '14px', color: TEXT, outline: 'none', boxSizing: 'border-box',
+  };
+  var labelStyle = {
+    display: 'block', fontSize: '13px', fontWeight: 600,
+    color: TEXT, marginBottom: '6px',
+  };
 
-  // ── Cost display helper ───────────────────────────────────────────────────
   function costDisplay(program) {
     if (!program.cost_type || program.cost_type === 'free') return { label: 'Free', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' };
     if (program.cost_type === 'donation') return { label: 'Donation', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' };
     var amt = program.cost_amount ? '$' + parseFloat(program.cost_amount).toFixed(2) : 'Paid';
     return { label: amt, color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' };
   }
+
+  // visibility helper — falls back gracefully for old records
+  function programVisibility(p) {
+    if (p.visibility) return p.visibility;
+    if (p.is_public) return 'public';
+    return 'draft';
+  }
+
+  // ── Tag groups for PlatformTagPicker ──────────────────────────────────────
+  var pickerGroups = [
+    { label: 'Cause Area',     tags: tagGroups.causeAreas    || [] },
+    { label: 'Audience',       tags: tagGroups.audience      || [] },
+    { label: 'Activity Type',  tags: tagGroups.activityTypes || [] },
+    { label: 'Languages',      tags: tagGroups.languages     || [] },
+  ].filter(function(g) { return g.tags.length > 0; });
 
   // ── Skeleton ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -992,7 +1231,7 @@ async function handleRegister(e, program) {
           <h2 style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: '0 0 8px' }}>Failed to load programs</h2>
           <p style={{ fontSize: '13px', color: MUTED, margin: '0 0 24px', lineHeight: 1.6 }}>Something went wrong. Check your connection and try again.</p>
           <button onClick={init} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <RefreshCw size={14} aria-hidden="true" />Try Again
+            <RefreshCw size={14} aria-hidden="true" /> Try Again
           </button>
         </div>
       </div>
@@ -1011,7 +1250,11 @@ async function handleRegister(e, program) {
             <p style={{ fontSize: '14px', color: MUTED, margin: '4px 0 0' }}>{programs.length + ' program' + (programs.length !== 1 ? 's' : '')}</p>
           </div>
           {isAdmin && (
-            <button onClick={openNew} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            <button
+              onClick={openNew}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+              className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
               <Icon path={ICONS.plus} className="h-4 w-4" />
               Add Program
             </button>
@@ -1023,19 +1266,38 @@ async function handleRegister(e, program) {
           <div style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '160px' }}>
               <Icon path={ICONS.search} className="h-4 w-4" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: MUTED, pointerEvents: 'none' }} />
-              <input type="text" value={searchQuery} onChange={function(e) { setSearchQuery(e.target.value); }} placeholder="Search programs..." aria-label="Search programs" style={{ width: '100%', paddingLeft: '32px', paddingRight: '10px', paddingTop: '7px', paddingBottom: '7px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+              <input
+                type="text" value={searchQuery}
+                onChange={function(e) { setSearchQuery(e.target.value); }}
+                placeholder="Search programs..."
+                aria-label="Search programs"
+                style={{ width: '100%', paddingLeft: '32px', paddingRight: '10px', paddingTop: '7px', paddingBottom: '7px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box' }}
+                className="focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {[{ key: 'all', label: 'All' }, { key: 'active', label: 'Active' }, { key: 'upcoming', label: 'Upcoming' }, { key: 'closed', label: 'Closed' }].map(function(f) {
                 var active = statusFilter === f.key;
                 return (
-                  <button key={f.key} onClick={function() { setStatusFilter(f.key); }} style={{ padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#0E1523' : ELEVATED, color: active ? '#FFFFFF' : TEXT2 }} className="focus:outline-none focus:ring-2 focus:ring-slate-400" aria-pressed={active}>
-                    {f.label}<span style={{ marginLeft: '5px', fontSize: '11px', opacity: 0.7 }}>{statusCounts[f.key]}</span>
+                  <button
+                    key={f.key}
+                    onClick={function() { setStatusFilter(f.key); }}
+                    style={{ padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#0E1523' : ELEVATED, color: active ? '#FFFFFF' : TEXT2 }}
+                    className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    aria-pressed={active}
+                  >
+                    {f.label} <span style={{ marginLeft: '3px', fontSize: '11px', opacity: 0.7 }}>{statusCounts[f.key]}</span>
                   </button>
                 );
               })}
             </div>
-            <select value={sortBy} onChange={function(e) { setSortBy(e.target.value); }} aria-label="Sort programs" style={{ padding: '6px 10px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT2, fontWeight: 600, outline: 'none', cursor: 'pointer' }} className="focus:ring-2 focus:ring-blue-500">
+            <select
+              value={sortBy}
+              onChange={function(e) { setSortBy(e.target.value); }}
+              aria-label="Sort programs"
+              style={{ padding: '6px 10px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT2, fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+              className="focus:ring-2 focus:ring-blue-500"
+            >
               <option value="custom">Custom Order</option>
               <option value="name">Name A–Z</option>
               <option value="start_date">Start Date</option>
@@ -1048,47 +1310,51 @@ async function handleRegister(e, program) {
         {/* Empty state */}
         {programs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 24px', background: CARD_BG, border: '2px dashed ' + BDR, borderRadius: '12px' }} role="region" aria-label="No programs">
-            <div style={{ color: MUTED, marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
-              <Icon path={ICONS.programs} className="h-14 w-14" sw={1} />
-            </div>
-            <h2 style={{ fontSize: '17px', fontWeight: 700, color: TEXT, marginBottom: '8px' }}>No programs yet</h2>
-            <p style={{ color: MUTED, fontSize: '13px', maxWidth: '280px', margin: '0 auto 24px' }}>
+            <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '200px', margin: '0 auto 20px', display: 'block', mixBlendMode: 'multiply' }} />
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: TEXT, marginBottom: '8px' }}>No programs yet</h2>
+            <p style={{ color: MUTED, fontSize: '14px', maxWidth: '280px', margin: '0 auto 24px', lineHeight: 1.6 }}>
               {isAdmin ? 'Add your first program to share with your community.' : 'This organization has not added any programs yet.'}
             </p>
             {isAdmin && (
-              <button onClick={openNew} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">Add Your First Program</button>
+              <button onClick={openNew} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Add Your First Program
+              </button>
             )}
           </div>
         ) : displayPrograms.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 24px', background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '12px' }}>
-            <div style={{ color: MUTED, marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
-              <Icon path={ICONS.search} className="h-10 w-10" sw={1} />
-            </div>
+            <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '160px', margin: '0 auto 16px', display: 'block', mixBlendMode: 'multiply' }} />
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>No programs match your filters</h2>
             <p style={{ color: MUTED, fontSize: '13px', marginBottom: '16px' }}>Try adjusting your search or status filter.</p>
-            <button onClick={function() { setSearchQuery(''); setStatusFilter('all'); }} style={{ padding: '8px 16px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Clear Filters</button>
+            <button
+              onClick={function() { setSearchQuery(''); setStatusFilter('all'); }}
+              style={{ padding: '8px 16px', background: ELEVATED, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }}
+              className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              Clear Filters
+            </button>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }} role="list" aria-label="Programs">
             {displayPrograms.map(function(program) {
-              var enrolled     = program.enrolled_count || 0;
               var cap          = program.capacity;
+              var enrolled     = program.enrolled_count || 0;
               var capPct       = cap ? Math.min(100, Math.round(enrolled / cap * 100)) : null;
               var capBarColor  = capPct >= 100 ? '#EF4444' : capPct >= 75 ? '#F59E0B' : '#22C55E';
               var isClosed     = program.status === 'closed';
-              var isExpanded   = expandedId === program.id;
               var isDragging   = draggingId === program.id;
               var isDragTarget = dragOverId === program.id && draggingId !== program.id;
               var startFmt     = formatDate(program.start_date);
               var endFmt       = formatDate(program.end_date);
               var startTimeFmt = formatTime(program.start_time);
               var endTimeFmt   = formatTime(program.end_time);
-              var hasExpand    = !!(program.how_to_apply || program.contact_name);
               var isSaved      = savedIds.has(program.id);
               var myReg        = myRegistrations[program.id];
               var isFull       = cap != null && enrolled >= cap;
               var regOpen      = program.registration_open !== false && !isClosed;
               var cost         = costDisplay(program);
+              var vis          = programVisibility(program);
+              var visMeta      = VISIBILITY_META[vis] || VISIBILITY_META.draft;
 
               return (
                 <article
@@ -1100,42 +1366,28 @@ async function handleRegister(e, program) {
                   onDragOver={function(e) { handleDragOver(program.id, e); }}
                   onDrop={function(e) { e.preventDefault(); handleDrop(program.id); }}
                   onDragEnd={function() { setDraggingId(null); setDragOverId(null); }}
-                  onClick={function(e) {
-                    if (isDragEnabled) return;
-                    if (e.target.closest('button')) return;
-                    navigate('/organizations/' + organizationId + '/programs/' + program.id, { state: { from: 'org-programs' } });
-                  }}
                   style={{
-                    background:    program.is_public ? CARD_BG : CARD_ALT,
-                    border:        isDragTarget ? '2px solid #3B82F6' : '1px solid ' + BDR,
+                    background:    vis === 'draft' ? CARD_ALT : CARD_BG,
+                    border:        isDragTarget ? '2px solid #3B82F6' : '0.5px solid ' + BDR,
                     borderRadius:  '12px',
                     display:       'flex',
                     flexDirection: 'column',
                     position:      'relative',
                     opacity:       isClosed ? 0.7 : isDragging ? 0.4 : 1,
-                    cursor:        isDragEnabled ? 'grab' : 'pointer',
+                    cursor:        isDragEnabled ? 'grab' : 'default',
                     transition:    'opacity 0.2s, border-color 0.15s, box-shadow 0.15s',
                   }}
                   className={isDragEnabled ? '' : 'hover:shadow-md'}
                 >
-                  {/* Invisible overlay — makes whole card clickable */}
-                  <Link
-                    to={'/organizations/' + organizationId + '/programs/' + program.id}
-                    state={{ from: 'org-programs' }}
-                    onClick={function(e) { if (isDragEnabled) e.preventDefault(); }}
-                    aria-label={'View details for ' + program.name}
-                    style={{ position: 'absolute', inset: 0, zIndex: 0 }}
-                    tabIndex={0}
-                  />
                   {/* Program image */}
                   {program.image_url ? (
-                    <div style={{ height: '140px', overflow: 'hidden', flexShrink: 0, position: 'relative', zIndex: 1, borderRadius: '12px 12px 0 0' }}>
+                    <div style={{ height: '140px', overflow: 'hidden', flexShrink: 0, borderRadius: '12px 12px 0 0' }}>
                       <img src={program.image_url} alt={program.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   ) : null}
 
                   {/* Card body */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 18px', flex: 1, position: 'relative', zIndex: 1 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 18px', flex: 1 }}>
                     {isDragEnabled && (
                       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '-4px', color: MUTED, opacity: 0.4 }} aria-hidden="true">
                         <Icon path={ICONS.grip} className="h-4 w-4" />
@@ -1145,43 +1397,26 @@ async function handleRegister(e, program) {
                     {/* Title row */}
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                       <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, margin: 0, lineHeight: 1.3 }}>
-                    <Link
-                      to={'/organizations/' + organizationId + '/programs/' + program.id}
-                      style={{ color: TEXT, textDecoration: 'none' }}
-                      className="hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-                    >
-                      {program.name}
-                    </Link>
-                  </h2>
-                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0, position: 'relative', zIndex: 1 }} onClick={function(e) { e.preventDefault(); e.stopPropagation(); }}>
-                        {!isAdmin && (
-                          <button
-                            onClick={function(e) { toggleSave(e, program.id); }}
-                            style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: isSaved ? '#F5B731' : MUTED }}
-                            className={'focus:outline-none focus:ring-2 focus:ring-yellow-400 ' + (isSaved ? '' : 'hover:text-yellow-500')}
-                            aria-label={isSaved ? 'Remove bookmark for ' + program.name : 'Bookmark ' + program.name}
-                            aria-pressed={isSaved}
-                          >
-                            {isSaved ? <BookmarkCheck size={16} aria-hidden="true" /> : <BookmarkIcon size={16} aria-hidden="true" />}
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <>
-                            <button onClick={function(e) { e.preventDefault(); e.stopPropagation(); setDrawerProgram(program); }} style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label={'View registrations for ' + program.name}>
-                              <Icon path={ICONS.users} className="h-4 w-4" />
-                            </button>
-                            <button onClick={function(e) { e.preventDefault(); e.stopPropagation(); openEdit(program); }} style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label={'Edit ' + program.name}>
-                              <Icon path={ICONS.pencil} className="h-4 w-4" />
-                            </button>
-                            <button onClick={function(e) { e.preventDefault(); e.stopPropagation(); copyProgram(program); }} style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label={'Copy ' + program.name}>
-                              <Icon path={ICONS.copy} className="h-4 w-4" />
-                            </button>
-                            <button onClick={function(e) { e.preventDefault(); e.stopPropagation(); deleteProgram(program.id, program.name); }} style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-500" aria-label={'Delete ' + program.name}>
-                              <Icon path={ICONS.trash} className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
+                        <Link
+                          to={'/organizations/' + organizationId + '/programs/' + program.id}
+                          state={{ from: 'org-programs' }}
+                          style={{ color: TEXT, textDecoration: 'none' }}
+                          className="hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                        >
+                          {program.name}
+                        </Link>
+                      </h2>
+                      {!isAdmin && (
+                        <button
+                          onClick={function(e) { toggleSave(e, program.id); }}
+                          style={{ padding: '5px', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', color: isSaved ? '#F5B731' : MUTED, flexShrink: 0 }}
+                          className={'focus:outline-none focus:ring-2 focus:ring-yellow-400 ' + (isSaved ? '' : 'hover:text-yellow-500')}
+                          aria-label={isSaved ? 'Remove bookmark for ' + program.name : 'Bookmark ' + program.name}
+                          aria-pressed={isSaved}
+                        >
+                          {isSaved ? <BookmarkCheck size={16} aria-hidden="true" /> : <BookmarkIcon size={16} aria-hidden="true" />}
+                        </button>
+                      )}
                     </div>
 
                     {/* Badges */}
@@ -1190,20 +1425,30 @@ async function handleRegister(e, program) {
                         {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
                       </span>
                       <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: cost.bg, color: cost.color }}>{cost.label}</span>
-                      {program.publish_to_discovery && (
+                      {isAdmin && (
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: visMeta.bg, color: visMeta.color }}>{visMeta.label}</span>
+                      )}
+                      {program.show_on_discover && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(139,92,246,0.12)', color: '#8B5CF6' }}>
-                          <Icon path={ICONS.globe} className="h-3 w-3" />On Discover
+                          <Icon path={ICONS.globe} className="h-3 w-3" /> On Discover
                         </span>
                       )}
-                      {isAdmin && !program.is_public && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(245,183,49,0.12)', color: '#B45309' }}>Hidden</span>}
-                      {program.requires_approval && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(100,116,139,0.1)', color: '#475569' }}><Icon path={ICONS.lock} className="h-3 w-3" />Approval required</span>}
-                      {!program.registration_open && !isClosed && <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(239,68,68,0.1)', color: '#EF4444' }}>Registration closed</span>}
+                      {program.requires_approval && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(100,116,139,0.1)', color: '#475569' }}>
+                          <Icon path={ICONS.lock} className="h-3 w-3" /> Approval required
+                        </span>
+                      )}
+                      {!program.registration_open && !isClosed && (
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 10px', borderRadius: '99px', background: 'rgba(239,68,68,0.1)', color: '#EF4444' }}>Registration closed</span>
+                      )}
                     </div>
 
                     {/* Tags */}
                     {program.tags && program.tags.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {program.tags.map(function(tag) { return <span key={tag} style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: ELEVATED, color: TEXT2, border: '1px solid ' + BDR }}>{tag}</span>; })}
+                        {program.tags.map(function(tag) {
+                          return <span key={tag} style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: ELEVATED, color: TEXT2, border: '0.5px solid ' + BDR }}>{tag}</span>;
+                        })}
                       </div>
                     )}
 
@@ -1212,7 +1457,7 @@ async function handleRegister(e, program) {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: MUTED }}>
-                            <Icon path={ICONS.users} className="h-3.5 w-3.5" /><span>Enrolled</span>
+                            <Icon path={ICONS.users} className="h-3.5 w-3.5" /> Enrolled
                           </div>
                           <span style={{ fontSize: '12px', fontWeight: 700, color: capPct >= 100 ? '#EF4444' : TEXT2 }}>{capPct >= 100 ? 'Full' : enrolled + ' / ' + cap}</span>
                         </div>
@@ -1245,6 +1490,14 @@ async function handleRegister(e, program) {
                       </div>
                     )}
 
+                    {/* Location */}
+                    {(program.location_city || program.location_state) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: MUTED }}>
+                        <Icon path={ICONS.mapPin} className="h-3.5 w-3.5" />
+                        <span>{[program.location_city, program.location_state].filter(Boolean).join(', ')}</span>
+                      </div>
+                    )}
+
                     {/* Audience / schedule */}
                     {(program.audience || program.schedule) && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1254,9 +1507,9 @@ async function handleRegister(e, program) {
                     )}
                   </div>
 
-                  {/* Register / member footer */}
+                  {/* Member register footer */}
                   {!isAdmin && (
-                    <div style={{ margin: '0 18px 16px', paddingTop: '12px', borderTop: '1px solid ' + BDR, display: 'flex', gap: '8px', alignItems: 'center', position: 'relative', zIndex: 1 }} onClick={function(e) { e.preventDefault(); e.stopPropagation(); }}>
+                    <div style={{ margin: '0 18px 16px', paddingTop: '12px', borderTop: '1px solid ' + BDR, display: 'flex', gap: '8px', alignItems: 'center' }}>
                       {myReg ? (
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                           <span style={{ fontSize: '12px', fontWeight: 700, padding: '4px 12px', borderRadius: '99px', background: myReg.status === 'enrolled' ? 'rgba(34,197,94,0.12)' : myReg.status === 'pending' ? 'rgba(245,183,49,0.15)' : 'rgba(100,116,139,0.1)', color: myReg.status === 'enrolled' ? '#22C55E' : myReg.status === 'pending' ? '#B45309' : '#64748B' }}>
@@ -1276,17 +1529,15 @@ async function handleRegister(e, program) {
                     </div>
                   )}
 
-                  {/* Admin toggles footer — outside link */}
+                  {/* Admin Actions footer */}
                   {isAdmin && (
-                    <div style={{ margin: '0 18px 16px', display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid ' + BDR, position: 'relative', zIndex: 1 }} onClick={function(e) { e.preventDefault(); e.stopPropagation(); }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: MUTED }}>Org page</span>
-                        <Toggle small checked={program.is_public} onClick={function(e) { e.stopPropagation(); togglePublic(program); }} label={'Toggle ' + program.name + ' org page visibility'} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: MUTED }}>Discover</span>
-                        <Toggle small checked={program.publish_to_discovery} disabled={!program.is_public} onClick={function(e) { e.stopPropagation(); toggleDiscovery(program); }} label={'Toggle ' + program.name + ' on Discover'} color="#8B5CF6" ringColor="focus:ring-purple-500" />
-                      </div>
+                    <div style={{ margin: '0 18px 16px', paddingTop: '12px', borderTop: '0.5px solid ' + BDR, display: 'flex', justifyContent: 'flex-end' }}>
+                      <ActionsDropdown
+                        onEdit={function() { openEdit(program); }}
+                        onDuplicate={function() { copyProgram(program); }}
+                        onViewRegistrations={function() { setDrawerProgram(program); }}
+                        onDelete={function() { deleteProgram(program.id, program.name); }}
+                      />
                     </div>
                   )}
                 </article>
@@ -1298,276 +1549,576 @@ async function handleRegister(e, program) {
 
       {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,21,35,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }} role="dialog" aria-modal="true" aria-labelledby="prog-modal-title" onClick={function() { setShowModal(false); }}>
-          <div ref={modalTrapRef} style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }} onClick={function(e) { e.stopPropagation(); }}>
-
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(14,21,35,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          role="dialog" aria-modal="true" aria-labelledby="prog-modal-title"
+          onClick={function() { setShowModal(false); }}
+        >
+          <div
+            ref={modalTrapRef}
+            style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+            onClick={function(e) { e.stopPropagation(); }}
+          >
             {/* Modal header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
-              <h2 id="prog-modal-title" style={{ fontSize: '17px', fontWeight: 800, color: TEXT, margin: 0 }}>{editingProgram ? 'Edit Program' : 'Add Program'}</h2>
-              <button onClick={function() { setShowModal(false); }} style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label="Close modal">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '0.5px solid ' + BDR, flexShrink: 0 }}>
+              <div>
+                <h2 id="prog-modal-title" style={{ fontSize: '17px', fontWeight: 500, color: TEXT, margin: 0 }}>{editingProgram ? 'Edit Program' : 'Add Program'}</h2>
+                {organization && <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{organization.name}</p>}
+              </div>
+              <button
+                onClick={function() { setShowModal(false); }}
+                style={{ padding: '6px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: MUTED }}
+                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                aria-label="Close modal"
+              >
                 <Icon path={ICONS.x} className="h-5 w-5" />
               </button>
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid ' + BDR, flexShrink: 0 }}>
-              {[{ key: false, label: 'Details' }, { key: true, label: 'Settings' }].map(function(tab) {
-                var active = showSettingsTab === tab.key;
+            <div style={{ display: 'flex', borderBottom: '0.5px solid ' + BDR, flexShrink: 0 }} role="tablist">
+              {[
+                { key: 'details',   label: 'Details' },
+                { key: 'settings',  label: 'Settings' },
+                { key: 'tags',      label: 'Audience & Tags' },
+                { key: 'publishing',label: 'Publishing' },
+              ].map(function(tab) {
+                var active = activeTab === tab.key;
                 return (
-                  <button key={String(tab.key)} onClick={function() { setShowSettingsTab(tab.key); }} style={{ flex: 1, padding: '12px', fontSize: '13px', fontWeight: 700, color: active ? TEXT : MUTED, background: 'none', border: 'none', borderBottom: active ? '2px solid #3B82F6' : '2px solid transparent', cursor: 'pointer' }} className="hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500" aria-selected={active} role="tab">{tab.label}</button>
+                  <button
+                    key={tab.key}
+                    onClick={function() { setActiveTab(tab.key); }}
+                    style={{ flex: 1, padding: '12px 8px', fontSize: '13px', fontWeight: 700, color: active ? '#3B82F6' : MUTED, background: 'none', border: 'none', borderBottom: active ? '2px solid #3B82F6' : '2px solid transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    className="hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    role="tab"
+                    aria-selected={active}
+                  >
+                    {tab.label}
+                  </button>
                 );
               })}
             </div>
 
-            {/* Details tab */}
-            {!showSettingsTab && (
-              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+            {/* Tab body */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
 
-                {/* Image upload */}
-                <div>
-                  <label style={labelStyle}>Program Image</label>
-                  {imagePreview ? (
-                    <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', marginBottom: '4px' }}>
-                      <img src={imagePreview} alt="Program preview" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                      <button
-                        type="button" onClick={clearImage}
-                        style={{ position: 'absolute', top: '8px', right: '8px', padding: '4px', borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', cursor: 'pointer', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        className="hover:bg-black focus:outline-none focus:ring-2 focus:ring-white"
-                        aria-label="Remove image"
+              {/* ── Details tab ─────────────────────────────────────────────── */}
+              {activeTab === 'details' && (
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                  {/* Name */}
+                  <div>
+                    <label htmlFor="prog-name" style={labelStyle}>
+                      Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="prog-name" type="text" value={form.name}
+                      onChange={function(e) { setField('name', e.target.value); }}
+                      placeholder="e.g. After School Tutoring"
+                      style={inputStyle}
+                      className="focus:ring-2 focus:ring-blue-500"
+                      aria-required="true"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label htmlFor="prog-desc" style={labelStyle}>Description</label>
+                    <textarea
+                      id="prog-desc" value={form.description} rows={4}
+                      onChange={function(e) { setField('description', e.target.value); }}
+                      placeholder="What does this program do?"
+                      maxLength={1000}
+                      style={Object.assign({}, inputStyle, { resize: 'vertical', minHeight: '80px' })}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0', textAlign: 'right' }}>{(form.description || '').length}/1000</p>
+                  </div>
+
+                  {/* Type */}
+                  <div>
+                    <label htmlFor="prog-type" style={labelStyle}>Program Type</label>
+                    <select
+                      id="prog-type" value={form.type}
+                      onChange={function(e) { setField('type', e.target.value); }}
+                      style={Object.assign({}, inputStyle, { width: '100%' })}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select a type...</option>
+                      {PROGRAM_TYPES.map(function(t) { return <option key={t} value={t}>{t}</option>; })}
+                    </select>
+                  </div>
+
+                  {/* Start date/time */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label htmlFor="prog-start" style={labelStyle}>Start Date</label>
+                      <input id="prog-start" type="date" value={form.start_date} onChange={function(e) { setField('start_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label htmlFor="prog-stime" style={labelStyle}>Start Time</label>
+                      <input id="prog-stime" type="time" value={form.start_time} onChange={function(e) { setField('start_time', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+
+                  {/* End date/time */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label htmlFor="prog-end" style={labelStyle}>End Date</label>
+                      <input id="prog-end" type="date" value={form.end_date} onChange={function(e) { setField('end_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label htmlFor="prog-etime" style={labelStyle}>End Time</label>
+                      <input id="prog-etime" type="time" value={form.end_time} onChange={function(e) { setField('end_time', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+
+                  {/* Location */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label htmlFor="prog-city" style={labelStyle}>City</label>
+                      <input id="prog-city" type="text" value={form.location_city} onChange={function(e) { setField('location_city', e.target.value); }} placeholder="e.g. Toledo" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label htmlFor="prog-state" style={labelStyle}>State</label>
+                      <select id="prog-state" value={form.location_state} onChange={function(e) { setField('location_state', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select...</option>
+                        {US_STATES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Cost */}
+                  <div>
+                    <label style={labelStyle}>Cost</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: form.cost_type !== 'free' ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                      <select
+                        value={form.cost_type}
+                        onChange={function(e) { setField('cost_type', e.target.value); }}
+                        style={Object.assign({}, inputStyle, { width: '100%' })}
+                        className="focus:ring-2 focus:ring-blue-500"
+                        aria-label="Cost type"
                       >
-                        <Icon path={ICONS.x} className="h-4 w-4" />
+                        <option value="free">Free</option>
+                        <option value="paid">Paid</option>
+                        <option value="donation">Donation / Suggested</option>
+                      </select>
+                      {form.cost_type !== 'free' && (
+                        <div style={{ position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: MUTED, fontSize: '14px' }}>$</span>
+                          <input
+                            type="number" min="0" step="0.01" value={form.cost_amount}
+                            onChange={function(e) { setField('cost_amount', e.target.value); }}
+                            placeholder={form.cost_type === 'donation' ? 'Suggested amount' : 'Amount'}
+                            style={Object.assign({}, inputStyle, { paddingLeft: '24px' })}
+                            className="focus:ring-2 focus:ring-blue-500"
+                            aria-label="Cost amount"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Capacity */}
+                  <div>
+                    <label htmlFor="prog-capacity" style={labelStyle}>Capacity (Max Spots)</label>
+                    <input
+                      id="prog-capacity" type="number" min="0" value={form.capacity}
+                      onChange={function(e) { setField('capacity', e.target.value); }}
+                      placeholder="Leave blank for unlimited"
+                      style={inputStyle}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Who is it for */}
+                  <div>
+                    <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>
+                    <input
+                      id="prog-audience" type="text" value={form.audience}
+                      onChange={function(e) { setField('audience', e.target.value); }}
+                      placeholder="e.g. Youth ages 6–18"
+                      style={inputStyle}
+                      className="focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p style={{ fontSize: '11px', color: MUTED, margin: '4px 0 0' }}>Free-text description. Use the Audience &amp; Tags tab to add structured audience tags.</p>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ── Settings tab ─────────────────────────────────────────────── */}
+              {activeTab === 'settings' && (
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                  {/* Registration */}
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {[
+                        { key: 'registration_open', label: 'Registration open', desc: 'Members can register or request to join' },
+                        { key: 'requires_approval', label: 'Require approval', desc: form.requires_approval ? 'Registrations are held for your review before enrolling' : 'Members are enrolled automatically on registration' },
+                        { key: 'show_enrolled_public', label: 'Show enrolled count publicly', desc: form.show_enrolled_public ? 'Members can see how many people are enrolled' : 'Enrollment count is hidden from non-admins' },
+                      ].map(function(item) {
+                        return (
+                          <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                            <Toggle
+                              checked={form[item.key]}
+                              onClick={function() { setField(item.key, !form[item.key]); }}
+                              label={'Toggle ' + item.label}
+                            />
+                            <div>
+                              <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{item.label}</p>
+                              <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{item.desc}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Schedule */}
+                  <div>
+                    <div>
+                      <label htmlFor="prog-schedule" style={labelStyle}>Schedule / Frequency</label>
+                      <input
+                        id="prog-schedule" type="text" value={form.schedule}
+                        onChange={function(e) { setField('schedule', e.target.value); }}
+                        placeholder="e.g. Every Monday 3–5pm"
+                        style={inputStyle}
+                        className="focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Apply method */}
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label htmlFor="prog-apply-method" style={labelStyle}>Apply Method</label>
+                        <select
+                          id="prog-apply-method" value={form.apply_method}
+                          onChange={function(e) { setField('apply_method', e.target.value); }}
+                          style={Object.assign({}, inputStyle, { width: '100%' })}
+                          className="focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="form">In-platform registration form</option>
+                          <option value="link">External link</option>
+                        </select>
+                      </div>
+                      {form.apply_method === 'link' && (
+                        <div>
+                          <label htmlFor="prog-apply-url" style={labelStyle}>Apply URL</label>
+                          <input
+                            id="prog-apply-url" type="url" value={form.apply_url}
+                            onChange={function(e) { setField('apply_url', e.target.value); }}
+                            placeholder="https://..."
+                            style={inputStyle}
+                            className="focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <label htmlFor="prog-apply-notes" style={labelStyle}>Additional Instructions</label>
+                        <textarea
+                          id="prog-apply-notes" value={form.how_to_apply} rows={2}
+                          onChange={function(e) { setField('how_to_apply', e.target.value); }}
+                          placeholder="e.g. Fill out form at front desk or call us"
+                          style={Object.assign({}, inputStyle, { resize: 'none' })}
+                          className="focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact */}
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label htmlFor="prog-cname" style={labelStyle}>Contact Name</label>
+                        <input id="prog-cname" type="text" value={form.contact_name} onChange={function(e) { setField('contact_name', e.target.value); }} placeholder="Jane Smith" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label htmlFor="prog-cemail" style={labelStyle}>Contact Email</label>
+                        <input id="prog-cemail" type="email" value={form.contact_email} onChange={function(e) { setField('contact_email', e.target.value); }} placeholder="jane@org.org" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <div>
+                      <label htmlFor="prog-status" style={labelStyle}>Program Status</label>
+                      <select
+                        id="prog-status" value={form.status}
+                        onChange={function(e) { setField('status', e.target.value); }}
+                        style={Object.assign({}, inputStyle, { width: '100%' })}
+                        className="focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="active">Active</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Image upload — always last on Settings tab */}
+                  <div>
+                    <label style={labelStyle}>Program Image</label>
+                    {imagePreview ? (
+                      <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden' }}>
+                        <img src={imagePreview} alt="Program preview" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                        <button
+                          type="button" onClick={clearImage}
+                          style={{ position: 'absolute', top: '8px', right: '8px', padding: '4px', borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', cursor: 'pointer', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          className="hover:bg-black focus:outline-none focus:ring-2 focus:ring-white"
+                          aria-label="Remove image"
+                        >
+                          <Icon path={ICONS.x} className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={function() { imageInputRef.current && imageInputRef.current.click(); }}
+                        style={{ width: '100%', padding: '24px', border: '1.5px dashed ' + BDR, borderRadius: '8px', background: INPUT_BG, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: MUTED }}
+                        className="hover:border-blue-400 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Upload program image"
+                      >
+                        <Icon path={ICONS.upload} className="h-8 w-8" />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>Click to upload image</span>
+                        <span style={{ fontSize: '11px' }}>JPG, PNG, WebP or GIF · max 5 MB</span>
+                      </button>
+                    )}
+                    <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: 'none' }} onChange={handleImageSelect} aria-label="Program image file input" />
+                  </div>
+
+                </div>
+              )}
+
+              {/* ── Audience & Tags tab ──────────────────────────────────────── */}
+              {activeTab === 'tags' && (
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                  {/* Default tags banner */}
+                  {orgDefaults && orgDefaults.program && orgDefaults.program.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', background: 'rgba(245,183,49,0.08)', border: '1px solid rgba(245,183,49,0.25)', borderRadius: '8px' }}>
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: '0 0 2px' }}>Your org has default program tags</p>
+                        <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{orgDefaults.program.slice(0, 3).join(', ')}{orgDefaults.program.length > 3 ? ' +' + (orgDefaults.program.length - 3) + ' more' : ''}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={applyDefaultTags}
+                        style={{ padding: '6px 12px', background: '#F5B731', color: '#0E1523', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        className="hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      >
+                        Use default tags
                       </button>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={function() { imageInputRef.current && imageInputRef.current.click(); }}
-                      style={{ width: '100%', padding: '24px', border: '2px dashed ' + BDR, borderRadius: '10px', background: INPUT_BG, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: MUTED }}
-                      className="hover:border-blue-400 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label="Upload program image"
-                    >
-                      <Icon path={ICONS.upload} className="h-8 w-8" />
-                      <span style={{ fontSize: '13px', fontWeight: 600 }}>Click to upload image</span>
-                      <span style={{ fontSize: '11px' }}>JPG, PNG, WebP or GIF · max 5 MB</span>
-                    </button>
                   )}
-                  <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: 'none' }} onChange={handleImageSelect} aria-label="Program image file input" />
-                </div>
 
-                <div>
-                  <label htmlFor="prog-name" style={labelStyle}>Program Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                  <input id="prog-name" type="text" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="e.g. After School Tutoring" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
-                </div>
+                  <PlatformTagPicker
+                    groups={pickerGroups}
+                    selectedTags={form.tags}
+                    onChange={function(tags) { setField('tags', tags); }}
+                  />
 
-                <div>
-                  <label htmlFor="prog-desc" style={labelStyle}>Description</label>
-                  <textarea id="prog-desc" value={form.description} rows={3} onChange={function(e) { setField('description', e.target.value); }} placeholder="What does this program do?" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
                 </div>
+              )}
 
-                {/* Dates */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* ── Publishing tab ───────────────────────────────────────────── */}
+              {activeTab === 'publishing' && (
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                  {/* Section 1: Visibility */}
                   <div>
-                    <label htmlFor="prog-start" style={labelStyle}>Start Date</label>
-                    <input id="prog-start" type="date" value={form.start_date} onChange={function(e) { setField('start_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div>
-                    <label htmlFor="prog-end" style={labelStyle}>End Date</label>
-                    <input id="prog-end" type="date" value={form.end_date} onChange={function(e) { setField('end_date', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} role="radiogroup" aria-label="Visibility">
+                      {[
+                        { value: 'draft',        label: 'Draft',          desc: 'Only visible to org admins' },
+                        { value: 'members_only', label: 'All Members',    desc: 'All active org members' },
+                        { value: 'groups',       label: 'Specific Groups',desc: 'Only members of selected groups' },
+                        { value: 'public',       label: 'Public',         desc: 'Anyone can see this' },
+                      ].map(function(opt) {
+                        var selected = form.visibility === opt.value;
+                        return (
+                          <div key={opt.value}>
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              onClick={function() { setField('visibility', opt.value); }}
+                              style={{
+                                width: '100%', textAlign: 'left', padding: '12px 14px',
+                                background: selected ? '#EFF6FF' : CARD_BG,
+                                border: selected ? '1.5px solid #3B82F6' : '1px solid ' + BDR,
+                                borderRadius: '8px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '12px',
+                              }}
+                              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: selected ? '5px solid #3B82F6' : '2px solid ' + BDR, flexShrink: 0, background: CARD_BG }} />
+                              <div>
+                                <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{opt.label}</p>
+                                <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{opt.desc}</p>
+                              </div>
+                            </button>
 
-                {/* Times */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label htmlFor="prog-stime" style={labelStyle}>Start Time</label>
-                    <input id="prog-stime" type="time" value={form.start_time} onChange={function(e) { setField('start_time', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div>
-                    <label htmlFor="prog-etime" style={labelStyle}>End Time</label>
-                    <input id="prog-etime" type="time" value={form.end_time} onChange={function(e) { setField('end_time', e.target.value); }} style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-
-                {/* Cost */}
-                <div>
-                  <label style={labelStyle}>Cost</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: form.cost_type !== 'free' ? '1fr 1fr' : '1fr', gap: '12px' }}>
-                    <select id="prog-cost-type" value={form.cost_type} onChange={function(e) { setField('cost_type', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500" aria-label="Cost type">
-                      <option value="free">Free</option>
-                      <option value="paid">Paid</option>
-                      <option value="donation">Donation / Suggested</option>
-                    </select>
-                    {form.cost_type !== 'free' && (
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: MUTED, fontSize: '14px' }}>$</span>
-                        <input id="prog-cost-amt" type="number" min="0" step="0.01" value={form.cost_amount} onChange={function(e) { setField('cost_amount', e.target.value); }} placeholder={form.cost_type === 'donation' ? 'Suggested amount' : 'Amount'} style={Object.assign({}, inputStyle, { paddingLeft: '24px' })} className="focus:ring-2 focus:ring-blue-500" aria-label="Cost amount" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="prog-capacity" style={labelStyle}>Capacity (Max Spots)</label>
-                  <input id="prog-capacity" type="number" min="0" value={form.capacity} onChange={function(e) { setField('capacity', e.target.value); }} placeholder="Leave blank for unlimited" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                </div>
-
-{/* Tags */}
-<div>
-  <label style={labelStyle}>Tags &amp; Keywords</label>
-
-  {(form.tags || []).length > 0 && (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-      {(form.tags || []).map(function(tag) {
-        var allPlatform = [];
-        PROGRAM_TAG_GROUPS.forEach(function(g) { g.tags.forEach(function(t) { allPlatform.push(t); }); });
-        var isPlatform = allPlatform.includes(tag);
-        return (
-          <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, background: isPlatform ? '#EFF6FF' : '#0E1523', color: isPlatform ? '#3B82F6' : '#FFFFFF', border: isPlatform ? '1px solid #BFDBFE' : 'none' }}>
-            {tag}
-            <button type="button" onClick={function() { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).filter(function(t) { return t !== tag; }) }); }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isPlatform ? '#3B82F6' : 'rgba(255,255,255,0.7)', padding: '0', lineHeight: 1, display: 'flex' }} aria-label={'Remove tag ' + tag} className="focus:outline-none rounded">
-              <Icon path={ICONS.x} className="h-3 w-3" />
-            </button>
-          </span>
-        );
-      })}
-    </div>
-  )}
-
-  {PROGRAM_TAG_GROUPS.map(function(group, gi) {
-    return (
-      <div key={group.label} style={{ marginBottom: gi < PROGRAM_TAG_GROUPS.length - 1 ? '14px' : '0' }}>
-        <p style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '7px' }}>{group.label}</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {group.tags.map(function(tag) {
-            var selected = (form.tags || []).includes(tag);
-            return (
-              <button key={tag} type="button" onClick={function() { setForm(function(prev) { var tags = prev.tags || []; var idx = tags.indexOf(tag); return Object.assign({}, prev, { tags: idx === -1 ? tags.concat([tag]) : tags.filter(function(t) { return t !== tag; }) }); }); }} style={{ padding: '4px 10px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, border: '1px solid ' + (selected ? '#3B82F6' : '#E2E8F0'), background: selected ? '#EFF6FF' : '#FFFFFF', color: selected ? '#3B82F6' : '#475569', cursor: 'pointer' }} className="hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400" aria-pressed={selected}>
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  })}
-
-  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
-    <p style={{ fontSize: '9px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '7px' }}>Custom Tag</p>
-    <div style={{ display: 'flex', gap: '8px' }}>
-      <input type="text" value={progTagInput} onChange={function(e) { setProgTagInput(e.target.value); }} onKeyDown={function(e) { if (e.key === 'Enter') { e.preventDefault(); var tag = progTagInput.trim(); if (tag && !(form.tags || []).includes(tag)) { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).concat([tag]) }); }); } setProgTagInput(''); } }} placeholder="Type a custom tag and press Enter" aria-label="Add custom tag" style={{ flex: 1, padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
-      <button type="button" onClick={function() { var tag = progTagInput.trim(); if (tag && !(form.tags || []).includes(tag)) { setForm(function(prev) { return Object.assign({}, prev, { tags: (prev.tags || []).concat([tag]) }); }); } setProgTagInput(''); }} style={{ padding: '8px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Add</button>
-    </div>
-  </div>
-</div>
-
-                <div>
-                  <label htmlFor="prog-audience" style={labelStyle}>Who Is It For?</label>
-                  <input id="prog-audience" type="text" value={form.audience} onChange={function(e) { setField('audience', e.target.value); }} placeholder="e.g. Youth ages 6–18" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label htmlFor="prog-schedule" style={labelStyle}>Schedule / Frequency</label>
-                  <input id="prog-schedule" type="text" value={form.schedule} onChange={function(e) { setField('schedule', e.target.value); }} placeholder="e.g. Every Monday 3–5pm" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label htmlFor="prog-apply" style={labelStyle}>How To Apply / Sign Up</label>
-                  <textarea id="prog-apply" value={form.how_to_apply} rows={2} onChange={function(e) { setField('how_to_apply', e.target.value); }} placeholder="e.g. Fill out form at front desk or call us" style={Object.assign({}, inputStyle, { resize: 'none' })} className="focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label htmlFor="prog-cname" style={labelStyle}>Contact Name</label>
-                    <input id="prog-cname" type="text" value={form.contact_name} onChange={function(e) { setField('contact_name', e.target.value); }} placeholder="Jane Smith" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div>
-                    <label htmlFor="prog-cemail" style={labelStyle}>Contact Email</label>
-                    <input id="prog-cemail" type="email" value={form.contact_email} onChange={function(e) { setField('contact_email', e.target.value); }} placeholder="jane@org.org" style={inputStyle} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="prog-status" style={labelStyle}>Status</label>
-                  <select id="prog-status" value={form.status} onChange={function(e) { setField('status', e.target.value); }} style={Object.assign({}, inputStyle, { width: '100%' })} className="focus:ring-2 focus:ring-blue-500">
-                    <option value="active">Active</option>
-                    <option value="upcoming">Upcoming</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Settings tab */}
-            {showSettingsTab && (
-              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
-                <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>Control how members interact with and see this program.</p>
-
-                <div>
-                  <p style={labelStyle}>Visibility</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {[
-                      { toggle: 'is_public', label: 'Show on org page', desc: 'Visitors to your public page will see this program', disabled: false, color: '#3B82F6', ring: 'focus:ring-blue-500' },
-                      { toggle: 'publish_to_discovery', label: 'Show on Discover', desc: form.is_public ? 'Anyone browsing /discover can find this program' : 'Enable "Show on org page" first', disabled: !form.is_public, color: '#8B5CF6', ring: 'focus:ring-purple-500' },
-                    ].map(function(item) {
-                      return (
-                        <div key={item.toggle} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR, opacity: item.disabled ? 0.5 : 1 }}>
-                          <Toggle checked={form[item.toggle]} disabled={item.disabled} onClick={function() { setField(item.toggle, !form[item.toggle]); }} label={'Toggle ' + item.label} color={item.color} ringColor={item.ring} />
-                          <div>
-                            <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{item.label}</p>
-                            <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{item.desc}</p>
+                            {/* Group picker */}
+                            {opt.value === 'groups' && selected && (
+                              <div style={{ marginTop: '8px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                                <label htmlFor="prog-groups" style={Object.assign({}, labelStyle, { marginBottom: '6px' })}>Select groups</label>
+                                {orgGroups.length === 0 ? (
+                                  <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>No groups found. Create groups first in your org settings.</p>
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {orgGroups.map(function(g) {
+                                      var checked = (form.group_ids || []).indexOf(g.id) !== -1;
+                                      return (
+                                        <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: TEXT }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={function() {
+                                              var ids = form.group_ids || [];
+                                              setField('group_ids', checked ? ids.filter(function(id) { return id !== g.id; }) : ids.concat([g.id]));
+                                            }}
+                                            className="focus:ring-2 focus:ring-blue-500"
+                                          />
+                                          {g.name}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p style={labelStyle}>Registration</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {[
-                      { toggle: 'registration_open', label: 'Registration open', desc: 'Members can register or request to join', color: '#3B82F6', ring: 'focus:ring-blue-500' },
-                      { toggle: 'requires_approval', label: 'Require approval', desc: form.requires_approval ? 'Registrations are held for your review before enrolling' : 'Members are enrolled automatically on registration', color: '#8B5CF6', ring: 'focus:ring-purple-500' },
-                    ].map(function(item) {
-                      return (
-                        <div key={item.toggle} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
-                          <Toggle checked={form[item.toggle]} onClick={function() { setField(item.toggle, !form[item.toggle]); }} label={'Toggle ' + item.label} color={item.color} ringColor={item.ring} />
-                          <div>
-                            <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{item.label}</p>
-                            <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{item.desc}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p style={labelStyle}>Privacy</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
-                    <Toggle checked={form.show_enrolled_public} onClick={function() { setField('show_enrolled_public', !form.show_enrolled_public); }} label="Toggle show enrolled members publicly" color="#3B82F6" ringColor="focus:ring-blue-500" />
-                    <div>
-                      <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>Show enrolled count publicly</p>
-                      <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>
-                        {form.show_enrolled_public ? 'Members can see how many people are enrolled' : 'Enrollment count is hidden from non-admins'}
-                      </p>
+                        );
+                      })}
                     </div>
                   </div>
+
+                  {/* Section 2: Also show on */}
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {[
+                        { key: 'show_on_website',  label: 'Org website',       desc: 'Appears on your public organization page' },
+                        { key: 'show_on_discover', label: 'Discover page',      desc: 'Public listing at /discover' },
+                        { key: 'is_featured',      label: 'Feature this listing', desc: 'Highlighted border and Featured badge' },
+                      ].map(function(item) {
+                        return (
+                          <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: ELEVATED, borderRadius: '8px', border: '1px solid ' + BDR }}>
+                            <Toggle
+                              checked={form[item.key]}
+                              onClick={function() { setField(item.key, !form[item.key]); }}
+                              label={'Toggle ' + item.label}
+                              color="#3B82F6"
+                            />
+                            <div>
+                              <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{item.label}</p>
+                              <p style={{ fontSize: '12px', color: MUTED, margin: '2px 0 0' }}>{item.desc}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Reach */}
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} role="radiogroup" aria-label="Reach">
+                      {[
+                        { value: 'local',    label: 'Local',             desc: 'City or region' },
+                        { value: 'state',    label: 'Statewide',         desc: 'Available across the state' },
+                        { value: 'national', label: 'National / Remote', desc: 'Available nationwide or online' },
+                      ].map(function(opt) {
+                        var selected = form.reach === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={function() { setField('reach', opt.value); }}
+                            style={{
+                              width: '100%', textAlign: 'left', padding: '10px 14px',
+                              background: selected ? '#EFF6FF' : CARD_BG,
+                              border: selected ? '1.5px solid #3B82F6' : '1px solid ' + BDR,
+                              borderRadius: '8px', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: '12px',
+                            }}
+                            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <div style={{ width: '14px', height: '14px', borderRadius: '50%', border: selected ? '4px solid #3B82F6' : '2px solid ' + BDR, flexShrink: 0, background: CARD_BG }} />
+                            <div>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: TEXT }}>{opt.label}</span>
+                              <span style={{ fontSize: '12px', color: MUTED, marginLeft: '6px' }}>{opt.desc}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Notification note */}
+                  <p style={{ fontSize: '12px', color: MUTED, margin: 0, padding: '10px 12px', background: ELEVATED, borderRadius: '6px', border: '1px solid ' + BDR }}>
+                    Members are notified once when you first publish. Changing between published states does not re-notify.
+                  </p>
+
                 </div>
-              </div>
-            )}
+              )}
+
+            </div>
 
             {/* Modal footer */}
-            <div style={{ display: 'flex', gap: '12px', padding: '16px 24px', borderTop: '1px solid ' + BDR, flexShrink: 0 }}>
-              <button onClick={function() { setShowModal(false); }} style={{ flex: 1, padding: '10px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
-              <button onClick={saveProgram} disabled={saving || uploadingImg} style={{ flex: 1, padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: (saving || uploadingImg) ? 'not-allowed' : 'pointer', opacity: (saving || uploadingImg) ? 0.6 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {uploadingImg ? 'Uploading image...' : saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Add Program')}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderTop: '0.5px solid ' + BDR, flexShrink: 0, gap: '8px' }}>
+              {/* Left: Save as Draft — only when creating new */}
+              {!editingProgram && (
+                <button
+                  onClick={function() { saveProgram(true); }}
+                  disabled={saving || uploadingImg}
+                  style={{ padding: '10px 16px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: (saving || uploadingImg) ? 'not-allowed' : 'pointer', opacity: (saving || uploadingImg) ? 0.6 : 1 }}
+                  className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  Save as Draft
+                </button>
+              )}
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={function() { setShowModal(false); }}
+                style={{ padding: '10px 16px', border: '1px solid ' + BDR, color: TEXT2, fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}
+                className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={function() { saveProgram(false); }}
+                disabled={saving || uploadingImg}
+                style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: (saving || uploadingImg) ? 'not-allowed' : 'pointer', opacity: (saving || uploadingImg) ? 0.6 : 1 }}
+                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {uploadingImg ? 'Uploading...' : saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Publish')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <ConfirmModal isOpen={confirmModal.open} title={confirmModal.title} message={confirmModal.message} confirmLabel={confirmModal.confirmLabel} onConfirm={confirmModal.onConfirm || function() {}} onCancel={closeConfirm} />
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        onConfirm={confirmModal.onConfirm || function() {}}
+        onCancel={closeConfirm}
+      />
 
       {drawerProgram && (
-        <RegistrationsDrawer program={drawerProgram} organizationId={organizationId} onClose={function() { setDrawerProgram(null); }} />
+        <RegistrationsDrawer
+          program={drawerProgram}
+          organizationId={organizationId}
+          onClose={function() { setDrawerProgram(null); }}
+        />
       )}
     </>
   );
