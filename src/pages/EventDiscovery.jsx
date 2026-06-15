@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Helmet } from 'react-helmet';
 import { BadgeCheck, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { et } from '../lib/eventDiscoveryTranslations';
 import EventDiscoveryCard from '../components/EventDiscoveryCard';
 import EventDiscoveryFilters from '../components/EventDiscoveryFilters';
-import ProgramDiscoveryCard from '../components/ProgramDiscoveryCard';
-import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { mascotErrorToast } from '../components/MascotToast';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
@@ -18,13 +16,6 @@ var SORT_OPTIONS = [
   { value: 'start_time',     labelKey: 'soonest' },
   { value: 'ending_soon',    labelKey: 'endingSoon' },
   { value: 'recently_added', labelKey: 'recentlyAdded' },
-];
-
-var PROGRAM_STATUS_OPTIONS = [
-  { value: '',         label: 'All Statuses' },
-  { value: 'active',   label: 'Active' },
-  { value: 'upcoming', label: 'Upcoming' },
-  { value: 'closed',   label: 'Closed' },
 ];
 
 var DEFAULT_FILTERS = {
@@ -72,7 +63,7 @@ function FilterIcon() {
 }
 
 function XIcon({ size }) {
-  var cls = size === 14 ? 'h-3.5 w-3.5' : 'h-4.5 w-4.5';
+  var cls = size === 14 ? 'h-3.5 w-3.5' : 'h-4 w-4';
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -104,22 +95,6 @@ function CalendarIcon() {
   );
 }
 
-function CalendarXIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
-function ProgramsEmptyIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  );
-}
-
 function AlertCircleIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -128,7 +103,7 @@ function AlertCircleIcon() {
   );
 }
 
-/* ─── Skeletons ─────────────────────────────────────────────── */
+/* ─── Skeleton ──────────────────────────────────────────────── */
 
 function EventCardSkeleton() {
   return (
@@ -165,85 +140,45 @@ function EventCardSkeleton() {
   );
 }
 
-function ProgramCardSkeleton() {
-  return (
-    <div
-      style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '3px 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)' }}
-      aria-hidden="true"
-      className="animate-pulse"
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#E2E8F0' }} />
-        <div style={{ height: '12px', width: '120px', background: '#F1F5F9', borderRadius: '4px' }} />
-      </div>
-      <div style={{ height: '18px', width: '65%', background: '#E2E8F0', borderRadius: '4px' }} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '100%' }} />
-        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '85%' }} />
-        <div style={{ height: '12px', background: '#F1F5F9', borderRadius: '4px', width: '70%' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-        <div style={{ height: '11px', width: '80px', background: '#F1F5F9', borderRadius: '4px' }} />
-        <div style={{ height: '28px', width: '96px', background: '#E2E8F0', borderRadius: '8px' }} />
-      </div>
-    </div>
-  );
-}
-
 /* ─── Component ─────────────────────────────────────────────── */
 
 export default function EventDiscovery() {
-  var [session, setSession] = useState(null);
-  var [sessionLoading, setSessionLoading] = useState(true);
-  var [viewMode, setViewMode] = useState(function() {
-    var params = new URLSearchParams(window.location.search);
-    return params.get('tab') === 'programs' ? 'programs' : 'events';
-  });
-  var [verifiedOnly, setVerifiedOnly] = useState(true);
-  var [filters, setFilters] = useState(DEFAULT_FILTERS);
-  var [keyword, setKeyword] = useState('');
+  var [session, setSession]               = useState(null);
+  var [verifiedOnly, setVerifiedOnly]     = useState(true);
+  var [filters, setFilters]               = useState(DEFAULT_FILTERS);
+  var [keyword, setKeyword]               = useState('');
   var [debouncedKeyword, setDebouncedKeyword] = useState('');
-  var [sortBy, setSortBy] = useState('start_time');
-  var [programStatus, setProgramStatus] = useState('');
+  var [sortBy, setSortBy]                 = useState('start_time');
 
-  var [events, setEvents] = useState([]);
+  var [events, setEvents]                 = useState([]);
   var [filteredEvents, setFilteredEvents] = useState([]);
-  var [totalCount, setTotalCount] = useState(0);
-  var [page, setPage] = useState(1);
-  var [loading, setLoading] = useState(true);
-  var [error, setError] = useState(null);
+  var [totalCount, setTotalCount]         = useState(0);
+  var [page, setPage]                     = useState(1);
+  var [loading, setLoading]               = useState(true);
+  var [error, setError]                   = useState(null);
 
-  var [programs, setPrograms] = useState([]);
-  var [programsTotalCount, setProgramsTotalCount] = useState(0);
-  var [programsPage, setProgramsPage] = useState(1);
-  var [programsLoading, setProgramsLoading] = useState(false);
-  var [programsError, setProgramsError] = useState(null);
-  var [savedPrograms, setSavedPrograms] = useState(new Set());
-
-  var [datePickerOpen, setDatePickerOpen] = useState(false);
+  var [datePickerOpen, setDatePickerOpen]   = useState(false);
   var [datePickerMonth, setDatePickerMonth] = useState(function() { return new Date(); });
   var [selectedFilterDate, setSelectedFilterDate] = useState(null);
   var datePickerRef = useRef(null);
 
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  var [savedEvents, setSavedEvents] = useState(new Set());
-  var [adminOrgs, setAdminOrgs] = useState([]);
-  var [coHostsMap, setCoHostsMap] = useState({});
+  var [savedEvents, setSavedEvents]         = useState(new Set());
+  var [adminOrgs, setAdminOrgs]             = useState([]);
+  var [coHostsMap, setCoHostsMap]           = useState({});
 
-  var [selectedEvent, setSelectedEvent] = useState(null);
-  var [guestRSVPModal, setGuestRSVPModal] = useState(false);
-  var [guestInfo, setGuestInfo] = useState({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
-  var [rsvpLoading, setRsvpLoading] = useState(false);
-  var [rsvpSuccess, setRsvpSuccess] = useState(false);
+  var [guestRSVPModal, setGuestRSVPModal]   = useState(false);
+  var [selectedEvent, setSelectedEvent]     = useState(null);
+  var [guestInfo, setGuestInfo]             = useState({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
+  var [rsvpLoading, setRsvpLoading]         = useState(false);
+  var [rsvpSuccess, setRsvpSuccess]         = useState(false);
 
   var searchRef = useRef(null);
   var lang = filters.uiLang || 'en';
+  var isRTL = lang === 'ar';
 
   useEffect(function() {
-    supabase.auth.getSession().then(function(res) {
-      setSession(res.data.session);
-      setSessionLoading(false);
-    });
+    supabase.auth.getSession().then(function(res) { setSession(res.data.session); });
     var sub = supabase.auth.onAuthStateChange(function(_e, s) { setSession(s); });
     return function() { sub.data.subscription.unsubscribe(); };
   }, []);
@@ -263,10 +198,6 @@ export default function EventDiscovery() {
       .then(function(res) {
         if (res.data) setSavedEvents(new Set(res.data.map(function(r) { return r.event_id; })));
       });
-    supabase.from('program_saves').select('program_id').eq('user_id', session.user.id)
-      .then(function(res) {
-        if (res.data) setSavedPrograms(new Set(res.data.map(function(r) { return r.program_id; })));
-      });
   }, [session]);
 
   useEffect(function() {
@@ -274,59 +205,54 @@ export default function EventDiscovery() {
     return function() { clearTimeout(timer); };
   }, [keyword]);
 
-  useEffect(function() {
-    setPage(1);
-    setProgramsPage(1);
-  }, [debouncedKeyword, filters, sortBy, programStatus, viewMode, verifiedOnly]);
+  useEffect(function() { setPage(1); }, [debouncedKeyword, filters, sortBy, verifiedOnly]);
 
-  // Client-side cause area filter applied after fetch
+  // Client-side cause area filter
   useEffect(function() {
     var causeAreas = filters.causeAreas || [];
     if (causeAreas.length === 0) {
       setFilteredEvents(events);
     } else {
       setFilteredEvents(events.filter(function(e) {
-        return causeAreas.every(function(tag) {
-          return (e.cause_areas || []).includes(tag);
-        });
+        return causeAreas.every(function(tag) { return (e.cause_areas || []).includes(tag); });
       }));
     }
   }, [events, filters.causeAreas]);
 
   /* ─── Fetch events ── */
   var fetchEvents = useCallback(async function() {
-    if (viewMode !== 'events') return;
     setLoading(true);
     setError(null);
     try {
       var offset = (page - 1) * PAGE_SIZE;
       var res = await supabase.rpc('get_public_events', {
-        search_keyword:      debouncedKeyword || null,
-        filter_tags:         (filters.tags || []).length > 0 ? filters.tags : null,
-        filter_event_types:  filters.eventTypes.length > 0 ? filters.eventTypes : null,
-        filter_audience:     filters.audience.length > 0 ? filters.audience : null,
-        filter_languages:    filters.languages.length > 0 ? filters.languages : null,
-        filter_org_type:     filters.orgType || null,
-        filter_state:        filters.state || null,
-        filter_city:         filters.city || null,
-        filter_zip:          filters.zip || null,
-        filter_volunteer:    filters.volunteerSignup || null,
-        filter_donation:     filters.donationDropoff || null,
-        filter_rsvp:         filters.requiresRsvp || null,
-        filter_date_range:   filters.dateRange
+        search_keyword:       debouncedKeyword || null,
+        filter_tags:          (filters.tags || []).length > 0 ? filters.tags : null,
+        filter_event_types:   filters.eventTypes.length > 0 ? filters.eventTypes : null,
+        filter_audience:      filters.audience.length > 0 ? filters.audience : null,
+        filter_languages:     filters.languages.length > 0 ? filters.languages : null,
+        filter_org_type:      filters.orgType || null,
+        filter_state:         filters.state || null,
+        filter_city:          filters.city || null,
+        filter_zip:           filters.zip || null,
+        filter_volunteer:     filters.volunteerSignup || null,
+        filter_donation:      filters.donationDropoff || null,
+        filter_rsvp:          filters.requiresRsvp || null,
+        filter_date_range:    filters.dateRange
           ? (filters.dateRange === 'thisWeek' ? 'this_week'
             : filters.dateRange === 'thisMonth' ? 'this_month'
             : filters.dateRange === 'customRange' ? 'custom'
             : filters.dateRange)
           : null,
-        filter_date_from:    filters.dateRange === 'customRange' && filters.dateFrom ? filters.dateFrom : null,
-        filter_date_to:      filters.dateRange === 'customRange' && filters.dateTo ? filters.dateTo : null,
-        sort_by:             sortBy,
-        page_limit:          PAGE_SIZE,
-        page_offset:         offset,
+        filter_date_from:     filters.dateRange === 'customRange' && filters.dateFrom ? filters.dateFrom : null,
+        filter_date_to:       filters.dateRange === 'customRange' && filters.dateTo ? filters.dateTo : null,
+        sort_by:              sortBy,
+        page_limit:           PAGE_SIZE,
+        page_offset:          offset,
         filter_verified_only: verifiedOnly,
       });
       if (res.error) throw res.error;
+
       var sorted = (res.data || []).slice().sort(function(a, b) {
         if (a.is_featured && !b.is_featured) return -1;
         if (!a.is_featured && b.is_featured) return 1;
@@ -336,6 +262,7 @@ export default function EventDiscovery() {
         return Object.assign({}, e, { is_demo: e.organization_id === 'a0000000-0000-0000-0000-000000000001' });
       });
       setEvents(withDemo);
+
       if (withDemo.length > 0) {
         var eventIds = withDemo.map(function(e) { return e.id; });
         var collabRes = await supabase
@@ -366,54 +293,17 @@ export default function EventDiscovery() {
     } finally {
       setLoading(false);
     }
-  }, [viewMode, page, debouncedKeyword, filters, sortBy, lang, verifiedOnly]);
+  }, [page, debouncedKeyword, filters, sortBy, verifiedOnly]);
 
-  /* ─── Fetch programs ── */
-  var fetchPrograms = useCallback(async function() {
-    if (viewMode !== 'programs') return;
-    setProgramsLoading(true);
-    setProgramsError(null);
-    try {
-      var offset = (programsPage - 1) * PAGE_SIZE;
-      var query = supabase
-        .from('org_programs')
-        .select('*, organizations!inner(id, name, slug, logo_url, type, city, state, county, is_public, is_verified_nonprofit)')
-        .eq('is_public', true)
-        .eq('publish_to_discovery', true)
-        .eq('organizations.is_public', true);
+  useEffect(function() { fetchEvents(); }, [fetchEvents]);
 
-      if (verifiedOnly) query = query.eq('organizations.is_verified_nonprofit', true);
-      if (programStatus) query = query.eq('status', programStatus);
-      if (filters.state) query = query.ilike('organizations.state', filters.state);
-      if (filters.city)  query = query.ilike('organizations.city', '%' + filters.city + '%');
-      if (debouncedKeyword) query = query.or('name.ilike.%' + debouncedKeyword + '%,description.ilike.%' + debouncedKeyword + '%');
-
-      query = query.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
-
-      var res = await query;
-      if (res.error) throw res.error;
-      var safeData = (res.data || []).filter(function(p) { return p && p.id; }).map(function(p) {
-        return Object.assign({}, p, {
-          org_name:                  p.organizations ? p.organizations.name : '',
-          org_slug:                  p.organizations ? p.organizations.slug : '',
-          org_logo_url:              p.organizations ? p.organizations.logo_url : null,
-          org_type:                  p.organizations ? p.organizations.type : '',
-          org_city:                  p.organizations ? p.organizations.city : '',
-          org_state:                 p.organizations ? p.organizations.state : '',
-          org_county:                p.organizations ? p.organizations.county : '',
-          org_is_verified_nonprofit: p.organizations ? p.organizations.is_verified_nonprofit : false,
-        });
-      });
-      setPrograms(safeData);
-      setProgramsTotalCount(safeData.length === PAGE_SIZE ? programsPage * PAGE_SIZE + 1 : offset + safeData.length);
-    } catch (err) {
-      console.error('Program discovery fetch error:', err);
-      setProgramsError(err.message || 'Failed to load programs');
-      mascotErrorToast('Failed to load programs', 'Check your connection and try again.');
-    } finally {
-      setProgramsLoading(false);
+  useEffect(function() {
+    function handleClickOutside(e) {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target)) setDatePickerOpen(false);
     }
-  }, [viewMode, programsPage, debouncedKeyword, filters, programStatus, verifiedOnly]);
+    if (datePickerOpen) document.addEventListener('mousedown', handleClickOutside);
+    return function() { document.removeEventListener('mousedown', handleClickOutside); };
+  }, [datePickerOpen]);
 
   function handleFilterChange(key, value) {
     setFilters(function(prev) { var u = {}; u[key] = value; return Object.assign({}, prev, u); });
@@ -423,7 +313,6 @@ export default function EventDiscovery() {
     setFilters(DEFAULT_FILTERS);
     setKeyword('');
     setSortBy('start_time');
-    setProgramStatus('');
     setSelectedFilterDate(null);
     setDatePickerOpen(false);
     if (searchRef.current) searchRef.current.focus();
@@ -442,25 +331,6 @@ export default function EventDiscovery() {
   function clearDateFilter() {
     setSelectedFilterDate(null);
     setFilters(function(prev) { return Object.assign({}, prev, { dateRange: '', dateFrom: '', dateTo: '' }); });
-  }
-
-  useEffect(function() { fetchEvents(); },   [fetchEvents]);
-  useEffect(function() { fetchPrograms(); }, [fetchPrograms]);
-
-  useEffect(function() {
-    function handleClickOutside(e) {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target)) {
-        setDatePickerOpen(false);
-      }
-    }
-    if (datePickerOpen) document.addEventListener('mousedown', handleClickOutside);
-    return function() { document.removeEventListener('mousedown', handleClickOutside); };
-  }, [datePickerOpen]);
-
-  function handleGuestRSVP(event) {
-    setSelectedEvent(event);
-    setGuestRSVPModal(true);
-    setRsvpSuccess(false);
   }
 
   async function submitGuestRSVP(e) {
@@ -484,7 +354,6 @@ export default function EventDiscovery() {
       }
       setRsvpSuccess(true);
       setGuestInfo({ name: '', email: '', phone: '', status: 'interested', guestCount: 1 });
-      mascotSuccessToast("You're on the list!", 'Your RSVP was submitted successfully.');
       var eventDate = new Date(selectedEvent.start_time).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       var eventTime = new Date(selectedEvent.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
       fetch(SUPABASE_URL + '/functions/v1/send-transactional', {
@@ -516,197 +385,162 @@ export default function EventDiscovery() {
     }
   }
 
-  // Use filteredEvents (cause area client-side filter applied) for display
-  var displayEvents   = filteredEvents;
-  var isLoading       = viewMode === 'events' ? loading : programsLoading;
-  var currentError    = viewMode === 'events' ? error : programsError;
-  var currentTotal    = viewMode === 'events' ? displayEvents.length : programsTotalCount;
-  var currentPage     = viewMode === 'events' ? page : programsPage;
-  var setCurrentPage  = viewMode === 'events' ? setPage : setProgramsPage;
-  var totalPages      = Math.ceil((viewMode === 'events' ? totalCount : programsTotalCount) / PAGE_SIZE);
-  var isRTL           = lang === 'ar';
+  var displayEvents = filteredEvents;
+  var totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <>
       <Header />
       <main id="main-content">
-    <div
-      style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}
-      dir={isRTL ? 'rtl' : 'ltr'}
-    >
-      {/* Sticky Search + Toggle Bar */}
-      <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: session ? 0 : 64, zIndex: 30 }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div
+          style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}
+          dir={isRTL ? 'rtl' : 'ltr'}
+        >
+          {/* Sticky search bar */}
+          <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: 64, zIndex: 30 }}>
+            <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
 
-          {/* Nonprofits / All toggle */}
-          <div
-            style={{ display: 'inline-flex', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '3px', flexShrink: 0 }}
-            role="group"
-            aria-label="Organization type filter"
-          >
-            <button
-              onClick={function() { setVerifiedOnly(true); }}
-              aria-pressed={verifiedOnly}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: verifiedOnly ? '#22C55E' : 'transparent', color: verifiedOnly ? '#FFFFFF' : '#64748B' }}
-              className="focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <BadgeCheck size={13} aria-hidden="true" />
-              Nonprofits
-            </button>
-            <button
-              onClick={function() { setVerifiedOnly(false); }}
-              aria-pressed={!verifiedOnly}
-              style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: !verifiedOnly ? '#3B82F6' : 'transparent', color: !verifiedOnly ? '#FFFFFF' : '#64748B' }}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              All
-            </button>
-          </div>
-
-          {/* Search input */}
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none', display: 'flex' }}>
-              <SearchIcon />
-            </span>
-            <input
-              ref={searchRef}
-              type="search"
-              value={keyword}
-              onChange={function(e) { setKeyword(e.target.value); }}
-              placeholder={viewMode === 'events' ? et(lang, 'searchPlaceholder') : 'Search programs, organizations...'}
-              aria-label={viewMode === 'programs' ? 'Search programs' : et(lang, 'searchPlaceholder')}
-              style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }}
-              className="focus:ring-2 focus:ring-blue-500"
-            />
-            {keyword && (
-              <button
-                onClick={function() { setKeyword(''); }}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }}
-                aria-label="Clear search"
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              {/* Nonprofits / All toggle */}
+              <div
+                style={{ display: 'inline-flex', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '3px', flexShrink: 0 }}
+                role="group"
+                aria-label="Organization type filter"
               >
-                <XIcon size={14} />
-              </button>
-            )}
-          </div>
-
-          <button
-            onClick={function() { setMobileFiltersOpen(true); }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
-            className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Open filters"
-            aria-expanded={mobileFiltersOpen}
-          >
-            <FilterIcon />
-            {et(lang, 'filtersHeading')}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
-        <div style={{ display: 'flex', gap: '24px' }}>
-
-          {/* Desktop Sidebar */}
-          <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
-            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', position: 'sticky', top: session ? 80 : 144 }}>
-              <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
-            </div>
-          </div>
-
-          {/* Mobile Filter Drawer */}
-          {mobileFiltersOpen && (
-            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={et(lang, 'filtersHeading')}>
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={function() { setMobileFiltersOpen(false); }} aria-hidden="true" />
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '320px', maxWidth: '100%', background: '#FFFFFF', boxShadow: '4px 0 24px rgba(0,0,0,0.15)', overflowY: 'auto', padding: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523' }}>{et(lang, 'filtersHeading')}</h2>
-                  <button onClick={function() { setMobileFiltersOpen(false); }} style={{ padding: '6px', borderRadius: '8px', color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close filters" className="focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <XIcon size={18} />
-                  </button>
-                </div>
-                <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
-                <button onClick={function() { setMobileFiltersOpen(false); }} style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {et(lang, 'results')}
+                <button
+                  onClick={function() { setVerifiedOnly(true); }}
+                  aria-pressed={verifiedOnly}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: verifiedOnly ? '#22C55E' : 'transparent', color: verifiedOnly ? '#FFFFFF' : '#64748B' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <BadgeCheck size={13} aria-hidden="true" />
+                  Nonprofits
+                </button>
+                <button
+                  onClick={function() { setVerifiedOnly(false); }}
+                  aria-pressed={!verifiedOnly}
+                  style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: !verifiedOnly ? '#3B82F6' : 'transparent', color: !verifiedOnly ? '#FFFFFF' : '#64748B' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  All
                 </button>
               </div>
+
+              {/* Search input */}
+              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none', display: 'flex' }}>
+                  <SearchIcon />
+                </span>
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={keyword}
+                  onChange={function(e) { setKeyword(e.target.value); }}
+                  placeholder={et(lang, 'searchPlaceholder')}
+                  aria-label={et(lang, 'searchPlaceholder')}
+                  style={{ width: '100%', paddingLeft: '36px', paddingRight: keyword ? '36px' : '16px', paddingTop: '8px', paddingBottom: '8px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }}
+                  className="focus:ring-2 focus:ring-blue-500"
+                />
+                {keyword && (
+                  <button
+                    onClick={function() { setKeyword(''); }}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: '2px' }}
+                    aria-label="Clear search"
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  >
+                    <XIcon size={14} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={function() { setMobileFiltersOpen(true); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                className="lg:hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Open filters"
+                aria-expanded={mobileFiltersOpen}
+              >
+                <FilterIcon />
+                {et(lang, 'filtersHeading')}
+              </button>
             </div>
-          )}
+          </div>
 
-          {/* Main Content */}
-          <main style={{ flex: 1, minWidth: 0 }} aria-label="Discovery results">
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+            <div style={{ display: 'flex', gap: '24px' }}>
 
-            <div style={{ marginBottom: '16px' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0E1523' }}>
-                {verifiedOnly
-                  ? (viewMode === 'programs' ? 'Nonprofit Programs' : 'Nonprofit Events')
-                  : et(lang, 'pageTitle')}
-              </h1>
-              <p style={{ color: '#64748B', fontSize: '14px', marginTop: '4px' }}>
-                {verifiedOnly ? 'Events and programs from verified 501(c)(3) nonprofits.' : et(lang, 'pageSubtitle')}
-              </p>
-            </div>
-
-            {/* Active filter chips */}
-            {(function() {
-              var chips = [];
-              if (filters.state && filters.state.length >= 2) chips.push({ key: 'state', label: 'State: ' + filters.state, clear: function() { handleFilterChange('state', ''); } });
-              if (filters.city && filters.city.length >= 2) chips.push({ key: 'city', label: 'City: ' + filters.city, clear: function() { handleFilterChange('city', ''); } });
-              if (filters.zip && filters.zip.length >= 3) chips.push({ key: 'zip', label: 'ZIP: ' + filters.zip, clear: function() { handleFilterChange('zip', ''); } });
-              (filters.eventTypes || []).forEach(function(t) { chips.push({ key: 'et-' + t, label: t.replace(/-/g, ' '), clear: function() { handleFilterChange('eventTypes', (filters.eventTypes || []).filter(function(x) { return x !== t; })); } }); });
-              (filters.causeAreas || []).forEach(function(t) { chips.push({ key: 'ca-' + t, label: t, clear: function() { handleFilterChange('causeAreas', (filters.causeAreas || []).filter(function(x) { return x !== t; })); } }); });
-              (filters.audience || []).forEach(function(t) { chips.push({ key: 'au-' + t, label: t.replace(/-/g, ' '), clear: function() { handleFilterChange('audience', (filters.audience || []).filter(function(x) { return x !== t; })); } }); });
-              (filters.languages || []).forEach(function(t) { chips.push({ key: 'la-' + t, label: t, clear: function() { handleFilterChange('languages', (filters.languages || []).filter(function(x) { return x !== t; })); } }); });
-              if (filters.orgType) chips.push({ key: 'ot', label: filters.orgType.replace(/_/g, ' '), clear: function() { handleFilterChange('orgType', ''); } });
-              if (filters.dateRange) chips.push({ key: 'dr', label: et(lang, filters.dateRange) || filters.dateRange, clear: function() { handleFilterChange('dateRange', ''); handleFilterChange('dateFrom', ''); handleFilterChange('dateTo', ''); } });
-              if (chips.length === 0) return null;
-              return (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role='list' aria-label='Active filters'>
-                  {chips.map(function(chip) {
-                    return (
-                      <span key={chip.key} role='listitem' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}>
-                        {chip.label}
-                        <button onClick={chip.clear} aria-label={'Remove filter: ' + chip.label} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }} className='focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full'>
-                          <X size={10} aria-hidden="true" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                  <button onClick={handleReset} style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }} className='focus:outline-none focus:ring-2 focus:ring-blue-500 rounded'>Clear all</button>
+              {/* Desktop sidebar */}
+              <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
+                <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', position: 'sticky', top: 144 }}>
+                  <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
                 </div>
-              );
-            })()}
+              </div>
 
-            {/* Events / Programs tabs */}
-            <div
-              style={{ display: 'inline-flex', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '3px', marginBottom: '20px' }}
-              role="tablist"
-              aria-label="View mode"
-            >
-              <button
-                role="tab" aria-selected={viewMode === 'events'}
-                onClick={function() { setViewMode('events'); }}
-                style={{ padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: viewMode === 'events' ? '#3B82F6' : 'transparent', color: viewMode === 'events' ? '#FFFFFF' : '#64748B' }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Events
-              </button>
-              <button
-                role="tab" aria-selected={viewMode === 'programs'}
-                onClick={function() { setViewMode('programs'); }}
-                style={{ padding: '7px 20px', fontSize: '13px', fontWeight: 700, borderRadius: '7px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: viewMode === 'programs' ? '#8B5CF6' : 'transparent', color: viewMode === 'programs' ? '#FFFFFF' : '#64748B' }}
-                className="focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                Programs
-              </button>
-            </div>
+              {/* Mobile filter drawer */}
+              {mobileFiltersOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={et(lang, 'filtersHeading')}>
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={function() { setMobileFiltersOpen(false); }} aria-hidden="true" />
+                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '320px', maxWidth: '100%', background: '#FFFFFF', boxShadow: '4px 0 24px rgba(0,0,0,0.15)', overflowY: 'auto', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0E1523', margin: 0 }}>{et(lang, 'filtersHeading')}</h2>
+                      <button onClick={function() { setMobileFiltersOpen(false); }} style={{ padding: '6px', borderRadius: '8px', color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close filters" className="focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <EventDiscoveryFilters lang={lang} filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} />
+                    <button onClick={function() { setMobileFiltersOpen(false); }} style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      {et(lang, 'results')}
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            <>
-              {/* Results bar */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                <p style={{ fontSize: '14px', color: '#64748B' }} aria-live="polite" aria-atomic="true">
-                  {!isLoading && !currentError && (currentTotal + ' ' + et(lang, 'results'))}
-                </p>
-                {viewMode === 'events' ? (
+              {/* Main content */}
+              <main style={{ flex: 1, minWidth: 0 }} aria-label="Event listings">
+
+                <div style={{ marginBottom: '16px' }}>
+                  <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0E1523', margin: '0 0 4px' }}>
+                    {verifiedOnly ? 'Nonprofit Events' : et(lang, 'pageTitle')}
+                  </h1>
+                  <p style={{ color: '#64748B', fontSize: '14px', margin: 0 }}>
+                    {verifiedOnly ? 'Upcoming events from verified 501(c)(3) nonprofits.' : et(lang, 'pageSubtitle')}
+                  </p>
+                </div>
+
+                {/* Active filter chips */}
+                {(function() {
+                  var chips = [];
+                  if (filters.state && filters.state.length >= 2) chips.push({ key: 'state', label: 'State: ' + filters.state, clear: function() { handleFilterChange('state', ''); } });
+                  if (filters.city && filters.city.length >= 2) chips.push({ key: 'city', label: 'City: ' + filters.city, clear: function() { handleFilterChange('city', ''); } });
+                  if (filters.zip && filters.zip.length >= 3) chips.push({ key: 'zip', label: 'ZIP: ' + filters.zip, clear: function() { handleFilterChange('zip', ''); } });
+                  (filters.eventTypes || []).forEach(function(t) { chips.push({ key: 'et-' + t, label: t.replace(/-/g, ' '), clear: function() { handleFilterChange('eventTypes', (filters.eventTypes || []).filter(function(x) { return x !== t; })); } }); });
+                  (filters.causeAreas || []).forEach(function(t) { chips.push({ key: 'ca-' + t, label: t, clear: function() { handleFilterChange('causeAreas', (filters.causeAreas || []).filter(function(x) { return x !== t; })); } }); });
+                  (filters.audience || []).forEach(function(t) { chips.push({ key: 'au-' + t, label: t.replace(/-/g, ' '), clear: function() { handleFilterChange('audience', (filters.audience || []).filter(function(x) { return x !== t; })); } }); });
+                  (filters.languages || []).forEach(function(t) { chips.push({ key: 'la-' + t, label: t, clear: function() { handleFilterChange('languages', (filters.languages || []).filter(function(x) { return x !== t; })); } }); });
+                  if (filters.orgType) chips.push({ key: 'ot', label: filters.orgType.replace(/_/g, ' '), clear: function() { handleFilterChange('orgType', ''); } });
+                  if (filters.dateRange) chips.push({ key: 'dr', label: et(lang, filters.dateRange) || filters.dateRange, clear: function() { handleFilterChange('dateRange', ''); handleFilterChange('dateFrom', ''); handleFilterChange('dateTo', ''); } });
+                  if (chips.length === 0) return null;
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role="list" aria-label="Active filters">
+                      {chips.map(function(chip) {
+                        return (
+                          <span key={chip.key} role="listitem" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}>
+                            {chip.label}
+                            <button onClick={chip.clear} aria-label={'Remove filter: ' + chip.label} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }} className="focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full">
+                              <X size={10} aria-hidden="true" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button onClick={handleReset} style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">Clear all</button>
+                    </div>
+                  );
+                })()}
+
+                {/* Results bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                  <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }} aria-live="polite" aria-atomic="true">
+                    {!loading && !error && (displayEvents.length + ' ' + et(lang, 'results'))}
+                  </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {/* Date picker */}
                     <div ref={datePickerRef} style={{ position: 'relative' }}>
@@ -758,183 +592,144 @@ export default function EventDiscovery() {
                         </div>
                       )}
                     </div>
-                    {/* Sort by */}
+                    {/* Sort */}
                     <label htmlFor="event-sort-select" style={{ fontSize: '14px', color: '#475569', whiteSpace: 'nowrap' }}>{et(lang, 'sortBy')}:</label>
                     <select id="event-sort-select" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: '#0E1523', outline: 'none' }} className="focus:ring-2 focus:ring-blue-500">
                       {SORT_OPTIONS.map(function(opt) { return <option key={opt.value} value={opt.value}>{et(lang, opt.labelKey)}</option>; })}
                     </select>
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label htmlFor="program-status-select" style={{ fontSize: '14px', color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
-                    <select id="program-status-select" value={programStatus} onChange={function(e) { setProgramStatus(e.target.value); }} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px 12px', fontSize: '14px', color: '#0E1523', outline: 'none' }} className="focus:ring-2 focus:ring-purple-500">
-                      {PROGRAM_STATUS_OPTIONS.map(function(opt) { return <option key={opt.value} value={opt.value}>{opt.label}</option>; })}
-                    </select>
+                </div>
+
+                {/* Loading */}
+                {loading && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" aria-label="Loading events" aria-busy="true">
+                    {[1,2,3,4,5,6].map(function(i) { return <EventCardSkeleton key={i} />; })}
                   </div>
                 )}
-              </div>
 
-              {/* Skeletons */}
-              {isLoading && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" aria-label={'Loading ' + viewMode} aria-busy="true">
-                  {[1, 2, 3, 4, 5, 6].map(function(i) {
-                    return viewMode === 'events' ? <EventCardSkeleton key={i} /> : <ProgramCardSkeleton key={i} />;
-                  })}
-                </div>
-              )}
-
-              {/* Error state */}
-              {!isLoading && currentError && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} role="alert">
-                  <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <span style={{ color: '#EF4444' }}><AlertCircleIcon /></span>
-                  </div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
-                  <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
-                  <button onClick={viewMode === 'events' ? fetchEvents : fetchPrograms} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{et(lang, 'tryAgain')}</button>
-                </div>
-              )}
-
-              {/* Empty — events */}
-              {!isLoading && !currentError && viewMode === 'events' && displayEvents.length === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
-                  <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '180px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply' }} />
-                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-                    {verifiedOnly ? 'No nonprofit events found' : et(lang, 'noResults')}
-                  </h2>
-                  <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
-                    {verifiedOnly ? 'Try adjusting your filters, or switch to All to see every event.' : et(lang, 'noResultsDesc')}
-                  </p>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {verifiedOnly && (
-                      <button onClick={function() { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Show All Events</button>
-                    )}
-                    <button onClick={handleReset} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{et(lang, 'resetFilters')}</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Empty — programs */}
-              {!isLoading && !currentError && viewMode === 'programs' && programs.length === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
-                  <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '180px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply' }} />
-                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-                    {verifiedOnly ? 'No nonprofit programs found' : 'No programs found'}
-                  </h2>
-                  <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
-                    {verifiedOnly ? 'Try switching to All to see programs from all organizations.' : 'Try adjusting your search or filters.'}
-                  </p>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {verifiedOnly && (
-                      <button onClick={function() { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Show All Programs</button>
-                    )}
-                    <button onClick={handleReset} style={{ padding: '10px 20px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">{et(lang, 'resetFilters')}</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Events grid */}
-              {!isLoading && !currentError && viewMode === 'events' && displayEvents.length > 0 && (
-                <>
-                  {displayEvents.filter(function(e) { return e.is_featured; }).length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
-                      {displayEvents.filter(function(e) { return e.is_featured; }).map(function(event) { return <EventDiscoveryCard key={event.id} event={event} lang={lang} />; })}
+                {/* Error */}
+                {!loading && error && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }} role="alert">
+                    <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                      <span style={{ color: '#EF4444' }}><AlertCircleIcon /></span>
                     </div>
-                  )}
-                  {displayEvents.filter(function(e) { return !e.is_featured; }).length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {displayEvents.filter(function(e) { return !e.is_featured; }).map(function(event) { return <EventDiscoveryCard key={event.id} event={event} lang={lang} />; })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Programs grid */}
-              {!isLoading && !currentError && viewMode === 'programs' && programs.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {programs.filter(function(p) { return p && p.id; }).map(function(program) {
-                    return <ProgramDiscoveryCard key={program.id} program={program} session={session} initialSaved={savedPrograms.has(program.id)} />;
-                  })}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {!isLoading && !currentError && totalPages > 1 && (
-                <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
-                  <button onClick={function() { setCurrentPage(function(p) { return Math.max(1, p - 1); }); }} disabled={currentPage === 1} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }} aria-label={et(lang, 'previous')} className="focus:outline-none focus:ring-2 focus:ring-blue-500"><ChevronLeftIcon />{et(lang, 'previous')}</button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {Array.from({ length: Math.min(5, totalPages) }, function(_, i) {
-                      var pageNum;
-                      if (totalPages <= 5) pageNum = i + 1;
-                      else if (currentPage <= 3) pageNum = i + 1;
-                      else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
-                      else pageNum = currentPage - 2 + i;
-                      var isActive = pageNum === currentPage;
-                      return (
-                        <button key={pageNum} onClick={function() { setCurrentPage(pageNum); }} style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : '1px solid #E2E8F0', background: isActive ? (viewMode === 'programs' ? '#8B5CF6' : '#3B82F6') : '#FFFFFF', color: isActive ? '#FFFFFF' : '#475569', cursor: 'pointer' }} aria-label={et(lang, 'page') + ' ' + pageNum} aria-current={isActive ? 'page' : undefined} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{pageNum}</button>
-                      );
-                    })}
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>{et(lang, 'errorTitle')}</h2>
+                    <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>{et(lang, 'errorDesc')}</p>
+                    <button onClick={fetchEvents} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{et(lang, 'tryAgain')}</button>
                   </div>
-                  <button onClick={function() { setCurrentPage(function(p) { return Math.min(totalPages, p + 1); }); }} disabled={currentPage === totalPages} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }} aria-label={et(lang, 'next')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{et(lang, 'next')}<ChevronRightIcon /></button>
-                </nav>
-              )}
-            </>
-          </main>
-        </div>
-      </div>
+                )}
 
-      {/* Guest RSVP Modal */}
-      {guestRSVPModal && selectedEvent && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }} onClick={function() { if (!rsvpSuccess) setGuestRSVPModal(false); }} role="dialog" aria-modal="true" aria-labelledby="rsvp-modal-title">
-          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxWidth: '448px', width: '100%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <div style={{ borderBottom: '1px solid #E2E8F0', padding: '16px 24px' }}>
-              <h2 id="rsvp-modal-title" style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523' }}>RSVP to Event</h2>
-              <p style={{ color: '#64748B', fontSize: '14px', marginTop: '4px' }}>{selectedEvent.title}</p>
-            </div>
-            {rsvpSuccess ? (
-              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523', marginBottom: '8px' }}>You're All Set!</h3>
-                <p style={{ color: '#64748B', fontSize: '14px' }}>We've received your RSVP. Check your email for confirmation.</p>
-              </div>
-            ) : (
-              <form onSubmit={submitGuestRSVP} style={{ padding: '16px 24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {[
-                    { id: 'guest-name',  label: 'Your Name',        type: 'text',  required: true,  value: guestInfo.name,  key: 'name',  placeholder: 'Jane Doe' },
-                    { id: 'guest-email', label: 'Your Email',       type: 'email', required: true,  value: guestInfo.email, key: 'email', placeholder: 'jane@example.com' },
-                    { id: 'guest-phone', label: 'Phone (Optional)', type: 'tel',   required: false, value: guestInfo.phone, key: 'phone', placeholder: '(555) 123-4567' },
-                  ].map(function(f) {
-                    return (
-                      <div key={f.id}>
-                        <label htmlFor={f.id} style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
-                          {f.label}{f.required && <span style={{ color: '#EF4444' }} aria-hidden="true"> *</span>}
-                        </label>
-                        <input id={f.id} type={f.type} required={f.required} value={f.value} placeholder={f.placeholder} onChange={function(e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function(p) { return Object.assign({}, p, u); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-required={f.required} />
+                {/* Empty */}
+                {!loading && !error && displayEvents.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', textAlign: 'center' }}>
+                    <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ width: '180px', height: 'auto', marginBottom: '16px', mixBlendMode: 'multiply' }} />
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
+                      {verifiedOnly ? 'No nonprofit events found' : et(lang, 'noResults')}
+                    </h2>
+                    <p style={{ color: '#64748B', fontSize: '14px', marginBottom: '24px', maxWidth: '360px' }}>
+                      {verifiedOnly ? 'Try adjusting your filters, or switch to All to see every event.' : et(lang, 'noResultsDesc')}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {verifiedOnly && (
+                        <button onClick={function() { setVerifiedOnly(false); }} style={{ padding: '10px 20px', background: '#22C55E', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Show All Events</button>
+                      )}
+                      <button onClick={handleReset} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{et(lang, 'resetFilters')}</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Events grid */}
+                {!loading && !error && displayEvents.length > 0 && (
+                  <>
+                    {displayEvents.filter(function(e) { return e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: '8px' }}>
+                        {displayEvents.filter(function(e) { return e.is_featured; }).map(function(event) { return <EventDiscoveryCard key={event.id} event={event} lang={lang} />; })}
                       </div>
-                    );
-                  })}
-                  <div>
-                    <label htmlFor="guest-status" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>RSVP Status</label>
-                    <select id="guest-status" value={guestInfo.status} onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }} className="focus:ring-2 focus:ring-blue-500">
-                      <option value="interested">Interested</option>
-                      <option value="going">Going</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="guest-count" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>Number of Guests</label>
-                    <input id="guest-count" type="number" min="1" max="10" value={guestInfo.guestCount} onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { guestCount: e.target.value }); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid #E2E8F0' }}>
-                  <button type="button" onClick={function() { setGuestRSVPModal(false); }} disabled={rsvpLoading} style={{ padding: '8px 16px', border: '1px solid #E2E8F0', color: '#475569', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
-                  <button type="submit" disabled={rsvpLoading} style={{ padding: '8px 16px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: rsvpLoading ? 'not-allowed' : 'pointer', opacity: rsvpLoading ? 0.6 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{rsvpLoading ? 'Submitting...' : 'Submit RSVP'}</button>
-                </div>
-              </form>
-            )}
+                    )}
+                    {displayEvents.filter(function(e) { return !e.is_featured; }).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {displayEvents.filter(function(e) { return !e.is_featured; }).map(function(event) { return <EventDiscoveryCard key={event.id} event={event} lang={lang} />; })}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Pagination */}
+                {!loading && !error && totalPages > 1 && (
+                  <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '32px' }} aria-label="Pagination">
+                    <button onClick={function() { setPage(function(p) { return Math.max(1, p - 1); }); }} disabled={page === 1} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1 }} aria-label={et(lang, 'previous')} className="focus:outline-none focus:ring-2 focus:ring-blue-500"><ChevronLeftIcon />{et(lang, 'previous')}</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {Array.from({ length: Math.min(5, totalPages) }, function(_, i) {
+                        var pageNum;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (page <= 3) pageNum = i + 1;
+                        else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = page - 2 + i;
+                        var isActive = pageNum === page;
+                        return (
+                          <button key={pageNum} onClick={function() { setPage(pageNum); }} style={{ width: '36px', height: '36px', fontSize: '14px', fontWeight: isActive ? 700 : 500, borderRadius: '8px', border: isActive ? 'none' : '1px solid #E2E8F0', background: isActive ? '#3B82F6' : '#FFFFFF', color: isActive ? '#FFFFFF' : '#475569', cursor: 'pointer' }} aria-label={et(lang, 'page') + ' ' + pageNum} aria-current={isActive ? 'page' : undefined} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{pageNum}</button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={function() { setPage(function(p) { return Math.min(totalPages, p + 1); }); }} disabled={page === totalPages} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '14px', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', background: '#FFFFFF', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.4 : 1 }} aria-label={et(lang, 'next')} className="focus:outline-none focus:ring-2 focus:ring-blue-500">{et(lang, 'next')}<ChevronRightIcon /></button>
+                  </nav>
+                )}
+              </main>
+            </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Guest RSVP Modal */}
+        {guestRSVPModal && selectedEvent && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }} onClick={function() { if (!rsvpSuccess) setGuestRSVPModal(false); }} role="dialog" aria-modal="true" aria-labelledby="rsvp-modal-title">
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxWidth: '448px', width: '100%' }} onClick={function(e) { e.stopPropagation(); }}>
+              <div style={{ borderBottom: '1px solid #E2E8F0', padding: '16px 24px' }}>
+                <h2 id="rsvp-modal-title" style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523', margin: 0 }}>RSVP to Event</h2>
+                <p style={{ color: '#64748B', fontSize: '14px', marginTop: '4px' }}>{selectedEvent.title}</p>
+              </div>
+              {rsvpSuccess ? (
+                <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0E1523', marginBottom: '8px' }}>You're All Set!</h3>
+                  <p style={{ color: '#64748B', fontSize: '14px' }}>We've received your RSVP. Check your email for confirmation.</p>
+                </div>
+              ) : (
+                <form onSubmit={submitGuestRSVP} style={{ padding: '16px 24px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {[
+                      { id: 'guest-name',  label: 'Your Name',        type: 'text',  required: true,  value: guestInfo.name,  key: 'name',  placeholder: 'Jane Doe' },
+                      { id: 'guest-email', label: 'Your Email',       type: 'email', required: true,  value: guestInfo.email, key: 'email', placeholder: 'jane@example.com' },
+                      { id: 'guest-phone', label: 'Phone (Optional)', type: 'tel',   required: false, value: guestInfo.phone, key: 'phone', placeholder: '(555) 123-4567' },
+                    ].map(function(f) {
+                      return (
+                        <div key={f.id}>
+                          <label htmlFor={f.id} style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>
+                            {f.label}{f.required && <span style={{ color: '#EF4444' }} aria-hidden="true"> *</span>}
+                          </label>
+                          <input id={f.id} type={f.type} required={f.required} value={f.value} placeholder={f.placeholder} onChange={function(e) { var u = {}; u[f.key] = e.target.value; setGuestInfo(function(p) { return Object.assign({}, p, u); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" aria-required={f.required} />
+                        </div>
+                      );
+                    })}
+                    <div>
+                      <label htmlFor="guest-status" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>RSVP Status</label>
+                      <select id="guest-status" value={guestInfo.status} onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { status: e.target.value }); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none' }} className="focus:ring-2 focus:ring-blue-500">
+                        <option value="interested">Interested</option>
+                        <option value="going">Going</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="guest-count" style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0E1523', marginBottom: '6px' }}>Number of Guests</label>
+                      <input id="guest-count" type="number" min="1" max="10" value={guestInfo.guestCount} onChange={function(e) { setGuestInfo(function(p) { return Object.assign({}, p, { guestCount: e.target.value }); }); }} style={{ width: '100%', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0E1523', outline: 'none', boxSizing: 'border-box' }} className="focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+                    <button type="button" onClick={function() { setGuestRSVPModal(false); }} disabled={rsvpLoading} style={{ padding: '8px 16px', border: '1px solid #E2E8F0', color: '#475569', fontSize: '14px', fontWeight: 600, borderRadius: '8px', background: 'transparent', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
+                    <button type="submit" disabled={rsvpLoading} style={{ padding: '8px 16px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: rsvpLoading ? 'not-allowed' : 'pointer', opacity: rsvpLoading ? 0.6 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{rsvpLoading ? 'Submitting...' : 'Submit RSVP'}</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
       </main>
       <Footer />
     </>

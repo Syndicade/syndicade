@@ -43,11 +43,8 @@ export default function ProgramDiscoveryCard({ program, session, initialSaved })
   var location = [program.org_city, program.org_state].filter(Boolean).join(', ');
   var orgInitials = ((program.org_name || 'O').charAt(0)).toUpperCase();
   var orgUrl = program.org_slug ? '/org/' + program.org_slug : null;
-
-  // organization_id is on the program object directly from org_programs table
   var orgId = program.organization_id;
 
-  // Cost display
   function costBadge() {
     if (!program.cost_type || program.cost_type === 'free') return { label: 'Free', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' };
     if (program.cost_type === 'donation') return { label: 'Donation', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' };
@@ -86,9 +83,9 @@ export default function ProgramDiscoveryCard({ program, session, initialSaved })
     }
   }
 
-  // Detail page link — passes from:'discover' state so back button works correctly
+  // Detail page link — state tracks where we came from for back navigation
   var detailTo = orgId
-    ? { pathname: '/organizations/' + orgId + '/programs/' + program.id, state: { from: 'discover' } }
+    ? { pathname: '/organizations/' + orgId + '/programs/' + program.id, state: { from: 'programs' } }
     : null;
 
   return (
@@ -135,7 +132,7 @@ export default function ProgramDiscoveryCard({ program, session, initialSaved })
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, overflow: 'hidden', flexWrap: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, overflow: 'hidden' }}>
             <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {program.org_name || 'Unknown Organization'}
             </span>
@@ -235,7 +232,6 @@ export default function ProgramDiscoveryCard({ program, session, initialSaved })
         {detailTo ? (
           <Link
             to={detailTo}
-            onClick={function() { window.history.replaceState({}, '', '/discover?tab=programs'); }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: '#8B5CF6', color: '#FFFFFF', fontSize: '12px', fontWeight: 700, borderRadius: '8px', textDecoration: 'none' }}
             className="hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
             aria-label={'View details for ' + (program.name || 'program')}
@@ -244,7 +240,6 @@ export default function ProgramDiscoveryCard({ program, session, initialSaved })
             <Icon path={ICONS.arrowRight} className="h-3.5 w-3.5" />
           </Link>
         ) : (
-          // Fallback if org ID is missing — shouldn't happen but safe
           <span style={{ fontSize: '12px', color: '#94A3B8' }}>Details unavailable</span>
         )}
       </div>

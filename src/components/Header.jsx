@@ -43,6 +43,11 @@ function Header() {
     return function() { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
 
+  // Close discover dropdown on route change
+  useEffect(function() {
+    setDiscoverOpen(false);
+  }, [location.pathname]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     navigate('/login');
@@ -64,11 +69,14 @@ function Header() {
   var hoverBg       = '#F1F5F9';
 
   var DISCOVER_ITEMS = [
-    { path: '/discover',      label: 'Events',        sub: 'Upcoming public events',          color: '#3B82F6', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-    { path: '/explore',       label: 'Organizations', sub: 'Verified nonprofits near you',    color: '#22C55E', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { path: '/opportunities', label: 'Opportunities', sub: 'Roles, boards, and volunteering', color: '#8B5CF6', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-    { path: '/funding',       label: 'Funding',       sub: 'Grants and scholarships',         color: '#F5B731', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { path: '/discover',      label: 'Events',         sub: 'Upcoming public events',          color: '#3B82F6', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { path: '/programs',      label: 'Programs',        sub: 'Ongoing nonprofit programs',      color: '#8B5CF6', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+    { path: '/explore',       label: 'Organizations',   sub: 'Verified nonprofits near you',    color: '#22C55E', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { path: '/opportunities', label: 'Opportunities',   sub: 'Roles, boards, and volunteering', color: '#F59E0B', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+    { path: '/funding',       label: 'Funding',         sub: 'Grants and scholarships',         color: '#F5B731', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   ];
+
+  var DISCOVER_PATHS = ['/discover', '/programs', '/explore', '/opportunities', '/funding'];
 
   function NavBtn({ path, label }) {
     var active = location.pathname === path;
@@ -87,7 +95,7 @@ function Header() {
   }
 
   function DiscoverDropdown() {
-    var discoverActive = ['/discover', '/explore', '/opportunities', '/funding'].indexOf(location.pathname) !== -1;
+    var discoverActive = DISCOVER_PATHS.indexOf(location.pathname) !== -1;
     return (
       <div ref={discoverRef} style={{ position: 'relative' }}>
         <button
@@ -105,6 +113,7 @@ function Header() {
           onMouseLeave={function(e) { if (!discoverOpen) { e.currentTarget.style.color = discoverActive ? textPrimary : textSecondary; e.currentTarget.style.background = discoverActive ? hoverBg : 'transparent'; } }}
           aria-haspopup="true"
           aria-expanded={discoverOpen}
+          aria-label="Discover menu"
         >
           Discover
           <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" style={{ transition: 'transform 0.15s', transform: discoverOpen ? 'rotate(180deg)' : 'none' }}>
@@ -113,7 +122,7 @@ function Header() {
         </button>
         {discoverOpen && (
           <div
-            style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', background: cardBg, border: '1px solid ' + headerBorder, borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', minWidth: '220px', overflow: 'hidden', zIndex: 100 }}
+            style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', background: cardBg, border: '1px solid ' + headerBorder, borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', minWidth: '240px', overflow: 'hidden', zIndex: 100 }}
             role="menu"
             aria-label="Discover navigation"
           >
@@ -152,7 +161,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
 
-          {/* Logo — always links to landing page */}
+          {/* Logo */}
           <button
             onClick={function() { navigate('/'); }}
             className="flex items-center flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
@@ -165,11 +174,8 @@ function Header() {
           {/* Nav — logged in */}
           {currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
-              <NavBtn path="/dashboard"     label="Dashboard" />
-              <NavBtn path="/discover"      label="Discover Events" />
-              <NavBtn path="/explore"       label="Explore Orgs" />
-              <NavBtn path="/opportunities" label="Opportunities" />
-              <NavBtn path="/funding"       label="Funding" />
+              <NavBtn path="/dashboard" label="Dashboard" />
+              <DiscoverDropdown />
               {firstAdminOrg && (
                 <button
                   onClick={function() { navigate('/community-board/hub'); }}
@@ -185,12 +191,12 @@ function Header() {
             </nav>
           )}
 
-          {/* Nav — logged out: consistent on ALL pages */}
+          {/* Nav — logged out */}
           {!currentUser && (
             <nav className="hidden md:flex items-center space-x-1 flex-shrink-0" aria-label="Main navigation">
-              <NavBtn path="/features"  label="Features" />
-              <NavBtn path="/pricing"   label="Pricing" />
-              <NavBtn path="/compare"   label="Compare Costs" />
+              <NavBtn path="/features" label="Features" />
+              <NavBtn path="/pricing"  label="Pricing" />
+              <NavBtn path="/compare"  label="Compare Costs" />
               <DiscoverDropdown />
             </nav>
           )}
