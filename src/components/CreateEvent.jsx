@@ -6,6 +6,7 @@ import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import usePlanLimits from '../hooks/usePlanLimits';
 import { Lock } from 'lucide-react';
 import { getStorageUsage } from '../lib/storageUtils';
+import { getContentModalTags } from '../lib/platformTags';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 var EVENT_TYPES = [
@@ -14,17 +15,7 @@ var EVENT_TYPES = [
   'Health & Wellness','Networking','Religious & Spiritual',
   'Social & Mixer','Sports & Recreation','Volunteer',
 ];
-var CAUSE_AREA_TAGS = [
-  'Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights','Community Building','Criminal Justice Reform','Disability Services','Disaster Relief','Domestic Violence','Economic Development','Education','Emergency Assistance','Employment & Workforce','Environment & Conservation','Faith & Spirituality','Financial Literacy','Food Access','Food Security','Health & Wellness','Homeless Services','Housing','Human Trafficking','Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights','Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction','Public Safety','Racial Equity','Senior Services','Substance Use Recovery','Transportation Access','Veterans Services','Violence Prevention','Voting Rights','Water Access',"Women's Rights",'Workforce Development','Youth Development',
-];
-var AUDIENCE_OPTIONS = [
-  'Adults (18+)','Children','Families','LGBTQ+',
-  'Seniors','Students','Veterans','Women','Youth (13–17)',
-];
-var LANGUAGE_OPTIONS = [
-  'Arabic','Chinese (Mandarin)','English','French','Haitian Creole',
-  'Hindi','Portuguese','Russian','Somali','Spanish','Tagalog','Vietnamese',
-];
+
 var TABS = [
   { id: 'details',   label: 'Details' },
   { id: 'settings',  label: 'Settings' },
@@ -396,6 +387,18 @@ visibility:'members', requireRSVP:false, enableCheckIn:true, displayPrice:'',
   var [causeAreas, setCauseAreas] = useState([]);
   var [volunteerSignup, setVolunteerSignup] = useState(false);
   var [donationDropoff, setDonationDropoff] = useState(false);
+  var [tagGroups, setTagGroups] = useState({ causeAreas: [], audience: [], activityTypes: [], languages: [] });
+  var [orgDefaults, setOrgDefaults] = useState({});
+
+useEffect(function() {
+  getContentModalTags('event').then(function(g) { setTagGroups(g); });
+}, []);
+
+useEffect(function() {
+  if (!isOpen || !organizationId) return;
+  supabase.from('organizations').select('tag_defaults').eq('id', organizationId).single()
+    .then(function(r) { setOrgDefaults(r.data && r.data.tag_defaults ? r.data.tag_defaults : {}); });
+}, [isOpen, organizationId]);
 
   // Publishing tab
   var [publishToDiscovery, setPublishToDiscovery] = useState(false);
@@ -551,13 +554,13 @@ setForm({title:'',description:'',eventType:'in-person',isMultiDay:false,schedule
     setSelectedGroupIds([]); setAvailableGroups([]);
     setIsRecurring(false); setRecurrenceType('monthly'); setDayOfWeek(1); setWeekOfMonth(1);
     setWeeklyDays([1]); setDailyInterval(1); setWeekdaysOnly(false); setRecurrenceEndDate('');
-    setEventTypes([]); setAudience([]); setLanguages([]); setEventTags([]);
     setEventTypes([]); setAudience([]); setLanguages([]); setEventTags([]); setCauseAreas([]);
     setVolunteerSignup(false); setDonationDropoff(false);
     setPublishToDiscovery(false); setPublishToWebsite(false); setIsFeatured(false);
     setFlierFile(null);
     setIsPaid(false); setTicketTypes([blankTicketType()]); setCheckoutFields(defaultCheckoutFields());
     setCoHostSearch(''); setCoHostResults([]); setCoHostInvites([]); setCoHostMessage('');
+    setOrgDefaults({});
     setError(null);
   }
 
@@ -1038,7 +1041,7 @@ if (!editingEvent && approvalStatus==='approved') {
             </button>
             <button
               type="button"
-              onClick={function() { if (form.displayPrice === '') setForm(function(p) { return Object.assign({}, p, { displayPrice: '' }); }); setForm(function(p) { return Object.assign({}, p, { displayPrice: p.displayPrice !== '' ? p.displayPrice : '0' }); }); }}
+              onClick={function() { setForm(function(p) { return Object.assign({}, p, { displayPrice: p.displayPrice !== '' ? p.displayPrice : '0' }); }); }}
               className={'flex-1 py-3 rounded-lg text-sm font-semibold border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (form.displayPrice !== '' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
               aria-pressed={form.displayPrice !== ''}>
               Paid / Donation
@@ -1428,13 +1431,37 @@ if (!editingEvent && approvalStatus==='approved') {
   function renderAudience() {
     return (
       <div className="space-y-6">
+        {/* Default tags banner */}
+        {orgDefaults.event && orgDefaults.event.length > 0 && (
+          <div style={{background:'rgba(245,183,49,0.08)',border:'1px solid rgba(245,183,49,0.35)',borderRadius:'10px',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',flexWrap:'wrap'}}>
+            <div style={{minWidth:0}}>
+              <p style={{fontSize:'13px',fontWeight:700,color:'#92400E',margin:'0 0 2px'}}>Your org has default event tags</p>
+              <p style={{fontSize:'12px',color:'#B45309',margin:0}}>
+                {orgDefaults.event.slice(0,3).join(' · ')}{orgDefaults.event.length > 3 ? ' +' + (orgDefaults.event.length - 3) + ' more' : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={function() {
+                var merged = causeAreas.slice();
+                orgDefaults.event.forEach(function(tag) { if (!merged.includes(tag)) merged.push(tag); });
+                setCauseAreas(merged);
+                mascotSuccessToast('Default tags applied.');
+              }}
+              style={{flexShrink:0,padding:'6px 14px',borderRadius:'6px',fontSize:'12px',fontWeight:700,border:'1px solid rgba(245,183,49,0.5)',background:'rgba(245,183,49,0.15)',color:'#92400E',cursor:'pointer'}}
+              className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+              aria-label="Apply org default event tags">
+              Use default tags
+            </button>
+          </div>
+        )}
 
         {/* Cause Area */}
         <div>
           <p className={labelCls}>Cause Area</p>
           <p className="text-xs text-gray-500 mb-3">Select all cause areas this event relates to.</p>
           <div className="flex flex-wrap gap-2">
-            {CAUSE_AREA_TAGS.map(function(tag) {
+            {tagGroups.causeAreas.map(function(tag) {
               var selected = causeAreas.includes(tag);
               return (
                 <button key={tag} type="button" onClick={function() { setCauseAreas(function(prev) { return prev.includes(tag) ? prev.filter(function(t) { return t !== tag; }) : prev.concat([tag]); }); }} className={'px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (selected ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50')} aria-pressed={selected}>
@@ -1461,7 +1488,7 @@ if (!editingEvent && approvalStatus==='approved') {
         <div>
           <p className={labelCls}>Audience</p>
           <p className="text-xs text-gray-500 mb-3">Who is this event intended for?</p>
-          <MultiCheckbox options={AUDIENCE_OPTIONS} selected={audience} onChange={setAudience} legend="Audience"/>
+          <MultiCheckbox options={tagGroups.audience} selected={audience} onChange={setAudience} legend="Audience"/>
         </div>
 
         <div className="border-t border-gray-100"/>
@@ -1470,7 +1497,7 @@ if (!editingEvent && approvalStatus==='approved') {
         <div>
           <p className={labelCls}>Languages Supported</p>
           <p className="text-xs text-gray-500 mb-3">Which languages will this event be conducted in?</p>
-          <MultiCheckbox options={LANGUAGE_OPTIONS} selected={languages} onChange={setLanguages} legend="Languages"/>
+          <MultiCheckbox options={tagGroups.languages} selected={languages} onChange={setLanguages} legend="Languages"/>
         </div>
 
         <div className="border-t border-gray-100"/>
