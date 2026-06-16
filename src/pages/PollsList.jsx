@@ -5,6 +5,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import toast from 'react-hot-toast';
 import PollCard from '../components/PollCard';
 import CreatePoll from '../components/CreatePoll';
+import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 
 function Icon({ path, className }) {
   return (
@@ -26,6 +27,7 @@ var ICONS = {
   x:        'M6 18L18 6M6 6l12 12',
   alert:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
   download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+  template: ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
 };
 
 function StatSkeleton() {
@@ -52,6 +54,8 @@ function PollCardSkeleton() {
   );
 }
 
+var POLL_TEMPLATES = (PLATFORM_TEMPLATES['poll'] || []);
+
 function PollsList() {
   var params = useParams();
   var organizationId = params.organizationId;
@@ -68,11 +72,13 @@ function PollsList() {
   var [sortBy, setSortBy] = useState('pinned_recent');
   var [showCreateModal, setShowCreateModal] = useState(false);
   var [editingPoll, setEditingPoll] = useState(null);
+  // templateData is separate from editingPoll — keeps CreatePoll in create mode
+  // while still pre-filling form fields and questions from the template
+  var [templateData, setTemplateData] = useState(null);
+  var [showTemplatePicker, setShowTemplatePicker] = useState(false);
   var [orgName, setOrgName] = useState('');
   var [memberCount, setMemberCount] = useState(0);
   var [exporting, setExporting] = useState(false);
-
-  // Selection state — Set of poll IDs
   var [selectedIds, setSelectedIds] = useState(new Set());
 
   var currentUserRef = useRef(null);
@@ -85,7 +91,6 @@ function PollsList() {
     applyFiltersAndSort();
   }, [polls, searchTerm, statusFilter, typeFilter, sortBy]);
 
-  // Clear selection when filters change so stale IDs don't linger
   useEffect(function() {
     setSelectedIds(new Set());
   }, [searchTerm, statusFilter, typeFilter, sortBy]);
@@ -97,7 +102,6 @@ function PollsList() {
 
   function applyFiltersAndSort() {
     var filtered = polls.slice();
-
     if (searchTerm.trim()) {
       var term = searchTerm.toLowerCase();
       filtered = filtered.filter(function(p) {
@@ -105,11 +109,9 @@ function PollsList() {
           (p.description && p.description.toLowerCase().includes(term));
       });
     }
-
     if (statusFilter === 'active') filtered = filtered.filter(function(p) { return !isPollClosed(p); });
     if (statusFilter === 'closed') filtered = filtered.filter(function(p) { return isPollClosed(p); });
     if (typeFilter !== 'all') filtered = filtered.filter(function(p) { return p.poll_type === typeFilter; });
-
     filtered.sort(function(a, b) {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
@@ -125,7 +127,6 @@ function PollsList() {
       if (aClosed && !bClosed) return 1;
       return new Date(b.created_at) - new Date(a.created_at);
     });
-
     setFilteredPolls(filtered);
   }
 
@@ -147,6 +148,7 @@ function PollsList() {
       var pollsResult = await supabase.from('polls')
         .select('*, last_reminded_at')
         .eq('organization_id', organizationId)
+        .eq('is_template', false)
         .order('created_at', { ascending: false });
       if (pollsResult.error) throw pollsResult.error;
       setPolls(pollsResult.data || []);
@@ -157,7 +159,6 @@ function PollsList() {
     } finally { setLoading(false); }
   }
 
-  // Selection helpers
   function toggleSelect(pollId) {
     setSelectedIds(function(prev) {
       var next = new Set(prev);
@@ -169,18 +170,13 @@ function PollsList() {
   function toggleSelectAll() {
     var allIds = filteredPolls.map(function(p) { return p.id; });
     var allSelected = allIds.every(function(id) { return selectedIds.has(id); });
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(allIds));
-    }
+    setSelectedIds(allSelected ? new Set() : new Set(allIds));
   }
 
   var allFilteredSelected = filteredPolls.length > 0 && filteredPolls.every(function(p) { return selectedIds.has(p.id); });
   var someFilteredSelected = filteredPolls.some(function(p) { return selectedIds.has(p.id); });
   var selectedCount = filteredPolls.filter(function(p) { return selectedIds.has(p.id); }).length;
 
-  // Export: uses selectedIds if any, otherwise all filteredPolls
   async function handleExport() {
     var pollsToExport = selectedCount > 0
       ? filteredPolls.filter(function(p) { return selectedIds.has(p.id); })
@@ -190,32 +186,14 @@ function PollsList() {
     var loadId = toast.loading('Preparing export...');
     try {
       var pollIds = pollsToExport.map(function(p) { return p.id; });
-
-      var optsResult = await supabase
-        .from('poll_options')
-        .select('id, poll_id, option_text, display_order')
-        .in('poll_id', pollIds)
-        .order('display_order');
+      var optsResult = await supabase.from('poll_options').select('id, poll_id, option_text, display_order').in('poll_id', pollIds).order('display_order');
       if (optsResult.error) throw optsResult.error;
-
-      var votesResult = await supabase
-        .from('poll_votes')
-        .select('poll_id, option_id')
-        .in('poll_id', pollIds);
+      var votesResult = await supabase.from('poll_votes').select('poll_id, option_id').in('poll_id', pollIds);
       if (votesResult.error) throw votesResult.error;
-
       var optsByPoll = {};
-      (optsResult.data || []).forEach(function(o) {
-        if (!optsByPoll[o.poll_id]) optsByPoll[o.poll_id] = [];
-        optsByPoll[o.poll_id].push(o);
-      });
-
+      (optsResult.data || []).forEach(function(o) { if (!optsByPoll[o.poll_id]) optsByPoll[o.poll_id] = []; optsByPoll[o.poll_id].push(o); });
       var votesByPoll = {};
-      (votesResult.data || []).forEach(function(v) {
-        if (!votesByPoll[v.poll_id]) votesByPoll[v.poll_id] = [];
-        votesByPoll[v.poll_id].push(v);
-      });
-
+      (votesResult.data || []).forEach(function(v) { if (!votesByPoll[v.poll_id]) votesByPoll[v.poll_id] = []; votesByPoll[v.poll_id].push(v); });
       var rows = [['Poll', 'Status', 'Option', 'Votes', 'Percentage', 'Total Votes']];
       pollsToExport.forEach(function(poll) {
         var pollOpts = optsByPoll[poll.id] || [];
@@ -236,20 +214,14 @@ function PollsList() {
         }
         rows.push(['', '', '', '', '', '']);
       });
-
-      var csv = rows.map(function(row) {
-        return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
-      }).join('\n');
-
+      var csv = rows.map(function(row) { return row.map(function(cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
       var blob = new Blob([csv], { type: 'text/csv' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      var dateStr = new Date().toISOString().slice(0, 10);
-      a.download = 'polls_export_' + dateStr + '.csv';
+      a.download = 'polls_export_' + new Date().toISOString().slice(0, 10) + '.csv';
       a.click();
       URL.revokeObjectURL(url);
-
       toast.dismiss(loadId);
       mascotSuccessToast(pollsToExport.length + ' poll' + (pollsToExport.length !== 1 ? 's' : '') + ' exported!');
       setSelectedIds(new Set());
@@ -266,6 +238,7 @@ function PollsList() {
 
   async function handlePollCreated(newPoll) {
     setPolls(function(prev) { return [newPoll].concat(prev); });
+    setTemplateData(null);
     try {
       var notifModule = await import('../lib/notificationService');
       var user = currentUserRef.current;
@@ -293,20 +266,48 @@ function PollsList() {
 
   function handleRemind(pollId, timestamp) {
     setPolls(function(prev) {
-      return prev.map(function(p) {
-        return p.id === pollId ? Object.assign({}, p, { last_reminded_at: timestamp }) : p;
-      });
+      return prev.map(function(p) { return p.id === pollId ? Object.assign({}, p, { last_reminded_at: timestamp }) : p; });
     });
   }
 
-  function openCreate() { setEditingPoll(null); setShowCreateModal(true); }
-  function openEdit(poll) { setEditingPoll(poll); setShowCreateModal(true); }
-  function closeModal() { setShowCreateModal(false); setEditingPoll(null); }
+  function openCreate() {
+    setEditingPoll(null);
+    setTemplateData(null);
+    setShowCreateModal(true);
+  }
 
-  var activeCount  = polls.filter(function(p) { return !isPollClosed(p); }).length;
-  var closedCount  = polls.filter(function(p) { return isPollClosed(p); }).length;
-  var pinnedCount  = polls.filter(function(p) { return p.is_pinned; }).length;
-  var hasFilters   = searchTerm || statusFilter !== 'all' || typeFilter !== 'all';
+  function openEdit(poll) {
+    setEditingPoll(poll);
+    setTemplateData(null);
+    setShowCreateModal(true);
+  }
+
+  function closeModal() {
+    setShowCreateModal(false);
+    setEditingPoll(null);
+    setTemplateData(null);
+  }
+
+  // Template from TemplatePickerModal — editPoll stays null (create mode)
+  // templateData carries the pre-fill payload including _questions
+  function handleTemplateSelect(template, name) {
+    setShowTemplatePicker(false);
+    setEditingPoll(null);
+    setTemplateData(Object.assign({}, template, { _templateName: name }));
+    setShowCreateModal(true);
+  }
+
+  // Template from empty state cards — same pattern
+  function handleEmptyStateTemplate(tmpl) {
+    setEditingPoll(null);
+    setTemplateData(Object.assign({}, tmpl, { _templateName: tmpl.title || tmpl.name }));
+    setShowCreateModal(true);
+  }
+
+  var activeCount = polls.filter(function(p) { return !isPollClosed(p); }).length;
+  var closedCount = polls.filter(function(p) { return isPollClosed(p); }).length;
+  var pinnedCount = polls.filter(function(p) { return p.is_pinned; }).length;
+  var hasFilters  = searchTerm || statusFilter !== 'all' || typeFilter !== 'all';
 
   if (loading) {
     return (
@@ -321,9 +322,7 @@ function PollsList() {
               <div className="h-10 w-32 rounded-lg bg-gray-200" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <StatSkeleton /><StatSkeleton /><StatSkeleton />
-          </div>
+          <div className="grid grid-cols-3 gap-4"><StatSkeleton /><StatSkeleton /><StatSkeleton /></div>
           <div className="rounded-xl border p-4 animate-pulse bg-white border-slate-200">
             <div className="h-10 rounded-lg bg-gray-100" />
           </div>
@@ -339,9 +338,7 @@ function PollsList() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-[#F8FAFC]">
         <div className="text-center max-w-md">
-          <div className="flex justify-center mb-4">
-            <Icon path={ICONS.alert} className="h-14 w-14 text-red-300" />
-          </div>
+          <img src="/mascot-error.png" alt="" aria-hidden="true" style={{maxWidth:'200px',margin:'0 auto 16px',display:'block',mixBlendMode:'multiply'}} />
           <h2 className="text-xl font-bold mb-2 text-[#0E1523]">Failed to Load Polls</h2>
           <p className="text-sm mb-6 text-[#475569]">{error}</p>
           <button onClick={function() { setError(null); loadData(); }}
@@ -367,15 +364,21 @@ function PollsList() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && filteredPolls.length > 0 && (
-              <button
-                onClick={handleExport}
-                disabled={exporting}
+              <button onClick={handleExport} disabled={exporting}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm disabled:opacity-50"
-                aria-label={selectedCount > 0 ? 'Export ' + selectedCount + ' selected polls as CSV' : 'Export all ' + filteredPolls.length + ' polls as CSV'}>
+                aria-label={selectedCount > 0 ? 'Export ' + selectedCount + ' selected polls as CSV' : 'Export all polls as CSV'}>
                 {exporting
                   ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" aria-hidden="true" />Exporting...</>
-                  : <><Icon path={ICONS.download} className="h-4 w-4" />{selectedCount > 0 ? 'Export selected (' + selectedCount + ')' : 'Export (' + filteredPolls.length + ')'}</>
+                  : <><Icon path={ICONS.download} className="h-4 w-4" />{selectedCount > 0 ? 'Export CSV (' + selectedCount + ' selected)' : 'Export CSV'}</>
                 }
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={function() { setShowTemplatePicker(true); }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm"
+                aria-label="Browse poll templates">
+                <Icon path={ICONS.template} className="h-4 w-4" />
+                Templates
               </button>
             )}
             {isAdmin && (
@@ -388,125 +391,151 @@ function PollsList() {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stat cards */}
         <div className="grid grid-cols-3 gap-4">
-          <div className={'rounded-xl p-5 border-2 ' + (activeCount > 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200')}>
-            <p className={'text-2xl font-extrabold ' + (activeCount > 0 ? 'text-green-700' : 'text-gray-500')}>{activeCount}</p>
+          <div className="rounded-xl p-5 border bg-[#DCFCE7] border-green-200">
+            <p className="text-2xl font-extrabold text-green-700">{activeCount}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Icon path={ICONS.check} className={'h-4 w-4 ' + (activeCount > 0 ? 'text-green-500' : 'text-gray-400')} />
-              <p className={'text-sm font-semibold ' + (activeCount > 0 ? 'text-green-600' : 'text-gray-500')}>Active</p>
+              <Icon path={ICONS.check} className="h-4 w-4 text-green-500" />
+              <p className="text-sm font-semibold text-green-600">Active</p>
             </div>
           </div>
-          <div className="rounded-xl p-5 border-2 bg-gray-50 border-gray-200">
-            <p className="text-2xl font-extrabold text-gray-600">{closedCount}</p>
+          <div className="rounded-xl p-5 border bg-[#F1F5F9] border-slate-200">
+            <p className="text-2xl font-extrabold text-slate-600">{closedCount}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Icon path={ICONS.lock} className="h-4 w-4 text-gray-400" />
-              <p className="text-sm font-semibold text-gray-500">Closed</p>
+              <Icon path={ICONS.lock} className="h-4 w-4 text-slate-400" />
+              <p className="text-sm font-semibold text-slate-500">Closed</p>
             </div>
           </div>
-          <div className={'rounded-xl p-5 border-2 ' + (pinnedCount > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200')}>
-            <p className={'text-2xl font-extrabold ' + (pinnedCount > 0 ? 'text-yellow-700' : 'text-gray-500')}>{pinnedCount}</p>
+          <div className="rounded-xl p-5 border bg-[#FEF9C3] border-yellow-200">
+            <p className="text-2xl font-extrabold text-yellow-700">{pinnedCount}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Icon path={ICONS.pin} className={'h-4 w-4 ' + (pinnedCount > 0 ? 'text-yellow-500' : 'text-gray-400')} />
-              <p className={'text-sm font-semibold ' + (pinnedCount > 0 ? 'text-yellow-600' : 'text-gray-500')}>Pinned</p>
+              <Icon path={ICONS.pin} className="h-4 w-4 text-yellow-500" />
+              <p className="text-sm font-semibold text-yellow-600">Pinned</p>
             </div>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="rounded-xl border p-4 bg-white border-slate-200">
-          <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
-            {/* Select all checkbox — admin only, only when polls exist */}
-            {isAdmin && filteredPolls.length > 0 && (
-              <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
-                <input
-                  id="select-all-polls"
-                  type="checkbox"
-                  checked={allFilteredSelected}
-                  ref={function(el) { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  aria-label={allFilteredSelected ? 'Deselect all polls' : 'Select all polls'}
-                />
-                <label htmlFor="select-all-polls" className="text-xs font-semibold text-[#475569] cursor-pointer whitespace-nowrap">
-                  {selectedCount > 0 ? selectedCount + ' selected' : 'Select all'}
-                </label>
+        {polls.length > 0 && (
+          <div className="rounded-xl border p-4 bg-white border-slate-200">
+            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
+              {isAdmin && filteredPolls.length > 0 && (
+                <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
+                  <input id="select-all-polls" type="checkbox" checked={allFilteredSelected}
+                    ref={function(el) { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    aria-label={allFilteredSelected ? 'Deselect all polls' : 'Select all polls'} />
+                  <label htmlFor="select-all-polls" className="text-xs font-semibold text-[#475569] cursor-pointer whitespace-nowrap">
+                    {selectedCount > 0 ? selectedCount + ' selected' : 'Select all'}
+                  </label>
+                </div>
+              )}
+              <div className="flex-1 w-full relative min-w-[160px]">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
+                </div>
+                <label htmlFor="search-polls" className="sr-only">Search polls</label>
+                <input id="search-polls" type="text" placeholder="Search polls..." value={searchTerm}
+                  onChange={function(e) { setSearchTerm(e.target.value); }}
+                  className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
               </div>
-            )}
-
-            <div className="flex-1 w-full relative min-w-[160px]">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
+              <div className="flex items-center gap-2">
+                <label htmlFor="status-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Status:</label>
+                <select id="status-filter" value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value); }}
+                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                  <option value="all">{'All (' + polls.length + ')'}</option>
+                  <option value="active">{'Active (' + activeCount + ')'}</option>
+                  <option value="closed">{'Closed (' + closedCount + ')'}</option>
+                </select>
               </div>
-              <label htmlFor="search-polls" className="sr-only">Search polls</label>
-              <input id="search-polls" type="text" placeholder="Search polls..."
-                value={searchTerm} onChange={function(e) { setSearchTerm(e.target.value); }}
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
+              <div className="flex items-center gap-2">
+                <label htmlFor="type-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Type:</label>
+                <select id="type-filter" value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }}
+                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                  <option value="all">All Types</option>
+                  <option value="single_choice">Single Choice</option>
+                  <option value="multiple_choice">Multiple Choice</option>
+                  <option value="yes_no_abstain">Yes / No / Abstain</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="sort-polls" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
+                <select id="sort-polls" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
+                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                  <option value="pinned_recent">Pinned First</option>
+                  <option value="recent">Most Recent</option>
+                  <option value="closing">Closing Soon</option>
+                </select>
+              </div>
+              {hasFilters && (
+                <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
+                  className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
+                  aria-label="Clear all filters">
+                  <Icon path={ICONS.x} className="h-3.5 w-3.5" />Clear
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="status-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Status:</label>
-              <select id="status-filter" value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value); }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                <option value="all">{'All (' + polls.length + ')'}</option>
-                <option value="active">{'Active (' + activeCount + ')'}</option>
-                <option value="closed">{'Closed (' + closedCount + ')'}</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="type-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Type:</label>
-              <select id="type-filter" value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                <option value="all">All Types</option>
-                <option value="single_choice">Single Choice</option>
-                <option value="multiple_choice">Multiple Choice</option>
-                <option value="yes_no_abstain">Yes / No / Abstain</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="sort-polls" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
-              <select id="sort-polls" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                <option value="pinned_recent">Pinned First</option>
-                <option value="recent">Most Recent</option>
-                <option value="closing">Closing Soon</option>
-              </select>
-            </div>
-            {hasFilters && (
-              <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
-                className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
-                aria-label="Clear all filters">
-                <Icon path={ICONS.x} className="h-3.5 w-3.5" />Clear
-              </button>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Poll list or empty state */}
-        {filteredPolls.length === 0 ? (
-          <div className="text-center py-16 rounded-xl border bg-white border-slate-200">
-            <div className="flex justify-center mb-4">
-              <Icon path={ICONS.chart} className="h-12 w-12 text-gray-300" />
-            </div>
-            <h3 className="text-lg font-semibold mb-1 text-[#0E1523]">
-              {hasFilters ? 'No polls match your filters' : 'No polls yet'}
-            </h3>
-            <p className="text-sm mb-6 text-[#475569]">
-              {hasFilters ? 'Try adjusting your search or filters.'
-                : isAdmin ? 'Create your first poll to gather member feedback.'
-                : 'Check back later for polls from your organization.'}
+        {polls.length === 0 ? (
+          <div className="rounded-xl border bg-white border-slate-200 py-12 px-6 text-center">
+            <img src="/mascots-empty.png" alt="" aria-hidden="true"
+              style={{maxWidth:'200px',margin:'0 auto 16px',display:'block',mixBlendMode:'multiply'}} />
+            <h3 className="text-lg font-bold mb-2 text-[#0E1523]">No polls yet</h3>
+            <p className="text-sm mb-6 text-[#475569] max-w-xs mx-auto">
+              {isAdmin
+                ? 'Create your first poll to gather member feedback and make decisions together.'
+                : 'Check back soon for polls from your organization.'}
             </p>
-            {isAdmin && !hasFilters && (
-              <button onClick={openCreate}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />Create Poll
-              </button>
+            {isAdmin && (
+              <div className="flex items-center justify-center gap-3 mb-10">
+                <button onClick={openCreate}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                  <Icon path={ICONS.plus} className="h-4 w-4" />Create Poll
+                </button>
+                <button onClick={function() { setShowTemplatePicker(true); }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
+                  <Icon path={ICONS.template} className="h-4 w-4" />Browse Templates
+                </button>
+              </div>
             )}
-            {hasFilters && (
-              <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.x} className="h-4 w-4" />Clear Filters
-              </button>
+            {isAdmin && POLL_TEMPLATES.length > 0 && (
+              <div>
+                <p style={{fontSize:'11px',fontWeight:700,color:'#F5B731',letterSpacing:'4px',textTransform:'uppercase',marginBottom:'12px'}}>
+                  Start from a template
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto text-left">
+                  {POLL_TEMPLATES.map(function(tmpl) {
+                    return (
+                      <div key={tmpl._id || tmpl.title} className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-4 flex flex-col gap-2">
+                        <p className="text-sm font-semibold text-[#0E1523]">{tmpl.title}</p>
+                        <p className="text-xs text-[#64748B] flex-1">{tmpl._desc}</p>
+                        <button onClick={function() { handleEmptyStateTemplate(tmpl); }}
+                          className="mt-1 text-xs font-semibold text-blue-500 hover:text-blue-700 text-left focus:outline-none focus:underline transition-colors"
+                          aria-label={'Use template: ' + tmpl.title}>
+                          Use this template
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
+          </div>
+        ) : filteredPolls.length === 0 ? (
+          <div className="rounded-xl border bg-white border-slate-200 py-12 px-6 text-center">
+            <img src="/mascots-empty.png" alt="" aria-hidden="true"
+              style={{maxWidth:'180px',margin:'0 auto 16px',display:'block',mixBlendMode:'multiply'}} />
+            <h3 className="text-lg font-bold mb-2 text-[#0E1523]">No polls match your filters</h3>
+            <p className="text-sm mb-6 text-[#475569]">Try adjusting your search or clearing the filters.</p>
+            <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
+              <Icon path={ICONS.x} className="h-4 w-4" />Clear Filters
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="list" aria-label="Polls">
@@ -514,17 +543,12 @@ function PollsList() {
               var isSelected = selectedIds.has(poll.id);
               return (
                 <div key={poll.id} role="listitem">
-                  {/* Selection bar — admin only */}
                   {isAdmin && (
                     <div className={'flex items-center gap-2 px-3 py-1.5 rounded-t-xl border-x border-t transition-colors ' + (isSelected ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200')}>
-                      <input
-                        id={'select-poll-' + poll.id}
-                        type="checkbox"
-                        checked={isSelected}
+                      <input id={'select-poll-' + poll.id} type="checkbox" checked={isSelected}
                         onChange={function() { toggleSelect(poll.id); }}
                         className="h-3.5 w-3.5 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                        aria-label={'Select poll: ' + poll.title}
-                      />
+                        aria-label={'Select poll: ' + poll.title} />
                       <label htmlFor={'select-poll-' + poll.id} className={'text-xs font-semibold cursor-pointer ' + (isSelected ? 'text-blue-600' : 'text-[#64748B]')}>
                         {isSelected ? 'Selected' : 'Select for export'}
                       </label>
@@ -551,22 +575,33 @@ function PollsList() {
         )}
 
         {filteredPolls.length > 0 && (
-          <p className="text-center text-xs text-[#64748B]">
+          <p className="text-center text-xs text-[#64748B]" aria-live="polite">
             {'Showing ' + filteredPolls.length + ' of ' + polls.length + ' poll' + (polls.length !== 1 ? 's' : '')}
             {selectedCount > 0 && ' \u00b7 ' + selectedCount + ' selected'}
           </p>
         )}
-
       </div>
 
+      {/* Create / Edit modal */}
       <CreatePoll
         isOpen={showCreateModal}
         onClose={closeModal}
         onSuccess={editingPoll ? handlePollUpdated : handlePollCreated}
         editPoll={editingPoll}
+        templateData={templateData}
         organizationId={organizationId}
         organizationName={orgName}
       />
+
+      {/* Template picker */}
+      {showTemplatePicker && (
+        <TemplatePickerModal
+          contentType="poll"
+          organizationId={organizationId}
+          onClose={function() { setShowTemplatePicker(false); }}
+          onSelect={handleTemplateSelect}
+        />
+      )}
     </div>
   );
 }

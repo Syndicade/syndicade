@@ -294,6 +294,281 @@ export var PLATFORM_TEMPLATES = {
       _desc: '6-week cohort for job seekers.',
     },
   ],
+  survey: [
+    {
+      _id: 'pt-survey-1',
+      title: 'Annual Member Survey',
+      description: 'Gather comprehensive feedback from members about programs, communication, and overall satisfaction with your organization.',
+      anonymous_responses: true,
+      allow_multiple_responses: false,
+      show_results_after_submission: false,
+      result_visibility: 'full',
+      visibility: 'all_members',
+      _questions: [
+        {
+          question_text: 'How satisfied are you with our organization overall?',
+          question_type: 'rating',
+          required: true,
+          options: [],
+        },
+        {
+          question_text: 'Which programs or services have you used this year?',
+          question_type: 'multiple_choice',
+          required: false,
+          options: ['Community events', 'Educational programs', 'Volunteer opportunities', 'Member resources', 'Online community', 'None yet'],
+        },
+        {
+          question_text: 'How would you rate our communication with members?',
+          question_type: 'single_choice',
+          required: true,
+          options: ['Excellent', 'Good', 'Fair', 'Poor', 'I rarely hear from the organization'],
+        },
+        {
+          question_text: 'What would most improve your experience as a member?',
+          question_type: 'textarea',
+          required: false,
+          options: [],
+        },
+      ],
+      _desc: 'Comprehensive yearly check-in on programs and satisfaction.',
+    },
+    {
+      _id: 'pt-survey-2',
+      title: 'Event Satisfaction Survey',
+      description: 'Collect detailed feedback after an event to improve future programming and understand what worked well.',
+      anonymous_responses: true,
+      allow_multiple_responses: false,
+      show_results_after_submission: true,
+      result_visibility: 'full',
+      visibility: 'all_members',
+      _questions: [
+        {
+          question_text: 'How would you rate the event overall?',
+          question_type: 'rating',
+          required: true,
+          options: [],
+        },
+        {
+          question_text: 'How did you hear about this event?',
+          question_type: 'single_choice',
+          required: false,
+          options: ['Email newsletter', 'Social media', 'Word of mouth', 'Organization website', 'Community board', 'Other'],
+        },
+        {
+          question_text: 'Which aspects of the event did you enjoy?',
+          question_type: 'multiple_choice',
+          required: false,
+          options: ['Content / topic', 'Speaker or presenter', 'Networking opportunities', 'Venue or format', 'Food or refreshments', 'Timing and length'],
+        },
+        {
+          question_text: 'What could we do better next time?',
+          question_type: 'textarea',
+          required: false,
+          options: [],
+        },
+        {
+          question_text: 'Would you recommend our events to others?',
+          question_type: 'single_choice',
+          required: true,
+          options: ['Definitely yes', 'Probably yes', 'Not sure', 'Probably not', 'Definitely not'],
+        },
+      ],
+      _desc: 'Post-event feedback with rating, multiple choice, and open text.',
+    },
+    {
+      _id: 'pt-survey-3',
+      title: 'Program Feedback Survey',
+      description: 'Evaluate the effectiveness of a specific program and understand participant outcomes and suggestions.',
+      anonymous_responses: false,
+      allow_multiple_responses: false,
+      show_results_after_submission: false,
+      result_visibility: 'full',
+      visibility: 'all_members',
+      _questions: [
+        {
+          question_text: 'How many sessions or meetings did you attend?',
+          question_type: 'single_choice',
+          required: true,
+          options: ['All of them', 'Most of them (75%+)', 'About half', 'A few (less than half)', 'Just one'],
+        },
+        {
+          question_text: 'How well did the program meet your needs?',
+          question_type: 'rating',
+          required: true,
+          options: [],
+        },
+        {
+          question_text: 'What skills or knowledge did you gain from this program?',
+          question_type: 'multiple_choice',
+          required: false,
+          options: ['New technical skills', 'Leadership or soft skills', 'Community connections', 'Career opportunities', 'Personal development', 'I am still working on it'],
+        },
+        {
+          question_text: 'What did you like most about the program?',
+          question_type: 'textarea',
+          required: false,
+          options: [],
+        },
+        {
+          question_text: 'Would you participate in this program again or recommend it?',
+          question_type: 'single_choice',
+          required: true,
+          options: ['Yes, definitely', 'Yes, with some improvements', 'Not sure', 'No'],
+        },
+      ],
+      _desc: 'Measure outcomes and satisfaction for a specific program.',
+    },
+    {
+      _id: 'pt-survey-4',
+      title: 'New Member Welcome Survey',
+      description: 'Learn how new members found your organization, what they are looking for, and how to best support them.',
+      anonymous_responses: false,
+      allow_multiple_responses: false,
+      show_results_after_submission: false,
+      result_visibility: 'none',
+      visibility: 'all_members',
+      _questions: [
+        {
+          question_text: 'How did you hear about our organization?',
+          question_type: 'single_choice',
+          required: true,
+          options: ['Friend or colleague', 'Social media', 'Internet search', 'Community event', 'Partner organization', 'Other'],
+        },
+        {
+          question_text: 'What are you most hoping to get out of your membership?',
+          question_type: 'multiple_choice',
+          required: true,
+          options: ['Networking and connections', 'Learning and development', 'Volunteer opportunities', 'Access to resources', 'Community and belonging', 'Professional recognition'],
+        },
+        {
+          question_text: 'What skills or experience would you like to contribute?',
+          question_type: 'textarea',
+          required: false,
+          options: [],
+        },
+        {
+          question_text: 'How comfortable are you with our online platform so far?',
+          question_type: 'single_choice',
+          required: false,
+          options: ['Very comfortable', 'Somewhat comfortable', 'Need a little help', 'Have not explored it yet'],
+        },
+      ],
+      _desc: 'Onboarding survey to understand new member goals and background.',
+    },
+  ],
+  poll: [
+    {
+      _id: 'pt-poll-1',
+      title: 'Board Election Vote',
+      description: 'Vote for your preferred candidate for the open board position. Each member may select one candidate. Results will be shared with all members after the voting period closes.',
+      allow_anonymous: false,
+      show_results_before_close: false,
+      allow_vote_changes: false,
+      result_visibility: 'full',
+      // _questions is the canonical shape for CreatePoll's applyTemplate:
+      // each question has: question_text, question_type, options (string[])
+      // yes_no_abstain questions must have options: []
+      _questions: [
+        {
+          question_text: 'Who is your preferred candidate for the open board seat?',
+          question_type: 'single_choice',
+          options: ['Candidate A', 'Candidate B', 'Candidate C', 'None of the above'],
+        },
+        {
+          question_text: 'Do you feel there was adequate notice before this election?',
+          question_type: 'yes_no_abstain',
+          options: [],
+        },
+        {
+          question_text: 'Which board committee would you most like the new member to lead?',
+          question_type: 'multiple_choice',
+          options: ['Finance', 'Programs', 'Outreach & Communications', 'Fundraising', 'No preference'],
+        },
+      ],
+      _desc: 'Let members vote on candidates for open board positions.',
+    },
+    {
+      _id: 'pt-poll-2',
+      title: 'Event Feedback',
+      description: 'Your feedback helps us improve future events for everyone. This poll takes less than 2 minutes to complete.',
+      allow_anonymous: true,
+      show_results_before_close: false,
+      allow_vote_changes: false,
+      result_visibility: 'full',
+      _questions: [
+        {
+          question_text: 'How would you rate the event overall?',
+          question_type: 'single_choice',
+          options: ['Excellent', 'Good', 'Fair', 'Poor'],
+        },
+        {
+          question_text: 'What did you enjoy most about this event?',
+          question_type: 'multiple_choice',
+          options: ['The speakers / presenters', 'Networking opportunities', 'The venue or location', 'The activities or programming', 'The food or refreshments'],
+        },
+        {
+          question_text: 'Would you attend a similar event again?',
+          question_type: 'yes_no_abstain',
+          options: [],
+        },
+      ],
+      _desc: 'Gather quick satisfaction ratings after an event.',
+    },
+    {
+      _id: 'pt-poll-3',
+      title: 'Member Preference Poll',
+      description: 'Help us plan programming that matters to you. Select all options that apply — there are no wrong answers.',
+      allow_anonymous: true,
+      show_results_before_close: false,
+      allow_vote_changes: true,
+      result_visibility: 'full',
+      _questions: [
+        {
+          question_text: 'Which types of events would you like to see more of?',
+          question_type: 'multiple_choice',
+          options: ['Workshops and skill-building', 'Networking mixers', 'Community service days', 'Fundraisers', 'Webinars or online events', 'Family-friendly events'],
+        },
+        {
+          question_text: 'What time of day works best for you to attend events?',
+          question_type: 'single_choice',
+          options: ['Morning (before noon)', 'Afternoon (noon – 5 PM)', 'Evening (after 5 PM)', 'Weekends only'],
+        },
+        {
+          question_text: 'Are you interested in volunteering to help organize future events?',
+          question_type: 'yes_no_abstain',
+          options: [],
+        },
+      ],
+      _desc: 'Find out what your members want more of.',
+    },
+    {
+      _id: 'pt-poll-4',
+      title: 'Budget Priority Poll',
+      description: 'Help us understand what matters most to our members as we plan the upcoming budget cycle. Your input directly shapes how we allocate resources.',
+      allow_anonymous: false,
+      show_results_before_close: false,
+      allow_vote_changes: false,
+      result_visibility: 'full',
+      _questions: [
+        {
+          question_text: 'Where should we focus our budget this year?',
+          question_type: 'single_choice',
+          options: ['Programs and services', 'Community events', 'Staff and operations', 'Technology and communications', 'Outreach and marketing'],
+        },
+        {
+          question_text: 'Which of these would you support adding to our budget next year?',
+          question_type: 'multiple_choice',
+          options: ['Youth programming', 'Senior services', 'Mental health resources', 'Job training', 'Language access services', 'Emergency assistance fund'],
+        },
+        {
+          question_text: 'Do you feel our current programs are meeting community needs?',
+          question_type: 'yes_no_abstain',
+          options: [],
+        },
+      ],
+      _desc: 'Help members weigh in on where resources should go.',
+    },
+  ],
 };
 
 // ── Focus trap ────────────────────────────────────────────────────────────────
@@ -328,6 +603,9 @@ function TemplateCard({ template, contentType, onSelect }) {
   var desc       = template._desc || template.description || '';
   var shortDesc  = desc.length > 100 ? desc.slice(0, 100) + '...' : desc;
 
+  // Show question count badge for polls
+  var questionCount = template._questions ? template._questions.length : null;
+
   return (
     <div style={{
       background: cardBg,
@@ -351,7 +629,19 @@ function TemplateCard({ template, contentType, onSelect }) {
           <FileText size={16} color={textMuted} aria-hidden="true" />
         </div>
         <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, margin: '0 0 3px', lineHeight: 1.3 }}>{titleField}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, margin: 0, lineHeight: 1.3 }}>{titleField}</p>
+            {questionCount !== null && (
+              <span style={{
+                fontSize: '10px', fontWeight: 700, color: '#475569',
+                background: elevatedBg, border: '0.5px solid ' + borderColor,
+                borderRadius: '99px', padding: '1px 7px',
+                whiteSpace: 'nowrap',
+              }}>
+                {questionCount + ' question' + (questionCount !== 1 ? 's' : '')}
+              </span>
+            )}
+          </div>
           <p style={{ fontSize: '12px', color: textSecondary, margin: 0, lineHeight: 1.5 }}>{shortDesc}</p>
         </div>
       </div>
@@ -388,12 +678,7 @@ function TemplatePickerModal({ contentType, organizationId, onClose, onSelect })
     opportunity: 'org_opportunities',
     funding:     'org_funding',
     program:     'org_programs',
-  };
-
-  var titleMap = {
-    opportunity: 'Opportunity',
-    funding:     'Funding',
-    program:     'Program',
+    poll:        'polls',
   };
 
   useEffect(function() {
@@ -418,10 +703,6 @@ function TemplatePickerModal({ contentType, organizationId, onClose, onSelect })
     }
     loadOrgTemplates();
   }, [contentType, organizationId]);
-
-  function getTitleField(template) {
-    return contentType === 'program' ? (template.name || template.title || '') : (template.title || '');
-  }
 
   return (
     <div
