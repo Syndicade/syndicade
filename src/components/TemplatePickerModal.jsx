@@ -11,7 +11,7 @@ var textSecondary = '#475569';
 var textMuted     = '#64748B';
 
 // ── Platform-seeded templates (hardcoded starter set) ─────────────────────────
-var PLATFORM_TEMPLATES = {
+export var PLATFORM_TEMPLATES = {
   opportunity: [
     {
       _id: 'pt-opp-1',

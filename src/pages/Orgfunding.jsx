@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
-import TemplatePickerModal from '../components/TemplatePickerModal';
+import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 import { getContentModalTags } from '../lib/platformTags';
 import {
   DollarSign, Plus, X, ChevronDown, Users, Globe, Lock,
@@ -214,7 +214,7 @@ function Skeleton() {
   );
 }
 
-function EmptyState({ onAdd, isVerified }) {
+function EmptyState({ onAdd, onBrowseTemplates, isVerified }) {
   if (!isVerified) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 24px' }}>
@@ -229,16 +229,44 @@ function EmptyState({ onAdd, isVerified }) {
     );
   }
   return (
-    <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+    <div style={{ textAlign: 'center', padding: '48px 24px 32px' }}>
       <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '200px', margin: '0 auto 20px', display: 'block', mixBlendMode: 'multiply' }} />
       <h3 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, marginBottom: '8px' }}>No funding listings yet</h3>
       <p style={{ fontSize: '14px', color: textSecondary, maxWidth: '380px', margin: '0 auto 20px', lineHeight: 1.6 }}>
         Post your scholarships, grants, and funding opportunities here. Share them with members first or publish to the public directory.
       </p>
-      <button onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
-        className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-        <Plus size={15} aria-hidden="true" />Post Funding
-      </button>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
+        <button onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+          className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          <Plus size={15} aria-hidden="true" />Post Funding
+        </button>
+        <button onClick={onBrowseTemplates} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: 'transparent', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+          className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+          Browse templates
+        </button>
+      </div>
+
+      <div style={{ textAlign: 'left', maxWidth: '640px', margin: '0 auto' }}>
+        <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>
+          Start from a template
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+          {PLATFORM_TEMPLATES.funding.slice(0, 4).map(function(tmpl) {
+            return (
+              <div key={tmpl._id} style={{ background: '#FFFFFF', border: '0.5px solid ' + borderColor, borderRadius: '10px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, margin: 0 }}>{tmpl.title}</p>
+                <p style={{ fontSize: '12px', color: textSecondary, margin: 0, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmpl._desc}</p>
+                <button onClick={function(t) { return function() { onBrowseTemplates(t); }; }(tmpl)}
+                  style={{ marginTop: 'auto', alignSelf: 'flex-start', padding: '5px 14px', background: 'transparent', color: '#3B82F6', border: '1px solid #BFDBFE', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-label={'Use template: ' + tmpl.title}>
+                  Use this template
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1272,7 +1300,14 @@ function handleTemplateSelect(template, name) {
 
           {!loading && items.length === 0 && (
             <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '24px' }}>
-              <EmptyState onAdd={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }} isVerified={true} />
+              <EmptyState
+              onAdd={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }}
+              onBrowseTemplates={function(tmpl) {
+                if (tmpl && tmpl._id) { handleTemplateSelect(tmpl, tmpl.title); }
+                else { setShowTemplatePicker(true); }
+              }}
+              isVerified={true}
+            />
             </div>
           )}
 

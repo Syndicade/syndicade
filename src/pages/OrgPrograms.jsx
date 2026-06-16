@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import { getContentModalTags } from '../lib/platformTags';
-import TemplatePickerModal from '../components/TemplatePickerModal';
+import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw, Globe, Lock, ChevronDown } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
@@ -1367,7 +1367,7 @@ function OrgPrograms() {
               <option value="custom">Custom Order</option>
               <option value="name">Name A–Z</option>
               <option value="start_date">Start Date</option>
-            </select>
+            </select>what lines to 
             {savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Saving order...</span>}
             {isDragEnabled && !savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Drag cards to reorder</span>}
           </div>
@@ -1375,19 +1375,49 @@ function OrgPrograms() {
 
         {/* Empty state */}
         {programs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 24px', background: CARD_BG, border: '2px dashed ' + BDR, borderRadius: '12px' }} role="region" aria-label="No programs">
-            <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '200px', margin: '0 auto 20px', display: 'block', mixBlendMode: 'multiply' }} />
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: TEXT, marginBottom: '8px' }}>No programs yet</h2>
-            <p style={{ color: MUTED, fontSize: '14px', maxWidth: '280px', margin: '0 auto 24px', lineHeight: 1.6 }}>
-              {isAdmin ? 'Add your first program to share with your community.' : 'This organization has not added any programs yet.'}
-            </p>
-            {isAdmin && (
-              <button onClick={openNew} style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                Add Your First Program
-              </button>
-            )}
+  <div style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '12px', padding: '24px' }} role="region" aria-label="No programs">
+    <div style={{ textAlign: 'center', padding: '48px 24px 32px' }}>
+      <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '200px', margin: '0 auto 20px', display: 'block', mixBlendMode: 'multiply' }} />
+      <h2 style={{ fontSize: '18px', fontWeight: 700, color: TEXT, marginBottom: '8px' }}>No programs yet</h2>
+      <p style={{ color: MUTED, fontSize: '14px', maxWidth: '320px', margin: '0 auto 24px', lineHeight: 1.6 }}>
+        {isAdmin ? 'Add your first program to share with your community.' : 'This organization has not added any programs yet.'}
+      </p>
+      {isAdmin && (
+        <>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
+            <button onClick={openNew} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <Icon path={ICONS.plus} className="h-4 w-4" />Add Your First Program
+            </button>
+            <button onClick={function() { setShowTemplatePicker(true); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: 'transparent', color: TEXT2, border: '1px solid ' + BDR, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+              Browse templates
+            </button>
           </div>
-        ) : displayPrograms.length === 0 ? (
+
+          <div style={{ textAlign: 'left', maxWidth: '640px', margin: '0 auto' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' }}>Start from a template</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+              {PLATFORM_TEMPLATES.program.slice(0, 4).map(function(tmpl) {
+                return (
+                  <div key={tmpl._id} style={{ background: PAGE_BG, border: '0.5px solid ' + BDR, borderRadius: '10px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: TEXT, margin: 0 }}>{tmpl.name}</p>
+                    <p style={{ fontSize: '12px', color: TEXT2, margin: 0, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{tmpl._desc}</p>
+                    <button onClick={function(t) { return function() { handleTemplateSelect(t, t.name); }; }(tmpl)}
+                      style={{ marginTop: 'auto', alignSelf: 'flex-start', padding: '5px 14px', background: 'transparent', color: '#3B82F6', border: '1px solid #BFDBFE', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                      className="hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      aria-label={'Use template: ' + tmpl.name}>
+                      Use this template
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+) : displayPrograms.length === 0 ? (
+
           <div style={{ textAlign: 'center', padding: '60px 24px', background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '12px' }}>
             <img src="/mascots-empty.png" alt="" aria-hidden="true" style={{ maxWidth: '160px', margin: '0 auto 16px', display: 'block', mixBlendMode: 'multiply' }} />
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: TEXT, marginBottom: '6px' }}>No programs match your filters</h2>
