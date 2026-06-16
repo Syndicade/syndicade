@@ -19,15 +19,13 @@ function Footer() {
 
   var communityLinks = [
     { label: 'Discover Events',       path: '/discover'       },
+    { label: 'Browse Programs',       path: '/programs'       },
     { label: 'Explore Organizations', path: '/explore'        },
     { label: 'Find Opportunities',    path: '/opportunities'  },
     { label: 'Funding Opportunities', path: '/funding'        },
   ];
 
-  var authLinks = [
-    { label: 'Dashboard',    path: '/dashboard'    },
-    { label: 'Calendar',     path: '/calendar'     },
-    { label: 'Saved Events', path: '/saved-events' },
+  var quickLinks = [
     { label: 'Wishlist',     path: '/wishlist'     },
     { label: 'Report a Bug', path: '/report-a-bug' },
   ];
@@ -92,7 +90,7 @@ function Footer() {
             className="flex flex-wrap items-start gap-x-8 gap-y-6"
             aria-label="Footer navigation"
           >
-            {/* Community — always shown, includes Opportunities + Funding */}
+            {/* Community */}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#F5B731', letterSpacing: '3px' }}>
                 Community
@@ -104,14 +102,14 @@ function Footer() {
               </div>
             </div>
 
-            {/* My Account — logged-in only */}
+            {/* Quick Links — logged-in only */}
             {isLoggedIn && (
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#F5B731', letterSpacing: '3px' }}>
-                  My Account
+                  Quick Links
                 </p>
                 <div className="flex flex-col gap-2">
-                  {authLinks.map(function(link) {
+                  {quickLinks.map(function(link) {
                     return <FooterLink key={link.path} label={link.label} path={link.path} />;
                   })}
                 </div>
