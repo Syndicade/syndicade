@@ -231,7 +231,7 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
 }
 
 // ── Actions dropdown ──────────────────────────────────────────────────────────
-function ActionsDropdown({ onEdit, onDuplicate, onViewRegistrations, onDelete }) {
+function ActionsDropdown({ onEdit, onDuplicate, onMakeTemplate, onViewRegistrations, onDelete }) {
   var [open, setOpen] = useState(false);
   var ref = useRef(null);
 
@@ -241,56 +241,35 @@ function ActionsDropdown({ onEdit, onDuplicate, onViewRegistrations, onDelete })
     function handleKey(e) { if (e.key === 'Escape') setOpen(false); }
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
-    return function() {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
+    return function() { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
   }, [open]);
 
-  function handleItem(fn) {
-    setOpen(false);
-    fn();
-  }
-
-  var menuItems = [
-    { label: 'Edit', fn: onEdit },
-    { label: 'Duplicate', fn: onDuplicate },
-    { label: 'View Registrations', fn: onViewRegistrations },
-    { divider: true },
-    { label: 'Delete', fn: onDelete, danger: true },
-  ];
-
   return (
-    <div ref={ref} style={{ position: 'relative' }} onClick={function(e) { e.preventDefault(); e.stopPropagation(); }}>
-      <button
-        onClick={function() { setOpen(function(v) { return !v; }); }}
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={function() { setOpen(function(v) { return !v; }); }}
         style={{ fontSize: '12px', fontWeight: 500, color: TEXT2, background: PAGE_BG, border: '0.5px solid ' + BDR, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
         className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-        aria-haspopup="true"
-        aria-expanded={open}
-        aria-label="Program actions"
-      >
+        aria-haspopup="true" aria-expanded={open} aria-label="Program actions">
         Actions <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open && (
-        <div
-          style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: '4px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: '160px', zIndex: 10, padding: '4px 0' }}
-          role="menu"
-        >
-          {menuItems.map(function(item, i) {
-            if (item.divider) return <div key={i} style={{ height: '1px', background: BDR, margin: '4px 0' }} role="separator" />;
-            return (
-              <button
-                key={item.label}
-                role="menuitem"
-                onClick={function() { handleItem(item.fn); }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: item.danger ? '#EF4444' : TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
-                className={item.danger ? 'hover:bg-red-50 focus:outline-none' : 'hover:bg-slate-50 focus:outline-none'}
-              >
-                {item.label}
-              </button>
-            );
-          })}
+        <div style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: '4px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: '180px', zIndex: 10, padding: '4px 0' }} role="menu">
+          <button role="menuitem" onClick={function() { setOpen(false); onEdit(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none">Edit</button>
+          <button role="menuitem" onClick={function() { setOpen(false); onDuplicate(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none">Duplicate</button>
+          <button role="menuitem" onClick={function() { setOpen(false); onMakeTemplate(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none">Make Template</button>
+          <button role="menuitem" onClick={function() { setOpen(false); onViewRegistrations(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-blue-50 focus:outline-none">View Registrations</button>
+          <div style={{ height: '1px', background: BDR, margin: '4px 0' }} role="separator" />
+          <button role="menuitem" onClick={function() { setOpen(false); onDelete(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}
+            className="hover:bg-red-50 focus:outline-none">Delete</button>
         </div>
       )}
     </div>
@@ -620,6 +599,62 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+function MakeTemplateModal({ program, onClose, onSaved }) {
+  var [name, setName] = useState(program.name);
+  var [saving, setSaving] = useState(false);
+
+  useEffect(function() {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return function() { document.removeEventListener('keydown', handleKey); };
+  }, []);
+
+  async function handleSave() {
+    if (!name.trim()) { toast.error('Template name is required.'); return; }
+    setSaving(true);
+    var payload = Object.assign({}, program, {
+      name: name.trim(),
+      is_template: true,
+      visibility: 'draft',
+      is_public: false,
+      show_on_website: false,
+      show_on_discover: false,
+      publish_to_discovery: false,
+      is_featured: false,
+      updated_at: new Date().toISOString(),
+    });
+    delete payload.id;
+    delete payload.created_at;
+    var result = await supabase.from('org_programs').insert(payload);
+    setSaving(false);
+    if (result.error) { mascotErrorToast('Failed to save template.', result.error.message); return; }
+    mascotSuccessToast('Template saved!');
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}
+      role="dialog" aria-modal="true" aria-labelledby="tmpl-prog-title"
+      onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: CARD_BG, borderRadius: '14px', padding: '28px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+        <h3 id="tmpl-prog-title" style={{ fontSize: '16px', fontWeight: 800, color: TEXT, marginBottom: '6px' }}>Save as Template</h3>
+        <p style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>This program will be saved as a reusable template for your org.</p>
+        <label htmlFor="tmpl-prog-name" style={{ fontSize: '13px', fontWeight: 600, color: TEXT, display: 'block', marginBottom: '6px' }}>Template name</label>
+        <input id="tmpl-prog-name" value={name} onChange={function(e) { setName(e.target.value); }}
+          style={{ width: '100%', padding: '9px 12px', border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box', marginBottom: '20px' }}
+          className="focus:ring-2 focus:ring-blue-500" aria-required="true" />
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: TEXT2, cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ flex: 1, padding: '10px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {saving ? 'Saving...' : 'Save Template'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OrgPrograms() {
   var params         = useParams();
   var organizationId = params.organizationId;
@@ -662,6 +697,7 @@ function OrgPrograms() {
 
   var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   var [drawerProgram, setDrawerProgram] = useState(null);
+  var [makingTemplate, setMakingTemplate] = useState(null);
 
   // Drag & drop
   var [draggingId, setDraggingId]   = useState(null);
@@ -880,7 +916,6 @@ function OrgPrograms() {
       tags:                 safeForm.tags || [],
       image_url:            imageUrl,
       // new publishing columns
-      visibility:           safeForm.visibility,
       group_ids:            safeForm.group_ids || [],
       show_on_website:      safeForm.show_on_website,
       show_on_discover:     safeForm.show_on_discover,
@@ -1533,11 +1568,12 @@ function OrgPrograms() {
                   {isAdmin && (
                     <div style={{ margin: '0 18px 16px', paddingTop: '12px', borderTop: '0.5px solid ' + BDR, display: 'flex', justifyContent: 'flex-end' }}>
                       <ActionsDropdown
-                        onEdit={function() { openEdit(program); }}
-                        onDuplicate={function() { copyProgram(program); }}
-                        onViewRegistrations={function() { setDrawerProgram(program); }}
-                        onDelete={function() { deleteProgram(program.id, program.name); }}
-                      />
+                      onEdit={function() { openEdit(program); }}
+                      onDuplicate={function() { copyProgram(program); }}
+                      onMakeTemplate={function() { setMakingTemplate(program); }}
+                      onViewRegistrations={function() { setDrawerProgram(program); }}
+                      onDelete={function() { deleteProgram(program.id, program.name); }}
+                    />
                     </div>
                   )}
                 </article>
@@ -2097,7 +2133,7 @@ function OrgPrograms() {
                 style={{ padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: (saving || uploadingImg) ? 'not-allowed' : 'pointer', opacity: (saving || uploadingImg) ? 0.6 : 1 }}
                 className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {uploadingImg ? 'Uploading...' : saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Publish')}
+                {uploadingImg ? 'Uploading...' : saving ? 'Saving...' : (editingProgram ? 'Save Changes' : 'Post Program')}
               </button>
             </div>
           </div>
@@ -2120,6 +2156,9 @@ function OrgPrograms() {
           onClose={function() { setDrawerProgram(null); }}
         />
       )}
+      {makingTemplate && (
+      <MakeTemplateModal program={makingTemplate} onClose={function() { setMakingTemplate(null); }} onSaved={fetchPrograms} />
+    )}
     </>
   );
 }
