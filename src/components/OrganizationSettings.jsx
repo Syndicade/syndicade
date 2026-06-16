@@ -5,19 +5,8 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import MembershipTiers from '../components/MembershipTiers';
 import NonprofitVerificationForm from './NonprofitVerificationForm';
 import { getStorageBreakdown, formatBytes, getStorageUsage } from '../lib/storageUtils';
+import { getOrgTagSets, getContentModalTags } from '../lib/platformTags';
 import usePlanLimits from '../hooks/usePlanLimits';
-
-var SERVICE_CATEGORIES = [
-  'Arts & Culture','Community Advocacy','Education & Tutoring',
-  'Food & Nutrition','Health & Wellness','Housing & Shelter',
-  'Immigration & Legal Aid','Job Training & Employment',
-  'Mental Health Support','Senior Services','Youth Programs',
-];
-
-var LANGUAGES = [
-  'Arabic','Chinese (Mandarin)','English','French','Haitian Creole',
-  'Hindi','Portuguese','Russian','Somali','Spanish','Tagalog','Vietnamese',
-];
 
 var ORG_TYPES = [
   { value: 'nonprofit',   label: 'Nonprofit Organization'  },
@@ -53,6 +42,8 @@ function getAvatarColor(name) {
   var char = (name || 'A').charCodeAt(0);
   return AVATAR_COLORS[char % AVATAR_COLORS.length];
 }
+
+var DEFAULT_TAG_DEFAULTS = { org: [], event: [], program: [], opportunity: [], funding: [] };
 
 function Icon({ path, className }) {
   return (
@@ -497,6 +488,34 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var [storageSortDir, setStorageSortDir] = useState('desc');
   var [deletingFile, setDeletingFile] = useState(null);
   var [logoUploading, setLogoUploading] = useState(false);
+  var [tagSets, setTagSets] = useState({ causeAreas: [], audience: [], languages: [] });
+
+useEffect(function() {
+  getOrgTagSets().then(function(sets) { setTagSets(sets); });
+}, []);
+
+var [contentTypeTags, setContentTypeTags] = useState({
+  event:       { causeAreas: [], activityTypes: [] },
+  program:     { causeAreas: [], activityTypes: [] },
+  opportunity: { causeAreas: [], roleTypes: [],    formats: [] },
+  funding:     { causeAreas: [], fundingTypes: [] },
+});
+
+useEffect(function() {
+  Promise.all([
+    getContentModalTags('event'),
+    getContentModalTags('program'),
+    getContentModalTags('opportunity'),
+    getContentModalTags('funding'),
+  ]).then(function(results) {
+    setContentTypeTags({
+      event:       { causeAreas: results[0].causeAreas, activityTypes: results[0].activityTypes },
+      program:     { causeAreas: results[1].causeAreas, activityTypes: results[1].activityTypes },
+      opportunity: { causeAreas: results[2].causeAreas, roleTypes: results[2].roleTypes, formats: results[2].formats },
+      funding:     { causeAreas: results[3].causeAreas, fundingTypes: results[3].fundingTypes },
+    });
+  });
+}, []);
 
   var planData   = usePlanLimits(organizationId);
   var planLimits = planData ? planData.limits : {};
@@ -510,6 +529,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
   var dividerCls = 'border-slate-200';
   var sectionRowCls = 'bg-gray-50 border-slate-200';
 
+  // CHANGE 3: Added audience: [] to form state
   var [form, setForm] = useState({
     name: '', description: '', type: 'community',
     settings: { allowMemberInvites: true, requireApproval: false },
@@ -520,12 +540,15 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     allow_following: true, search_tags: [], enable_donations: false,
     donation_suggested_amount: '', donation_external_link: '', donation_title: '', donation_description: '',
     manual_payment_instructions: '',
+    tags: [],
+    audience: [],
+    tag_defaults: { org: [], event: [], program: [], opportunity: [], funding: [] },
   });
 
-  // Discover Orgs tab removed — fields moved into Privacy & Access tab
   var tabs = [
     { id: 'basic',        label: 'Basic Information' },
     { id: 'privacy',      label: 'Privacy & Access'  },
+    { id: 'default_tags', label: 'Default Tags'      },
     { id: 'roles',        label: 'Roles'             },
     { id: 'membership',   label: 'Membership'        },
     { id: 'payments',     label: 'Payments & Donations' },
@@ -587,6 +610,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     else { setStorageSortField(field); setStorageSortDir('desc'); }
   }
 
+  // CHANGE 4: Load audience from DB
   async function fetchOrganization() {
     try {
       var { data: authData } = await supabase.auth.getUser();
@@ -612,6 +636,9 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         enable_donations: data.enable_donations||false, donation_suggested_amount: data.donation_suggested_amount||'',
         donation_external_link: data.donation_external_link||'', donation_title: data.donation_title||'', donation_description: data.donation_description||'',
         manual_payment_instructions: data.manual_payment_instructions||'',
+        tags: data.tags||[],
+        audience: data.audience||[],
+        tag_defaults: Object.assign({}, DEFAULT_TAG_DEFAULTS, data.tag_defaults||{}),
       });
     } catch(err) { toast.error('Failed to load settings'); } finally { setLoading(false); }
   }
@@ -657,6 +684,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
     }
   }
 
+  // CHANGE 5: Save audience to DB; removed dead service_categories save
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) { toast.error('Organization name is required'); return; }
@@ -671,7 +699,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         mailing_city: form.mailing_same ? form.city.trim() : form.mailing_city.trim(),
         mailing_state: form.mailing_same ? form.state.trim() : form.mailing_state.trim(),
         mailing_zip: form.mailing_same ? form.zip_code.trim() : form.mailing_zip.trim(),
-        service_categories: form.service_categories, languages: form.languages, keywords: form.keywords,
+        languages: form.languages, keywords: form.keywords,
         discovery_about: form.discovery_about.trim() || null, allow_following: form.allow_following, search_tags: form.search_tags,
         enable_donations: form.enable_donations,
         donation_suggested_amount: form.donation_suggested_amount ? parseFloat(form.donation_suggested_amount) : null,
@@ -679,6 +707,9 @@ function OrganizationSettings({ organizationId, onUpdate }) {
         donation_title: form.donation_title ? form.donation_title.trim() : null,
         donation_description: form.donation_description ? form.donation_description.trim() : null,
         manual_payment_instructions: form.manual_payment_instructions ? form.manual_payment_instructions.trim() : null,
+        tags: form.tags,
+        audience: form.audience,
+        tag_defaults: form.tag_defaults,
       }).eq('id', organizationId);
       if (error) throw error;
       mascotSuccessToast('Settings saved!', 'Your changes are live.');
@@ -986,24 +1017,80 @@ function OrganizationSettings({ organizationId, onUpdate }) {
                       <textarea id="discovery-about" value={form.discovery_about} onChange={function(e){ setForm(function(p){ return Object.assign({},p,{discovery_about:e.target.value}); }); }} maxLength={280} rows={3} placeholder="e.g. We connect local volunteers with food-insecure families across Lucas County." className={inputCls + ' resize-none'} aria-describedby="discovery-about-count"/>
                       <p id="discovery-about-count" className={mutedCls + ' mt-1 text-right'} aria-live="polite">{form.discovery_about.length} / 280</p>
                     </div>
+
                     <div>
-                      <p className="text-sm font-bold mb-1 text-gray-900">Service Categories <span className={mutedCls}>({form.service_categories.length}/6)</span></p>
-                      <p className={mutedCls + ' mb-3'}>Select up to 6 that apply.</p>
-                      <ChecklistGroup options={SERVICE_CATEGORIES} selected={form.service_categories} onChange={function(val){ setForm(function(p){ return Object.assign({},p,{service_categories:val}); }); }} legend="Service categories" max={6}/>
+                      <p className="text-sm font-bold mb-1 text-gray-900">Cause Areas</p>
+                      <p className={mutedCls + ' mb-3'}>Select the cause areas your organization works in. These appear on your discovery card.</p>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Cause area tags">
+                        {tagSets.causeAreas.map(function(tag) {
+                          var selected = form.tags.includes(tag);
+                          return (
+                            <button key={tag} type="button"
+                              onClick={function() {
+                                setForm(function(prev) {
+                                  var next = selected ? prev.tags.filter(function(t){ return t !== tag; }) : prev.tags.concat([tag]);
+                                  return Object.assign({}, prev, { tags: next });
+                                });
+                              }}
+                              className={'px-3 py-1.5 rounded-full text-xs font-semibold border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (selected ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-slate-200 hover:border-blue-300')}
+                              aria-pressed={selected}>
+                              {tag}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {form.tags.length > 0 && (
+                        <button type="button" onClick={function(){ setForm(function(prev){ return Object.assign({}, prev, { tags: [] }); }); }}
+                          className="mt-2 text-xs text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 rounded underline">
+                          Clear all cause areas
+                        </button>
+                      )}
                     </div>
+
+                    {/* CHANGE 6: Audience Served chip picker — below Cause Areas */}
+                    <div>
+                      <p className="text-sm font-bold mb-1 text-gray-900">Audience Served</p>
+                      <p className={mutedCls + ' mb-3'}>Who does your organization primarily serve? Helps people find you on the Discover page.</p>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Audience served tags">
+                        {tagSets.audience.map(function(tag) {
+                          var selected = form.audience.includes(tag);
+                          return (
+                            <button key={tag} type="button"
+                              onClick={function() {
+                                setForm(function(prev) {
+                                  var next = selected ? prev.audience.filter(function(t){ return t !== tag; }) : prev.audience.concat([tag]);
+                                  return Object.assign({}, prev, { audience: next });
+                                });
+                              }}
+                              className={'px-3 py-1.5 rounded-full text-xs font-semibold border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ' + (selected ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-600 border-slate-200 hover:border-green-300')}
+                              aria-pressed={selected}>
+                              {tag}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {form.audience.length > 0 && (
+                        <button type="button" onClick={function(){ setForm(function(prev){ return Object.assign({}, prev, { audience: [] }); }); }}
+                          className="mt-2 text-xs text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 rounded underline">
+                          Clear all audience tags
+                        </button>
+                      )}
+                    </div>
+
                     <div>
                       <p className="text-sm font-bold mb-1 text-gray-900">Languages Served</p>
                       <p className={mutedCls + ' mb-3'}>Which languages does your organization serve?</p>
-                      <ChecklistGroup options={LANGUAGES} selected={form.languages} onChange={function(val){ setForm(function(p){ return Object.assign({},p,{languages:val}); }); }} legend="Languages served"/>
+                      <ChecklistGroup options={tagSets.languages} selected={form.languages} onChange={function(val){ setForm(function(p){ return Object.assign({},p,{languages:val}); }); }} legend="Languages served"/>
                     </div>
+
                     <div>
                       <p className="text-sm font-bold mb-1 text-gray-900">Search Tags</p>
-                      <p className={mutedCls + ' mb-3'}>Short tags shown on your card and used for keyword search.</p>
+                      <p className={mutedCls + ' mb-3'}>Shown on your discovery card. Add anything missing from the cause areas above — e.g. "food pantry", "after school", "veterans".</p>
                       <KeywordInput keywords={form.search_tags} onChange={function(val){ setForm(function(p){ return Object.assign({},p,{search_tags:val}); }); }} placeholder="e.g. food pantry, after school" ariaLabel="Search tags"/>
                     </div>
                     <div>
-                      <p className="text-sm font-bold mb-1 text-gray-900">Additional Search Keywords</p>
-                      <p className={mutedCls + ' mb-3'}>Used for search matching only — not displayed on your card.</p>
+                      <p className="text-sm font-bold mb-1 text-gray-900">Additional Keywords</p>
+                      <p className={mutedCls + ' mb-3'}>Used for search matching only — never displayed on your discovery card. Add neighborhood names, acronyms, or alternate names people might search for.</p>
                       <KeywordInput keywords={form.keywords} onChange={function(val){ setForm(function(p){ return Object.assign({},p,{keywords:val}); }); }} placeholder="e.g. Toledo, northwest Ohio" ariaLabel="Additional keywords"/>
                     </div>
                   </div>
@@ -1189,6 +1276,146 @@ function OrganizationSettings({ organizationId, onUpdate }) {
               </section>
             )}
 
+            {activeTab === 'default_tags' && (
+  <section aria-labelledby="default-tags-heading" className="space-y-8">
+    <div>
+      <h3 id="default-tags-heading" className={headingCls}>Default Tags</h3>
+      <p className={subTextCls}>Set default tags for each content type. When creating content, admins can apply these with one click, then add or remove as needed.</p>
+    </div>
+    {[
+      {
+        key: 'event', label: 'Events', color: '#3B82F6',
+        groups: [
+          { label: 'Cause Area',    tags: contentTypeTags.event.causeAreas   },
+          { label: 'Activity Type', tags: contentTypeTags.event.activityTypes },
+        ],
+      },
+      {
+        key: 'program', label: 'Programs', color: '#8B5CF6',
+        groups: [
+          { label: 'Cause Area',    tags: contentTypeTags.program.causeAreas   },
+          { label: 'Activity Type', tags: contentTypeTags.program.activityTypes },
+        ],
+      },
+      {
+        key: 'opportunity', label: 'Opportunities', color: '#22C55E',
+        groups: [
+          { label: 'Cause Area', tags: contentTypeTags.opportunity.causeAreas },
+          { label: 'Role Type',  tags: contentTypeTags.opportunity.roleTypes  },
+          { label: 'Format',     tags: contentTypeTags.opportunity.formats    },
+        ],
+      },
+      {
+        key: 'funding', label: 'Funding', color: '#F59E0B',
+        groups: [
+          { label: 'Cause Area',   tags: contentTypeTags.funding.causeAreas   },
+          { label: 'Funding Type', tags: contentTypeTags.funding.fundingTypes },
+        ],
+      },
+    ].map(function(ct) {
+      var selected = (form.tag_defaults[ct.key] || []);
+ 
+      // All available tags across this content type's groups (flattened, deduplicated)
+      var allAvailable = [];
+      ct.groups.forEach(function(g) {
+        (g.tags || []).forEach(function(t) {
+          if (!allAvailable.includes(t)) allAvailable.push(t);
+        });
+      });
+ 
+      return (
+        <div key={ct.key} className="p-5 border rounded-xl bg-gray-50 border-slate-200 space-y-4">
+          {/* Section header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: ct.color }} aria-hidden="true" />
+              <p className="text-sm font-bold text-gray-900">{ct.label}</p>
+              {selected.length > 0 && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-gray-500">
+                  {selected.length} default{selected.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {selected.length > 0 && (
+              <button type="button"
+                onClick={function() {
+                  setForm(function(prev) {
+                    var td = Object.assign({}, prev.tag_defaults);
+                    td[ct.key] = [];
+                    return Object.assign({}, prev, { tag_defaults: td });
+                  });
+                }}
+                className="text-xs text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 rounded underline">
+                Clear all
+              </button>
+            )}
+          </div>
+ 
+          {/* Selected defaults */}
+          {selected.length > 0 && (
+            <div className="flex flex-wrap gap-2" role="list" aria-label={'Selected defaults for ' + ct.label}>
+              {selected.map(function(tag) {
+                return (
+                  <span key={tag} role="listitem" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white" style={{ backgroundColor: ct.color }}>
+                    {tag}
+                    <button type="button"
+                      onClick={function() {
+                        setForm(function(prev) {
+                          var td = Object.assign({}, prev.tag_defaults);
+                          td[ct.key] = td[ct.key].filter(function(t) { return t !== tag; });
+                          return Object.assign({}, prev, { tag_defaults: td });
+                        });
+                      }}
+                      className="hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-white rounded-full"
+                      aria-label={'Remove ' + tag + ' from ' + ct.label + ' defaults'}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+ 
+          {/* Tag groups — show each group's chips */}
+          {ct.groups.map(function(group) {
+            var available = (group.tags || []).filter(function(t) { return !selected.includes(t); });
+            if (available.length === 0) return null;
+            return (
+              <div key={group.label}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{group.label}</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label={'Add ' + group.label + ' tags to ' + ct.label + ' defaults'}>
+                  {available.map(function(tag) {
+                    return (
+                      <button key={tag} type="button"
+                        onClick={function() {
+                          setForm(function(prev) {
+                            var td = Object.assign({}, prev.tag_defaults);
+                            td[ct.key] = (td[ct.key] || []).concat([tag]);
+                            return Object.assign({}, prev, { tag_defaults: td });
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium border bg-white text-gray-600 border-slate-200 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                        aria-label={'Add ' + tag + ' to ' + ct.label + ' defaults'}>
+                        + {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+ 
+          {allAvailable.length > 0 && allAvailable.every(function(t) { return selected.includes(t); }) && (
+            <p className="text-xs text-gray-400 italic">All available tags are selected as defaults.</p>
+          )}
+        </div>
+      );
+    })}
+  </section>
+)}
+
             {activeTab === 'verification' && <section aria-label="Nonprofit verification"><NonprofitVerificationForm organizationId={organizationId}/></section>}
 
             {activeTab === 'danger' && (
@@ -1221,7 +1448,7 @@ function OrganizationSettings({ organizationId, onUpdate }) {
             )}
 
             {/* Save button — not on roles, danger, or storage tabs */}
-            {activeTab !== 'roles' && activeTab !== 'danger' && activeTab !== 'storage' && (
+            {activeTab !== 'roles' && activeTab !== 'danger' && activeTab !== 'storage' && activeTab !== 'verification' && (
               <div className={'flex items-center justify-end pt-6 mt-6 border-t ' + dividerCls}>
                 <button type="submit" disabled={saving}
                   className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"

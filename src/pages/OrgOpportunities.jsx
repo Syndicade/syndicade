@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
+import TemplatePickerModal from '../components/TemplatePickerModal';
 import { getContentModalTags } from '../lib/platformTags';
 import {
   Briefcase, Plus, X, ChevronDown, Users, Globe, Lock,
@@ -488,11 +489,11 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
       reach:                form.reach,
       updated_at:           new Date().toISOString(),
     };
-    if (!existing) payload.created_by = currentUserId;
+    if (!existing || !existing.id) payload.created_by = currentUserId;
 
-    var result = existing
-      ? await supabase.from('org_opportunities').update(payload).eq('id', existing.id)
-      : await supabase.from('org_opportunities').insert(payload);
+      var result = (existing && existing.id)
+        ? await supabase.from('org_opportunities').update(payload).eq('id', existing.id)
+        : await supabase.from('org_opportunities').insert(payload);
 
     toast.dismiss(toastId); setSaving(false);
     if (result.error) { mascotErrorToast('Failed to save opportunity.', result.error.message); return; }
@@ -1210,6 +1211,8 @@ function OrgOpportunities() {
   var [showModal, setShowModal]           = useState(false);
   var [editing, setEditing]               = useState(null);
   var [templateBanner, setTemplateBanner] = useState(null);
+  var [templateData, setTemplateData] = useState(null);
+  var [showTemplatePicker, setShowTemplatePicker] = useState(false);
   var [deleting, setDeleting]             = useState(null);
   var [makingTemplate, setMakingTemplate] = useState(null);
   var [viewingApps, setViewingApps]       = useState(null);
@@ -1251,6 +1254,17 @@ function OrgOpportunities() {
     setTemplateBanner(null);
     setShowModal(true);
   }
+
+function handleTemplateSelect(template, name) {
+  setShowTemplatePicker(false);
+  var clean = Object.assign({}, template);
+  delete clean._id;
+  delete clean._desc;
+  delete clean.id;
+  setEditing(clean);
+  setTemplateBanner(name);
+  setShowModal(true);
+}
 
   async function handleDuplicate(item) {
     var payload = Object.assign({}, item, {
@@ -1297,13 +1311,20 @@ function OrgOpportunities() {
               {items.length > 0 ? items.length + ' listing' + (items.length !== 1 ? 's' : '') : 'Post roles, board seats, and volunteer opportunities'}
             </p>
           </div>
-          {isAdmin && isVerified && (
-            <button onClick={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}
-              className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-              <Plus size={15} aria-hidden="true" />Post Opportunity
-            </button>
-          )}
+              {isAdmin && isVerified && (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={function() { setShowTemplatePicker(true); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: 'transparent', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+            Templates
+          </button>
+          <button onClick={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}
+            className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            <Plus size={15} aria-hidden="true" />Post Opportunity
+          </button>
+        </div>
+      )}
         </div>
       </div>
 
@@ -1383,6 +1404,15 @@ function OrgOpportunities() {
           templateBanner={templateBanner}
           onClose={function() { setShowModal(false); setEditing(null); setTemplateBanner(null); }} onSaved={loadItems} />
       )}
+
+{showTemplatePicker && (
+  <TemplatePickerModal
+    contentType="opportunity"
+    organizationId={organizationId}
+    onClose={function() { setShowTemplatePicker(false); }}
+    onSelect={handleTemplateSelect}
+  />
+)}
 
       {deleting && <ConfirmDeleteModal item={deleting} onConfirm={handleDelete} onCancel={function() { setDeleting(null); }} />}
 

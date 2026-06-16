@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import { getContentModalTags } from '../lib/platformTags';
+import TemplatePickerModal from '../components/TemplatePickerModal';
 import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw, Globe, Lock, ChevronDown } from 'lucide-react';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
@@ -615,7 +616,6 @@ function MakeTemplateModal({ program, onClose, onSaved }) {
     var payload = Object.assign({}, program, {
       name: name.trim(),
       is_template: true,
-      visibility: 'draft',
       is_public: false,
       show_on_website: false,
       show_on_discover: false,
@@ -698,6 +698,8 @@ function OrgPrograms() {
   var [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   var [drawerProgram, setDrawerProgram] = useState(null);
   var [makingTemplate, setMakingTemplate] = useState(null);
+  var [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  var [templateBanner, setTemplateBanner] = useState(null);
 
   // Drag & drop
   var [draggingId, setDraggingId]   = useState(null);
@@ -874,6 +876,29 @@ function OrgPrograms() {
     setShowModal(true);
   }
 
+  function handleTemplateSelect(template, name) {
+  setShowTemplatePicker(false);
+  setEditingProgram(null);
+  setForm(Object.assign({}, EMPTY_FORM, {
+    name:              template.name || '',
+    description:       template.description || '',
+    type:              template.type || '',
+    audience:          template.audience || '',
+    schedule:          template.schedule || '',
+    cost_type:         template.cost_type || 'free',
+    requires_approval: template.requires_approval || false,
+    registration_open: template.registration_open !== false,
+    apply_method:      template.apply_method || 'form',
+    tags:              template.tags || [],
+    reach:             template.reach || 'local',
+  }));
+  setTemplateBanner(name);
+  setActiveTab('details');
+  setImageFile(null);
+  setImagePreview('');
+  setShowModal(true);
+}
+
   function applyDefaultTags() {
     if (!orgDefaults || !orgDefaults.program) return;
     var defaults = orgDefaults.program || [];
@@ -1012,7 +1037,6 @@ function OrgPrograms() {
     var payload = Object.assign({}, program, {
       id: undefined,
       name: program.name + ' (Copy)',
-      visibility: 'draft',
       is_public: false,
       publish_to_discovery: false,
       show_on_website: false,
@@ -1284,7 +1308,13 @@ function OrgPrograms() {
             <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, margin: 0 }}>Programs</h1>
             <p style={{ fontSize: '14px', color: MUTED, margin: '4px 0 0' }}>{programs.length + ' program' + (programs.length !== 1 ? 's' : '')}</p>
           </div>
-          {isAdmin && (
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={function() { setShowTemplatePicker(true); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', background: 'transparent', color: TEXT2, border: '1px solid ' + BDR, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+              Templates
+            </button>
             <button
               onClick={openNew}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
@@ -1293,7 +1323,8 @@ function OrgPrograms() {
               <Icon path={ICONS.plus} className="h-4 w-4" />
               Add Program
             </button>
-          )}
+          </div>
+        )}
         </div>
 
         {/* Filter bar */}
@@ -2139,6 +2170,15 @@ function OrgPrograms() {
           </div>
         </div>
       )}
+
+      {showTemplatePicker && (
+      <TemplatePickerModal
+        contentType="program"
+        organizationId={organizationId}
+        onClose={function() { setShowTemplatePicker(false); }}
+        onSelect={handleTemplateSelect}
+      />
+    )}
 
       <ConfirmModal
         isOpen={confirmModal.open}

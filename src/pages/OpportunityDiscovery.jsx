@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import { getDiscoveryFilterTags } from '../lib/platformTags';
 import {
   Briefcase, Search, Clock, Calendar,
   DollarSign, ExternalLink, Mail, X, AlertCircle, Paperclip,
@@ -38,37 +39,6 @@ var COMP_COLORS = {
   unpaid:  { bg: '#F1F5F9', color: '#64748B' },
   stipend: { bg: '#FFF7ED', color: '#D97706' },
 };
-
-var CAUSE_AREA_TAGS = [
-  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
-  'Community Building', 'Criminal Justice Reform', 'Disability Services',
-  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
-  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
-  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
-  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
-  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
-  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
-  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
-  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
-  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
-];
-
-var AUDIENCE_TAGS = [
-  'Adults (18+)', 'Black Community', 'Children (under 13)', 'English Learners',
-  'Families', 'First-Generation Students', 'Foster Youth', 'General Public',
-  'Immigrants & Refugees', 'Indigenous Communities', 'Justice-Involved Individuals',
-  'Latino Community', 'LGBTQ+ Community', 'Low-Income Individuals', 'Men',
-  'Older Adults (65+)', 'People with Disabilities', 'Rural Communities', 'Seniors',
-  'Single Parents', 'Students', 'Survivors of Domestic Violence',
-  'Unhoused Individuals', 'Veterans', 'Women', 'Youth (13–17)',
-];
-
-var LANGUAGE_TAGS = [
-  'Arabic', 'Bengali', 'Bosnian', 'Burmese', 'Chinese (Cantonese)', 'Chinese (Mandarin)',
-  'English', 'French', 'German', 'Greek', 'Haitian Creole', 'Hindi', 'Hmong',
-  'Italian', 'Japanese', 'Karen', 'Khmer', 'Korean', 'Nepali', 'Polish',
-  'Portuguese', 'Romanian', 'Russian', 'Somali',
-];
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 function OpportunityCardSkeleton() {
@@ -115,7 +85,7 @@ function OppFilterSection({ label, children, defaultOpen }) {
   );
 }
 
-function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }) {
+function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount, tagSets }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -138,7 +108,7 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         )}
       </div>
 
-      {/* ── Location (always first, open by default) ── */}
+      {/* Location */}
       <OppFilterSection label="Location" defaultOpen={true}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <input
@@ -168,6 +138,7 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
+      {/* Work Location */}
       <OppFilterSection label="Work Location">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {[
@@ -186,6 +157,7 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
+      {/* Role Type */}
       <OppFilterSection label="Role Type">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {ROLE_TYPE_OPTIONS.map(function(opt) {
@@ -200,6 +172,7 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
+      {/* Compensation */}
       <OppFilterSection label="Compensation">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {[
@@ -218,28 +191,10 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
-      <OppFilterSection label="Work Location">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {[
-            { value: 'in_person', label: 'In-Person' },
-            { value: 'remote', label: 'Remote' },
-            { value: 'hybrid', label: 'Hybrid' },
-          ].map(function(opt) {
-            var checked = (filters.locations || []).includes(opt.value);
-            return (
-              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '3px 0', fontSize: '13px', color: checked ? '#0E1523' : textSecondary }}>
-                <input type="checkbox" checked={checked} onChange={function() { onToggleTag('locations', opt.value); }} style={{ width: '14px', height: '14px', accentColor: '#3B82F6', flexShrink: 0 }} aria-label={opt.label} className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" />
-                {opt.label}
-              </label>
-            );
-          })}
-        </div>
-      </OppFilterSection>
-
-      {/* ── Cause Area ── */}
+      {/* Cause Area */}
       <OppFilterSection label="Cause Area" defaultOpen={false}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-          {CAUSE_AREA_TAGS.map(function(tag) {
+          {tagSets.causeAreas.map(function(tag) {
             var active = filters.causeAreas.includes(tag);
             return (
               <button
@@ -262,10 +217,10 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
-      {/* ── Audience Served ── */}
+      {/* Audience Served */}
       <OppFilterSection label="Audience Served" defaultOpen={false}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {AUDIENCE_TAGS.map(function(tag) {
+          {tagSets.audience.map(function(tag) {
             var checked = filters.audience.includes(tag);
             return (
               <label
@@ -287,10 +242,10 @@ function SidebarFilters({ filters, onChange, onToggleTag, onReset, activeCount }
         </div>
       </OppFilterSection>
 
-      {/* ── Languages ── */}
+      {/* Languages */}
       <OppFilterSection label="Languages" defaultOpen={false}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {LANGUAGE_TAGS.map(function(tag) {
+          {tagSets.languages.map(function(tag) {
             var checked = filters.languages.includes(tag);
             return (
               <label
@@ -334,9 +289,7 @@ function ApplyModal({ item, onClose, currentUser }) {
   }, []);
 
   useEffect(function() {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
-    }
+    function handleKeyDown(e) { if (e.key === 'Escape') onClose(); }
     document.addEventListener('keydown', handleKeyDown);
     return function() { document.removeEventListener('keydown', handleKeyDown); };
   }, [onClose]);
@@ -413,54 +366,20 @@ function ApplyModal({ item, onClose, currentUser }) {
             <>
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="apply-name" style={labelStyle}>Your Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                <input
-                  ref={firstFieldRef}
-                  id="apply-name"
-                  value={form.name}
-                  onChange={function(e) { setField('name', e.target.value); }}
-                  placeholder="Jane Smith"
-                  style={Object.assign({}, inputStyle, errors.name ? { borderColor: '#EF4444' } : {})}
-                  aria-required="true"
-                  aria-describedby={errors.name ? 'apply-name-error' : undefined}
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <input ref={firstFieldRef} id="apply-name" value={form.name} onChange={function(e) { setField('name', e.target.value); }} placeholder="Jane Smith" style={Object.assign({}, inputStyle, errors.name ? { borderColor: '#EF4444' } : {})} aria-required="true" aria-describedby={errors.name ? 'apply-name-error' : undefined} className="focus:ring-2 focus:ring-blue-500" />
                 {errors.name && <p id="apply-name-error" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.name}</p>}
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="apply-email" style={labelStyle}>Email Address <span style={{ color: '#EF4444' }} aria-hidden="true">*</span></label>
-                <input
-                  id="apply-email"
-                  type="email"
-                  value={form.email}
-                  onChange={function(e) { setField('email', e.target.value); }}
-                  placeholder="jane@example.com"
-                  style={Object.assign({}, inputStyle, errors.email ? { borderColor: '#EF4444' } : {})}
-                  aria-required="true"
-                  aria-describedby={errors.email ? 'apply-email-error' : undefined}
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <input id="apply-email" type="email" value={form.email} onChange={function(e) { setField('email', e.target.value); }} placeholder="jane@example.com" style={Object.assign({}, inputStyle, errors.email ? { borderColor: '#EF4444' } : {})} aria-required="true" aria-describedby={errors.email ? 'apply-email-error' : undefined} className="focus:ring-2 focus:ring-blue-500" />
                 {errors.email && <p id="apply-email-error" style={errorStyle} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.email}</p>}
               </div>
               <div style={{ marginBottom: '20px' }}>
                 <label htmlFor="apply-message" style={labelStyle}>Message <span style={{ fontWeight: 400, color: textMuted }}>(optional)</span></label>
-                <textarea
-                  id="apply-message"
-                  value={form.message}
-                  onChange={function(e) { setField('message', e.target.value); }}
-                  placeholder="Tell the organization why you're interested..."
-                  rows={4}
-                  style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })}
-                  className="focus:ring-2 focus:ring-blue-500"
-                />
+                <textarea id="apply-message" value={form.message} onChange={function(e) { setField('message', e.target.value); }} placeholder="Tell the organization why you're interested..." rows={4} style={Object.assign({}, inputStyle, { resize: 'vertical', lineHeight: 1.6 })} className="focus:ring-2 focus:ring-blue-500" />
               </div>
               {errors.submit && <p style={Object.assign({}, errorStyle, { marginBottom: '12px' })} role="alert"><AlertCircle size={11} aria-hidden="true" />{errors.submit}</p>}
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                style={{ width: '100%', padding: '11px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
-                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-disabled={saving}
-              >
+              <button onClick={handleSubmit} disabled={saving} style={{ width: '100%', padding: '11px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-disabled={saving}>
                 {saving ? 'Submitting...' : 'Submit Application'}
               </button>
             </>
@@ -478,9 +397,7 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
   var isExpired = item.deadline && new Date(item.deadline) < new Date();
 
   useEffect(function() {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
-    }
+    function handleKeyDown(e) { if (e.key === 'Escape') onClose(); }
     document.addEventListener('keydown', handleKeyDown);
     return function() { document.removeEventListener('keydown', handleKeyDown); };
   }, [onClose]);
@@ -560,13 +477,7 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
           {item.posting_url && (
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 800, color: textPrimary, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Posting Document</h3>
-              <a
-                href={item.posting_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: pageBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }}
-                className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <a href={item.posting_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: pageBg, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 700, color: '#3B82F6', textDecoration: 'none' }} className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <Paperclip size={14} aria-hidden="true" />View Full Posting<ExternalLink size={12} aria-hidden="true" />
               </a>
             </div>
@@ -575,21 +486,11 @@ function DetailDrawer({ item, orgName, onClose, onApply }) {
           <div style={{ borderTop: '1px solid ' + borderColor, paddingTop: '20px' }}>
             {!isExpired ? (
               item.apply_method === 'form' ? (
-                <button
-                  onClick={onApply}
-                  style={{ width: '100%', padding: '13px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
-                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
+                <button onClick={onApply} style={{ width: '100%', padding: '13px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                   Apply for this Role
                 </button>
               ) : (
-                <a
-                  href={item.apply_url && item.apply_url.includes('@') ? 'mailto:' + item.apply_url : item.apply_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px', background: '#3B82F6', color: '#fff', borderRadius: '10px', fontSize: '15px', fontWeight: 800, textDecoration: 'none', boxSizing: 'border-box' }}
-                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
+                <a href={item.apply_url && item.apply_url.includes('@') ? 'mailto:' + item.apply_url : item.apply_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '13px', background: '#3B82F6', color: '#fff', borderRadius: '10px', fontSize: '15px', fontWeight: 800, textDecoration: 'none', boxSizing: 'border-box' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                   {item.apply_url && item.apply_url.includes('@') ? <Mail size={16} aria-hidden="true" /> : <ExternalLink size={16} aria-hidden="true" />}
                   Apply Now
                 </a>
@@ -693,11 +594,16 @@ export default function OpportunityDiscovery() {
     roleTypes: [], compensations: [], locations: [], city: '', state: '', zip: '',
     causeAreas: [], audience: [], languages: [],
   });
+  var [tagSets, setTagSets] = useState({ causeAreas: [], audience: [], languages: [] });
   var [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   var [selected, setSelected]                 = useState(null);
   var [applying, setApplying]                 = useState(null);
   var [currentUser, setCurrentUser]           = useState(null);
   var searchRef = useRef(null);
+
+  useEffect(function() {
+    getDiscoveryFilterTags('opportunity').then(function(t) { setTagSets(t); });
+  }, []);
 
   useEffect(function() {
     var t = setTimeout(function() { setDebouncedKeyword(keyword); }, 300);
@@ -714,11 +620,7 @@ export default function OpportunityDiscovery() {
     var session = sessionRes.data && sessionRes.data.session;
     if (!session) return;
     var userId = session.user.id;
-    var profileRes = await supabase
-      .from('members')
-      .select('user_id,first_name,last_name')
-      .eq('user_id', userId)
-      .single();
+    var profileRes = await supabase.from('members').select('user_id,first_name,last_name').eq('user_id', userId).single();
     setCurrentUser({
       id: userId,
       email: session.user.email,
@@ -778,7 +680,6 @@ export default function OpportunityDiscovery() {
     if (searchRef.current) searchRef.current.focus();
   }
 
-  // Count active filters for badge
   var activeCount = (
     filters.roleTypes.length +
     filters.compensations.length +
@@ -806,15 +707,9 @@ export default function OpportunityDiscovery() {
     var matchCity = !filters.city || (item.city && item.city.toLowerCase().includes(filters.city.toLowerCase()));
     var matchState = !filters.state || (item.state && item.state.toLowerCase().includes(filters.state.toLowerCase()));
     var matchZip = !filters.zip || (item.zip && item.zip.includes(filters.zip));
-    var matchCause = filters.causeAreas.length === 0 || filters.causeAreas.every(function(t) {
-      return (item.tags || []).includes(t);
-    });
-    var matchAudience = filters.audience.length === 0 || filters.audience.every(function(t) {
-      return (item.tags || []).includes(t);
-    });
-    var matchLanguages = filters.languages.length === 0 || filters.languages.every(function(t) {
-      return (item.tags || []).includes(t);
-    });
+    var matchCause = filters.causeAreas.length === 0 || filters.causeAreas.every(function(t) { return (item.tags || []).includes(t); });
+    var matchAudience = filters.audience.length === 0 || filters.audience.every(function(t) { return (item.tags || []).includes(t); });
+    var matchLanguages = filters.languages.length === 0 || filters.languages.every(function(t) { return (item.tags || []).includes(t); });
     return matchSearch && matchType && matchComp && matchLoc && matchCity && matchState && matchZip && matchCause && matchAudience && matchLanguages;
   });
 
@@ -847,7 +742,6 @@ export default function OpportunityDiscovery() {
                 </button>
               )}
             </div>
-            {/* Mobile filter button with active count badge */}
             <button
               onClick={function() { setMobileFiltersOpen(true); }}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: activeCount > 0 ? '#EFF6FF' : cardBg, border: '1px solid ' + (activeCount > 0 ? '#3B82F6' : borderColor), borderRadius: '8px', fontSize: '13px', color: activeCount > 0 ? '#3B82F6' : textSecondary, cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -858,9 +752,7 @@ export default function OpportunityDiscovery() {
               <SlidersHorizontal size={14} aria-hidden="true" />
               Filters
               {activeCount > 0 && (
-                <span style={{ background: '#3B82F6', color: '#fff', borderRadius: '99px', fontSize: '11px', fontWeight: 700, padding: '0px 6px', lineHeight: '18px' }} aria-hidden="true">
-                  {activeCount}
-                </span>
+                <span style={{ background: '#3B82F6', color: '#fff', borderRadius: '99px', fontSize: '11px', fontWeight: 700, padding: '0px 6px', lineHeight: '18px' }} aria-hidden="true">{activeCount}</span>
               )}
             </button>
           </div>
@@ -872,13 +764,7 @@ export default function OpportunityDiscovery() {
             {/* Desktop sidebar */}
             <div className="hidden lg:block" style={{ width: '256px', flexShrink: 0 }}>
               <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '16px', position: 'sticky', top: 144 }}>
-                <SidebarFilters
-                  filters={filters}
-                  onChange={handleFilterChange}
-                  onToggleTag={handleToggleTag}
-                  onReset={handleReset}
-                  activeCount={activeCount}
-                />
+                <SidebarFilters filters={filters} onChange={handleFilterChange} onToggleTag={handleToggleTag} onReset={handleReset} activeCount={activeCount} tagSets={tagSets} />
               </div>
             </div>
 
@@ -893,13 +779,7 @@ export default function OpportunityDiscovery() {
                       <X size={18} />
                     </button>
                   </div>
-                  <SidebarFilters
-                    filters={filters}
-                    onChange={handleFilterChange}
-                    onToggleTag={handleToggleTag}
-                    onReset={handleReset}
-                    activeCount={activeCount}
-                  />
+                  <SidebarFilters filters={filters} onChange={handleFilterChange} onToggleTag={handleToggleTag} onReset={handleReset} activeCount={activeCount} tagSets={tagSets} />
                   <button onClick={function() { setMobileFiltersOpen(false); }} style={{ marginTop: '24px', width: '100%', padding: '10px', background: '#3B82F6', color: '#fff', fontSize: '14px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     Show Results
                   </button>
@@ -928,18 +808,18 @@ export default function OpportunityDiscovery() {
                 (filters.languages || []).forEach(function(t) { chips.push({ key: 'la-' + t, label: t, clear: function() { handleToggleTag('languages', t); } }); });
                 if (chips.length === 0) return null;
                 return (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role='list' aria-label='Active filters'>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }} role="list" aria-label="Active filters">
                     {chips.map(function(chip) {
                       return (
-                        <span key={chip.key} role='listitem' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}>
+                        <span key={chip.key} role="listitem" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#374151', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: 600 }}>
                           {chip.label}
-                          <button onClick={chip.clear} aria-label={'Remove filter: ' + chip.label} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }} className='focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full'>
-                            <X size={10} aria-hidden='true' />
+                          <button onClick={chip.clear} aria-label={'Remove filter: ' + chip.label} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', padding: '0' }} className="focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-full">
+                            <X size={10} aria-hidden="true" />
                           </button>
                         </span>
                       );
                     })}
-                    <button onClick={handleReset} style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }} className='focus:outline-none focus:ring-2 focus:ring-blue-500 rounded'>Clear all</button>
+                    <button onClick={handleReset} style={{ fontSize: '11px', fontWeight: 600, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px' }} className="focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">Clear all</button>
                   </div>
                 );
               })()}
@@ -1005,19 +885,10 @@ export default function OpportunityDiscovery() {
       </div>
 
       {selected && (
-        <DetailDrawer
-          item={selected}
-          orgName={orgs[selected.organization_id] || 'Verified Nonprofit'}
-          onClose={function() { setSelected(null); }}
-          onApply={function() { setApplying(selected); }}
-        />
+        <DetailDrawer item={selected} orgName={orgs[selected.organization_id] || 'Verified Nonprofit'} onClose={function() { setSelected(null); }} onApply={function() { setApplying(selected); }} />
       )}
       {applying && (
-        <ApplyModal
-          item={applying}
-          currentUser={currentUser}
-          onClose={function() { setApplying(null); }}
-        />
+        <ApplyModal item={applying} currentUser={currentUser} onClose={function() { setApplying(null); }} />
       )}
     </>
   );

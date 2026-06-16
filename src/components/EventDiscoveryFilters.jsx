@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { et } from '../lib/eventDiscoveryTranslations';
+import { getDiscoveryFilterTags } from '../lib/platformTags';
 
 var EVENT_TYPES = [
   'advocacy-event', 'blood-drive', 'clothing-drive', 'community-meeting',
@@ -21,20 +22,6 @@ var LANGUAGE_OPTIONS = [
   { code: 'tl', label: 'Tagalog' },
   { code: 'vi', label: 'Tiếng Việt' },
   { code: 'ar', label: 'العربية' },
-];
-
-var CAUSE_AREA_TAGS = [
-  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
-  'Community Building', 'Criminal Justice Reform', 'Disability Services',
-  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
-  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
-  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
-  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
-  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
-  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
-  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
-  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
-  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
 ];
 
 var borderColor = '#E2E8F0';
@@ -119,6 +106,12 @@ function CheckItem({ checked, onChange, label }) {
 }
 
 export default function EventDiscoveryFilters({ lang, filters, onFilterChange, onReset }) {
+  var [causeAreas, setCauseAreas] = useState([]);
+
+  useEffect(function() {
+    getDiscoveryFilterTags('event').then(function(t) { setCauseAreas(t.causeAreas || []); });
+  }, []);
+
   function handleMultiSelect(filterKey, value) {
     var current = filters[filterKey] || [];
     onFilterChange(filterKey, current.includes(value)
@@ -161,7 +154,7 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
 
-        {/* Location — always first per UX/UI Standards §6 */}
+        {/* Location */}
         <div style={{ paddingBottom: '12px', borderBottom: '1px solid ' + borderColor }}>
           <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '8px', paddingTop: '10px' }}>
             {et(lang, 'locationLabel')}
@@ -221,10 +214,10 @@ export default function EventDiscoveryFilters({ lang, filters, onFilterChange, o
           </div>
         </FilterSection>
 
-        {/* Cause Area — chip style, client-side filter on cause_areas column */}
+        {/* Cause Area — DB-driven chips */}
         <FilterSection id="filter-cause-area" label="Cause Area" count={causeAreaCount}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} role="group" aria-label="Cause Area">
-            {CAUSE_AREA_TAGS.map(function(tag) {
+            {causeAreas.map(function(tag) {
               var active = (filters.causeAreas || []).includes(tag);
               return (
                 <button

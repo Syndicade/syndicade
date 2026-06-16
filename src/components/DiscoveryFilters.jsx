@@ -1,88 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-
-var CATEGORIES = [
-  { value: 'Adults (18+)',                   label: 'Adults (18+)' },
-  { value: 'Black Community',                label: 'Black Community' },
-  { value: 'Children (under 13)',            label: 'Children (under 13)' },
-  { value: 'English Learners',               label: 'English Learners' },
-  { value: 'Families',                       label: 'Families' },
-  { value: 'First-Generation Students',      label: 'First-Generation Students' },
-  { value: 'Foster Youth',                   label: 'Foster Youth' },
-  { value: 'General Public',                 label: 'General Public' },
-  { value: 'Immigrants & Refugees',          label: 'Immigrants & Refugees' },
-  { value: 'Indigenous Communities',         label: 'Indigenous Communities' },
-  { value: 'Justice-Involved Individuals',   label: 'Justice-Involved Individuals' },
-  { value: 'Latino Community',               label: 'Latino Community' },
-  { value: 'LGBTQ+ Community',               label: 'LGBTQ+ Community' },
-  { value: 'Low-Income Individuals',         label: 'Low-Income Individuals' },
-  { value: 'Men',                            label: 'Men' },
-  { value: 'Older Adults (65+)',             label: 'Older Adults (65+)' },
-  { value: 'People with Disabilities',       label: 'People with Disabilities' },
-  { value: 'Rural Communities',              label: 'Rural Communities' },
-  { value: 'Seniors',                        label: 'Seniors' },
-  { value: 'Single Parents',                 label: 'Single Parents' },
-  { value: 'Students',                       label: 'Students' },
-  { value: 'Survivors of Domestic Violence', label: 'Survivors of Domestic Violence' },
-  { value: 'Unhoused Individuals',           label: 'Unhoused Individuals' },
-  { value: 'Veterans',                       label: 'Veterans' },
-  { value: 'Women',                          label: 'Women' },
-  { value: 'Youth (13-17)',                  label: 'Youth (13-17)' },
-];
-var ORG_TYPES = [
-  { value: 'nonprofit',       label: 'Nonprofit (501c3)' },
-  { value: 'community_group', label: 'Community Group' },
-  { value: 'association',     label: 'Association' },
-  { value: 'religious',       label: 'Religious Organization' },
-];
-
-var LANGUAGE_OPTIONS = [
-  { code: 'arabic',            label: 'Arabic' },
-  { code: 'bengali',           label: 'Bengali' },
-  { code: 'bosnian',           label: 'Bosnian' },
-  { code: 'burmese',           label: 'Burmese' },
-  { code: 'cantonese',         label: 'Chinese (Cantonese)' },
-  { code: 'mandarin',          label: 'Chinese (Mandarin)' },
-  { code: 'english',           label: 'English' },
-  { code: 'french',            label: 'French' },
-  { code: 'german',            label: 'German' },
-  { code: 'greek',             label: 'Greek' },
-  { code: 'haitian-creole',    label: 'Haitian Creole' },
-  { code: 'hindi',             label: 'Hindi' },
-  { code: 'hmong',             label: 'Hmong' },
-  { code: 'italian',           label: 'Italian' },
-  { code: 'japanese',          label: 'Japanese' },
-  { code: 'karen',             label: 'Karen' },
-  { code: 'khmer',             label: 'Khmer' },
-  { code: 'korean',            label: 'Korean' },
-  { code: 'nepali',            label: 'Nepali' },
-  { code: 'polish',            label: 'Polish' },
-  { code: 'portuguese',        label: 'Portuguese' },
-  { code: 'romanian',          label: 'Romanian' },
-  { code: 'russian',           label: 'Russian' },
-  { code: 'somali',            label: 'Somali' },
-  { code: 'spanish',           label: 'Spanish' },
-  { code: 'swahili',           label: 'Swahili' },
-  { code: 'tagalog',           label: 'Tagalog' },
-  { code: 'tigrinya',          label: 'Tigrinya' },
-  { code: 'ukrainian',         label: 'Ukrainian' },
-  { code: 'urdu',              label: 'Urdu' },
-  { code: 'vietnamese',        label: 'Vietnamese' },
-];
-
-var CAUSE_AREA_TAGS = [
-  'Animal Welfare', 'Arts & Culture', 'Civic Engagement', 'Civil Rights',
-  'Community Building', 'Criminal Justice Reform', 'Disability Services',
-  'Disaster Relief', 'Domestic Violence', 'Economic Development', 'Education',
-  'Emergency Assistance', 'Employment & Workforce', 'Environment & Conservation',
-  'Faith & Spirituality', 'Financial Literacy', 'Food Access', 'Food Security',
-  'Health & Wellness', 'Homeless Services', 'Housing', 'Human Trafficking',
-  'Immigration & Refugee Services', 'Language Access', 'Legal Aid', 'LGBTQ+ Rights',
-  'Mental Health', 'Neighborhood Revitalization', 'Nutrition', 'Poverty Reduction',
-  'Public Safety', 'Racial Equity', 'Senior Services', 'Substance Use Recovery',
-  'Transportation Access', 'Veterans Services', 'Violence Prevention', 'Voting Rights',
-  'Water Access', "Women's Rights", 'Workforce Development', 'Youth Development',
-];
+import { getDiscoveryFilterTags } from '../lib/platformTags';
 
 var sectionBdr = '#E5E7EB';
 
@@ -144,6 +62,11 @@ function CheckItem({ checked, onChange, label }) {
 }
 
 export default function DiscoveryFilters({ lang, filters, onFilterChange, onReset }) {
+  var [tagSets, setTagSets] = useState({ causeAreas: [], audience: [], orgTypes: [], languages: [] });
+
+  useEffect(function() {
+    getDiscoveryFilterTags('org').then(function(t) { setTagSets(t); });
+  }, []);
 
   function handleCauseArea(tag) {
     var current = filters.causeAreas || [];
@@ -163,11 +86,11 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
     onFilterChange('orgType', filters.orgType === type ? '' : type);
   }
 
-  function handleLanguageFilter(code) {
+  function handleLanguageFilter(lang) {
     var current = filters.languagesServed || [];
-    onFilterChange('languagesServed', current.includes(code)
-      ? current.filter(function(c) { return c !== code; })
-      : current.concat([code]));
+    onFilterChange('languagesServed', current.includes(lang)
+      ? current.filter(function(c) { return c !== lang; })
+      : current.concat([lang]));
   }
 
   var selectedCatCount   = (filters.categories || []).length;
@@ -232,7 +155,7 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
         {/* Cause Area */}
         <FilterSection id="filter-cause-area" label="Cause Area" count={selectedCauseCount}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} role="group" aria-label="Cause Area">
-            {CAUSE_AREA_TAGS.map(function(tag) {
+            {tagSets.causeAreas.map(function(tag) {
               var active = (filters.causeAreas || []).includes(tag);
               return (
                 <button
@@ -258,8 +181,8 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
         {/* Audience Served */}
         <FilterSection id="filter-categories" label="Audience Served" count={selectedCatCount}>
           <div role="group" aria-label="Audience served" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {CATEGORIES.map(function(cat) {
-              return <CheckItem key={cat.value} checked={(filters.categories || []).includes(cat.value)} onChange={function() { handleCategory(cat.value); }} label={cat.label} />;
+            {tagSets.audience.map(function(cat) {
+              return <CheckItem key={cat} checked={(filters.categories || []).includes(cat)} onChange={function() { handleCategory(cat); }} label={cat} />;
             })}
           </div>
         </FilterSection>
@@ -267,8 +190,8 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
         {/* Organization Type */}
         <FilterSection id="filter-orgtype" label="Organization Type" count={selectedOrgCount}>
           <div role="group" aria-label="Organization type" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {ORG_TYPES.map(function(type) {
-              return <CheckItem key={type.value} checked={filters.orgType === type.value} onChange={function() { handleOrgType(type.value); }} label={type.label} />;
+            {tagSets.orgTypes.map(function(type) {
+              return <CheckItem key={type} checked={filters.orgType === type} onChange={function() { handleOrgType(type); }} label={type} />;
             })}
           </div>
         </FilterSection>
@@ -276,8 +199,8 @@ export default function DiscoveryFilters({ lang, filters, onFilterChange, onRese
         {/* Languages Served */}
         <FilterSection id="filter-languages" label="Languages Served" count={selectedLangCount}>
           <div role="group" aria-label="Languages served" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {LANGUAGE_OPTIONS.map(function(l) {
-              return <CheckItem key={l.code} checked={(filters.languagesServed || []).includes(l.code)} onChange={function() { handleLanguageFilter(l.code); }} label={l.label} />;
+            {tagSets.languages.map(function(l) {
+              return <CheckItem key={l} checked={(filters.languagesServed || []).includes(l)} onChange={function() { handleLanguageFilter(l); }} label={l} />;
             })}
           </div>
         </FilterSection>

@@ -4,7 +4,7 @@ import { mascotSuccessToast } from './MascotToast';
 import { supabase } from '../lib/supabase';
 import NonprofitVerificationForm from './NonprofitVerificationForm';
 
-var TOTAL_STEPS = 4;
+var TOTAL_STEPS = 5;
 
 function ProgressBar({ step }) {
   var pct = ((step - 1) / (TOTAL_STEPS - 1)) * 100;
@@ -238,8 +238,120 @@ function Step2({ org, onNext, onSkip }) {
   );
 }
 
-// Step 3 — Nonprofit verification
+// Step 3 — Cause Areas
+var ONBOARDING_CAUSE_AREAS = [
+  'Animal Welfare','Arts & Culture','Civic Engagement','Civil Rights',
+  'Community Building','Criminal Justice Reform','Disability Services',
+  'Disaster Relief','Domestic Violence','Economic Development','Education',
+  'Emergency Assistance','Employment & Workforce','Environment & Conservation',
+  'Faith & Spirituality','Financial Literacy','Food Access','Food Security',
+  'Health & Wellness','Homeless Services','Housing','Human Trafficking',
+  'Immigration & Refugee Services','Language Access','Legal Aid','LGBTQ+ Rights',
+  'Mental Health','Neighborhood Revitalization','Nutrition','Poverty Reduction',
+  'Public Safety','Racial Equity','Senior Services','Substance Use Recovery',
+  'Transportation Access','Veterans Services','Violence Prevention','Voting Rights',
+  'Water Access',"Women's Rights",'Workforce Development','Youth Development',
+];
+
 function Step3({ org, onNext, onSkip }) {
+  var [selected, setSelected] = useState([]);
+  var [saving, setSaving] = useState(false);
+
+  function toggleTag(tag) {
+    setSelected(function(prev) {
+      return prev.includes(tag) ? prev.filter(function(t) { return t !== tag; }) : prev.concat([tag]);
+    });
+  }
+
+  async function handleSave() {
+    if (selected.length === 0) { onSkip(); return; }
+    setSaving(true);
+    try {
+      var tagDefaults = { org: selected, event: selected, program: selected, opportunity: selected, funding: selected };
+      var { error } = await supabase.from('organizations').update({
+        tags: selected,
+        tag_defaults: tagDefaults,
+      }).eq('id', org.id);
+      if (error) throw error;
+      onNext();
+    } catch(err) {
+      toast.error('Could not save: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  var labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: '#F5B731', textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '12px' };
+
+  return (
+    <div>
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>What does your org work on?</h2>
+          <span style={{ padding: '2px 10px', borderRadius: '99px', fontSize: '10px', fontWeight: 700, background: 'rgba(100,116,139,0.2)', color: '#94A3B8', border: '1px solid #2A3550' }}>Optional</span>
+        </div>
+        <p style={{ fontSize: '13px', color: '#94A3B8' }}>
+          Select your cause areas. These appear on your discovery card and will pre-fill tags when you create events, programs, and more. You can change these anytime in Settings.
+        </p>
+      </div>
+
+      <div style={{ marginBottom: '8px' }}>
+        <p style={labelStyle}>Cause Areas {selected.length > 0 ? '(' + selected.length + ' selected)' : ''}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '260px', overflowY: 'auto', padding: '4px 2px' }}>
+          {ONBOARDING_CAUSE_AREAS.map(function(tag) {
+            var isSelected = selected.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={function() { toggleTag(tag); }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '99px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: '1px solid',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  background: isSelected ? '#3B82F6' : '#1E2845',
+                  color: isSelected ? '#FFFFFF' : '#94A3B8',
+                  borderColor: isSelected ? '#3B82F6' : '#2A3550',
+                }}
+                aria-pressed={isSelected}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected.length > 0 && (
+        <button
+          type="button"
+          onClick={function() { setSelected([]); }}
+          style={{ fontSize: '11px', color: '#64748B', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginBottom: '16px', padding: 0 }}
+        >
+          Clear selection
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+        <button onClick={onSkip}
+          className="px-6 py-3 bg-transparent border border-gray-600 text-white font-semibold rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+          style={{ fontSize: '14px', flex: 1 }}>Skip for now</button>
+        <button onClick={handleSave} disabled={saving}
+          className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          style={{ fontSize: '14px', flex: 2, opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Saving...' : selected.length === 0 ? 'Skip for now' : 'Save and Continue'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Step 4 — Nonprofit verification
+function Step4({ org, onNext, onSkip }) {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
@@ -263,8 +375,8 @@ function Step3({ org, onNext, onSkip }) {
   );
 }
 
-// Step 4 — You're all set
-function Step4({ org, onDone }) {
+// Step 5 — You're all set
+function Step5({ org, onDone }) {
   var actions = [
     {
       label: 'Create an Event',
@@ -436,7 +548,8 @@ export default function OrgOnboardingWizard({ org: initialOrg, organizationId, o
           {step === 1 && <Step1 org={org} onNext={nextStep} onUpdate={handleUpdate} />}
           {step === 2 && <Step2 org={org} onNext={nextStep} onSkip={skipStep} />}
           {step === 3 && <Step3 org={org} onNext={nextStep} onSkip={skipStep} />}
-          {step === 4 && <Step4 org={org} onDone={handleDone} />}
+          {step === 4 && <Step4 org={org} onNext={nextStep} onSkip={skipStep} />}
+          {step === 5 && <Step5 org={org} onDone={handleDone} />}
         </div>
       </div>
     </div>
