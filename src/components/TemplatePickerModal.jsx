@@ -478,6 +478,68 @@ export var PLATFORM_TEMPLATES = {
       ],
     },
   ],
+
+  // ── Org-level Forms (form builder) templates ────────────────────────────────
+  form: [
+    {
+      _id: 'pt-form-1',
+      title: 'Flier / Graphic Design Request',
+      description: 'Submit a request for a flier, social graphic, or other design asset.',
+      requires_approval: false,
+      status: 'draft',
+      _desc: 'Collect project details, deadline, and format needed for design requests.',
+      _fields: [
+        { field_type: 'text', label: 'Project Name', placeholder: 'e.g. Spring Fundraiser Flier', required: true },
+        { field_type: 'textarea', label: 'Description of Request', placeholder: 'What should the design include?', required: true },
+        { field_type: 'date', label: 'Needed By', required: true },
+        { field_type: 'dropdown', label: 'Format Needed', options: ['Digital Flier', 'Print Flier', 'Social Media Graphic', 'Other'], required: true },
+        { field_type: 'textarea', label: 'Additional Notes', required: false },
+      ],
+    },
+    {
+      _id: 'pt-form-2',
+      title: 'Press / PR Statement Request',
+      description: 'Use this form to request a written statement or talking points.',
+      requires_approval: true,
+      status: 'draft',
+      _desc: 'Request a press statement or messaging for local media or social channels.',
+      _fields: [
+        { field_type: 'text', label: 'Topic', required: true },
+        { field_type: 'textarea', label: 'Key Points to Include', required: true },
+        { field_type: 'dropdown', label: 'Audience', options: ['Local Press', 'Members', 'Social Media', 'Other'], required: true },
+        { field_type: 'date', label: 'Deadline', required: false },
+      ],
+    },
+    {
+      _id: 'pt-form-3',
+      title: 'Facility / Space Request',
+      description: 'Request a space for your upcoming event or activity.',
+      requires_approval: true,
+      status: 'draft',
+      _desc: 'Request use of a room, hall, or outdoor space for an event or activity.',
+      _fields: [
+        { field_type: 'text', label: 'Event / Activity Name', required: true },
+        { field_type: 'date', label: 'Date Needed', required: true },
+        { field_type: 'dropdown', label: 'Space Requested', options: ['Main Hall', 'Conference Room', 'Outdoor Space', 'Other'], required: true },
+        { field_type: 'text', label: 'Expected Attendees', required: false },
+        { field_type: 'textarea', label: 'Additional Needs', required: false },
+      ],
+    },
+    {
+      _id: 'pt-form-4',
+      title: 'General Admin Request',
+      description: 'Submit any general administrative request.',
+      requires_approval: false,
+      status: 'draft',
+      _desc: 'Catch-all form for supply, IT, or scheduling requests.',
+      _fields: [
+        { field_type: 'dropdown', label: 'Request Type', options: ['Supplies', 'IT Support', 'Scheduling', 'Other'], required: true },
+        { field_type: 'textarea', label: 'Details', required: true },
+        { field_type: 'dropdown', label: 'Priority', options: ['Low', 'Medium', 'High'], required: true },
+        { field_type: 'date', label: 'Needed By', required: false },
+      ],
+    },
+  ],
 };
 
 // ── Focus trap ────────────────────────────────────────────────────────────────
@@ -512,9 +574,15 @@ function TemplateCard({ template, contentType, onSelect }) {
   var desc       = template._desc || template.description || '';
   var shortDesc  = desc.length > 100 ? desc.slice(0, 100) + '...' : desc;
 
-  // Show question count badge for polls/surveys; item count for signup forms
+  // Show question count for polls/surveys, item count for signup forms, field count for forms
   var questionCount = template._questions ? template._questions.length : null;
   var itemCount     = template._items     ? template._items.length     : null;
+  var fieldCount    = template._fields    ? template._fields.length    : null;
+
+  var countLabel = null;
+  if (questionCount !== null) countLabel = questionCount + ' question' + (questionCount !== 1 ? 's' : '');
+  else if (itemCount !== null) countLabel = itemCount + ' item' + (itemCount !== 1 ? 's' : '');
+  else if (fieldCount !== null) countLabel = fieldCount + ' field' + (fieldCount !== 1 ? 's' : '');
 
   return (
     <div
@@ -542,22 +610,13 @@ function TemplateCard({ template, contentType, onSelect }) {
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
             <p style={{ fontSize: '13px', fontWeight: 700, color: textPrimary, margin: 0, lineHeight: 1.3 }}>{titleField}</p>
-            {questionCount !== null && (
+            {countLabel && (
               <span style={{
                 fontSize: '10px', fontWeight: 700, color: '#475569',
                 background: elevatedBg, border: '0.5px solid ' + borderColor,
                 borderRadius: '99px', padding: '1px 7px', whiteSpace: 'nowrap',
               }}>
-                {questionCount + ' question' + (questionCount !== 1 ? 's' : '')}
-              </span>
-            )}
-            {itemCount !== null && questionCount === null && (
-              <span style={{
-                fontSize: '10px', fontWeight: 700, color: '#475569',
-                background: elevatedBg, border: '0.5px solid ' + borderColor,
-                borderRadius: '99px', padding: '1px 7px', whiteSpace: 'nowrap',
-              }}>
-                {itemCount + ' item' + (itemCount !== 1 ? 's' : '')}
+                {countLabel}
               </span>
             )}
           </div>
@@ -597,7 +656,9 @@ function TemplatePickerModal({ contentType, organizationId, onClose, onSelect })
     funding:      'org_funding',
     program:      'org_programs',
     poll:         'polls',
+    survey:       'surveys',
     signup_form:  'signup_forms',
+    form:         'org_forms',
   };
 
   useEffect(function() {
