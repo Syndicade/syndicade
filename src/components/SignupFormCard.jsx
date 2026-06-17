@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Check, X, Trash2, ClipboardList, Pin, Download, Copy, Lock, Unlock, AlertTriangle, Pencil } from 'lucide-react';
+import { Calendar, Users, Check, X, Trash2, ClipboardList, Pin, Download, Copy, Lock, Unlock, AlertTriangle, Pencil, ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react';
 import EditSignupForm from './EditSignupForm';
 
 var CARD_BG      = '#FFFFFF';
@@ -66,11 +66,120 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
   );
 }
 
+// ── ActionsMenu — position:fixed dropdown that escapes card clipping ──────────
+function ActionsMenu({ form, isPinned, isClosed, adminActing, onEdit, onPinToggle, onCloseToggle, onDuplicate, onExportCSV, onDelete }) {
+  var [isOpen, setIsOpen] = useState(false);
+  var [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  var btnRef = useRef(null);
+  var menuRef = useRef(null);
+
+  function openMenu() {
+    if (btnRef.current) {
+      var rect = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 6, left: rect.right - 200 });
+    }
+    setIsOpen(true);
+  }
+
+  function closeMenu() { setIsOpen(false); }
+
+  useEffect(function() {
+    if (!isOpen) return;
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target) && btnRef.current && !btnRef.current.contains(e.target)) {
+        closeMenu();
+      }
+    }
+    function handleKey(e) { if (e.key === 'Escape') closeMenu(); }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return function() {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen]);
+
+  function wrapAction(fn) {
+    return function() {
+      closeMenu();
+      if (fn) fn();
+    };
+  }
+
+  var menuItemStyle = {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    width: '100%', padding: '9px 14px',
+    background: 'transparent', border: 'none',
+    fontSize: '13px', fontWeight: 600, color: TEXT_SEC,
+    cursor: 'pointer', textAlign: 'left'
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={function() { isOpen ? closeMenu() : openMenu(); }}
+        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+        aria-haspopup="true"
+        aria-expanded={isOpen}
+        aria-label="Form actions"
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 hover:bg-slate-50"
+      >
+        Actions
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+
+      {isOpen && (
+        <div
+          ref={menuRef}
+          role="menu"
+          style={{
+            position: 'fixed',
+            top: menuPos.top + 'px',
+            left: menuPos.left + 'px',
+            width: '200px',
+            background: '#FFFFFF',
+            border: '1px solid ' + CARD_BDR,
+            borderRadius: '10px',
+            boxShadow: '3px 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)',
+            zIndex: 70,
+            padding: '6px',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <button onClick={wrapAction(onEdit)} style={menuItemStyle} role="menuitem" className="hover:bg-slate-50">
+            <Pencil size={14} aria-hidden="true" /> Edit
+          </button>
+          <button onClick={wrapAction(onPinToggle)} disabled={adminActing} style={Object.assign({}, menuItemStyle, { color: isPinned ? '#B45309' : TEXT_SEC, opacity: adminActing ? 0.6 : 1 })} role="menuitem" className="hover:bg-slate-50">
+            <Pin size={14} aria-hidden="true" /> {isPinned ? 'Unpin' : 'Pin'}
+          </button>
+          <button onClick={wrapAction(onCloseToggle)} disabled={adminActing} style={Object.assign({}, menuItemStyle, { color: isClosed ? '#22C55E' : TEXT_SEC, opacity: adminActing ? 0.6 : 1 })} role="menuitem" className="hover:bg-slate-50">
+            {isClosed ? <Unlock size={14} aria-hidden="true" /> : <Lock size={14} aria-hidden="true" />} {isClosed ? 'Reopen' : 'Close Now'}
+          </button>
+          <button onClick={wrapAction(onDuplicate)} disabled={adminActing} style={Object.assign({}, menuItemStyle, { opacity: adminActing ? 0.6 : 1 })} role="menuitem" className="hover:bg-slate-50">
+            <Copy size={14} aria-hidden="true" /> Duplicate
+          </button>
+          <button onClick={wrapAction(onExportCSV)} style={menuItemStyle} role="menuitem" className="hover:bg-slate-50">
+            <Download size={14} aria-hidden="true" /> Export CSV
+          </button>
+          <div style={{ height: '1px', background: CARD_BDR, margin: '4px 0' }} />
+          <button onClick={wrapAction(onDelete)} style={Object.assign({}, menuItemStyle, { color: '#EF4444' })} role="menuitem" className="hover:bg-red-50">
+            <Trash2 size={14} aria-hidden="true" /> Delete
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── SignupFormCard ─────────────────────────────────────────────────────────────
 function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memberCount, onDuplicate }) {
+  var [isExpanded, setIsExpanded]     = useState(false);
   var [items, setItems]               = useState([]);
   var [responses, setResponses]       = useState([]);
   var [loading, setLoading]           = useState(true);
+  var [loadedOnce, setLoadedOnce]     = useState(false);
   var [submitting, setSubmitting]     = useState(false);
   var [adminActing, setAdminActing]   = useState(false);
   var [signupQuantities, setSignupQuantities] = useState({});
@@ -94,7 +203,14 @@ function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memb
   }
 
   var formId = form ? form.id : null;
-  useEffect(function() { if (form) fetchData(); }, [formId]);
+
+  // Fetch data only once the card is expanded for the first time
+  useEffect(function() {
+    if (form && isExpanded && !loadedOnce) {
+      fetchData();
+      setLoadedOnce(true);
+    }
+  }, [formId, isExpanded]);
 
   var fetchData = async function() {
     try {
@@ -408,22 +524,6 @@ function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memb
 
   if (!form) return null;
 
-  if (loading) {
-    return (
-      <div
-        role="listitem"
-        style={{ background: CARD_BG, border: '1px solid ' + CARD_BDR, borderRadius: '12px', padding: '24px' }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ height: '24px', borderRadius: '6px', background: '#E2E8F0', width: '60%' }} className="animate-pulse" />
-          <div style={{ height: '16px', borderRadius: '6px', background: '#E2E8F0', width: '40%' }} className="animate-pulse" />
-          <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
-          <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
   var retentionLabel = getRetentionLabel(form.retention_days);
 
   return (
@@ -441,12 +541,24 @@ function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memb
         }}
         aria-label={'Sign-up form: ' + form.title}
       >
-        {/* Card header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid ' + CARD_BDR }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+        {/* Card header — clickable to expand/collapse */}
+        <div
+          style={{ padding: '20px 24px', borderBottom: isExpanded ? '1px solid ' + CARD_BDR : 'none', cursor: 'pointer' }}
+          onClick={function() { setIsExpanded(!isExpanded); }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isExpanded}
+          aria-label={(isExpanded ? 'Collapse' : 'Expand') + ' ' + form.title}
+          onKeyDown={function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsExpanded(!isExpanded); } }}
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+            <div style={{ paddingTop: '2px', flexShrink: 0, color: TEXT_MUTED }}>
+              {isExpanded ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 700, color: TEXT_PRIMARY, margin: 0 }}>{form.title}</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: TEXT_PRIMARY, margin: 0 }}>{form.title}</h3>
                 {isPinned && (
                   <span style={{ padding: '2px 8px', background: 'rgba(245,183,49,0.12)', color: '#B45309', fontSize: '11px', fontWeight: 700, borderRadius: '99px', border: '1px solid rgba(245,183,49,0.35)' }}>
                     Pinned
@@ -487,210 +599,168 @@ function SignupFormCard({ form, currentUserId, isAdmin, onDelete, onUpdate, memb
           </div>
         </div>
 
-        {/* Admin action bar — only rendered for admins */}
-        {isAdmin && (
-          <div style={{ padding: '10px 24px', borderBottom: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              onClick={function() { setShowEditModal(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-              aria-label={'Edit form: ' + form.title}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 hover:bg-slate-50"
-            >
-              <Pencil size={13} aria-hidden="true" />
-              Edit
-            </button>
-
-            <button
-              onClick={handlePinToggle}
-              disabled={adminActing}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: isPinned ? 'rgba(245,183,49,0.1)' : '#FFFFFF', color: isPinned ? '#B45309' : TEXT_SEC, border: '1px solid ' + (isPinned ? 'rgba(245,183,49,0.4)' : CARD_BDR), borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
-              aria-label={isPinned ? 'Unpin form' : 'Pin form'}
-              className="focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
-            >
-              <Pin size={13} aria-hidden="true" />
-              {isPinned ? 'Unpin' : 'Pin'}
-            </button>
-
-            <button
-              onClick={handleCloseToggle}
-              disabled={adminActing}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: isClosed ? '#22C55E' : TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
-              aria-label={isClosed ? 'Reopen form' : 'Close form now'}
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-            >
-              {isClosed ? <Unlock size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}
-              {isClosed ? 'Reopen' : 'Close Now'}
-            </button>
-
-            <button
-              onClick={handleDuplicate}
-              disabled={adminActing}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: adminActing ? 'not-allowed' : 'pointer', opacity: adminActing ? 0.6 : 1 }}
-              aria-label="Duplicate form"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-            >
-              <Copy size={13} aria-hidden="true" />
-              Duplicate
-            </button>
-
-            <button
-              onClick={handleExportCSV}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: TEXT_SEC, border: '1px solid ' + CARD_BDR, borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-              aria-label="Export responses as CSV"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-            >
-              <Download size={13} aria-hidden="true" />
-              Export CSV
-            </button>
-
-            <div style={{ marginLeft: 'auto' }}>
-              <button
-                onClick={handleDelete}
-                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', background: '#FFFFFF', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                aria-label={'Delete form: ' + form.title}
-                className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 hover:bg-red-50"
-              >
-                <Trash2 size={13} aria-hidden="true" />
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Items list */}
-        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {items.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <ClipboardList size={36} style={{ color: TEXT_MUTED, margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
-              <p style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, marginBottom: '4px' }}>No items yet</p>
-              <p style={{ fontSize: '14px', color: TEXT_MUTED }}>This form has no sign-up slots added.</p>
-            </div>
-          ) : (
-            items.map(function(item) {
-              var itemResponses   = getItemResponses(item.id);
-              var userSignedUp    = hasUserSignedUp(item.id);
-              var itemFull        = isItemFull(item);
-              var spotsRemaining  = item.max_slots - item.current_signups;
-
-              // show_responses: always true for admins, otherwise respect form setting
-              var showResponses = isAdmin || form.show_responses;
-
-              return (
-                <div key={item.id} style={{ background: ITEM_BG, border: '1px solid ' + CARD_BDR, borderRadius: '10px', padding: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <h4 style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, margin: '0 0 4px' }}>{item.item_name}</h4>
-                      {item.description && (
-                        <p style={{ fontSize: '13px', color: TEXT_SEC, marginBottom: '8px' }}>{item.description}</p>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: itemResponses.length > 0 && showResponses ? '8px' : 0 }}>
-                        <Users size={14} style={{ color: itemFull ? '#EF4444' : '#3B82F6', flexShrink: 0 }} aria-hidden="true" />
-                        <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : TEXT_SEC, fontWeight: itemFull ? 600 : 400 }}>
-                          {item.current_signups} of {item.max_slots} {item.max_slots === 1 ? 'spot' : 'spots'} filled
-                        </span>
-                        {!itemFull && spotsRemaining > 0 && (
-                          <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>({spotsRemaining} left)</span>
-                        )}
-                      </div>
-
-                      {/* Responses — always shown to admins, gated by show_responses for members */}
-                      {showResponses && itemResponses.length > 0 && (
-                        <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
-                          <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {itemResponses.map(function(response) {
-                              return (
-                                <div key={response.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                                  <Check size={13} style={{ color: '#22C55E', flexShrink: 0 }} aria-hidden="true" />
-                                  <span style={{ color: TEXT_SEC }}>
-                                    {response.member ? (response.member.first_name + ' ' + response.member.last_name) : '(loading)'}
-                                    {response.quantity > 1 && (
-                                      <span style={{ color: '#3B82F6', fontWeight: 600 }}> &times;{response.quantity}</span>
-                                    )}
-                                  </span>
-                                  {response.member_id === currentUserId && (
-                                    <span style={{ fontSize: '11px', color: '#3B82F6', fontWeight: 600 }}>(You)</span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Sign-up action column — hidden when closed */}
-                    {!isClosed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '120px' }}>
-                        {userSignedUp ? (
-                          <button
-                            onClick={function() { handleUnsignUp(item.id); }}
-                            disabled={submitting}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
-                            aria-label={'Remove sign-up for ' + item.item_name}
-                            className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                          >
-                            <X size={14} aria-hidden="true" />
-                            Unsign Up
-                          </button>
-                        ) : (
-                          <>
-                            {item.max_slots > 1 && !itemFull && (
-                              <div>
-                                <label htmlFor={'qty-' + item.id} style={{ fontSize: '11px', fontWeight: 600, color: TEXT_MUTED, display: 'block', marginBottom: '4px' }}>Quantity</label>
-                                <input
-                                  type="number"
-                                  id={'qty-' + item.id}
-                                  min="1"
-                                  max={spotsRemaining}
-                                  value={signupQuantities[item.id] || ''}
-                                  placeholder="1"
-                                  onChange={function(e) {
-                                    setSignupQuantities(function(prev) {
-                                      return Object.assign({}, prev, { [item.id]: e.target.value });
-                                    });
-                                  }}
-                                  style={{ width: '100%', padding: '6px 10px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: TEXT_PRIMARY, fontSize: '13px' }}
-                                  disabled={submitting}
-                                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  aria-label={'Quantity for ' + item.item_name}
-                                />
-                              </div>
-                            )}
-                            <button
-                              onClick={function() { handleSignUp(item.id); }}
-                              disabled={submitting || itemFull}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: itemFull ? '#E2E8F0' : '#3B82F6', color: itemFull ? TEXT_MUTED : '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: (submitting || itemFull) ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
-                              aria-label={itemFull ? (item.item_name + ' is full') : ('Sign up for ' + item.item_name)}
-                              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            >
-                              <Check size={14} aria-hidden="true" />
-                              {itemFull ? 'Full' : 'Sign Up'}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer — response summary */}
-        {totalSignups > 0 && (
-          <div style={{ padding: '12px 24px', borderTop: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-            <span style={{ fontSize: '13px', color: TEXT_MUTED }}>
-              {totalSignups} {totalSignups === 1 ? 'response' : 'responses'}
-              {responseRate !== null && ' (' + responseRate + '% of members)'}
-            </span>
-            {totalSlots > 0 && (
-              <span style={{ fontSize: '12px', color: TEXT_MUTED }}>
-                {Math.round((totalSignups / totalSlots) * 100)}% capacity filled
-              </span>
+        {/* Collapsed-state content stops here */}
+        {isExpanded && (
+          <>
+            {/* Admin action bar — Actions dropdown only, escapes card clipping */}
+            {isAdmin && (
+              <div style={{ padding: '10px 24px', borderBottom: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <ActionsMenu
+                  form={form}
+                  isPinned={isPinned}
+                  isClosed={isClosed}
+                  adminActing={adminActing}
+                  onEdit={function() { setShowEditModal(true); }}
+                  onPinToggle={handlePinToggle}
+                  onCloseToggle={handleCloseToggle}
+                  onDuplicate={handleDuplicate}
+                  onExportCSV={handleExportCSV}
+                  onDelete={handleDelete}
+                />
+              </div>
             )}
-          </div>
+
+            {/* Items list */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
+                  <div style={{ height: '80px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
+                </div>
+              ) : items.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <ClipboardList size={36} style={{ color: TEXT_MUTED, margin: '0 auto 12px', display: 'block' }} aria-hidden="true" />
+                  <p style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, marginBottom: '4px' }}>No items yet</p>
+                  <p style={{ fontSize: '14px', color: TEXT_MUTED }}>This form has no sign-up slots added.</p>
+                </div>
+              ) : (
+                items.map(function(item) {
+                  var itemResponses   = getItemResponses(item.id);
+                  var userSignedUp    = hasUserSignedUp(item.id);
+                  var itemFull        = isItemFull(item);
+                  var spotsRemaining  = item.max_slots - item.current_signups;
+
+                  // show_responses: always true for admins, otherwise respect form setting
+                  var showResponses = isAdmin || form.show_responses;
+
+                  return (
+                    <div key={item.id} style={{ background: ITEM_BG, border: '1px solid ' + CARD_BDR, borderRadius: '10px', padding: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ fontSize: '15px', fontWeight: 600, color: TEXT_PRIMARY, margin: '0 0 4px' }}>{item.item_name}</h4>
+                          {item.description && (
+                            <p style={{ fontSize: '13px', color: TEXT_SEC, marginBottom: '8px' }}>{item.description}</p>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: itemResponses.length > 0 && showResponses ? '8px' : 0 }}>
+                            <Users size={14} style={{ color: itemFull ? '#EF4444' : '#3B82F6', flexShrink: 0 }} aria-hidden="true" />
+                            <span style={{ fontSize: '13px', color: itemFull ? '#EF4444' : TEXT_SEC, fontWeight: itemFull ? 600 : 400 }}>
+                              {item.current_signups} of {item.max_slots} {item.max_slots === 1 ? 'spot' : 'spots'} filled
+                            </span>
+                            {!itemFull && spotsRemaining > 0 && (
+                              <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>({spotsRemaining} left)</span>
+                            )}
+                          </div>
+
+                          {/* Responses — always shown to admins, gated by show_responses for members */}
+                          {showResponses && itemResponses.length > 0 && (
+                            <div style={{ background: RESPONSES_BG, borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
+                              <p style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px' }}>Signed up</p>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {itemResponses.map(function(response) {
+                                  return (
+                                    <div key={response.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                                      <Check size={13} style={{ color: '#22C55E', flexShrink: 0 }} aria-hidden="true" />
+                                      <span style={{ color: TEXT_SEC }}>
+                                        {response.member ? (response.member.first_name + ' ' + response.member.last_name) : '(loading)'}
+                                        {response.quantity > 1 && (
+                                          <span style={{ color: '#3B82F6', fontWeight: 600 }}> &times;{response.quantity}</span>
+                                        )}
+                                      </span>
+                                      {response.member_id === currentUserId && (
+                                        <span style={{ fontSize: '11px', color: '#3B82F6', fontWeight: 600 }}>(You)</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sign-up action column — hidden when closed */}
+                        {!isClosed && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '120px' }}>
+                            {userSignedUp ? (
+                              <button
+                                onClick={function() { handleUnsignUp(item.id); }}
+                                disabled={submitting}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
+                                aria-label={'Remove sign-up for ' + item.item_name}
+                                className="focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                              >
+                                <X size={14} aria-hidden="true" />
+                                Unsign Up
+                              </button>
+                            ) : (
+                              <>
+                                {item.max_slots > 1 && !itemFull && (
+                                  <div>
+                                    <label htmlFor={'qty-' + item.id} style={{ fontSize: '11px', fontWeight: 600, color: TEXT_MUTED, display: 'block', marginBottom: '4px' }}>Quantity</label>
+                                    <input
+                                      type="number"
+                                      id={'qty-' + item.id}
+                                      min="1"
+                                      max={spotsRemaining}
+                                      value={signupQuantities[item.id] || ''}
+                                      placeholder="1"
+                                      onChange={function(e) {
+                                        setSignupQuantities(function(prev) {
+                                          return Object.assign({}, prev, { [item.id]: e.target.value });
+                                        });
+                                      }}
+                                      style={{ width: '100%', padding: '6px 10px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: TEXT_PRIMARY, fontSize: '13px' }}
+                                      disabled={submitting}
+                                      className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      aria-label={'Quantity for ' + item.item_name}
+                                    />
+                                  </div>
+                                )}
+                                <button
+                                  onClick={function() { handleSignUp(item.id); }}
+                                  disabled={submitting || itemFull}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 14px', background: itemFull ? '#E2E8F0' : '#3B82F6', color: itemFull ? TEXT_MUTED : '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: (submitting || itemFull) ? 'not-allowed' : 'pointer', opacity: submitting ? 0.5 : 1 }}
+                                  aria-label={itemFull ? (item.item_name + ' is full') : ('Sign up for ' + item.item_name)}
+                                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                >
+                                  <Check size={14} aria-hidden="true" />
+                                  {itemFull ? 'Full' : 'Sign Up'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer — response summary */}
+            {totalSignups > 0 && (
+              <div style={{ padding: '12px 24px', borderTop: '1px solid ' + CARD_BDR, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: TEXT_MUTED }}>
+                  {totalSignups} {totalSignups === 1 ? 'response' : 'responses'}
+                  {responseRate !== null && ' (' + responseRate + '% of members)'}
+                </span>
+                {totalSlots > 0 && (
+                  <span style={{ fontSize: '12px', color: TEXT_MUTED }}>
+                    {Math.round((totalSignups / totalSlots) * 100)}% capacity filled
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </article>
 

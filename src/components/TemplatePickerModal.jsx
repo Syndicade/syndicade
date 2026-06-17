@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { X, FileText, ChevronRight } from 'lucide-react';
 
-var cardBg      = '#FFFFFF';
-var pageBg      = '#F8FAFC';
-var borderColor = '#E2E8F0';
-var elevatedBg  = '#F1F5F9';
+var cardBg        = '#FFFFFF';
+var pageBg        = '#F8FAFC';
+var borderColor   = '#E2E8F0';
+var elevatedBg    = '#F1F5F9';
 var textPrimary   = '#0E1523';
 var textSecondary = '#475569';
 var textMuted     = '#64748B';
@@ -305,30 +305,10 @@ export var PLATFORM_TEMPLATES = {
       result_visibility: 'full',
       visibility: 'all_members',
       _questions: [
-        {
-          question_text: 'How satisfied are you with our organization overall?',
-          question_type: 'rating',
-          required: true,
-          options: [],
-        },
-        {
-          question_text: 'Which programs or services have you used this year?',
-          question_type: 'multiple_choice',
-          required: false,
-          options: ['Community events', 'Educational programs', 'Volunteer opportunities', 'Member resources', 'Online community', 'None yet'],
-        },
-        {
-          question_text: 'How would you rate our communication with members?',
-          question_type: 'single_choice',
-          required: true,
-          options: ['Excellent', 'Good', 'Fair', 'Poor', 'I rarely hear from the organization'],
-        },
-        {
-          question_text: 'What would most improve your experience as a member?',
-          question_type: 'textarea',
-          required: false,
-          options: [],
-        },
+        { question_text: 'How satisfied are you with our organization overall?', question_type: 'rating', required: true, options: [] },
+        { question_text: 'Which programs or services have you used this year?', question_type: 'multiple_choice', required: false, options: ['Community events', 'Educational programs', 'Volunteer opportunities', 'Member resources', 'Online community', 'None yet'] },
+        { question_text: 'How would you rate our communication with members?', question_type: 'single_choice', required: true, options: ['Excellent', 'Good', 'Fair', 'Poor', 'I rarely hear from the organization'] },
+        { question_text: 'What would most improve your experience as a member?', question_type: 'textarea', required: false, options: [] },
       ],
       _desc: 'Comprehensive yearly check-in on programs and satisfaction.',
     },
@@ -342,36 +322,11 @@ export var PLATFORM_TEMPLATES = {
       result_visibility: 'full',
       visibility: 'all_members',
       _questions: [
-        {
-          question_text: 'How would you rate the event overall?',
-          question_type: 'rating',
-          required: true,
-          options: [],
-        },
-        {
-          question_text: 'How did you hear about this event?',
-          question_type: 'single_choice',
-          required: false,
-          options: ['Email newsletter', 'Social media', 'Word of mouth', 'Organization website', 'Community board', 'Other'],
-        },
-        {
-          question_text: 'Which aspects of the event did you enjoy?',
-          question_type: 'multiple_choice',
-          required: false,
-          options: ['Content / topic', 'Speaker or presenter', 'Networking opportunities', 'Venue or format', 'Food or refreshments', 'Timing and length'],
-        },
-        {
-          question_text: 'What could we do better next time?',
-          question_type: 'textarea',
-          required: false,
-          options: [],
-        },
-        {
-          question_text: 'Would you recommend our events to others?',
-          question_type: 'single_choice',
-          required: true,
-          options: ['Definitely yes', 'Probably yes', 'Not sure', 'Probably not', 'Definitely not'],
-        },
+        { question_text: 'How would you rate the event overall?', question_type: 'rating', required: true, options: [] },
+        { question_text: 'How did you hear about this event?', question_type: 'single_choice', required: false, options: ['Email newsletter', 'Social media', 'Word of mouth', 'Organization website', 'Community board', 'Other'] },
+        { question_text: 'Which aspects of the event did you enjoy?', question_type: 'multiple_choice', required: false, options: ['Content / topic', 'Speaker or presenter', 'Networking opportunities', 'Venue or format', 'Food or refreshments', 'Timing and length'] },
+        { question_text: 'What could we do better next time?', question_type: 'textarea', required: false, options: [] },
+        { question_text: 'Would you recommend our events to others?', question_type: 'single_choice', required: true, options: ['Definitely yes', 'Probably yes', 'Not sure', 'Probably not', 'Definitely not'] },
       ],
       _desc: 'Post-event feedback with rating, multiple choice, and open text.',
     },
@@ -385,36 +340,11 @@ export var PLATFORM_TEMPLATES = {
       result_visibility: 'full',
       visibility: 'all_members',
       _questions: [
-        {
-          question_text: 'How many sessions or meetings did you attend?',
-          question_type: 'single_choice',
-          required: true,
-          options: ['All of them', 'Most of them (75%+)', 'About half', 'A few (less than half)', 'Just one'],
-        },
-        {
-          question_text: 'How well did the program meet your needs?',
-          question_type: 'rating',
-          required: true,
-          options: [],
-        },
-        {
-          question_text: 'What skills or knowledge did you gain from this program?',
-          question_type: 'multiple_choice',
-          required: false,
-          options: ['New technical skills', 'Leadership or soft skills', 'Community connections', 'Career opportunities', 'Personal development', 'I am still working on it'],
-        },
-        {
-          question_text: 'What did you like most about the program?',
-          question_type: 'textarea',
-          required: false,
-          options: [],
-        },
-        {
-          question_text: 'Would you participate in this program again or recommend it?',
-          question_type: 'single_choice',
-          required: true,
-          options: ['Yes, definitely', 'Yes, with some improvements', 'Not sure', 'No'],
-        },
+        { question_text: 'How many sessions or meetings did you attend?', question_type: 'single_choice', required: true, options: ['All of them', 'Most of them (75%+)', 'About half', 'A few (less than half)', 'Just one'] },
+        { question_text: 'How well did the program meet your needs?', question_type: 'rating', required: true, options: [] },
+        { question_text: 'What skills or knowledge did you gain from this program?', question_type: 'multiple_choice', required: false, options: ['New technical skills', 'Leadership or soft skills', 'Community connections', 'Career opportunities', 'Personal development', 'I am still working on it'] },
+        { question_text: 'What did you like most about the program?', question_type: 'textarea', required: false, options: [] },
+        { question_text: 'Would you participate in this program again or recommend it?', question_type: 'single_choice', required: true, options: ['Yes, definitely', 'Yes, with some improvements', 'Not sure', 'No'] },
       ],
       _desc: 'Measure outcomes and satisfaction for a specific program.',
     },
@@ -428,30 +358,10 @@ export var PLATFORM_TEMPLATES = {
       result_visibility: 'none',
       visibility: 'all_members',
       _questions: [
-        {
-          question_text: 'How did you hear about our organization?',
-          question_type: 'single_choice',
-          required: true,
-          options: ['Friend or colleague', 'Social media', 'Internet search', 'Community event', 'Partner organization', 'Other'],
-        },
-        {
-          question_text: 'What are you most hoping to get out of your membership?',
-          question_type: 'multiple_choice',
-          required: true,
-          options: ['Networking and connections', 'Learning and development', 'Volunteer opportunities', 'Access to resources', 'Community and belonging', 'Professional recognition'],
-        },
-        {
-          question_text: 'What skills or experience would you like to contribute?',
-          question_type: 'textarea',
-          required: false,
-          options: [],
-        },
-        {
-          question_text: 'How comfortable are you with our online platform so far?',
-          question_type: 'single_choice',
-          required: false,
-          options: ['Very comfortable', 'Somewhat comfortable', 'Need a little help', 'Have not explored it yet'],
-        },
+        { question_text: 'How did you hear about our organization?', question_type: 'single_choice', required: true, options: ['Friend or colleague', 'Social media', 'Internet search', 'Community event', 'Partner organization', 'Other'] },
+        { question_text: 'What are you most hoping to get out of your membership?', question_type: 'multiple_choice', required: true, options: ['Networking and connections', 'Learning and development', 'Volunteer opportunities', 'Access to resources', 'Community and belonging', 'Professional recognition'] },
+        { question_text: 'What skills or experience would you like to contribute?', question_type: 'textarea', required: false, options: [] },
+        { question_text: 'How comfortable are you with our online platform so far?', question_type: 'single_choice', required: false, options: ['Very comfortable', 'Somewhat comfortable', 'Need a little help', 'Have not explored it yet'] },
       ],
       _desc: 'Onboarding survey to understand new member goals and background.',
     },
@@ -465,25 +375,10 @@ export var PLATFORM_TEMPLATES = {
       show_results_before_close: false,
       allow_vote_changes: false,
       result_visibility: 'full',
-      // _questions is the canonical shape for CreatePoll's applyTemplate:
-      // each question has: question_text, question_type, options (string[])
-      // yes_no_abstain questions must have options: []
       _questions: [
-        {
-          question_text: 'Who is your preferred candidate for the open board seat?',
-          question_type: 'single_choice',
-          options: ['Candidate A', 'Candidate B', 'Candidate C', 'None of the above'],
-        },
-        {
-          question_text: 'Do you feel there was adequate notice before this election?',
-          question_type: 'yes_no_abstain',
-          options: [],
-        },
-        {
-          question_text: 'Which board committee would you most like the new member to lead?',
-          question_type: 'multiple_choice',
-          options: ['Finance', 'Programs', 'Outreach & Communications', 'Fundraising', 'No preference'],
-        },
+        { question_text: 'Who is your preferred candidate for the open board seat?', question_type: 'single_choice', options: ['Candidate A', 'Candidate B', 'Candidate C', 'None of the above'] },
+        { question_text: 'Do you feel there was adequate notice before this election?', question_type: 'yes_no_abstain', options: [] },
+        { question_text: 'Which board committee would you most like the new member to lead?', question_type: 'multiple_choice', options: ['Finance', 'Programs', 'Outreach & Communications', 'Fundraising', 'No preference'] },
       ],
       _desc: 'Let members vote on candidates for open board positions.',
     },
@@ -496,21 +391,9 @@ export var PLATFORM_TEMPLATES = {
       allow_vote_changes: false,
       result_visibility: 'full',
       _questions: [
-        {
-          question_text: 'How would you rate the event overall?',
-          question_type: 'single_choice',
-          options: ['Excellent', 'Good', 'Fair', 'Poor'],
-        },
-        {
-          question_text: 'What did you enjoy most about this event?',
-          question_type: 'multiple_choice',
-          options: ['The speakers / presenters', 'Networking opportunities', 'The venue or location', 'The activities or programming', 'The food or refreshments'],
-        },
-        {
-          question_text: 'Would you attend a similar event again?',
-          question_type: 'yes_no_abstain',
-          options: [],
-        },
+        { question_text: 'How would you rate the event overall?', question_type: 'single_choice', options: ['Excellent', 'Good', 'Fair', 'Poor'] },
+        { question_text: 'What did you enjoy most about this event?', question_type: 'multiple_choice', options: ['The speakers / presenters', 'Networking opportunities', 'The venue or location', 'The activities or programming', 'The food or refreshments'] },
+        { question_text: 'Would you attend a similar event again?', question_type: 'yes_no_abstain', options: [] },
       ],
       _desc: 'Gather quick satisfaction ratings after an event.',
     },
@@ -523,21 +406,9 @@ export var PLATFORM_TEMPLATES = {
       allow_vote_changes: true,
       result_visibility: 'full',
       _questions: [
-        {
-          question_text: 'Which types of events would you like to see more of?',
-          question_type: 'multiple_choice',
-          options: ['Workshops and skill-building', 'Networking mixers', 'Community service days', 'Fundraisers', 'Webinars or online events', 'Family-friendly events'],
-        },
-        {
-          question_text: 'What time of day works best for you to attend events?',
-          question_type: 'single_choice',
-          options: ['Morning (before noon)', 'Afternoon (noon – 5 PM)', 'Evening (after 5 PM)', 'Weekends only'],
-        },
-        {
-          question_text: 'Are you interested in volunteering to help organize future events?',
-          question_type: 'yes_no_abstain',
-          options: [],
-        },
+        { question_text: 'Which types of events would you like to see more of?', question_type: 'multiple_choice', options: ['Workshops and skill-building', 'Networking mixers', 'Community service days', 'Fundraisers', 'Webinars or online events', 'Family-friendly events'] },
+        { question_text: 'What time of day works best for you to attend events?', question_type: 'single_choice', options: ['Morning (before noon)', 'Afternoon (noon – 5 PM)', 'Evening (after 5 PM)', 'Weekends only'] },
+        { question_text: 'Are you interested in volunteering to help organize future events?', question_type: 'yes_no_abstain', options: [] },
       ],
       _desc: 'Find out what your members want more of.',
     },
@@ -550,23 +421,61 @@ export var PLATFORM_TEMPLATES = {
       allow_vote_changes: false,
       result_visibility: 'full',
       _questions: [
-        {
-          question_text: 'Where should we focus our budget this year?',
-          question_type: 'single_choice',
-          options: ['Programs and services', 'Community events', 'Staff and operations', 'Technology and communications', 'Outreach and marketing'],
-        },
-        {
-          question_text: 'Which of these would you support adding to our budget next year?',
-          question_type: 'multiple_choice',
-          options: ['Youth programming', 'Senior services', 'Mental health resources', 'Job training', 'Language access services', 'Emergency assistance fund'],
-        },
-        {
-          question_text: 'Do you feel our current programs are meeting community needs?',
-          question_type: 'yes_no_abstain',
-          options: [],
-        },
+        { question_text: 'Where should we focus our budget this year?', question_type: 'single_choice', options: ['Programs and services', 'Community events', 'Staff and operations', 'Technology and communications', 'Outreach and marketing'] },
+        { question_text: 'Which of these would you support adding to our budget next year?', question_type: 'multiple_choice', options: ['Youth programming', 'Senior services', 'Mental health resources', 'Job training', 'Language access services', 'Emergency assistance fund'] },
+        { question_text: 'Do you feel our current programs are meeting community needs?', question_type: 'yes_no_abstain', options: [] },
       ],
       _desc: 'Help members weigh in on where resources should go.',
+    },
+  ],
+
+  // ── Sign-Up Form templates ──────────────────────────────────────────────────
+  signup_form: [
+    {
+      _id: 'pt-sf-1',
+      title: 'Volunteer Interest Form',
+      description: 'Help us match you with the right opportunities! Sign up for one or more areas where you can contribute your time and skills.',
+      _desc: 'Collect volunteer availability, skills, and areas of interest.',
+      _items: [
+        { item_name: 'Event Setup & Breakdown', description: 'Help set up and clean up before and after events. Typically 2–3 hrs per event.', max_slots: 10, slot_type: 'spots' },
+        { item_name: 'Administrative Support', description: 'Data entry, filing, and office tasks. Flexible remote or in-person hours.', max_slots: 5, slot_type: 'spots' },
+        { item_name: 'Outreach & Tabling', description: 'Represent the organization at community events and information tables.', max_slots: 8, slot_type: 'spots' },
+        { item_name: 'Program Facilitation', description: 'Lead or co-facilitate a workshop or program session. Training provided.', max_slots: 4, slot_type: 'spots' },
+      ],
+    },
+    {
+      _id: 'pt-sf-2',
+      title: 'Event Registration',
+      description: 'Reserve your spot for our upcoming event. Space is limited — sign up early!',
+      _desc: 'Simple RSVP with name, contact info, and optional dietary/accessibility notes.',
+      _items: [
+        { item_name: 'General Admission', description: 'Standard registration for the event.', max_slots: 50, slot_type: 'spots' },
+        { item_name: 'VIP / Early Access', description: 'Includes early entry and reserved seating.', max_slots: 10, slot_type: 'spots' },
+        { item_name: 'Volunteer (Day-of Help)', description: 'Register as a day-of volunteer. Includes event access.', max_slots: 8, slot_type: 'spots' },
+      ],
+    },
+    {
+      _id: 'pt-sf-3',
+      title: 'Membership Application',
+      description: 'Interested in becoming a member? Fill out this form and our team will follow up with next steps.',
+      _desc: 'Gather background, interests, and motivation for joining.',
+      _items: [
+        { item_name: 'General Membership', description: 'Standard membership with access to all member benefits and events.', max_slots: 100, slot_type: 'spots' },
+        { item_name: 'Student / Youth Membership', description: 'Discounted membership for students and members under 25.', max_slots: 30, slot_type: 'spots' },
+        { item_name: 'Senior Membership', description: 'Membership for community members 65 and older.', max_slots: 30, slot_type: 'spots' },
+      ],
+    },
+    {
+      _id: 'pt-sf-4',
+      title: 'Potluck & Supplies Sign-Up',
+      description: 'Sign up to bring a dish or supplies to our community potluck. Coordinate with members so we have a good variety!',
+      _desc: 'Open-ended sign-up for members to share what they will bring.',
+      _items: [
+        { item_name: 'Main Dish', description: 'A hearty entree to share (serves 8–10).', max_slots: 4, slot_type: 'spots' },
+        { item_name: 'Side Dish or Salad', description: 'A side, salad, or vegetable dish (serves 8–10).', max_slots: 6, slot_type: 'spots' },
+        { item_name: 'Dessert', description: 'A sweet treat to finish the meal (serves 8–10).', max_slots: 4, slot_type: 'spots' },
+        { item_name: 'Drinks & Beverages', description: 'Non-alcoholic drinks, juice, or water for the group.', max_slots: 3, slot_type: 'spots' },
+      ],
     },
   ],
 };
@@ -603,22 +512,24 @@ function TemplateCard({ template, contentType, onSelect }) {
   var desc       = template._desc || template.description || '';
   var shortDesc  = desc.length > 100 ? desc.slice(0, 100) + '...' : desc;
 
-  // Show question count badge for polls
+  // Show question count badge for polls/surveys; item count for signup forms
   var questionCount = template._questions ? template._questions.length : null;
+  var itemCount     = template._items     ? template._items.length     : null;
 
   return (
-    <div style={{
-      background: cardBg,
-      border: '0.5px solid ' + borderColor,
-      borderRadius: '10px',
-      padding: '14px 16px',
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: '12px',
-      transition: 'border-color 0.15s, box-shadow 0.15s',
-    }}
-    className="hover:shadow-sm"
+    <div
+      style={{
+        background: cardBg,
+        border: '0.5px solid ' + borderColor,
+        borderRadius: '10px',
+        padding: '14px 16px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '12px',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+      className="hover:shadow-sm"
     >
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
         <div style={{
@@ -635,10 +546,18 @@ function TemplateCard({ template, contentType, onSelect }) {
               <span style={{
                 fontSize: '10px', fontWeight: 700, color: '#475569',
                 background: elevatedBg, border: '0.5px solid ' + borderColor,
-                borderRadius: '99px', padding: '1px 7px',
-                whiteSpace: 'nowrap',
+                borderRadius: '99px', padding: '1px 7px', whiteSpace: 'nowrap',
               }}>
                 {questionCount + ' question' + (questionCount !== 1 ? 's' : '')}
+              </span>
+            )}
+            {itemCount !== null && questionCount === null && (
+              <span style={{
+                fontSize: '10px', fontWeight: 700, color: '#475569',
+                background: elevatedBg, border: '0.5px solid ' + borderColor,
+                borderRadius: '99px', padding: '1px 7px', whiteSpace: 'nowrap',
+              }}>
+                {itemCount + ' item' + (itemCount !== 1 ? 's' : '')}
               </span>
             )}
           </div>
@@ -654,8 +573,7 @@ function TemplateCard({ template, contentType, onSelect }) {
           background: '#3B82F6', color: '#FFFFFF',
           border: 'none', borderRadius: '6px',
           fontSize: '12px', fontWeight: 700,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
+          cursor: 'pointer', whiteSpace: 'nowrap',
         }}
         className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         aria-label={'Use template: ' + titleField}
@@ -675,10 +593,11 @@ function TemplatePickerModal({ contentType, organizationId, onClose, onSelect })
   var platformTemplates = PLATFORM_TEMPLATES[contentType] || [];
 
   var tableMap = {
-    opportunity: 'org_opportunities',
-    funding:     'org_funding',
-    program:     'org_programs',
-    poll:        'polls',
+    opportunity:  'org_opportunities',
+    funding:      'org_funding',
+    program:      'org_programs',
+    poll:         'polls',
+    signup_form:  'signup_forms',
   };
 
   useEffect(function() {

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Plus, Search, Filter, ClipboardList, ArrowUpDown, X } from 'lucide-react';
 import CreateSignupForm from '../components/CreateSignupForm';
 import SignupFormCard from '../components/SignupFormCard';
+import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 
 function SignupFormsList() {
   var { organizationId } = useParams();
@@ -16,6 +17,8 @@ function SignupFormsList() {
   var [loading, setLoading]           = useState(true);
   var [error, setError]               = useState(null);
   var [showCreateModal, setShowCreateModal] = useState(false);
+  var [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  var [templateData, setTemplateData] = useState(null);
   var [searchTerm, setSearchTerm]     = useState('');
   var [statusFilter, setStatusFilter] = useState('all');
   var [sortBy, setSortBy]             = useState('recent');
@@ -43,6 +46,7 @@ function SignupFormsList() {
           .from('signup_forms')
           .select('*')
           .eq('organization_id', organizationId)
+          .eq('is_template', false)
           .order('created_at', { ascending: false }),
         supabase
           .from('memberships')
@@ -124,6 +128,7 @@ function SignupFormsList() {
   var handleFormCreated = async function(newForm) {
     loadData();
     setShowCreateModal(false);
+    setTemplateData(null);
     try {
       var notifModule = await import('../lib/notificationService');
       await notifModule.notifyOrganizationMembers({
@@ -140,9 +145,22 @@ function SignupFormsList() {
     }
   };
 
+  var handleTemplateSelect = function(template, name) {
+    setTemplateData(Object.assign({}, template, { _templateName: name }));
+    setShowTemplatePicker(false);
+    setShowCreateModal(true);
+  };
+
+  var handleCreateModalClose = function() {
+    setShowCreateModal(false);
+    setTemplateData(null);
+  };
+
   var activeForms  = forms.filter(function(f) { return !isFormClosed(f); }).length;
   var closedForms  = forms.filter(function(f) { return isFormClosed(f); }).length;
   var pinnedForms  = forms.filter(function(f) { return f.is_pinned; }).length;
+
+  var signupTemplates = PLATFORM_TEMPLATES.signup_form || [];
 
   // ── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -188,15 +206,25 @@ function SignupFormsList() {
         </div>
 
         {isAdmin && (
-          <button
-            onClick={function() { setShowCreateModal(true); }}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
-            aria-label="Create new sign-up form"
-            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
-          >
-            <Plus size={18} aria-hidden="true" />
-            Create Form
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+            <button
+              onClick={function() { setShowTemplatePicker(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+              aria-label="Browse sign-up form templates"
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
+            >
+              Templates
+            </button>
+            <button
+              onClick={function() { setShowCreateModal(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+              aria-label="Create new sign-up form"
+              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+            >
+              <Plus size={18} aria-hidden="true" />
+              Create Form
+            </button>
+          </div>
         )}
       </div>
 
@@ -295,17 +323,13 @@ function SignupFormsList() {
 
       {/* Empty state */}
       {filteredForms.length === 0 ? (
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '64px 24px', textAlign: 'center' }}>
-          <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>
-            {hasActiveFilters ? 'No Forms Match Your Filters' : 'No Sign-Up Forms Yet'}
-          </h2>
-          <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '360px', margin: '0 auto 24px', lineHeight: '1.6' }}>
-            {hasActiveFilters
-              ? 'Try adjusting your search or filters.'
-              : 'Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.'}
-          </p>
-          {hasActiveFilters ? (
+        hasActiveFilters ? (
+          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '64px 24px', textAlign: 'center' }}>
+            <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>No Forms Match Your Filters</h2>
+            <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '360px', margin: '0 auto 24px', lineHeight: '1.6' }}>
+              Try adjusting your search or filters.
+            </p>
             <button
               onClick={clearFilters}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
@@ -314,22 +338,69 @@ function SignupFormsList() {
               <X size={16} aria-hidden="true" />
               Clear Filters
             </button>
-          ) : (
-            isAdmin && (
-              <button
-                onClick={function() { setShowCreateModal(true); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
-              >
-                <Plus size={18} aria-hidden="true" />
-                Create Your First Form
-              </button>
-            )
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '48px 24px', textAlign: 'center' }}>
+            <img
+              src="/mascots-empty.png"
+              alt=""
+              aria-hidden="true"
+              style={{ width: '120px', height: '120px', margin: '0 auto 16px', display: 'block', objectFit: 'contain' }}
+            />
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>No Sign-Up Forms Yet</h2>
+            <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '380px', margin: '0 auto 24px', lineHeight: '1.6' }}>
+              Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.
+            </p>
+
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: signupTemplates.length > 0 ? '40px' : 0 }}>
+                <button
+                  onClick={function() { setShowTemplatePicker(true); }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
+                >
+                  Browse Templates
+                </button>
+                <button
+                  onClick={function() { setShowCreateModal(true); }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+                >
+                  <Plus size={18} aria-hidden="true" />
+                  Create Your First Form
+                </button>
+              </div>
+            )}
+
+            {isAdmin && signupTemplates.length > 0 && (
+              <div style={{ textAlign: 'left', maxWidth: '640px', margin: '0 auto' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center' }}>
+                  Start from a template
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  {signupTemplates.slice(0, 4).map(function(tmpl) {
+                    return (
+                      <div key={tmpl._id} style={{ borderRadius: '12px', border: '1px solid #E2E8F0', background: '#F8FAFC', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523', margin: 0 }}>{tmpl.title}</p>
+                        <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{tmpl._desc}</p>
+                        <button
+                          onClick={function() { handleTemplateSelect(tmpl, tmpl.title); }}
+                          style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left' }}
+                          className="hover:underline focus:outline-none"
+                        >
+                          Use this template
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )
       ) : (
         <div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '20px' }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '20px' }}
           role="list"
           aria-label="Sign-up forms"
         >
@@ -353,8 +424,19 @@ function SignupFormsList() {
       {showCreateModal && (
         <CreateSignupForm
           organizationId={organizationId}
-          onClose={function() { setShowCreateModal(false); }}
+          currentUserId={currentUser ? currentUser.id : null}
+          templateData={templateData}
+          onClose={handleCreateModalClose}
           onFormCreated={handleFormCreated}
+        />
+      )}
+
+      {showTemplatePicker && (
+        <TemplatePickerModal
+          contentType="signup_form"
+          organizationId={organizationId}
+          onClose={function() { setShowTemplatePicker(false); }}
+          onSelect={handleTemplateSelect}
         />
       )}
     </main>
