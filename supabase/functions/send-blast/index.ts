@@ -18,38 +18,43 @@ interface AudienceConfig {
   name?: string
 }
 
+function joinName(first: string | null, last: string | null): string {
+  return ((first || '') + ' ' + (last || '')).trim()
+}
+
 async function resolveAudience(aud: AudienceConfig, org_id: string, supabase: any): Promise<Recipient[]> {
+  // NOTE: `members` has first_name + last_name — there is no full_name column.
   if (aud.type === 'all_active') {
     var { data } = await supabase
       .from('memberships')
-      .select('members!inner(email, full_name)')
+      .select('members!inner(email, first_name, last_name)')
       .eq('organization_id', org_id)
       .eq('status', 'active')
-    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: joinName(m.members.first_name, m.members.last_name) }))
 
   } else if (aud.type === 'all_including_inactive') {
     var { data } = await supabase
       .from('memberships')
-      .select('members!inner(email, full_name)')
+      .select('members!inner(email, first_name, last_name)')
       .eq('organization_id', org_id)
-    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: joinName(m.members.first_name, m.members.last_name) }))
 
   } else if (aud.type === 'admins_only') {
     var { data } = await supabase
       .from('memberships')
-      .select('members!inner(email, full_name)')
+      .select('members!inner(email, first_name, last_name)')
       .eq('organization_id', org_id)
       .eq('status', 'active')
       .eq('role', 'admin')
-    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: joinName(m.members.first_name, m.members.last_name) }))
 
   } else if (aud.type === 'group' && aud.group_id) {
     // NOTE: Adjust table name if needed — uses org_group_members joined to members
     var { data } = await supabase
       .from('org_group_members')
-      .select('member_id, members!inner(email, full_name)')
+      .select('member_id, members!inner(email, first_name, last_name)')
       .eq('group_id', aud.group_id)
-    return (data || []).map((m: any) => ({ email: m.members.email, full_name: m.members.full_name || '' }))
+    return (data || []).map((m: any) => ({ email: m.members.email, full_name: joinName(m.members.first_name, m.members.last_name) }))
 
   } else if (aud.type === 'event' && aud.event_id) {
     var allRecs: Recipient[] = []
@@ -65,9 +70,9 @@ async function resolveAudience(aud: AudienceConfig, org_id: string, supabase: an
       if (userIds.length > 0) {
         var { data: memberData } = await supabase
           .from('members')
-          .select('email, full_name')
+          .select('email, first_name, last_name')
           .in('user_id', userIds)
-        allRecs.push(...(memberData || []).map((m: any) => ({ email: m.email, full_name: m.full_name || '' })))
+        allRecs.push(...(memberData || []).map((m: any) => ({ email: m.email, full_name: joinName(m.first_name, m.last_name) })))
       }
     }
 
@@ -189,10 +194,34 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'No recipients found' }), { status: 400, headers: corsHeaders })
     }
 
+    // Create the blast record FIRST so we have a real blast_id to attach
+    // per-recipient rows to as we send (needed for analytics tracking).
+    var { data: blastRow, error: blastInsertError } = await supabase
+      .from('email_blasts')
+      .insert({
+        org_id: org_id,
+        subject: subject,
+        body: html_body,
+        template_name: template_name || null,
+        audience: audienceLabel,
+        recipient_count: 0,
+        sent_by: user.id,
+        status: 'sending'
+      })
+      .select()
+      .single()
+
+    if (blastInsertError || !blastRow) {
+      return new Response(JSON.stringify({ error: 'Failed to create email blast record' }), { status: 500, headers: corsHeaders })
+    }
+
+    var blastId = blastRow.id
+
     var RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
     var FROM_ADDRESS = 'Syndicade <noreply@syndicade.org>'
     var sentCount = 0
     var errors: any[] = []
+    var recipientRows: any[] = []
 
     for (var recipient of recipients) {
       var nameParts = (recipient.full_name || '').trim().split(' ')
@@ -256,23 +285,37 @@ serve(async (req) => {
       })
 
       if (res.ok) {
+        var resendData = await res.json()
         sentCount++
+        recipientRows.push({
+          blast_id: blastId,
+          org_id: org_id,
+          email: recipient.email,
+          name: recipient.full_name || null,
+          resend_email_id: resendData?.id || null,
+          sent_at: new Date().toISOString()
+        })
       } else {
         var errBody = await res.json()
         errors.push({ email: recipient.email, error: errBody.message })
       }
     }
 
-    await supabase.from('email_blasts').insert({
-      org_id: org_id,
-      subject: subject,
-      body: html_body,
-      template_name: template_name || null,
-      audience: audienceLabel,
-      recipient_count: sentCount,
-      sent_by: user.id,
-      status: sentCount > 0 ? 'sent' : 'failed'
-    })
+    // Write per-recipient rows in one batch so EmailAnalyticsModal has data to read.
+    if (recipientRows.length > 0) {
+      var { error: recipientsInsertError } = await supabase.from('email_recipients').insert(recipientRows)
+      if (recipientsInsertError) {
+        errors.push({ email: null, error: 'Failed to save recipient tracking rows: ' + recipientsInsertError.message })
+      }
+    }
+
+    await supabase
+      .from('email_blasts')
+      .update({
+        recipient_count: sentCount,
+        status: sentCount > 0 ? 'sent' : 'failed'
+      })
+      .eq('id', blastId)
 
     return new Response(JSON.stringify({
       success: true,

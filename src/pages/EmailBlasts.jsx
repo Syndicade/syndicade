@@ -3,12 +3,12 @@ import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
+import PageHeader from '../components/PageHeader';
 import EmailAnalyticsModal from '../components/EmailAnalyticsModal';
 import NewsletterBuilder from '../components/NewsletterBuilder';
 import {
-  Mail, Send, FileText, Clock, Users, ChevronDown,
-  Plus, Trash2, Edit2, X, AlertCircle, CheckCircle,
-  Eye, Save, BarChart2, Layout, TrendingUp, Lock, ArrowRight
+  ChevronDown, X, AlertCircle, CheckCircle,
+  FileText, ArrowRight
 } from 'lucide-react';
 
 var PLAN_LIMITS = {
@@ -57,6 +57,23 @@ var BUILTIN_TEMPLATES = [
 
 function Skeleton({ className }) {
   return <div className={'animate-pulse bg-slate-200 rounded ' + (className || '')} aria-hidden="true" />;
+}
+
+// ── Mascot empty state ─────────────────────────────────────────────────────────
+function EmptyState({ heading, description, actionLabel, onAction }) {
+  return (
+    <div className="text-center py-12 bg-white border border-slate-200 rounded-xl">
+      <img src="/mascots-empty.png" alt="" aria-hidden="true"
+        style={{ maxWidth: '200px', margin: '0 auto 16px', display: 'block', mixBlendMode: 'multiply' }} />
+      <h3 className="text-sm font-bold text-slate-900 mb-1">{heading}</h3>
+      <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">{description}</p>
+      {actionLabel && (
+        <button onClick={onAction} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function UsageBar({ used, limit }) {
@@ -177,6 +194,55 @@ function BodyEditor({ value, onChange }) {
   );
 }
 
+// ── Template card Actions dropdown (Card Standards §4) ──────────────────────────
+function TemplateActionsMenu({ template, onEdit, onDelete }) {
+  var [open, setOpen] = useState(false);
+  var menuRef = useRef(null);
+  var triggerRef = useRef(null);
+
+  useEffect(function() {
+    function handleClick(e) {
+      if (open && menuRef.current && !menuRef.current.contains(e.target) && triggerRef.current && !triggerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e) {
+      if (e.key === 'Escape' && open) {
+        setOpen(false);
+        if (triggerRef.current) triggerRef.current.focus();
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return function() {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative flex-shrink-0">
+      <button ref={triggerRef} onClick={function() { setOpen(!open); }} aria-haspopup="menu" aria-expanded={open} aria-label={'Actions for ' + template.name}
+        className="px-2.5 py-1 bg-[#F8FAFC] border border-slate-200 text-slate-500 text-xs font-semibold rounded-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        Actions ▾
+      </button>
+      {open && (
+        <div ref={menuRef} role="menu" aria-label={'Actions for ' + template.name}
+          className="absolute right-0 mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-32">
+          <button role="menuitem" onClick={function() { setOpen(false); onEdit(template); }}
+            className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:bg-slate-50">
+            Edit
+          </button>
+          <button role="menuitem" onClick={function() { setOpen(false); onDelete(template.id); }}
+            className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 focus:outline-none focus:bg-red-50">
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TemplateCard({ template, onUse, onDelete, onEdit, isCustom }) {
   var categoryColors = {
     Members: 'bg-blue-50 text-blue-700', Events: 'bg-green-50 text-green-700',
@@ -195,22 +261,11 @@ function TemplateCard({ template, onUse, onDelete, onEdit, isCustom }) {
           <h3 className="text-sm font-bold text-slate-900 truncate">{template.name}</h3>
           <p className="text-xs text-slate-400 mt-0.5 truncate">{template.subject}</p>
         </div>
-        {isCustom && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={function() { onEdit(template); }} aria-label={'Edit ' + template.name}
-              className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <Edit2 size={13} aria-hidden="true" />
-            </button>
-            <button onClick={function() { onDelete(template.id); }} aria-label={'Delete ' + template.name}
-              className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <Trash2 size={13} aria-hidden="true" />
-            </button>
-          </div>
-        )}
+        {isCustom && <TemplateActionsMenu template={template} onEdit={onEdit} onDelete={onDelete} />}
       </div>
       <button onClick={function() { onUse(template); }}
-        className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-1.5">
-        <Edit2 size={12} aria-hidden="true" />Use Template
+        className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        Use Template
       </button>
     </article>
   );
@@ -229,30 +284,27 @@ function HistoryRow({ blast, blastStats, planKey, onViewAnalytics }) {
         {blast.template_name && <p className="text-xs text-slate-400 mt-0.5">Template: {blast.template_name}</p>}
         {isGrowthPlus && stats && (
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            <span className="flex items-center gap-1 text-xs text-green-600"><TrendingUp size={10} aria-hidden="true" />{stats.openRate}% opened</span>
-            <span className="flex items-center gap-1 text-xs text-purple-600"><Eye size={10} aria-hidden="true" />{stats.clickRate}% clicked</span>
-            {stats.bounced > 0 && <span className="flex items-center gap-1 text-xs text-red-500"><AlertCircle size={10} aria-hidden="true" />{stats.bounced} bounced</span>}
+            <span className="text-xs text-green-600">{stats.openRate}% opened</span>
+            <span className="text-xs text-purple-600">{stats.clickRate}% clicked</span>
+            {stats.bounced > 0 && <span className="text-xs text-red-500">{stats.bounced} bounced</span>}
           </div>
         )}
       </td>
       <td className="px-4 py-3 text-sm text-slate-500 max-w-[180px]">
         <span className="truncate block">{blast.audience || '—'}</span>
       </td>
-      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">
-        <span className="flex items-center gap-1"><Users size={12} aria-hidden="true" />{blast.recipient_count}</span>
-      </td>
+      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{blast.recipient_count}</td>
       <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{formatted} at {time}</td>
       <td className="px-4 py-3">
-        <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ' + (blast.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600')}>
-          {blast.status === 'sent' ? <CheckCircle size={11} aria-hidden="true" /> : <AlertCircle size={11} aria-hidden="true" />}
+        <span className={'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ' + (blast.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600')}>
           {blast.status === 'sent' ? 'Sent' : 'Failed'}
         </span>
       </td>
       <td className="px-4 py-3">
         <button onClick={function() { onViewAnalytics(blast); }} aria-label={'View analytics for ' + blast.subject}
-          className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ' + (isGrowthPlus ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 cursor-default border border-slate-200')}
+          className={'px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ' + (isGrowthPlus ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200' : 'bg-slate-50 text-slate-300 cursor-default border border-slate-200')}
           title={isGrowthPlus ? 'View analytics' : 'Analytics available on Growth and Pro plans'}>
-          <BarChart2 size={12} aria-hidden="true" />Analytics
+          Analytics
         </button>
       </td>
     </tr>
@@ -346,7 +398,7 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
       <div ref={pickerRef} className="relative inline-block">
         <button onClick={openPicker} aria-expanded={showPicker} aria-haspopup="listbox"
           className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-          <Plus size={14} aria-hidden="true" />Add Recipients
+          Add Recipients
           <ChevronDown size={13} aria-hidden="true" />
         </button>
 
@@ -446,8 +498,7 @@ function RecipientBuilder({ audiences, onChange, memberCount, orgGroups, orgEven
       </div>
 
       {audiences.length > 0 && (
-        <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-          <Users size={11} aria-hidden="true" />
+        <p className="text-xs text-slate-400 mt-2">
           {audiences.length === 1 && audiences[0].type === 'all_active'
             ? 'Estimated: ' + memberCount + ' active member' + (memberCount !== 1 ? 's' : '')
             : 'Sending to: ' + audiences.map(function(a) { return a.label; }).join(', ')}
@@ -595,7 +646,6 @@ export default function EmailBlasts() {
     setBody(template.body);
     setActiveTemplateName(template.name);
     setTab('compose');
-    toast('Template loaded — customize it before sending.', { icon: null });
   }
 
   async function saveTemplate() {
@@ -678,9 +728,8 @@ export default function EmailBlasts() {
     return (
       <main className="flex-1 p-6 bg-[#F8FAFC] min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <Mail size={28} className="text-slate-300" aria-hidden="true" />
-          </div>
+          <img src="/mascots-empty.png" alt="" aria-hidden="true"
+            style={{ maxWidth: '180px', margin: '0 auto 16px', display: 'block', mixBlendMode: 'multiply' }} />
           <h2 className="text-lg font-bold text-slate-900 mb-2">Admin Access Required</h2>
           <p className="text-sm text-slate-500">Only organization admins can send email blasts.</p>
         </div>
@@ -708,21 +757,13 @@ export default function EmailBlasts() {
   if (planKey === 'starter') {
     return (
       <main className="flex-1 bg-[#F8FAFC] min-h-screen" aria-label="Email Blasts">
-        {/* ── Standard page header ── */}
-        <div className="bg-white border-b border-slate-200 px-6 py-6">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
-                Email Blasts
-              </h1>
-              <p className="text-sm text-[#64748B] mt-1">Send announcements and updates directly to your members.</p>
-            </div>
-          </div>
-          <div className="flex mt-5 border-b border-slate-200 opacity-40 pointer-events-none select-none" aria-hidden="true">
-            {[{ key: 'compose', label: 'Compose', Icon: Mail }, { key: 'newsletter', label: 'Newsletter', Icon: Layout }, { key: 'templates', label: 'Templates', Icon: FileText }, { key: 'history', label: 'Send History', Icon: Clock }].map(function(t) {
+        <PageHeader title="Email Blasts" />
+        <div className="bg-white border-b border-slate-200 px-6">
+          <div className="flex border-b border-slate-200 opacity-40 pointer-events-none select-none" aria-hidden="true">
+            {['Compose', 'Newsletter', 'Templates', 'Send History'].map(function(label, i) {
               return (
-                <div key={t.key} className={'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px ' + (t.key === 'compose' ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-400')}>
-                  <t.Icon size={14} />{t.label}
+                <div key={label} className={'px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px ' + (i === 0 ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-400')}>
+                  {label}
                 </div>
               );
             })}
@@ -737,21 +778,21 @@ export default function EmailBlasts() {
             </div>
           </div>
           <div className="absolute inset-0 flex items-start justify-center pt-16 px-4" style={{ background: 'rgba(248,250,252,0.85)' }}>
-            <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 shadow-xl">
-              <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-5" aria-hidden="true">
-                <Lock size={24} className="text-slate-400" />
-              </div>
+            <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 shadow-xl text-center">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-blue-50 border border-blue-200 text-blue-600 mb-4">Available on Growth</span>
               <h2 className="text-xl font-extrabold text-slate-900 mb-2">Email Blasts &amp; Newsletter Builder</h2>
               <p className="text-sm text-slate-500 mb-6 leading-relaxed">Send announcements, updates, and beautifully designed newsletters directly to your members.</p>
               <ul className="text-left space-y-3 mb-8" role="list">
-                {[{ icon: Send, text: 'Email blasts to all members or admins — up to 500/month' }, { icon: Layout, text: 'Drag-and-drop newsletter builder with 11 block types' }, { icon: BarChart2, text: 'Open rates, click rates, and bounce tracking per campaign' }, { icon: FileText, text: 'Reusable templates for announcements, events, and more' }].map(function(item, i) {
+                {[
+                  'Email blasts to all members or admins — up to 500/month',
+                  'Drag-and-drop newsletter builder with 11 block types',
+                  'Open rates, click rates, and bounce tracking per campaign',
+                  'Reusable templates for announcements, events, and more'
+                ].map(function(text, i) {
                   return (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5" aria-hidden="true">
-                        <item.icon size={13} className="text-blue-500" />
-                      </div>
-                      <span className="text-sm text-slate-700">{item.text}</span>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6', marginTop: '7px' }} aria-hidden="true" className="flex-shrink-0" />
+                      <span className="text-sm text-slate-700">{text}</span>
                     </li>
                   );
                 })}
@@ -770,26 +811,18 @@ export default function EmailBlasts() {
 
   return (
     <main className="flex-1 bg-[#F8FAFC] min-h-screen" aria-label="Email Blasts">
-      {/* ── Standard page header ── */}
-      <div className="bg-white border-b border-slate-200 px-6 py-6">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', lineHeight: 1.15 }}>
-              Email Blasts
-            </h1>
-            <p className="text-sm text-[#64748B] mt-1">
-              {usedThisMonth + ' email' + (usedThisMonth !== 1 ? 's' : '') + ' sent this month'}
-            </p>
-          </div>
-          <UsageBar used={usedThisMonth} limit={planLimit} />
-        </div>
-        <div className="flex mt-5 border-b border-slate-200" role="tablist" aria-label="Email blast sections">
-          {[{ key: 'compose', label: 'Compose', Icon: Mail }, { key: 'newsletter', label: 'Newsletter', Icon: Layout }, { key: 'templates', label: 'Templates', Icon: FileText }, { key: 'history', label: 'Send History', Icon: Clock }].map(function(t) {
+      <PageHeader
+        title="Email Blasts"
+        subtitle={usedThisMonth + ' email' + (usedThisMonth !== 1 ? 's' : '') + ' sent this month'}
+        actions={<UsageBar used={usedThisMonth} limit={planLimit} />}
+      />
+      <div className="bg-white border-b border-slate-200 px-6">
+        <div className="flex border-b border-slate-200" role="tablist" aria-label="Email blast sections">
+          {[{ key: 'compose', label: 'Compose' }, { key: 'newsletter', label: 'Newsletter' }, { key: 'templates', label: 'Templates' }, { key: 'history', label: 'Send History' }].map(function(t) {
             var active = tab === t.key;
             return (
               <button key={t.key} role="tab" aria-selected={active} onClick={function() { setTab(t.key); }}
                 className={'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (active ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-500 hover:text-slate-700')}>
-                <t.Icon size={14} aria-hidden="true" />
                 {t.label}
                 {t.key === 'history' && blastHistory.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">{blastHistory.length}</span>
@@ -854,17 +887,17 @@ export default function EmailBlasts() {
             <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
               <div className="flex items-center gap-2">
                 <button onClick={function() { setShowPreview(true); }} disabled={!body.trim()} aria-label="Preview email"
-                  className="flex items-center gap-2 px-4 py-2.5 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-400 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40">
-                  <Eye size={14} aria-hidden="true" />Preview
+                  className="px-4 py-2.5 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-400 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40">
+                  Preview
                 </button>
                 <button onClick={function() { setSaveName(activeTemplateName || ''); setShowSaveModal(true); }} disabled={!subject.trim() || !body.trim()} aria-label="Save as template"
-                  className="flex items-center gap-2 px-4 py-2.5 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-400 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40">
-                  <Save size={14} aria-hidden="true" />Save as Template
+                  className="px-4 py-2.5 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-400 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40">
+                  Save as Template
                 </button>
               </div>
               <button onClick={function() { setShowConfirm(true); }} disabled={!canSend}
                 className="flex items-center gap-2 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed">
-                {sending ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />Sending...</> : <><Send size={14} aria-hidden="true" />Send Blast</>}
+                {sending ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />Sending...</> : 'Send Blast'}
               </button>
             </div>
           </div>
@@ -888,19 +921,17 @@ export default function EmailBlasts() {
               <div className="flex items-center justify-between mb-3">
                 <h2 id="custom-heading" className="text-xs font-bold uppercase tracking-widest text-[#F5B731]">Your Templates</h2>
                 <button onClick={function() { setTab('compose'); setTimeout(function() { setShowSaveModal(true); }, 100); }}
-                  className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-1">
-                  <Plus size={13} aria-hidden="true" />New Template
+                  className="text-xs text-blue-500 hover:text-blue-600 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-1">
+                  New Template
                 </button>
               </div>
               {customTemplates.length === 0 ? (
-                <div className="text-center py-12 bg-white border border-slate-200 rounded-xl">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                    <FileText size={22} className="text-slate-300" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">No saved templates yet</h3>
-                  <p className="text-xs text-slate-400 mb-4">Write an email and click "Save as Template" to build your library.</p>
-                  <button onClick={function() { setTab('compose'); }} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Compose an Email</button>
-                </div>
+                <EmptyState
+                  heading="No saved templates yet"
+                  description="Write an email and click Save as Template to build your library."
+                  actionLabel="Compose an Email"
+                  onAction={function() { setTab('compose'); }}
+                />
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {customTemplates.map(function(t) { return <TemplateCard key={t.id} template={t} onUse={useTemplate} onDelete={deleteTemplate} onEdit={openEditTemplate} isCustom={true} />; })}
@@ -913,14 +944,12 @@ export default function EmailBlasts() {
         {tab === 'history' && (
           <div>
             {blastHistory.length === 0 ? (
-              <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                  <BarChart2 size={22} className="text-slate-300" aria-hidden="true" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-900 mb-1">No emails sent yet</h3>
-                <p className="text-xs text-slate-400 mb-4">Your send history will appear here after your first blast.</p>
-                <button onClick={function() { setTab('compose'); }} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Send Your First Blast</button>
-              </div>
+              <EmptyState
+                heading="No emails sent yet"
+                description="Your send history will appear here after your first blast."
+                actionLabel="Send Your First Blast"
+                onAction={function() { setTab('compose'); }}
+              />
             ) : (
               <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -983,22 +1012,15 @@ export default function EmailBlasts() {
       {showConfirm && (
         <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <div className="flex items-start gap-4 mb-5">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Send size={18} className="text-blue-500" aria-hidden="true" />
-              </div>
-              <div>
-                <h2 id="confirm-title" className="text-base font-bold text-slate-900 mb-1">Confirm Send</h2>
-                <p className="text-sm text-slate-500">
-                  You're about to send <strong className="text-slate-900">"{subject}"</strong> to <strong className="text-slate-900">{audienceSummary}</strong>.
-                  {planLimit !== Infinity && <span className="block mt-1 text-xs text-slate-400">{remainingEmails} emails remaining this month after sending.</span>}
-                </p>
-              </div>
-            </div>
+            <h2 id="confirm-title" className="text-base font-bold text-slate-900 mb-1">Confirm Send</h2>
+            <p className="text-sm text-slate-500 mb-5">
+              You're about to send <strong className="text-slate-900">"{subject}"</strong> to <strong className="text-slate-900">{audienceSummary}</strong>.
+              {planLimit !== Infinity && <span className="block mt-1 text-xs text-slate-400">{remainingEmails} emails remaining this month after sending.</span>}
+            </p>
             <div className="flex gap-3 justify-end">
               <button onClick={function() { setShowConfirm(false); }} className="px-4 py-2 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Cancel</button>
-              <button onClick={sendBlast} className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2">
-                <Send size={14} aria-hidden="true" />Send Now
+              <button onClick={sendBlast} className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Send Now
               </button>
             </div>
           </div>
@@ -1031,8 +1053,8 @@ export default function EmailBlasts() {
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button onClick={function() { setShowSaveModal(false); setEditingTemplate(null); }} className="px-4 py-2 bg-transparent border border-slate-200 text-slate-500 hover:text-slate-900 text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Cancel</button>
-              <button onClick={saveTemplate} className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2">
-                <Save size={14} aria-hidden="true" />{editingTemplate ? 'Update' : 'Save Template'}
+              <button onClick={saveTemplate} className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {editingTemplate ? 'Update' : 'Save Template'}
               </button>
             </div>
           </div>
