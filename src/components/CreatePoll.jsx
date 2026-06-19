@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useModalKeyboard } from '../hooks/useModalKeyboard';
 
 function Icon({ path, className }) {
   return (
@@ -13,9 +15,9 @@ function Icon({ path, className }) {
   );
 }
 
+// Trimmed unused keys (plus/drag/save/check were only on button labels we removed, or never referenced).
 var ICONS = {
   chart:    'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  plus:     'M12 4v16m8-8H4',
   x:        'M6 18L18 6M6 6l12 12',
   clock:    ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
   refresh:  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
@@ -24,11 +26,8 @@ var ICONS = {
   trash:    'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
   repeat:   'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
   template: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  check:    'M5 13l4 4L19 7',
   edit:     'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
   lock:     'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-  drag:     ['M4 6h16M4 12h16M4 18h16'],
-  save:     ['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2', 'M23 21v-2a4 4 0 00-3-3.87', 'M16 3.13a4 4 0 010 7.75'],
 };
 
 var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900';
@@ -83,9 +82,16 @@ var BLANK_FORM = {
 };
 
 // ─── TemplatePicker ───────────────────────────────────────────────────────────
+// Note: this is a separate, older template system (poll_survey_templates table,
+// org-saved templates only) from the platform TemplatePickerModal used on the
+// PollsList page (PLATFORM_TEMPLATES / is_template). Worth unifying eventually —
+// flagging here rather than merging them in this pass.
 function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClose, deletingId, renamingId }) {
   var [editingId, setEditingId] = useState(null);
   var [editingName, setEditingName] = useState('');
+  var [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
 
   function startRename(tmpl) { setEditingId(tmpl.id); setEditingName(tmpl.name); }
   function cancelRename() { setEditingId(null); setEditingName(''); }
@@ -100,122 +106,132 @@ function TemplatePicker({ templates, loading, onApply, onDelete, onRename, onClo
     if (e.key === 'Escape') cancelRename();
   }
 
+  var confirmDeleteTmpl = templates.find(function(t) { return t.id === confirmDeleteId; });
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
-      onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="tmpl-picker-title">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
-        onClick={function(e) { e.stopPropagation(); }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Icon path={ICONS.template} className="h-4 w-4 text-blue-500" />
-            </div>
-            <h3 id="tmpl-picker-title" className="text-base font-bold text-[#0E1523]">Load Poll Template</h3>
-          </div>
-          <button type="button" onClick={onClose}
-            className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            aria-label="Close template picker">
-            <Icon path={ICONS.x} className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="overflow-y-auto flex-1 px-5 py-4">
-          {loading ? (
-            <div className="space-y-3" aria-busy="true">
-              {[1,2,3].map(function(n) {
-                return (
-                  <div key={n} className="border border-slate-200 rounded-xl p-4 animate-pulse flex items-center justify-between">
-                    <div className="space-y-2 flex-1 mr-4">
-                      <div className="h-4 w-3/4 bg-slate-200 rounded" />
-                      <div className="h-3 w-1/3 bg-slate-100 rounded" />
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="h-8 w-14 bg-slate-200 rounded-lg" />
-                      <div className="h-8 w-8 bg-slate-100 rounded-lg" />
-                      <div className="h-8 w-8 bg-slate-100 rounded-lg" />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : templates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                <Icon path={ICONS.template} className="h-6 w-6 text-[#94A3B8]" />
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]"
+        onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="tmpl-picker-title">
+        <div ref={modalRef} className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col"
+          onClick={function(e) { e.stopPropagation(); }}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Icon path={ICONS.template} className="h-4 w-4 text-blue-500" />
               </div>
-              <p className="text-sm font-semibold text-[#475569] mb-1">No templates yet</p>
-              <p className="text-xs text-[#94A3B8] max-w-[220px]">
-                Use "Save as Template" on any poll card to save one for reuse.
-              </p>
+              <h3 id="tmpl-picker-title" className="text-base font-bold text-[#0E1523]">Load Poll Template</h3>
             </div>
-          ) : (
-            <ul className="space-y-2" role="list" aria-label="Saved poll templates">
-              {templates.map(function(tmpl) {
-                var d = tmpl.template_data;
-                var qCount = d.questions ? d.questions.length : 0;
-                var meta = qCount + ' question' + (qCount !== 1 ? 's' : '');
-                var isDeleting = deletingId === tmpl.id;
-                var isRenaming = renamingId === tmpl.id;
-                var isEditing  = editingId === tmpl.id;
-                return (
-                  <li key={tmpl.id} className={'border rounded-xl p-4 transition-colors ' + (isEditing ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:border-blue-200 hover:bg-slate-50')}>
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <label htmlFor={'rename-' + tmpl.id} className="text-xs font-semibold text-[#475569]">Template name</label>
-                        <input id={'rename-' + tmpl.id} type="text" value={editingName}
-                          onChange={function(e) { setEditingName(e.target.value); }}
-                          onKeyDown={function(e) { handleKeyDown(e, tmpl.id); }}
-                          maxLength={100} autoFocus
-                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900" />
-                        <div className="flex items-center gap-2 justify-end">
-                          <button type="button" onClick={cancelRename}
-                            className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-[#475569] rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
-                            Cancel
-                          </button>
-                          <button type="button" onClick={function() { commitRename(tmpl.id); }} disabled={isRenaming}
-                            className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors flex items-center gap-1">
-                            {isRenaming
-                              ? <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Saving...</>
-                              : <><Icon path={ICONS.check} className="h-3 w-3" />Save</>
-                            }
-                          </button>
-                        </div>
+            <button type="button" onClick={onClose}
+              className="p-1.5 text-[#64748B] hover:text-[#0E1523] hover:bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              aria-label="Close template picker">
+              <Icon path={ICONS.x} className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 px-5 py-4">
+            {loading ? (
+              <div className="space-y-3" aria-busy="true">
+                {[1,2,3].map(function(n) {
+                  return (
+                    <div key={n} className="border border-slate-200 rounded-xl p-4 animate-pulse flex items-center justify-between">
+                      <div className="space-y-2 flex-1 mr-4">
+                        <div className="h-4 w-3/4 bg-slate-200 rounded" />
+                        <div className="h-3 w-1/3 bg-slate-100 rounded" />
                       </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-[#0E1523] truncate">{tmpl.name}</p>
-                          <p className="text-xs text-[#94A3B8] mt-0.5">{meta}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button type="button" onClick={function() { onApply(tmpl); }}
-                            className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors flex items-center gap-1"
-                            aria-label={'Load template: ' + tmpl.name}>
-                            <Icon path={ICONS.check} className="h-3 w-3" />Load
-                          </button>
-                          <button type="button" onClick={function() { startRename(tmpl); }}
-                            className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors"
-                            aria-label={'Rename template: ' + tmpl.name}>
-                            <Icon path={ICONS.edit} className="h-4 w-4" />
-                          </button>
-                          <button type="button" onClick={function() { onDelete(tmpl.id); }} disabled={isDeleting}
-                            className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors disabled:opacity-40"
-                            aria-label={'Delete template: ' + tmpl.name}>
-                            {isDeleting
-                              ? <svg className="animate-spin h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                              : <Icon path={ICONS.trash} className="h-4 w-4" />
-                            }
-                          </button>
-                        </div>
+                      <div className="flex gap-2">
+                        <div className="h-8 w-14 bg-slate-200 rounded-lg" />
+                        <div className="h-8 w-8 bg-slate-100 rounded-lg" />
+                        <div className="h-8 w-8 bg-slate-100 rounded-lg" />
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                  <Icon path={ICONS.template} className="h-6 w-6 text-[#94A3B8]" />
+                </div>
+                <p className="text-sm font-semibold text-[#475569] mb-1">No templates yet</p>
+                <p className="text-xs text-[#94A3B8] max-w-[220px]">
+                  Use "Save as Template" on any poll card to save one for reuse.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2" role="list" aria-label="Saved poll templates">
+                {templates.map(function(tmpl) {
+                  var d = tmpl.template_data;
+                  var qCount = d.questions ? d.questions.length : 0;
+                  var meta = qCount + ' question' + (qCount !== 1 ? 's' : '');
+                  var isDeleting = deletingId === tmpl.id;
+                  var isRenaming = renamingId === tmpl.id;
+                  var isEditing  = editingId === tmpl.id;
+                  return (
+                    <li key={tmpl.id} className={'border rounded-xl p-4 transition-colors ' + (isEditing ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:border-blue-200 hover:bg-slate-50')}>
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <label htmlFor={'rename-' + tmpl.id} className="text-xs font-semibold text-[#475569]">Template name</label>
+                          <input id={'rename-' + tmpl.id} type="text" value={editingName}
+                            onChange={function(e) { setEditingName(e.target.value); }}
+                            onKeyDown={function(e) { handleKeyDown(e, tmpl.id); }}
+                            maxLength={100} autoFocus
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900" />
+                          <div className="flex items-center gap-2 justify-end">
+                            <button type="button" onClick={cancelRename}
+                              className="px-3 py-1.5 text-xs font-semibold border border-slate-200 text-[#475569] rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-colors">
+                              Cancel
+                            </button>
+                            <button type="button" onClick={function() { commitRename(tmpl.id); }} disabled={isRenaming}
+                              className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors">
+                              {isRenaming ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-[#0E1523] truncate">{tmpl.name}</p>
+                            <p className="text-xs text-[#94A3B8] mt-0.5">{meta}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button type="button" onClick={function() { onApply(tmpl); }}
+                              className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+                              aria-label={'Load template: ' + tmpl.name}>
+                              Load
+                            </button>
+                            <button type="button" onClick={function() { startRename(tmpl); }}
+                              className="p-1.5 text-[#94A3B8] hover:text-blue-500 hover:bg-blue-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors"
+                              aria-label={'Rename template: ' + tmpl.name}>
+                              <Icon path={ICONS.edit} className="h-4 w-4" />
+                            </button>
+                            <button type="button" onClick={function() { setConfirmDeleteId(tmpl.id); }} disabled={isDeleting}
+                              className="p-1.5 text-[#94A3B8] hover:text-red-500 hover:bg-red-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors disabled:opacity-40"
+                              aria-label={'Delete template: ' + tmpl.name}>
+                              {isDeleting
+                                ? <svg className="animate-spin h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                                : <Icon path={ICONS.trash} className="h-4 w-4" />
+                              }
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {confirmDeleteTmpl && (
+        <ConfirmDeleteModal
+          title="Delete Template?"
+          message={<>"<strong style={{color:'#0E1523'}}>{confirmDeleteTmpl.name}</strong>" will be permanently removed. This cannot be undone.</>}
+          onConfirm={function() { var id = confirmDeleteId; setConfirmDeleteId(null); onDelete(id); }}
+          onCancel={function() { setConfirmDeleteId(null); }}
+        />
+      )}
+    </>
   );
 }
 
@@ -313,7 +329,7 @@ function QuestionBlock({ question, index, total, onChange, onRemove, onMoveUp, o
               var disabled = hasExistingVotes && !!question.id;
               return (
                 <label key={qt.value}
-                  className={'flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg cursor-pointer text-xs font-semibold transition-colors ' +
+                  className={'flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg cursor-pointer text-xs font-semibold transition-colors focus-within:ring-2 focus-within:ring-blue-400 focus-within:ring-offset-1 ' +
                     (checked ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-blue-300') +
                     (disabled ? ' opacity-60 cursor-not-allowed' : '')}>
                   <input type="radio"
@@ -370,7 +386,7 @@ function QuestionBlock({ question, index, total, onChange, onRemove, onMoveUp, o
             {question.options.length < 10 && (
               <button type="button" onClick={addOption}
                 className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                <Icon path={ICONS.plus} className="h-3.5 w-3.5" />Add Option
+                Add Option
               </button>
             )}
           </div>
@@ -392,7 +408,7 @@ function QuestionBlock({ question, index, total, onChange, onRemove, onMoveUp, o
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationName, editPoll }) {
+function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationName, editPoll, templateData }) {
   var isEditMode = !!editPoll;
 
   var [formData, setFormData]     = useState(BLANK_FORM);
@@ -416,18 +432,22 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
   var [templateName, setTemplateName]               = useState('');
   var [savingTemplate, setSavingTemplate]           = useState(false);
 
-  useEffect(function() {
-    if (isOpen && organizationId) loadOrgRoles();
-  }, [isOpen, organizationId]);
+  // This component stays mounted and toggles via the isOpen prop (parent renders
+  // it unconditionally) — so pass the real boolean, not a hardcoded true.
+  var modalRef = useRef(null);
+  useModalKeyboard(isOpen, onClose, modalRef);
 
-  useEffect(function() {
-    if (!isOpen) return;
-    if (isEditMode) {
-      prefillFromPoll(editPoll);
-    } else {
-      resetForm();
-    }
-  }, [isOpen, editPoll]);
+useEffect(function() {
+  if (!isOpen) return;
+  if (isEditMode) {
+    prefillFromPoll(editPoll);
+  } else if (templateData) {
+    // Pre-fill from platform or org template — stays in create mode
+    prefillFromPoll(templateData);
+  } else {
+    resetForm();
+  }
+}, [isOpen, editPoll, templateData]);
 
   async function loadOrgRoles() {
     setRolesLoading(true);
@@ -455,8 +475,25 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       recurring_ends_at:        p.recurring_ends_at ? p.recurring_ends_at.slice(0, 10) : '',
     });
 
-    setQuestionsLoading(true);
-    try {
+  setQuestionsLoading(true);
+try {
+  // Platform templates carry _questions directly — no DB fetch needed
+  if (p._questions && Array.isArray(p._questions) && p._questions.length > 0) {
+    setQuestions(p._questions.map(function(q, i) {
+      return {
+        id: null,
+        question_text: q.question_text || '',
+        question_type: q.question_type || 'single_choice',
+        display_order: i,
+        options: (q.options || []).map(function(o) {
+          return { text: o, existingId: null, voteCount: 0 };
+        }),
+      };
+    }));
+    setQuestionsLoading(false);
+    return;
+  }
+
       // Load questions for this poll
       var qRes = await supabase.from('poll_questions').select('*')
         .eq('poll_id', p.id).order('display_order');
@@ -841,10 +878,9 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
       <div
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
         onClick={onClose}
-        onKeyDown={function(e) { if (e.key === 'Escape') onClose(); }}
         role="dialog" aria-modal="true" aria-labelledby="create-poll-title"
       >
-        <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col"
+        <div ref={modalRef} className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col"
           onClick={function(e) { e.stopPropagation(); }}>
 
           {/* Header */}
@@ -865,7 +901,6 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
                 <button type="button" onClick={openTemplatePicker}
                   className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-[#475569] bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                   aria-label="Load a saved template">
-                  <Icon path={ICONS.template} className="h-4 w-4 text-[#94A3B8]" />
                   Load Template
                 </button>
               )}
@@ -951,7 +986,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
 
               <button type="button" onClick={addQuestion}
                 className="mt-3 flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                <Icon path={ICONS.plus} className="h-4 w-4" />Add Question
+                Add Question
               </button>
             </div>
 
@@ -981,7 +1016,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
                 {RESULT_VISIBILITY_OPTIONS.map(function(opt) {
                   var checked = formData.result_visibility === opt.value;
                   return (
-                    <label key={opt.value} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors ' + (checked ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50')}>
+                    <label key={opt.value} className={'flex items-start p-3 border-2 rounded-xl cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-blue-400 focus-within:ring-offset-1 ' + (checked ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50')}>
                       <input type="radio" name="result_visibility" value={opt.value} checked={checked} onChange={handleChange}
                         className="w-4 h-4 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0" />
                       <div className="ml-3">
@@ -1004,7 +1039,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
                   { id: 'anon',          name: 'allow_anonymous',           checked: formData.allow_anonymous,           icon: ICONS.shield,  color: 'text-purple-500', label: 'Anonymous Voting',    desc: "Don't show who voted for what" },
                 ].map(function(item) {
                   return (
-                    <label key={item.id} className={'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ' + (item.checked ? 'border-blue-300 bg-white' : 'border-transparent hover:bg-white')}>
+                    <label key={item.id} className={'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-blue-400 focus-within:ring-offset-1 ' + (item.checked ? 'border-blue-300 bg-white' : 'border-transparent hover:bg-white')}>
                       <input id={item.id} name={item.name} type="checkbox" checked={item.checked} onChange={handleChange}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -1101,18 +1136,14 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
                     Cancel
                   </button>
                   <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate || !templateName.trim()}
-                    className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors flex items-center gap-1">
-                    {savingTemplate
-                      ? <><svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Saving...</>
-                      : <><Icon path={ICONS.check} className="h-3 w-3" />Save Template</>
-                    }
+                    className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors">
+                    {savingTemplate ? 'Saving...' : 'Save Template'}
                   </button>
                 </div>
               </div>
             ) : (
               <button type="button" onClick={openSaveTemplate}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#475569] bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                <Icon path={ICONS.template} className="h-4 w-4 text-[#94A3B8]" />
                 Save as Template
               </button>
             )}
@@ -1130,7 +1161,7 @@ function CreatePoll({ isOpen, onClose, onSuccess, organizationId, organizationNa
               {loading ? (
                 <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>{isEditMode ? 'Saving...' : 'Creating...'}</>
               ) : (
-                <><Icon path={isEditMode ? ICONS.edit : ICONS.chart} className="h-4 w-4" />{isEditMode ? 'Save Changes' : 'Create Poll'}</>
+                isEditMode ? 'Save Changes' : 'Create Poll'
               )}
             </button>
           </div>

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import PollCard from '../components/PollCard';
 import CreatePoll from '../components/CreatePoll';
 import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
+import PageHeader from '../components/PageHeader';
 
 function Icon({ path, className }) {
   return (
@@ -17,17 +18,13 @@ function Icon({ path, className }) {
   );
 }
 
+// Trimmed to icons still in use — search input icon + stat card icons.
+// (Plus/Template/Download/X/Chart/Alert were only used on button labels, now removed per UX/UI Standards §1.)
 var ICONS = {
-  chart:    'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  plus:     'M12 4v16m8-8H4',
-  search:   'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  check:    'M5 13l4 4L19 7',
-  lock:     'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-  pin:      ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
-  x:        'M6 18L18 6M6 6l12 12',
-  alert:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
-  download: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-  template: ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
+  search: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  check:  'M5 13l4 4L19 7',
+  lock:   'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+  pin:    ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
 };
 
 function StatSkeleton() {
@@ -312,7 +309,7 @@ function PollsList() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
-        <div className="px-6 py-6 space-y-6">
+        <div style={{ padding: '20px 24px 32px' }} className="space-y-6">
           <div className="rounded-xl border p-6 animate-pulse bg-white border-slate-200">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
@@ -352,16 +349,11 @@ function PollsList() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      <div className="px-6 py-6 space-y-6">
 
-        {/* Page header */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 style={{fontSize:'30px',fontWeight:800,color:'#0E1523',lineHeight:1.2}}>Polls</h1>
-            <p className="text-sm mt-1 text-[#64748B]">
-              {polls.length + ' poll' + (polls.length !== 1 ? 's' : '') + ' \u00b7 ' + activeCount + ' active'}
-            </p>
-          </div>
+      <PageHeader
+        title="Polls"
+        subtitle={polls.length + ' poll' + (polls.length !== 1 ? 's' : '')}
+        actions={
           <div className="flex items-center gap-2">
             {isAdmin && filteredPolls.length > 0 && (
               <button onClick={handleExport} disabled={exporting}
@@ -369,7 +361,7 @@ function PollsList() {
                 aria-label={selectedCount > 0 ? 'Export ' + selectedCount + ' selected polls as CSV' : 'Export all polls as CSV'}>
                 {exporting
                   ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" aria-hidden="true" />Exporting...</>
-                  : <><Icon path={ICONS.download} className="h-4 w-4" />{selectedCount > 0 ? 'Export CSV (' + selectedCount + ' selected)' : 'Export CSV'}</>
+                  : (selectedCount > 0 ? 'Export CSV (' + selectedCount + ' selected)' : 'Export CSV')
                 }
               </button>
             )}
@@ -377,19 +369,20 @@ function PollsList() {
               <button onClick={function() { setShowTemplatePicker(true); }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm"
                 aria-label="Browse poll templates">
-                <Icon path={ICONS.template} className="h-4 w-4" />
                 Templates
               </button>
             )}
             {isAdmin && (
               <button onClick={openCreate}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />
                 Create Poll
               </button>
             )}
           </div>
-        </div>
+        }
+      />
+
+      <div style={{ padding: '20px 24px 32px' }} className="space-y-6">
 
         {/* Stat cards */}
         <div className="grid grid-cols-3 gap-4">
@@ -416,67 +409,77 @@ function PollsList() {
           </div>
         </div>
 
-        {/* Controls */}
+        {/* Filter bar — flush with page background, bordered chips for Status, counts in parens */}
         {polls.length > 0 && (
-          <div className="rounded-xl border p-4 bg-white border-slate-200">
-            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
-              {isAdmin && filteredPolls.length > 0 && (
-                <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
-                  <input id="select-all-polls" type="checkbox" checked={allFilteredSelected}
-                    ref={function(el) { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
-                    onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    aria-label={allFilteredSelected ? 'Deselect all polls' : 'Select all polls'} />
-                  <label htmlFor="select-all-polls" className="text-xs font-semibold text-[#475569] cursor-pointer whitespace-nowrap">
-                    {selectedCount > 0 ? selectedCount + ' selected' : 'Select all'}
-                  </label>
-                </div>
-              )}
-              <div className="flex-1 w-full relative min-w-[160px]">
-                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
-                </div>
-                <label htmlFor="search-polls" className="sr-only">Search polls</label>
-                <input id="search-polls" type="text" placeholder="Search polls..." value={searchTerm}
-                  onChange={function(e) { setSearchTerm(e.target.value); }}
-                  className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {isAdmin && filteredPolls.length > 0 && (
+              <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
+                <input id="select-all-polls" type="checkbox" checked={allFilteredSelected}
+                  ref={function(el) { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  aria-label={allFilteredSelected ? 'Deselect all polls' : 'Select all polls'} />
+                <label htmlFor="select-all-polls" className="text-xs font-semibold text-[#475569] cursor-pointer whitespace-nowrap">
+                  {selectedCount > 0 ? selectedCount + ' selected' : 'Select all'}
+                </label>
               </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="status-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Status:</label>
-                <select id="status-filter" value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value); }}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                  <option value="all">{'All (' + polls.length + ')'}</option>
-                  <option value="active">{'Active (' + activeCount + ')'}</option>
-                  <option value="closed">{'Closed (' + closedCount + ')'}</option>
-                </select>
+            )}
+
+            <div className="relative flex-1" style={{ minWidth: '180px' }}>
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Icon path={ICONS.search} className="h-4 w-4 text-gray-400" />
               </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="type-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Type:</label>
-                <select id="type-filter" value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                  <option value="all">All Types</option>
-                  <option value="single_choice">Single Choice</option>
-                  <option value="multiple_choice">Multiple Choice</option>
-                  <option value="yes_no_abstain">Yes / No / Abstain</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="sort-polls" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
-                <select id="sort-polls" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                  <option value="pinned_recent">Pinned First</option>
-                  <option value="recent">Most Recent</option>
-                  <option value="closing">Closing Soon</option>
-                </select>
-              </div>
-              {hasFilters && (
-                <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
-                  className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
-                  aria-label="Clear all filters">
-                  <Icon path={ICONS.x} className="h-3.5 w-3.5" />Clear
-                </button>
-              )}
+              <label htmlFor="search-polls" className="sr-only">Search polls</label>
+              <input id="search-polls" type="text" placeholder="Search polls..." value={searchTerm}
+                onChange={function(e) { setSearchTerm(e.target.value); }}
+                className="w-full pl-9 pr-4 py-2 border-[0.5px] border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
             </div>
+
+            <div style={{ display: 'flex', gap: '6px' }} role="group" aria-label="Filter by status">
+              {[
+                { value: 'all',    label: 'All',    count: polls.length },
+                { value: 'active', label: 'Active', count: activeCount },
+                { value: 'closed', label: 'Closed', count: closedCount },
+              ].map(function(opt) {
+                var active = statusFilter === opt.value;
+                return (
+                  <button key={opt.value} onClick={function() { setStatusFilter(opt.value); }}
+                    style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#3B82F6' : '#E2E8F0'), background: active ? '#EFF6FF' : '#FFFFFF', color: active ? '#3B82F6' : '#64748B', cursor: 'pointer' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500" aria-pressed={active}>
+                    {opt.label + (opt.count > 0 ? ' (' + opt.count + ')' : '')}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label htmlFor="type-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Type:</label>
+              <select id="type-filter" value={typeFilter} onChange={function(e) { setTypeFilter(e.target.value); }}
+                className="px-3 py-2 border-[0.5px] border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                <option value="all">All Types</option>
+                <option value="single_choice">Single Choice</option>
+                <option value="multiple_choice">Multiple Choice</option>
+                <option value="yes_no_abstain">Yes / No / Abstain</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label htmlFor="sort-polls" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
+              <select id="sort-polls" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
+                className="px-3 py-2 border-[0.5px] border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                <option value="pinned_recent">Pinned First</option>
+                <option value="recent">Most Recent</option>
+                <option value="closing">Closing Soon</option>
+              </select>
+            </div>
+
+            {hasFilters && (
+              <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
+                className="px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
+                aria-label="Clear all filters">
+                Clear
+              </button>
+            )}
           </div>
         )}
 
@@ -495,11 +498,11 @@ function PollsList() {
               <div className="flex items-center justify-center gap-3 mb-10">
                 <button onClick={openCreate}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                  <Icon path={ICONS.plus} className="h-4 w-4" />Create Poll
+                  Create Poll
                 </button>
                 <button onClick={function() { setShowTemplatePicker(true); }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
-                  <Icon path={ICONS.template} className="h-4 w-4" />Browse Templates
+                  Browse Templates
                 </button>
               </div>
             )}
@@ -534,7 +537,7 @@ function PollsList() {
             <p className="text-sm mb-6 text-[#475569]">Try adjusting your search or clearing the filters.</p>
             <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); }}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
-              <Icon path={ICONS.x} className="h-4 w-4" />Clear Filters
+              Clear Filters
             </button>
           </div>
         ) : (
