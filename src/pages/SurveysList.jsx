@@ -5,6 +5,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import toast from 'react-hot-toast';
 import SurveyCard from '../components/SurveyCard';
 import CreateSurvey from '../components/CreateSurvey';
+import PageHeader from '../components/PageHeader';
 import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 
 function Icon({ path, className }) {
@@ -18,17 +19,26 @@ function Icon({ path, className }) {
 }
 
 var ICONS = {
-  clipboard: ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
-  plus:      'M12 4v16m8-8H4',
-  search:    'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  check:     'M5 13l4 4L19 7',
-  lock:      'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-  pin:       ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
-  x:         'M6 18L18 6M6 6l12 12',
-  users:     ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
-  download:  'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-  template:  ['M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
+  search: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  check:  'M5 13l4 4L19 7',
+  lock:   'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+  pin:    ['M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z'],
+  users:  ['M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
 };
+
+function getStatusChipStyle(active) {
+  return {
+    borderRadius: '7px',
+    border: '1px solid ' + (active ? '#3B82F6' : '#E2E8F0'),
+    background: active ? '#EFF6FF' : '#FFFFFF',
+    color: active ? '#3B82F6' : '#475569',
+    fontSize: '12px',
+    fontWeight: 600,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  };
+}
 
 function StatSkeleton() {
   return (
@@ -311,15 +321,17 @@ function SurveysList() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-6 py-6">
           <div className="rounded-xl border p-6 animate-pulse bg-white border-slate-200">
             <div className="flex items-center justify-between">
-              <div className="space-y-2"><div className="h-7 w-28 rounded bg-gray-200" /><div className="h-4 w-52 rounded bg-gray-100" /></div>
+              <div className="space-y-2"><div className="h-7 w-28 rounded bg-gray-200" /><div className="h-4 w-24 rounded bg-gray-100" /></div>
               <div className="h-10 w-36 rounded-lg bg-gray-200" />
             </div>
           </div>
+        </div>
+        <div style={{padding:'20px 24px 32px'}} className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></div>
-          <div className="rounded-xl border p-4 animate-pulse bg-white border-slate-200"><div className="h-10 rounded-lg bg-gray-100" /></div>
+          <div className="h-10 rounded-lg bg-gray-100 animate-pulse" style={{maxWidth:'320px'}} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[1,2,3,4].map(function(i) { return <SurveyCardSkeleton key={i} />; })}
           </div>
@@ -346,42 +358,38 @@ function SurveysList() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      <div className="px-6 py-6 space-y-6">
-
-        {/* Page header */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 style={{fontSize:'30px',fontWeight:800,color:'#0E1523',lineHeight:1.2}}>Surveys</h1>
-            <p className="text-sm mt-1 text-[#64748B]">
-              {surveys.length + ' survey' + (surveys.length !== 1 ? 's' : '') + ' \u00b7 ' + activeCount + ' active'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+      <PageHeader
+        title="Surveys"
+        subtitle={surveys.length + ' survey' + (surveys.length !== 1 ? 's' : '')}
+        actions={
+          <>
             {isAdmin && filteredSurveys.length > 0 && (
               <button onClick={handleExport} disabled={exporting}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm disabled:opacity-50"
                 aria-label={selectedCount > 0 ? 'Export ' + selectedCount + ' selected surveys as CSV' : 'Export all surveys as CSV'}>
                 {exporting
                   ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" aria-hidden="true" />Exporting...</>
-                  : <><Icon path={ICONS.download} className="h-4 w-4" />{selectedCount > 0 ? 'Export CSV (' + selectedCount + ' selected)' : 'Export CSV'}</>
-                }
+                  : (selectedCount > 0 ? 'Export CSV (' + selectedCount + ' selected)' : 'Export CSV')}
               </button>
             )}
             {isAdmin && (
               <button onClick={function() { setShowTemplatePicker(true); }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm"
+                className="px-4 py-2 bg-transparent border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm"
                 aria-label="Browse survey templates">
-                <Icon path={ICONS.template} className="h-4 w-4" />Templates
+                Templates
               </button>
             )}
             {isAdmin && (
               <button onClick={openCreate}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                <Icon path={ICONS.plus} className="h-4 w-4" />Create Survey
+                className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                Create Survey
               </button>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
+
+      <div style={{padding:'20px 24px 32px'}} className="space-y-6">
 
         {/* Stat cards — brand-aligned fixed tokens */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -417,10 +425,10 @@ function SurveysList() {
           </div>
         </div>
 
-        {/* Controls — only show when surveys exist */}
+        {/* Controls — only show when surveys exist; flush bar, no card wrapper */}
         {surveys.length > 0 && (
-          <div className="rounded-xl border p-4 bg-white border-slate-200">
-            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap">
+          <div style={{marginBottom:'16px'}}>
+            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center flex-wrap" style={{marginBottom:'10px'}}>
               {isAdmin && filteredSurveys.length > 0 && (
                 <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
                   <input id="select-all-surveys" type="checkbox" checked={allFilteredSelected}
@@ -440,31 +448,28 @@ function SurveysList() {
                 <label htmlFor="search-surveys" className="sr-only">Search surveys</label>
                 <input id="search-surveys" type="text" placeholder="Search surveys..." value={searchTerm}
                   onChange={function(e) { setSearchTerm(e.target.value); }}
-                  className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
+                  className="w-full pl-9 pr-4 py-2 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900 placeholder-gray-400" />
               </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="status-filter" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Status:</label>
-                <select id="status-filter" value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value); }}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
-                  <option value="all">{'All (' + surveys.length + ')'}</option>
-                  <option value="active">{'Active (' + activeCount + ')'}</option>
-                  <option value="closed">{'Closed (' + closedCount + ')'}</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="sort-surveys" className="text-xs font-bold uppercase tracking-wide whitespace-nowrap text-[#F5B731]">Sort:</label>
+            </div>
+            <div className="flex items-center flex-wrap" style={{gap:'6px'}}>
+              <button type="button" onClick={function(){ setStatusFilter('all'); }} style={getStatusChipStyle(statusFilter==='all')} className="focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 transition-colors" aria-pressed={statusFilter==='all'}>{'All (' + surveys.length + ')'}</button>
+              <button type="button" onClick={function(){ setStatusFilter('active'); }} style={getStatusChipStyle(statusFilter==='active')} className="focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 transition-colors" aria-pressed={statusFilter==='active'}>{'Active (' + activeCount + ')'}</button>
+              <button type="button" onClick={function(){ setStatusFilter('closed'); }} style={getStatusChipStyle(statusFilter==='closed')} className="focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 transition-colors" aria-pressed={statusFilter==='closed'}>{'Closed (' + closedCount + ')'}</button>
+              <div className="flex items-center gap-2" style={{marginLeft:'10px'}}>
+                <label htmlFor="sort-surveys" className="text-xs font-semibold text-[#64748B] whitespace-nowrap">Sort:</label>
                 <select id="sort-surveys" value={sortBy} onChange={function(e) { setSortBy(e.target.value); }}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900">
+                  className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white text-gray-900">
                   <option value="pinned_recent">Pinned First</option>
                   <option value="recent">Most Recent</option>
                   <option value="closing">Closing Soon</option>
                 </select>
               </div>
               {hasFilters && (
-                <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); }}
-                  className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
+                <button type="button" onClick={function() { setSearchTerm(''); setStatusFilter('all'); }}
+                  style={{padding:'6px 10px'}}
+                  className="text-xs font-semibold text-gray-500 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors whitespace-nowrap"
                   aria-label="Clear all filters">
-                  <Icon path={ICONS.x} className="h-3.5 w-3.5" />Clear
+                  Clear
                 </button>
               )}
             </div>
@@ -486,12 +491,12 @@ function SurveysList() {
             {isAdmin && (
               <div className="flex items-center justify-center gap-3 mb-10">
                 <button onClick={openCreate}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                  <Icon path={ICONS.plus} className="h-4 w-4" />Create Survey
+                  className="inline-flex items-center px-5 py-2.5 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                  Create Survey
                 </button>
                 <button onClick={function() { setShowTemplatePicker(true); }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
-                  <Icon path={ICONS.template} className="h-4 w-4" />Browse Templates
+                  className="inline-flex items-center px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
+                  Browse Templates
                 </button>
               </div>
             )}
@@ -526,8 +531,8 @@ function SurveysList() {
             <h3 className="text-lg font-bold mb-2 text-[#0E1523]">No surveys match your filters</h3>
             <p className="text-sm mb-6 text-[#475569]">Try adjusting your search or clearing the filters.</p>
             <button onClick={function() { setSearchTerm(''); setStatusFilter('all'); }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
-              <Icon path={ICONS.x} className="h-4 w-4" />Clear Filters
+              className="inline-flex items-center px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors text-sm">
+              Clear Filters
             </button>
           </div>
         ) : (

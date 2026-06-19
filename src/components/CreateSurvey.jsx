@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
+import { useModalKeyboard } from '../hooks/useModalKeyboard';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 
 function Icon({ path, className }) {
   return (
@@ -31,7 +33,6 @@ var ICONS = {
   template:   ['M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2'],
   pencil:     ['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
   check:      'M5 13l4 4L19 7',
-  warning:    ['M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
 };
 
 var inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-900';
@@ -89,37 +90,6 @@ function makeQuestionFromTemplate(tq, orderNumber) {
   };
 }
 
-// ─── ConfirmModal ─────────────────────────────────────────────────────────────
-function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel, danger }) {
-  useEffect(function() {
-    function handleEscape(e) { if (e.key === 'Escape') onCancel(); }
-    if (isOpen) document.addEventListener('keydown', handleEscape);
-    return function() { document.removeEventListener('keydown', handleEscape); };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]" onClick={onCancel} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={function(e){e.stopPropagation();}}>
-        <div className="flex items-start gap-4 mb-5">
-          <div className={'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 '+(danger?'bg-red-100':'bg-amber-100')}>
-            <Icon path={ICONS.warning} className={'h-5 w-5 '+(danger?'text-red-600':'text-amber-600')} />
-          </div>
-          <div>
-            <h3 id="confirm-modal-title" className="text-base font-bold text-[#0E1523] mb-1">{title}</h3>
-            <p className="text-sm text-[#475569]">{message}</p>
-          </div>
-        </div>
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onCancel} className="px-4 py-2 bg-transparent border border-slate-300 text-[#475569] font-semibold rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 text-sm transition-colors">Cancel</button>
-          <button type="button" onClick={onConfirm} className={'px-4 py-2 font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm transition-colors text-white '+(danger?'bg-red-500 hover:bg-red-600 focus:ring-red-500':'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500')} autoFocus>{confirmLabel||'Confirm'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── TemplatePicker ───────────────────────────────────────────────────────────
 function TemplatePicker({ organizationId, onLoad, onClose }) {
   var [templates, setTemplates]         = useState([]);
@@ -129,6 +99,10 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
   var [renameSaving, setRenameSaving]   = useState(false);
   var [deletingId, setDeletingId]       = useState(null);
   var [confirmDelete, setConfirmDelete] = useState(null);
+  var modalRef = useRef(null);
+
+  // Mounted/unmounted by parent's conditional render — pass true (mount = open).
+  useModalKeyboard(true, onClose, modalRef);
 
   useEffect(function() { fetchTemplates(); }, []);
 
@@ -172,7 +146,7 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="template-picker-title">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col" onClick={function(e){e.stopPropagation();}}>
+        <div ref={modalRef} className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col" onClick={function(e){e.stopPropagation();}}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Icon path={ICONS.template} className="h-5 w-5 text-[#64748B]" />
@@ -220,10 +194,18 @@ function TemplatePicker({ organizationId, onLoad, onClose }) {
             })}
           </div>
         </div>
-      </div>
-      <ConfirmModal isOpen={!!confirmDelete} title="Delete template?" message={confirmDelete?'Delete "'+confirmDelete.name+'"? This cannot be undone.':''} confirmLabel="Delete" danger={true} onConfirm={confirmDeleteTemplate} onCancel={function(){setConfirmDelete(null);}}/>
-    </>
-  );
+  </div>
+    {confirmDelete && (
+      <ConfirmDeleteModal
+        title="Delete template?"
+        message={'Delete "'+confirmDelete.name+'"? This cannot be undone.'}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteTemplate}
+        onCancel={function(){setConfirmDelete(null);}}
+      />
+    )}
+  </>
+);
 }
 
 // ─── CreateSurvey ─────────────────────────────────────────────────────────────
@@ -248,6 +230,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
   });
 
   var [questions, setQuestions] = useState([makeQuestion(1)]);
+  var modalRef = useRef(null);
 
   // Load org roles when modal opens
   useEffect(function() {
@@ -302,11 +285,12 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
     }
   }, [isOpen, editSurvey, templateData]);
 
-  useEffect(function() {
-    function handleEscape(e) { if (e.key === 'Escape' && isOpen && !showTemplatePicker) handleClose(); }
-    if (isOpen) document.addEventListener('keydown', handleEscape);
-    return function() { document.removeEventListener('keydown', handleEscape); };
-  }, [isOpen, showTemplatePicker]);
+  // Focus-trap/Escape/focus-return. This component stays mounted and toggles
+  // via the `isOpen` prop rather than unmounting (returns null below), so we
+  // pass the real `isOpen` — not `true` — same wiring as CreatePoll.jsx. The
+  // close callback no-ops while TemplatePicker is open so Escape closes the
+  // top overlay first, not the modal underneath it.
+  useModalKeyboard(isOpen, function() { if (!showTemplatePicker) handleClose(); }, modalRef);
 
   async function loadOrgRoles() {
     setRolesLoading(true);
@@ -462,12 +446,48 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
         recurring_ends_at: formData.is_recurring && formData.recurring_ends_at ? formData.recurring_ends_at : null,
       };
       var surveyId; var approvalStatus = 'approved';
+      // Maps each LOCAL question.id -> the real DB row id, filled in below
+      // regardless of whether the row was updated, inserted, or freshly created.
+      var localIdToDbId = {};
+
       if (isEditMode) {
         var upR = await supabase.from('surveys').update(surveyPayload).eq('id', editSurvey.id);
         if (upR.error) throw upR.error;
         surveyId = editSurvey.id;
-        var delR = await supabase.from('survey_questions').delete().eq('survey_id', surveyId);
-        if (delR.error) throw delR.error;
+
+        // ── Upsert survey_questions (was delete-all + reinsert) ──────────
+        // 1. Delete only DB rows that are no longer present locally.
+        var origR = await supabase.from('survey_questions').select('id').eq('survey_id', surveyId);
+        if (origR.error) throw origR.error;
+        var existingDbIds = questions.filter(function(q) { return q._dbId; }).map(function(q) { return q._dbId; });
+        var idsToDelete = (origR.data || []).map(function(r) { return r.id; }).filter(function(id) { return !existingDbIds.includes(id); });
+        if (idsToDelete.length > 0) {
+          var delR = await supabase.from('survey_questions').delete().in('id', idsToDelete);
+          if (delR.error) throw delR.error;
+        }
+        // 2. Update existing rows in place (preserves their id).
+        for (var ui = 0; ui < questions.length; ui++) {
+          var uq = questions[ui];
+          if (!uq._dbId) continue;
+          var updPayload = {
+            question_text: uq.question_text.trim(), question_type: uq.question_type, required: uq.required,
+            options: needsOptions(uq.question_type) ? uq.options.filter(function(o) { return o.trim(); }) : null,
+            order_number: uq.order_number,
+          };
+          var uqR = await supabase.from('survey_questions').update(updPayload).eq('id', uq._dbId);
+          if (uqR.error) throw uqR.error;
+          localIdToDbId[uq.id] = uq._dbId;
+        }
+        // 3. Insert only the questions added during this edit (no _dbId yet).
+        var newQs = questions.filter(function(q) { return !q._dbId; });
+        if (newQs.length > 0) {
+          var newInserts = newQs.map(function(q) {
+            return { survey_id: surveyId, question_text: q.question_text.trim(), question_type: q.question_type, required: q.required, options: needsOptions(q.question_type) ? q.options.filter(function(o) { return o.trim(); }) : null, order_number: q.order_number, condition_question_id: null, condition_answer: null };
+          });
+          var newInsR = await supabase.from('survey_questions').insert(newInserts).select();
+          if (newInsR.error) throw newInsR.error;
+          newQs.forEach(function(q, idx) { localIdToDbId[q.id] = newInsR.data[idx].id; });
+        }
       } else {
         var user = auth.data.user;
         var memR = await supabase.from('memberships').select('role').eq('organization_id', organizationId).eq('member_id', user.id).eq('status', 'active').maybeSingle();
@@ -476,25 +496,36 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
         var sR = await supabase.from('surveys').insert(Object.assign({}, surveyPayload, { organization_id: organizationId, status: 'active', is_pinned: false, created_by: user.id, approval_status: approvalStatus })).select().single();
         if (sR.error) throw sR.error;
         surveyId = sR.data.id;
+
+        var qInserts = questions.map(function(q) {
+          return { survey_id: surveyId, question_text: q.question_text.trim(), question_type: q.question_type, required: q.required, options: needsOptions(q.question_type) ? q.options.filter(function(o) { return o.trim(); }) : null, order_number: q.order_number, condition_question_id: null, condition_answer: null };
+        });
+        var qR = await supabase.from('survey_questions').insert(qInserts).select();
+        if (qR.error) throw qR.error;
+        questions.forEach(function(q, idx) { localIdToDbId[q.id] = qR.data[idx].id; });
       }
-      var qInserts = questions.map(function(q) {
-        return { survey_id: surveyId, question_text: q.question_text.trim(), question_type: q.question_type, required: q.required, options: needsOptions(q.question_type) ? q.options.filter(function(o) { return o.trim(); }) : null, order_number: q.order_number, condition_question_id: null, condition_answer: null };
-      });
-      var qR = await supabase.from('survey_questions').insert(qInserts).select();
-      if (qR.error) throw qR.error;
-      var insertedQuestions = qR.data;
+
+      // Resolve conditional-question links now that every local question has
+      // a real DB id (whether it was just updated, freshly inserted, or
+      // newly created). Explicitly clears the link for any question whose
+      // condition was removed.
       var conditionUpdates = [];
-      questions.forEach(function(q, idx) {
+      questions.forEach(function(q) {
+        var dbId = localIdToDbId[q.id];
+        if (!dbId) return;
         if (q.has_condition && q.condition_question_id && q.condition_answer) {
-          var condLocalIdx = questions.findIndex(function(cq) { return cq.id === q.condition_question_id; });
-          if (condLocalIdx >= 0 && insertedQuestions[condLocalIdx] && insertedQuestions[idx]) {
-            conditionUpdates.push({ id: insertedQuestions[idx].id, condition_question_id: insertedQuestions[condLocalIdx].id, condition_answer: q.condition_answer });
-          }
+          var condDbId = localIdToDbId[q.condition_question_id];
+          if (condDbId) conditionUpdates.push({ id: dbId, condition_question_id: condDbId, condition_answer: q.condition_answer });
+        } else {
+          conditionUpdates.push({ id: dbId, condition_question_id: null, condition_answer: null });
         }
       });
       if (conditionUpdates.length > 0) {
-        await Promise.all(conditionUpdates.map(function(upd) { return supabase.from('survey_questions').update({ condition_question_id: upd.condition_question_id, condition_answer: upd.condition_answer }).eq('id', upd.id); }));
+        await Promise.all(conditionUpdates.map(function(upd) {
+          return supabase.from('survey_questions').update({ condition_question_id: upd.condition_question_id, condition_answer: upd.condition_answer }).eq('id', upd.id);
+        }));
       }
+
       mascotSuccessToast(isEditMode ? 'Survey updated!' : (approvalStatus === 'pending' ? 'Survey submitted for approval.' : 'Survey created!'));
       handleClose();
       if (onSuccess) onSuccess({ id: surveyId });
@@ -513,7 +544,7 @@ function CreateSurvey({ isOpen, onClose, onSuccess, organizationId, organization
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={handleClose} role="dialog" aria-modal="true" aria-labelledby="create-survey-title">
-        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col" onClick={function(e){e.stopPropagation();}}>
+        <div ref={modalRef} className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col" onClick={function(e){e.stopPropagation();}}>
 
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">

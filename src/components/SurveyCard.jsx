@@ -4,6 +4,8 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import toast from 'react-hot-toast';
 import { format, formatDistanceToNow } from 'date-fns';
 import { notifyUsers } from '../lib/notificationService';
+import { useDropdownKeyboard } from '../hooks/useModalKeyboard';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 
 function Icon({ path, className }) {
   return (
@@ -23,7 +25,7 @@ var ICONS = {
   star:      'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z',
   x:         'M6 18L18 6M6 6l12 12',
   chart:     'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  eyeOff:    ['M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'],
+  eyeOff:    ['M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
   eye:       ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'],
   pieChart:  ['M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z'],
   barChart:  'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
@@ -39,18 +41,20 @@ var CHART_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899',
 
 // ── ActionsDropdown ───────────────────────────────────────────────────────────
 // Uses position:fixed so it escapes card overflow/clipping in both collapsed
-// and expanded states.
-function ActionsDropdown({ survey, isClosed, duplicating, reminding, onEdit, onPin, onToggleStatus, onDuplicate, onRemind, onSaveTemplate, onExportCSV, onDelete, canExport }) {
+// and expanded states. Keyboard (Escape/outside-click/Arrow/Home/End/focus-return)
+// is handled by useDropdownKeyboard; the dynamic up/down position-flip is custom
+// (the hook doesn't cover that), same pattern as PollCard.
+function ActionsDropdown({ survey, isClosed, duplicating, reminding, onEdit, onPin, onToggleStatus, onDuplicate, onRemind, onSaveTemplate, onExportCSV, onRequestDelete, canExport }) {
   var [open, setOpen] = useState(false);
-  var [confirmDelete, setConfirmDelete] = useState(false);
   var [menuStyle, setMenuStyle] = useState({});
+  var containerRef = useRef(null); // wraps trigger + menu — required by useDropdownKeyboard
   var triggerRef = useRef(null);
   var menuRef = useRef(null);
 
   function calcMenuPosition() {
     if (!triggerRef.current) return;
     var rect = triggerRef.current.getBoundingClientRect();
-    var menuHeight = 280; // generous estimate
+    var menuHeight = 260; // generous estimate
     var spaceBelow = window.innerHeight - rect.bottom;
     var openUpward = spaceBelow < menuHeight && rect.top > menuHeight;
     if (openUpward) {
@@ -63,31 +67,11 @@ function ActionsDropdown({ survey, isClosed, duplicating, reminding, onEdit, onP
   useEffect(function() {
     if (!open) return;
     calcMenuPosition();
-    // Reposition on scroll/resize
     window.addEventListener('scroll', calcMenuPosition, true);
     window.addEventListener('resize', calcMenuPosition);
-    function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target) && !triggerRef.current.contains(e.target)) {
-        setOpen(false); setConfirmDelete(false);
-      }
-    }
-    function handleKey(e) {
-      if (e.key === 'Escape') { setOpen(false); setConfirmDelete(false); if (triggerRef.current) triggerRef.current.focus(); }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        var items = menuRef.current ? Array.from(menuRef.current.querySelectorAll('[role="menuitem"]:not([disabled])')) : [];
-        if (!items.length) return;
-        var idx = items.indexOf(document.activeElement);
-        items[(e.key === 'ArrowDown' ? (idx + 1) : (idx - 1 + items.length)) % items.length].focus();
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
     return function() {
       window.removeEventListener('scroll', calcMenuPosition, true);
       window.removeEventListener('resize', calcMenuPosition);
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
     };
   }, [open]);
 
@@ -95,15 +79,19 @@ function ActionsDropdown({ survey, isClosed, duplicating, reminding, onEdit, onP
     if (open && menuRef.current) { var first = menuRef.current.querySelector('[role="menuitem"]:not([disabled])'); if (first) first.focus(); }
   }, [open]);
 
-  function close() { setOpen(false); setConfirmDelete(false); if (triggerRef.current) triggerRef.current.focus(); }
-  function action(fn) { return function() { close(); fn(); }; }
+  function closeMenu() { setOpen(false); }
+  useDropdownKeyboard(open, closeMenu, containerRef);
+
+  function action(fn) { return function() { setOpen(false); fn(); }; }
 
   var menuItemBase = { display:'block', width:'100%', textAlign:'left', padding:'7px 14px', fontSize:'13px', fontWeight:500, color:'#475569', background:'none', border:'none', cursor:'pointer', whiteSpace:'nowrap' };
+  var menuItemCls = 'hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400';
+  var deleteItemCls = 'hover:bg-red-50 focus:bg-red-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-400';
 
   return (
-    <div style={{display:'inline-block'}}>
+    <div ref={containerRef} style={{display:'inline-block'}}>
       <button ref={triggerRef}
-        onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v; }); setConfirmDelete(false); }}
+        onClick={function(e) { e.stopPropagation(); setOpen(function(v) { return !v; }); }}
         aria-haspopup="true" aria-expanded={open}
         aria-label={'Actions for survey: ' + survey.title}
         style={{fontSize:'12px',fontWeight:500,color:'#475569',background:'#F8FAFC',border:'0.5px solid #E2E8F0',borderRadius:'6px',padding:'4px 10px',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'4px'}}
@@ -115,27 +103,17 @@ function ActionsDropdown({ survey, isClosed, duplicating, reminding, onEdit, onP
         <div ref={menuRef} role="menu" aria-label={'Survey actions for ' + survey.title}
           style={Object.assign({background:'#FFFFFF',border:'0.5px solid #E2E8F0',borderRadius:'8px',boxShadow:'0 4px 20px rgba(0,0,0,0.12)',minWidth:'160px',zIndex:9999,padding:'4px 0'}, menuStyle)}>
 
-          <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onClick={action(function(){ onEdit(survey); })}>Edit</button>
-          <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" disabled={duplicating} onClick={action(onDuplicate)} aria-disabled={duplicating}>{duplicating ? 'Duplicating...' : 'Duplicate'}</button>
-          <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onClick={action(onSaveTemplate)}>Make Template</button>
-          <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onClick={action(onPin)}>{survey.is_pinned ? 'Unpin' : 'Pin'}</button>
-          {!isClosed && <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" disabled={reminding} onClick={action(onRemind)} aria-disabled={reminding}>{reminding ? 'Sending...' : 'Remind'}</button>}
-          <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onClick={action(onToggleStatus)}>{isClosed ? 'Reopen' : 'Close'}</button>
-          {canExport && <button role="menuitem" style={menuItemBase} className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onClick={action(onExportCSV)}>Export CSV</button>}
+          <button role="menuitem" style={menuItemBase} className={menuItemCls} onClick={action(function(){ onEdit(survey); })}>Edit</button>
+          <button role="menuitem" style={menuItemBase} className={menuItemCls} disabled={duplicating} onClick={action(onDuplicate)} aria-disabled={duplicating}>{duplicating ? 'Duplicating...' : 'Duplicate'}</button>
+          <button role="menuitem" style={menuItemBase} className={menuItemCls} onClick={action(onSaveTemplate)}>Make Template</button>
+          <button role="menuitem" style={menuItemBase} className={menuItemCls} onClick={action(onPin)}>{survey.is_pinned ? 'Unpin' : 'Pin'}</button>
+          {!isClosed && <button role="menuitem" style={menuItemBase} className={menuItemCls} disabled={reminding} onClick={action(onRemind)} aria-disabled={reminding}>{reminding ? 'Sending...' : 'Remind'}</button>}
+          <button role="menuitem" style={menuItemBase} className={menuItemCls} onClick={action(onToggleStatus)}>{isClosed ? 'Reopen' : 'Close'}</button>
+          {canExport && <button role="menuitem" style={menuItemBase} className={menuItemCls} onClick={action(onExportCSV)}>Export CSV</button>}
 
           <div style={{borderTop:'0.5px solid #E2E8F0',margin:'4px 0'}} role="separator" />
 
-          {!confirmDelete ? (
-            <button role="menuitem" style={Object.assign({},menuItemBase,{color:'#EF4444'})} className="hover:bg-red-50 focus:bg-red-50 focus:outline-none" onClick={function(e){e.stopPropagation();setConfirmDelete(true);}}>Delete</button>
-          ) : (
-            <div style={{padding:'6px 14px'}}>
-              <p style={{fontSize:'11px',color:'#475569',marginBottom:'6px',fontWeight:600}}>Delete this survey?</p>
-              <div style={{display:'flex',gap:'6px'}}>
-                <button role="menuitem" style={{flex:1,padding:'4px 8px',fontSize:'11px',fontWeight:600,background:'#EF4444',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer'}} className="hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500" onClick={function(){close();onDelete();}}>Delete</button>
-                <button role="menuitem" style={{flex:1,padding:'4px 8px',fontSize:'11px',fontWeight:600,background:'#F1F5F9',color:'#475569',border:'0.5px solid #E2E8F0',borderRadius:'5px',cursor:'pointer'}} className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400" onClick={function(){setConfirmDelete(false);}}>Cancel</button>
-              </div>
-            </div>
-          )}
+          <button role="menuitem" style={Object.assign({},menuItemBase,{color:'#EF4444'})} className={deleteItemCls} onClick={action(onRequestDelete)}>Delete</button>
         </div>
       )}
     </div>
@@ -240,8 +218,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, on
   var [showSaveTemplate, setShowSaveTemplate] = useState(false);
   var [templateName, setTemplateName]     = useState('');
   var [savingTemplate, setSavingTemplate] = useState(false);
-  // Collapsed by default for both admin and member
-  var [expanded, setExpanded]             = useState(false);
+  var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Both admin and member start collapsed
   var [expanded, setExpanded]             = useState(false);
 
@@ -427,7 +404,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, on
   function renderCollapsedHeader() {
     return (
       <div
-        className="flex items-center gap-3 p-4 cursor-pointer select-none"
+        className="flex items-center gap-3 p-4 cursor-pointer select-none rounded-xl focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
         onClick={function(e){ if(e.target.closest('[data-no-collapse]'))return; setExpanded(function(v){return !v;}); }}
         role="button"
         aria-expanded={expanded}
@@ -465,7 +442,7 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, on
               onEdit={onEdit} onPin={handlePin} onToggleStatus={handleToggleStatus}
               onDuplicate={handleDuplicate} onRemind={handleRemind}
               onSaveTemplate={openSaveTemplate} onExportCSV={handleExportCSV}
-              onDelete={handleDelete} canExport={!!(results&&results.totalResponses>0)}
+              onRequestDelete={function(){ setShowDeleteConfirm(true); }} canExport={!!(results&&results.totalResponses>0)}
             />
           </div>
         )}
@@ -502,7 +479,6 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, on
           )}
           {canSeeResults && (
             <button onClick={function(){if(!showResults){setShowResults(true);loadResults();}else{setShowResults(false);}}} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-              <Icon path={showResults ? ICONS.eyeOff : ICONS.eye} className="h-4 w-4"/>
               {showResults?'Hide Results':'View Results'}
             </button>
           )}
@@ -617,12 +593,23 @@ function SurveyCard({ survey, onDelete, onSurveyUpdated, onDuplicate, onEdit, on
     );
   }
 
-  return (
+return (
+  <>
     <article className={'rounded-xl border bg-white '+borderCls} aria-label={survey.title+' survey'}>
       {renderCollapsedHeader()}
       {expanded && renderExpandedBody()}
     </article>
-  );
+    {showDeleteConfirm && (
+      <ConfirmDeleteModal
+        title="Delete this survey?"
+        message={'Delete "'+survey.title+'"? This will also delete all responses. This cannot be undone.'}
+        confirmLabel="Delete"
+        onConfirm={function(){ setShowDeleteConfirm(false); handleDelete(); }}
+        onCancel={function(){ setShowDeleteConfirm(false); }}
+      />
+    )}
+  </>
+);
 }
 
 export default SurveyCard;
