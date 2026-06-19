@@ -6,6 +6,8 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import { getContentModalTags } from '../lib/platformTags';
 import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 import { AlertTriangle, BookmarkIcon, BookmarkCheck, Users, RefreshCw, Globe, Lock, ChevronDown } from 'lucide-react';
+import { useModalKeyboard, useDropdownKeyboard } from '../hooks/useModalKeyboard';
+import PageHeader from '../components/PageHeader';
 
 // ── Light theme tokens ────────────────────────────────────────────────────────
 var PAGE_BG  = '#F8FAFC';
@@ -83,32 +85,6 @@ function formatTime(t) {
   var ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return h + ':' + m + ' ' + ampm;
-}
-
-// ── Focus trap hook ───────────────────────────────────────────────────────────
-function useFocusTrap(isActive) {
-  var ref = useRef(null);
-  useEffect(function() {
-    if (!isActive || !ref.current) return;
-    var el = ref.current;
-    var focusable = el.querySelectorAll(
-      'button,a[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
-    );
-    var first = focusable[0];
-    var last  = focusable[focusable.length - 1];
-    function trap(e) {
-      if (e.key !== 'Tab') return;
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    }
-    el.addEventListener('keydown', trap);
-    if (first) first.focus();
-    return function() { el.removeEventListener('keydown', trap); };
-  }, [isActive]);
-  return ref;
 }
 
 // ── SVG Icon ──────────────────────────────────────────────────────────────────
@@ -194,13 +170,8 @@ function Toggle(props) {
 
 // ── ConfirmModal ──────────────────────────────────────────────────────────────
 function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCancel }) {
-  var trapRef = useFocusTrap(isOpen);
-  useEffect(function() {
-    if (!isOpen) return;
-    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, [isOpen]);
+  var modalRef = useRef(null);
+  useModalKeyboard(isOpen, onCancel, modalRef);
   if (!isOpen) return null;
   return (
     <div
@@ -209,7 +180,7 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
       onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}
     >
       <div
-        ref={trapRef}
+        ref={modalRef}
         style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '3px 4px 14px rgba(0,0,0,0.12)' }}
         onClick={function(e) { e.stopPropagation(); }}
       >
@@ -234,19 +205,12 @@ function ConfirmModal({ isOpen, title, message, confirmLabel, onConfirm, onCance
 // ── Actions dropdown ──────────────────────────────────────────────────────────
 function ActionsDropdown({ onEdit, onDuplicate, onMakeTemplate, onViewRegistrations, onDelete }) {
   var [open, setOpen] = useState(false);
-  var ref = useRef(null);
+  var containerRef = useRef(null);
 
-  useEffect(function() {
-    if (!open) return;
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    function handleKey(e) { if (e.key === 'Escape') setOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
-  }, [open]);
+  useDropdownKeyboard(open, function() { setOpen(false); }, containerRef);
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <button onClick={function() { setOpen(function(v) { return !v; }); }}
         style={{ fontSize: '12px', fontWeight: 500, color: TEXT2, background: PAGE_BG, border: '0.5px solid ' + BDR, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
         className="hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -257,20 +221,20 @@ function ActionsDropdown({ onEdit, onDuplicate, onMakeTemplate, onViewRegistrati
         <div style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: '4px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: '180px', zIndex: 10, padding: '4px 0' }} role="menu">
           <button role="menuitem" onClick={function() { setOpen(false); onEdit(); }}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
-            className="hover:bg-slate-50 focus:outline-none">Edit</button>
+            className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">Edit</button>
           <button role="menuitem" onClick={function() { setOpen(false); onDuplicate(); }}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
-            className="hover:bg-slate-50 focus:outline-none">Duplicate</button>
+            className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">Duplicate</button>
           <button role="menuitem" onClick={function() { setOpen(false); onMakeTemplate(); }}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: TEXT2, background: 'none', border: 'none', cursor: 'pointer' }}
-            className="hover:bg-slate-50 focus:outline-none">Make Template</button>
+            className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">Make Template</button>
           <button role="menuitem" onClick={function() { setOpen(false); onViewRegistrations(); }}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
-            className="hover:bg-blue-50 focus:outline-none">View Registrations</button>
+            className="hover:bg-blue-50 focus:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">View Registrations</button>
           <div style={{ height: '1px', background: BDR, margin: '4px 0' }} role="separator" />
           <button role="menuitem" onClick={function() { setOpen(false); onDelete(); }}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: '13px', fontWeight: 500, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}
-            className="hover:bg-red-50 focus:outline-none">Delete</button>
+            className="hover:bg-red-50 focus:bg-red-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400">Delete</button>
         </div>
       )}
     </div>
@@ -412,17 +376,12 @@ function PlatformTagPicker({ groups, selectedTags, onChange }) {
 
 // ── Registrations drawer ──────────────────────────────────────────────────────
 function RegistrationsDrawer({ program, organizationId, onClose }) {
-  var trapRef = useFocusTrap(true);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
   var [registrations, setRegistrations] = useState([]);
   var [loading, setLoading]             = useState(true);
   var [editingNoteId, setEditingNoteId] = useState(null);
   var [noteText, setNoteText]           = useState('');
-
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
 
   useEffect(function() { loadRegistrations(); }, [program.id]);
 
@@ -543,7 +502,7 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
       role="dialog" aria-modal="true" aria-labelledby="reg-drawer-title"
     >
       <div
-        ref={trapRef}
+        ref={modalRef}
         style={{ background: CARD_BG, width: '100%', maxWidth: '480px', height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}
         onClick={function(e) { e.stopPropagation(); }}
       >
@@ -603,12 +562,8 @@ function RegistrationsDrawer({ program, organizationId, onClose }) {
 function MakeTemplateModal({ program, onClose, onSaved }) {
   var [name, setName] = useState(program.name);
   var [saving, setSaving] = useState(false);
-
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
 
   async function handleSave() {
     if (!name.trim()) { toast.error('Template name is required.'); return; }
@@ -637,7 +592,7 @@ function MakeTemplateModal({ program, onClose, onSaved }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}
       role="dialog" aria-modal="true" aria-labelledby="tmpl-prog-title"
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: CARD_BG, borderRadius: '14px', padding: '28px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+      <div ref={modalRef} style={{ background: CARD_BG, borderRadius: '14px', padding: '28px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
         <h3 id="tmpl-prog-title" style={{ fontSize: '16px', fontWeight: 800, color: TEXT, marginBottom: '6px' }}>Save as Template</h3>
         <p style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>This program will be saved as a reusable template for your org.</p>
         <label htmlFor="tmpl-prog-name" style={{ fontSize: '13px', fontWeight: 600, color: TEXT, display: 'block', marginBottom: '6px' }}>Template name</label>
@@ -678,7 +633,7 @@ function OrgPrograms() {
   var [form, setForm]                     = useState(EMPTY_FORM);
   var [saving, setSaving]                 = useState(false);
   var [activeTab, setActiveTab]           = useState('details');
-  var modalTrapRef = useFocusTrap(showModal);
+  var modalRef = useRef(null);
 
   // Tag groups from DB
   var [tagGroups, setTagGroups] = useState({ causeAreas: [], audience: [], activityTypes: [], languages: [] });
@@ -720,12 +675,7 @@ function OrgPrograms() {
 
   useEffect(function() { init(); }, [organizationId]);
 
-  useEffect(function() {
-    if (!showModal) return;
-    function handleKey(e) { if (e.key === 'Escape') setShowModal(false); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, [showModal]);
+  useModalKeyboard(showModal, function() { setShowModal(false); }, modalRef);
 
   async function init() {
     setLoadError(false);
@@ -1300,59 +1250,57 @@ function OrgPrograms() {
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <>
-      <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", padding: '32px 24px' }}>
+      <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
 
-        {/* Page header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
-          <div>
-            <h1 style={{ fontSize: '30px', fontWeight: 800, color: TEXT, margin: 0 }}>Programs</h1>
-            <p style={{ fontSize: '14px', color: MUTED, margin: '4px 0 0' }}>{programs.length + ' program' + (programs.length !== 1 ? 's' : '')}</p>
-          </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={function() { setShowTemplatePicker(true); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', background: 'transparent', color: TEXT2, border: '1px solid ' + BDR, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
-              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
-              Templates
-            </button>
-            <button
-              onClick={openNew}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
-              className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              <Icon path={ICONS.plus} className="h-4 w-4" />
-              Add Program
-            </button>
-          </div>
-        )}
-        </div>
+        <PageHeader
+          title="Programs"
+          subtitle={programs.length + ' program' + (programs.length !== 1 ? 's' : '')}
+          actions={isAdmin ? (
+            <>
+              <button onClick={function() { setShowTemplatePicker(true); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', background: 'transparent', color: TEXT2, border: '1px solid ' + BDR, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                Templates
+              </button>
+              <button
+                onClick={openNew}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Add Program
+              </button>
+            </>
+          ) : null}
+        />
+
+        <div style={{ padding: '20px 24px 32px' }}>
 
         {/* Filter bar */}
         {programs.length > 0 && (
-          <div style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '160px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '200px' }}>
               <Icon path={ICONS.search} className="h-4 w-4" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: MUTED, pointerEvents: 'none' }} />
               <input
                 type="text" value={searchQuery}
                 onChange={function(e) { setSearchQuery(e.target.value); }}
                 placeholder="Search programs..."
                 aria-label="Search programs"
-                style={{ width: '100%', paddingLeft: '32px', paddingRight: '10px', paddingTop: '7px', paddingBottom: '7px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT, outline: 'none', boxSizing: 'border-box' }}
                 className="focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }} role="group" aria-label="Filter by status">
               {[{ key: 'all', label: 'All' }, { key: 'active', label: 'Active' }, { key: 'upcoming', label: 'Upcoming' }, { key: 'closed', label: 'Closed' }].map(function(f) {
                 var active = statusFilter === f.key;
                 return (
                   <button
                     key={f.key}
                     onClick={function() { setStatusFilter(f.key); }}
-                    style={{ padding: '5px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', background: active ? '#0E1523' : ELEVATED, color: active ? '#FFFFFF' : TEXT2 }}
-                    className="focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    style={{ padding: '6px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700, border: '1px solid ' + (active ? '#3B82F6' : BDR), background: active ? '#EFF6FF' : CARD_BG, color: active ? '#3B82F6' : TEXT2, cursor: 'pointer' }}
+                    className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-pressed={active}
                   >
-                    {f.label} <span style={{ marginLeft: '3px', fontSize: '11px', opacity: 0.7 }}>{statusCounts[f.key]}</span>
+                    {f.label}{statusCounts[f.key] > 0 ? ' (' + statusCounts[f.key] + ')' : ''}
                   </button>
                 );
               })}
@@ -1361,13 +1309,13 @@ function OrgPrograms() {
               value={sortBy}
               onChange={function(e) { setSortBy(e.target.value); }}
               aria-label="Sort programs"
-              style={{ padding: '6px 10px', background: INPUT_BG, border: '1px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT2, fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+              style={{ padding: '7px 10px', background: CARD_BG, border: '0.5px solid ' + BDR, borderRadius: '8px', fontSize: '13px', color: TEXT2, fontWeight: 600, outline: 'none', cursor: 'pointer' }}
               className="focus:ring-2 focus:ring-blue-500"
             >
               <option value="custom">Custom Order</option>
               <option value="name">Name A–Z</option>
               <option value="start_date">Start Date</option>
-            </select>what lines to 
+            </select>
             {savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Saving order...</span>}
             {isDragEnabled && !savingOrder && <span style={{ fontSize: '12px', color: MUTED }}>Drag cards to reorder</span>}
           </div>
@@ -1386,7 +1334,7 @@ function OrgPrograms() {
         <>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
             <button onClick={openNew} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, borderRadius: '8px', border: 'none', cursor: 'pointer' }} className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <Icon path={ICONS.plus} className="h-4 w-4" />Add Your First Program
+              Add Your First Program
             </button>
             <button onClick={function() { setShowTemplatePicker(true); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: 'transparent', color: TEXT2, border: '1px solid ' + BDR, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }} className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
               Browse templates
@@ -1642,6 +1590,7 @@ function OrgPrograms() {
             })}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
@@ -1652,7 +1601,7 @@ function OrgPrograms() {
           onClick={function() { setShowModal(false); }}
         >
           <div
-            ref={modalTrapRef}
+            ref={modalRef}
             style={{ background: CARD_BG, border: '1px solid ' + BDR, borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', width: '100%', maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
             onClick={function(e) { e.stopPropagation(); }}
           >
@@ -2169,8 +2118,8 @@ function OrgPrograms() {
 
             {/* Modal footer */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderTop: '0.5px solid ' + BDR, flexShrink: 0, gap: '8px' }}>
-              {/* Left: Save as Draft — only when creating new */}
-              {!editingProgram && (
+              {/* Left: Save as Draft — when creating new, or editing an existing draft */}
+              {(!editingProgram || programVisibility(editingProgram) === 'draft') && (
                 <button
                   onClick={function() { saveProgram(true); }}
                   disabled={saving || uploadingImg}

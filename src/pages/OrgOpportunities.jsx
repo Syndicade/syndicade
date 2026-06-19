@@ -6,10 +6,12 @@ import toast from 'react-hot-toast';
 import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
 import { getContentModalTags } from '../lib/platformTags';
 import {
-  Briefcase, Plus, X, ChevronDown, Users, Globe, Lock,
+  Briefcase, X, ChevronDown, Users, Globe, Lock,
   AlertCircle, CheckCircle, Search,
   Upload, DollarSign, Paperclip, Inbox, Tag, Sparkles
 } from 'lucide-react';
+import { useModalKeyboard, useDropdownKeyboard } from '../hooks/useModalKeyboard';
+import PageHeader from '../components/PageHeader';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 var pageBg        = '#F8FAFC';
@@ -320,7 +322,7 @@ function EmptyState({ onAdd, onBrowseTemplates, isVerified }) {
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
         <button onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
           className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-          <Plus size={15} aria-hidden="true" />Post an Opportunity
+          Post an Opportunity
         </button>
         <button onClick={onBrowseTemplates} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: 'transparent', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
           className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
@@ -421,11 +423,8 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
       .then(function(r) { setOrgGroups(r.data || []); });
   }, [organizationId]);
 
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
 
   var ACCEPTED_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
   var ACCEPTED_EXT   = '.pdf, .docx, .jpg, .jpeg, .png';
@@ -444,7 +443,12 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
   }
 
   function setField(key, val) {
-    setForm(function(prev) { var next = Object.assign({}, prev); next[key] = val; return next; });
+    setForm(function(prev) {
+      var next = Object.assign({}, prev);
+      next[key] = val;
+      if (key === 'visibility' && val !== 'groups') next.group_ids = [];
+      return next;
+    });
     if (errors[key]) setErrors(function(prev) { var next = Object.assign({}, prev); delete next[key]; return next; });
   }
 
@@ -543,7 +547,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', zIndex: 50, overflowY: 'auto' }}
       role="dialog" aria-modal="true" aria-labelledby="opp-modal-title"
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: cardBg, borderRadius: '16px', width: '100%', maxWidth: '600px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', marginTop: '16px', marginBottom: '24px' }}>
+      <div ref={modalRef} style={{ background: cardBg, borderRadius: '16px', width: '100%', maxWidth: '600px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', marginTop: '16px', marginBottom: '24px' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 0' }}>
@@ -923,7 +927,7 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '16px 24px', borderTop: '1px solid ' + borderColor }}>
           <div>
-            {!existing && (
+            {(!existing || existing.visibility === 'draft') && (
               <button type="button" onClick={function() { handleSave('draft'); }} disabled={saving}
                 style={{ padding: '9px 16px', background: 'transparent', color: textMuted, border: '1px solid ' + borderColor, borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
                 className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
@@ -949,21 +953,11 @@ function OpportunityModal({ organizationId, currentUserId, existing, onClose, on
 }
 
 // ── Opportunity card ──────────────────────────────────────────────────────────
-function OpportunityCard({ item, appCount, onEdit, onDelete, onDuplicate, onMakeTemplate, onViewApps }) {
+function OpportunityCard({ item, appCount, onEdit, onDelete, onDuplicate, onMakeTemplate, onViewApps, onUnpublish }) {
   var [menuOpen, setMenuOpen] = useState(false);
   var menuRef = useRef(null);
 
-  useEffect(function() {
-    function handleClick(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    return function() { document.removeEventListener('mousedown', handleClick); };
-  }, []);
-
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') setMenuOpen(false); }
-    if (menuOpen) document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, [menuOpen]);
+  useDropdownKeyboard(menuOpen, function() { setMenuOpen(false); }, menuRef);
 
   var isExpired    = item.deadline && new Date(item.deadline) < new Date();
   var hasFormApply = item.apply_method === 'form';
@@ -1025,30 +1019,30 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onDuplicate, onMake
             <div style={{ position: 'absolute', right: 0, bottom: '100%', marginBottom: '4px', background: cardBg, border: '0.5px solid ' + borderColor, borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: '180px', zIndex: 20, padding: '4px 0' }} role="menu">
               <button onClick={function() { setMenuOpen(false); onEdit(item); }}
                 style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: textPrimary, textAlign: 'left' }}
-                className="hover:bg-slate-50 focus:outline-none" role="menuitem">Edit</button>
+                className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">Edit</button>
               <button onClick={function() { setMenuOpen(false); onDuplicate(item); }}
                 style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: textPrimary, textAlign: 'left' }}
-                className="hover:bg-slate-50 focus:outline-none" role="menuitem">Duplicate</button>
+                className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">Duplicate</button>
               <button onClick={function() { setMenuOpen(false); onMakeTemplate(item); }}
                 style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: textPrimary, textAlign: 'left' }}
-                className="hover:bg-slate-50 focus:outline-none" role="menuitem">Make Template</button>
+                className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">Make Template</button>
               {hasFormApply && (
                 <button onClick={function() { setMenuOpen(false); onViewApps(item); }}
                   style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: '#3B82F6', textAlign: 'left' }}
-                  className="hover:bg-blue-50 focus:outline-none" role="menuitem">
+                  className="hover:bg-blue-50 focus:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">
                   View Applications{appCount > 0 ? ' (' + appCount + ')' : ''}
                 </button>
               )}
               <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
               {item.visibility === 'public' && (
-                <button onClick={function() { setMenuOpen(false); onEdit(Object.assign({}, item, { _openTab: 'publishing' })); }}
+                <button onClick={function() { setMenuOpen(false); onUnpublish(item); }}
                   style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: textMuted, textAlign: 'left' }}
-                  className="hover:bg-slate-50 focus:outline-none" role="menuitem">Unpublish</button>
+                  className="hover:bg-slate-50 focus:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">Unpublish</button>
               )}
               <div style={{ height: '1px', background: borderColor, margin: '4px 0' }} role="separator" />
               <button onClick={function() { setMenuOpen(false); onDelete(item); }}
                 style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, color: '#EF4444', textAlign: 'left' }}
-                className="hover:bg-red-50 focus:outline-none" role="menuitem">Delete</button>
+                className="hover:bg-red-50 focus:bg-red-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400" role="menuitem">Delete</button>
             </div>
           )}
         </div>
@@ -1059,17 +1053,14 @@ function OpportunityCard({ item, appCount, onEdit, onDelete, onDuplicate, onMake
 
 // ── Confirm delete modal ──────────────────────────────────────────────────────
 function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onCancel(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onCancel, modalRef);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}
       role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title"
       onClick={function(e) { if (e.target === e.currentTarget) onCancel(); }}>
-      <div style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+      <div ref={modalRef} style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
         <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }} aria-hidden="true">
           <AlertCircle size={22} color="#EF4444" />
         </div>
@@ -1090,12 +1081,8 @@ function ConfirmDeleteModal({ item, onConfirm, onCancel }) {
 function MakeTemplateModal({ item, onClose, onSaved }) {
   var [name, setName] = useState(item.title);
   var [saving, setSaving] = useState(false);
-
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
 
   async function handleSave() {
     if (!name.trim()) { toast.error('Template name is required.'); return; }
@@ -1124,7 +1111,7 @@ function MakeTemplateModal({ item, onClose, onSaved }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 60 }}
       role="dialog" aria-modal="true" aria-labelledby="tmpl-opp-title"
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+      <div ref={modalRef} style={{ background: cardBg, borderRadius: '14px', padding: '28px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
         <h3 id="tmpl-opp-title" style={{ fontSize: '16px', fontWeight: 800, color: textPrimary, marginBottom: '6px' }}>Save as Template</h3>
         <p style={{ fontSize: '13px', color: textMuted, marginBottom: '20px' }}>This opportunity will be saved as a reusable template for your org.</p>
         <label htmlFor="tmpl-opp-name" style={{ fontSize: '13px', fontWeight: 600, color: textPrimary, display: 'block', marginBottom: '6px' }}>Template name</label>
@@ -1146,12 +1133,8 @@ function MakeTemplateModal({ item, onClose, onSaved }) {
 function ApplicationsDrawer({ item, onClose }) {
   var [apps, setApps]       = useState([]);
   var [loading, setLoading] = useState(true);
-
-  useEffect(function() {
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return function() { document.removeEventListener('keydown', handleKey); };
-  }, []);
+  var modalRef = useRef(null);
+  useModalKeyboard(true, onClose, modalRef);
 
   useEffect(function() {
     async function load() {
@@ -1174,7 +1157,7 @@ function ApplicationsDrawer({ item, onClose }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 50 }}
       role="dialog" aria-modal="true" aria-labelledby="apps-drawer-title"
       onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: '100%', maxWidth: '460px', background: cardBg, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.1)' }}>
+      <div ref={modalRef} style={{ width: '100%', maxWidth: '460px', background: cardBg, height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid ' + borderColor, position: 'sticky', top: 0, background: cardBg, zIndex: 1 }}>
           <div>
             <h2 id="apps-drawer-title" style={{ fontSize: '15px', fontWeight: 800, color: textPrimary, margin: 0 }}>Applications</h2>
@@ -1313,6 +1296,13 @@ function handleTemplateSelect(template, name) {
     loadItems();
   }
 
+  async function handleUnpublish(item) {
+    var result = await supabase.from('org_opportunities').update({ visibility: 'members_only', updated_at: new Date().toISOString() }).eq('id', item.id);
+    if (result.error) { mascotErrorToast('Failed to unpublish.', result.error.message); return; }
+    mascotSuccessToast('Opportunity unpublished.', 'Now visible to members only.');
+    loadItems();
+  }
+
   async function handleDelete() {
     if (!deleting) return;
     var r = await supabase.from('org_opportunities').delete().eq('id', deleting.id);
@@ -1332,30 +1322,27 @@ function handleTemplateSelect(template, name) {
 
   return (
     <div style={{ background: pageBg, minHeight: '100vh' }}>
-      <div style={{ padding: '0 0 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: '30px', fontWeight: 800, color: textPrimary, margin: '0 0 4px' }}>Opportunities</h1>
-            <p style={{ fontSize: '14px', color: textMuted, margin: 0 }}>
-              {items.length > 0 ? items.length + ' listing' + (items.length !== 1 ? 's' : '') : 'Post roles, board seats, and volunteer opportunities'}
-            </p>
-          </div>
-              {isAdmin && isVerified && (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={function() { setShowTemplatePicker(true); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: 'transparent', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
-            className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
-            Templates
-          </button>
-          <button onClick={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}
-            className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-            <Plus size={15} aria-hidden="true" />Post Opportunity
-          </button>
-        </div>
-      )}
-        </div>
-      </div>
+
+      <PageHeader
+        title="Opportunities"
+        subtitle={items.length + ' listing' + (items.length !== 1 ? 's' : '')}
+        actions={isAdmin && isVerified ? (
+          <>
+            <button onClick={function() { setShowTemplatePicker(true); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: 'transparent', color: textSecondary, border: '1px solid ' + borderColor, borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              className="hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+              Templates
+            </button>
+            <button onClick={function() { setEditing(null); setTemplateBanner(null); setShowModal(true); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', flexShrink: 0 }}
+              className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Post Opportunity
+            </button>
+          </>
+        ) : null}
+      />
+
+      <div style={{ padding: '20px 24px 32px' }}>
 
       {!isVerified && isAdmin && (
         <div style={{ background: cardBg, border: '1px solid ' + borderColor, borderRadius: '12px', padding: '24px' }}>
@@ -1426,6 +1413,7 @@ function handleTemplateSelect(template, name) {
                       onDuplicate={handleDuplicate}
                       onMakeTemplate={function(i) { setMakingTemplate(i); }}
                       onDelete={function(i) { setDeleting(i); }}
+                      onUnpublish={handleUnpublish}
                       onViewApps={function(i) { setViewingApps(i); }} />
                   </div>
                 );
@@ -1434,6 +1422,8 @@ function handleTemplateSelect(template, name) {
           )}
         </>
       )}
+
+      </div>
 
       {showModal && (
         <OpportunityModal organizationId={organizationId} currentUserId={currentUserId} existing={editing}
