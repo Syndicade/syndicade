@@ -94,13 +94,29 @@ function App() {
 
   return (
     <>
+      {/*
+        Light theme, Floating elevation (§1/§5) applied to ALL plain toasts
+        (toast.error() / toast.loading() / toast() etc.) — not just the
+        mascot ones, which render their own card via MascotToast.jsx.
+        Durations match §5: success 4000ms, error 5000ms, loading indefinite.
+      */}
       <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
-          style: { background: '#363636', color: '#fff' },
-          success: { duration: 3000, iconTheme: { primary: '#10b981', secondary: '#fff' } },
-          error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+          style: {
+            background: '#FFFFFF',
+            color: '#0E1523',
+            border: '0.5px solid #E2E8F0',
+            borderRadius: '12px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+            minWidth: '320px',
+            maxWidth: '420px',
+            fontSize: '13px'
+          },
+          success: { duration: 4000, iconTheme: { primary: '#22C55E', secondary: '#FFFFFF' } },
+          error: { duration: 5000, iconTheme: { primary: '#EF4444', secondary: '#FFFFFF' } },
+          loading: { duration: Infinity }
         }}
       />
       <Router>

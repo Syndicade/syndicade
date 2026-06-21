@@ -1,47 +1,46 @@
 import { Search } from 'lucide-react';
 import PageHeader from '../PageHeader';
 import { Button } from './Button';
-import { Chip } from './Chip';
+import { CardSkeleton } from '../Skeletons';
 
 /**
  * ListPageLayout
  *
  * Internal admin list-page shell per Syndicade Design System §13.1.
  * Used by: Programs, Opportunities, Funding, Polls, Surveys, Sign-Up Forms,
- * Announcements, Member Directory, Document Library.
+ * Announcements, Member Directory, Document Library, Groups & Committees,
+ * Photo Gallery, Members.
  *
  * NOT for public discovery pages — see DiscoveryPageLayout for those.
  *
- * Filter scope follows §10 "Internal admin pages" order:
- *   Status chips -> Date/Deadline -> Type/Category -> Audience
- * (No Location filter — content is already scoped to the org.)
+ * ARCHITECTURE (decided June 21, 2026): this is a STRUCTURAL SHELL, not a fixed
+ * filter taxonomy. It standardizes placement only — header, optional stat-card
+ * row, search bar position, filter-row container. It does NOT hardcode specific
+ * filter control types (no built-in status-chip loop, date select, type select,
+ * etc.) because §10 confirms every module already uses a different filter set
+ * (Programs: status chips only; Polls/Surveys: chips + Type + Sort + stat cards;
+ * Members: Role/Tag/Group/Dues dropdowns + Sort; etc.). Each page builds its own
+ * filter content (Chip rows, <select> dropdowns, toggles — whatever fits) and
+ * passes it in via the `filters` prop.
+ *
+ * Audience filter REMOVED (decided June 21, 2026): Audience filtering is
+ * Discovery-only (§10) — does not apply to internal admin pages at all, so
+ * there is no Audience slot or prop here anymore.
  *
  * ASSUMPTIONS FLAGGED FOR REVIEW:
- * 1. Button.jsx's variant prop is assumed to be `variant="ghost"` / "primary" / etc.
- *    (matches Badge.jsx's confirmed `variant` pattern) — please confirm against the
- *    real Button.jsx source.
- * 2. Date/Type/Audience filters render as native <select> dropdowns, not chip rows —
- *    §10 doesn't specify a UI control for these in a horizontal bar (only the sidebar
- *    context describes them), and Audience alone has 25 options, too many for inline
- *    chips. Flagging this as a simplification — a proper multi-select chip popover
- *    would need its own component (doesn't exist yet).
- * 3. Loading state below is a TEMPORARY inline skeleton stub, matching Card anatomy
- *    per §11, but NOT the shared Skeleton component (Skeletons.jsx update is a later
- *    step). Swap this out once that file is updated.
- * 4. Mascot image paths assume /public root convention (confirmed for
- *    mascots-empty.png) — assumed mascot-error.png lives alongside it at the same
- *    path. Please confirm.
- * 5. No mobile "bottom drawer" filter pattern (§13.7) — that's documented for pages
- *    with a real sidebar (Discovery). ListPageLayout's filter bar just wraps on
- *    mobile instead. Flagging in case you want drawer behavior here too.
+ * 1. Mascot image paths assume /public root convention (confirmed for
+ *    mascots-empty.png) — assumed mascot-error.png lives alongside it at the
+ *    same path. Please confirm.
+ * 2. No mobile "bottom drawer" filter pattern (§13.7) — that's documented for
+ *    pages with a real sidebar (Discovery). ListPageLayout's filter bar just
+ *    wraps on mobile instead.
  *
  * Props:
  * - title, subtitle, headerActions        -> passed straight to PageHeader
  * - searchValue, onSearchChange, searchPlaceholder, searchLabel
- * - statusFilters: [{ key, label, count }], activeStatusFilter, onStatusFilterChange
- * - dateFilterOptions: [{ key, label }], activeDateFilter, onDateFilterChange
- * - typeFilterOptions: [{ key, label }], activeTypeFilter, onTypeFilterChange, typeFilterLabel
- * - audienceFilterOptions: [string], activeAudienceFilters: [string], onAudienceFilterChange
+ * - filters: ReactNode                    -> page-supplied filter content (Chip rows,
+ *                                             dropdowns, toggles), rendered right of the
+ *                                             search bar, same row, wraps on mobile
  * - status: 'loading' | 'error' | 'empty' | 'no-results' | 'ready'
  * - onRetry, onClearFilters
  * - emptyStateConfig: { heading, description, primaryActionLabel, onPrimaryAction,
@@ -60,22 +59,7 @@ function ListPageLayout(props) {
   var searchPlaceholder = props.searchPlaceholder || 'Search...';
   var searchLabel = props.searchLabel || 'Search';
 
-  var statusFilters = props.statusFilters || [];
-  var activeStatusFilter = props.activeStatusFilter;
-  var onStatusFilterChange = props.onStatusFilterChange;
-
-  var dateFilterOptions = props.dateFilterOptions || [];
-  var activeDateFilter = props.activeDateFilter || '';
-  var onDateFilterChange = props.onDateFilterChange;
-
-  var typeFilterOptions = props.typeFilterOptions || [];
-  var activeTypeFilter = props.activeTypeFilter || '';
-  var onTypeFilterChange = props.onTypeFilterChange;
-  var typeFilterLabel = props.typeFilterLabel || 'Type';
-
-  var audienceFilterOptions = props.audienceFilterOptions || [];
-  var activeAudienceFilters = props.activeAudienceFilters || [];
-  var onAudienceFilterChange = props.onAudienceFilterChange;
+  var filters = props.filters;
 
   var status = props.status || 'ready';
   var onRetry = props.onRetry;
@@ -90,38 +74,14 @@ function ListPageLayout(props) {
   var itemListLabel = props.itemListLabel || 'Items';
   var children = props.children;
 
-  var selectStyle = {
-    border: '0.5px solid #E2E8F0',
-    borderRadius: '8px',
-    padding: '8px 12px',
-    fontSize: '14px',
-    background: '#FFFFFF',
-    color: '#475569'
-  };
-
-  function handleAudienceChange(e) {
-    var selected = [];
-    var options = e.target.options;
-    var i;
-    for (i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selected.push(options[i].value);
-      }
-    }
-    if (onAudienceFilterChange) {
-      onAudienceFilterChange(selected);
-    }
-  }
-
-  var showFilterRow2 = dateFilterOptions.length > 0 || typeFilterOptions.length > 0 || audienceFilterOptions.length > 0;
-
   return (
     <div>
       <PageHeader title={title} subtitle={subtitle} actions={headerActions} />
 
       <div style={{ padding: '20px 24px 32px' }}>
 
-        {/* Filter bar — no card wrapper, sits on page bg, per §13.1 */}
+        {/* Filter bar — no card wrapper, sits on page bg, per §13.1.
+            Search (left) + page-supplied filter content (right), same row, wraps on mobile. */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
 
@@ -151,73 +111,12 @@ function ListPageLayout(props) {
               />
             </div>
 
-            {statusFilters.length > 0 && (
-              <div role="group" aria-label="Filter by status" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {statusFilters.map(function (f) {
-                  var label = f.label + (typeof f.count === 'number' ? ' (' + f.count + ')' : '');
-                  return (
-                    <Chip
-                      key={f.key}
-                      selected={activeStatusFilter === f.key}
-                      onClick={function () { if (onStatusFilterChange) { onStatusFilterChange(f.key); } }}
-                    >
-                      {label}
-                    </Chip>
-                  );
-                })}
+            {filters && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {filters}
               </div>
             )}
           </div>
-
-          {/* Date -> Type -> Audience, per §10 order (see assumption #2 above) */}
-          {showFilterRow2 && (
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '12px' }}>
-              {dateFilterOptions.length > 0 && (
-                <select
-                  value={activeDateFilter}
-                  onChange={function (e) { if (onDateFilterChange) { onDateFilterChange(e.target.value); } }}
-                  aria-label="Filter by date"
-                  style={selectStyle}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Any date</option>
-                  {dateFilterOptions.map(function (opt) {
-                    return <option key={opt.key} value={opt.key}>{opt.label}</option>;
-                  })}
-                </select>
-              )}
-
-              {typeFilterOptions.length > 0 && (
-                <select
-                  value={activeTypeFilter}
-                  onChange={function (e) { if (onTypeFilterChange) { onTypeFilterChange(e.target.value); } }}
-                  aria-label={'Filter by ' + typeFilterLabel}
-                  style={selectStyle}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All {typeFilterLabel}</option>
-                  {typeFilterOptions.map(function (opt) {
-                    return <option key={opt.key} value={opt.key}>{opt.label}</option>;
-                  })}
-                </select>
-              )}
-
-              {audienceFilterOptions.length > 0 && (
-                <select
-                  multiple
-                  value={activeAudienceFilters}
-                  onChange={handleAudienceChange}
-                  aria-label="Filter by audience"
-                  style={Object.assign({}, selectStyle, { minWidth: '160px', height: '38px' })}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {audienceFilterOptions.map(function (a) {
-                    return <option key={a} value={a}>{a}</option>;
-                  })}
-                </select>
-              )}
-            </div>
-          )}
         </div>
 
         {/* No separate result-count line — header subtitle already shows the count, per §13.1 */}
@@ -292,8 +191,9 @@ function ListPageLayout(props) {
 }
 
 /**
- * TEMPORARY inline loading skeleton — mirrors Card anatomy per §11.
- * Replace with the shared Skeleton component once Skeletons.jsx is updated (Build List #13).
+ * Loading grid — renders the real CardSkeleton (Skeletons.jsx), matching
+ * exact List Card anatomy per §11. Build List #13/#10 step: temporary stub
+ * removed now that Skeletons.jsx is fixed.
  */
 function LoadingGrid() {
   var placeholders = [1, 2, 3, 4, 5, 6];
@@ -307,26 +207,7 @@ function LoadingGrid() {
       }}
     >
       {placeholders.map(function (n) {
-        return (
-          <div
-            key={n}
-            style={{
-              border: '0.5px solid #E2E8F0',
-              borderRadius: '12px',
-              padding: '16px'
-            }}
-          >
-            <div className="animate-pulse" style={{ height: '14px', width: '60%', background: '#F1F5F9', borderRadius: '4px', marginBottom: '10px' }} />
-            <div className="animate-pulse" style={{ height: '12px', width: '100%', background: '#F1F5F9', borderRadius: '4px', marginBottom: '6px' }} />
-            <div className="animate-pulse" style={{ height: '12px', width: '90%', background: '#F1F5F9', borderRadius: '4px', marginBottom: '14px' }} />
-            <div className="animate-pulse" style={{ height: '10px', width: '70%', background: '#F1F5F9', borderRadius: '4px', marginBottom: '8px' }} />
-            <div className="animate-pulse" style={{ height: '10px', width: '50%', background: '#F1F5F9', borderRadius: '4px', marginBottom: '16px' }} />
-            <div style={{ borderTop: '0.5px solid #E2E8F0', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
-              <div className="animate-pulse" style={{ height: '10px', width: '40%', background: '#F1F5F9', borderRadius: '4px' }} />
-              <div className="animate-pulse" style={{ height: '24px', width: '70px', background: '#F1F5F9', borderRadius: '6px' }} />
-            </div>
-          </div>
-        );
+        return <CardSkeleton key={n} />;
       })}
     </div>
   );
