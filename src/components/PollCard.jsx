@@ -4,7 +4,7 @@ import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast'
 import toast from 'react-hot-toast';
 import { format, formatDistanceToNow } from 'date-fns';
 import { notifyUsers } from '../lib/notificationService';
-import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ConfirmDeleteModal from '../components/ConfirmModal';
 import { useDropdownKeyboard } from '../hooks/useModalKeyboard';
 
 function Icon({ path, className }) {
