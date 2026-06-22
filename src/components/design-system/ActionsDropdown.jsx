@@ -14,10 +14,20 @@
 // against light backgrounds. Now has real button chrome + a lucide ChevronDown icon (matches
 // the icon allowlist's "Actions dropdown chevron" entry) + visible "Actions" label text.
 //
+// ADDED June 22, 2026 (Opportunities retrofit) — generic `extraItems` slot for module-specific
+// actions that don't fit the fixed canonical list (e.g. Opportunities/Funding's "View
+// Applications"). Each item: { key, label, onClick, badge }. Rendered immediately after Export
+// and before Make Template — data-access actions cluster together, ahead of the lower-frequency
+// template/pin/remind/close group. Not part of the canonical order itself; consumers without
+// data-access actions simply omit the prop and nothing changes.
+//
 // props:
 //   triggerLabel: string — aria-label for the trigger, e.g. "Actions for Spring Food Drive"
 //   onEdit, onDuplicate, onExport, onMakeTemplate, onSavePost, onRemind, onDelete: fn — item
 //     hidden if omitted. (Export acts on this single item only, never bulk.)
+//   extraItems: [{ key, label, onClick, badge }] — module-specific actions, rendered after
+//     Export / before Make Template. `badge` is optional trailing count text, e.g.
+//     { key: 'view-apps', label: 'View Applications', onClick: fn, badge: 3 } -> "View Applications (3)"
 //   pinState: 'pinned' | 'unpinned' — Pin/Unpin hidden unless this AND onPinToggle are set
 //   onPinToggle: fn
 //   closeState: 'open' | 'closed' — Close/Reopen hidden unless this AND onCloseToggle are set
@@ -87,11 +97,20 @@ function ActionsDropdown(props) {
 
   var pinLabel = props.pinState === 'pinned' ? 'Unpin' : 'Pin';
   var closeLabel = props.closeState === 'closed' ? 'Reopen' : 'Close';
+  var extraItems = props.extraItems || [];
 
   var items = [];
   if (props.onEdit) { items.push({ key: 'edit', label: 'Edit', onClick: makeHandler(props.onEdit), style: MENU_ITEM_STYLE }); }
   if (props.onDuplicate) { items.push({ key: 'duplicate', label: 'Duplicate', onClick: makeHandler(props.onDuplicate), style: MENU_ITEM_STYLE }); }
   if (props.onExport) { items.push({ key: 'export', label: 'Export', onClick: makeHandler(props.onExport), style: MENU_ITEM_STYLE }); }
+
+  extraItems.forEach(function (extra) {
+    var label = (extra.badge !== undefined && extra.badge !== null && extra.badge !== '')
+      ? extra.label + ' (' + extra.badge + ')'
+      : extra.label;
+    items.push({ key: extra.key, label: label, onClick: makeHandler(extra.onClick), style: MENU_ITEM_STYLE });
+  });
+
   if (props.onMakeTemplate) { items.push({ key: 'make-template', label: 'Make Template', onClick: makeHandler(props.onMakeTemplate), style: MENU_ITEM_STYLE }); }
   if (props.pinState && props.onPinToggle) { items.push({ key: 'pin', label: pinLabel, onClick: makeHandler(props.onPinToggle), style: MENU_ITEM_STYLE }); }
   if (props.onSavePost) { items.push({ key: 'save-post', label: 'Save Post', onClick: makeHandler(props.onSavePost), style: MENU_ITEM_STYLE }); }
