@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
 import toast from 'react-hot-toast';
 import { useModalKeyboard } from '../hooks/useModalKeyboard';
-import ConfirmDeleteModal from './ConfirmDeleteModal';
+import ConfirmDeleteModal from './ConfirmModal';
 
 function Icon({ path, className }) {
   return (
