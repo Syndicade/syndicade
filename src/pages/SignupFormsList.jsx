@@ -2,35 +2,42 @@ import { useState, useEffect } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { mascotSuccessToast, mascotErrorToast } from '../components/MascotToast';
-import toast from 'react-hot-toast';
-import { Plus, Search, Filter, ClipboardList, ArrowUpDown, X } from 'lucide-react';
+import { Download } from 'lucide-react';
+import ListPageLayout from '../components/design-system/ListPageLayout';
+import Chip from '../components/design-system/Chip';
 import CreateSignupForm from '../components/CreateSignupForm';
 import SignupFormCard from '../components/SignupFormCard';
 import TemplatePickerModal, { PLATFORM_TEMPLATES } from '../components/TemplatePickerModal';
+
+var STATUS_CHIPS = [
+  { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'closed', label: 'Closed' }
+];
 
 function SignupFormsList() {
   var { organizationId } = useParams();
   var { isAdmin } = useOutletContext();
 
-  var [forms, setForms]               = useState([]);
+  var [forms, setForms] = useState([]);
   var [filteredForms, setFilteredForms] = useState([]);
-  var [loading, setLoading]           = useState(true);
-  var [error, setError]               = useState(null);
+  var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
   var [showCreateModal, setShowCreateModal] = useState(false);
   var [showTemplatePicker, setShowTemplatePicker] = useState(false);
   var [templateData, setTemplateData] = useState(null);
-  var [searchTerm, setSearchTerm]     = useState('');
+  var [searchTerm, setSearchTerm] = useState('');
   var [statusFilter, setStatusFilter] = useState('all');
-  var [sortBy, setSortBy]             = useState('recent');
-  var [currentUser, setCurrentUser]   = useState(null);
-  var [memberCount, setMemberCount]   = useState(0);
+  var [sortBy, setSortBy] = useState('recent');
+  var [selectMode, setSelectMode] = useState(false);
+  var [selectedIds, setSelectedIds] = useState([]);
+  var [currentUser, setCurrentUser] = useState(null);
+  var [memberCount, setMemberCount] = useState(0);
 
-  // Single load on mount
   useEffect(function() {
     loadData();
   }, [organizationId]);
 
-  // Re-filter whenever forms or filter state changes
   useEffect(function() {
     applyFilters();
   }, [forms, searchTerm, statusFilter, sortBy]);
@@ -40,33 +47,31 @@ function SignupFormsList() {
       setLoading(true);
       setError(null);
 
-      var results = await Promise.all([
-        supabase.auth.getUser(),
-        supabase
-          .from('signup_forms')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('is_template', false)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('memberships')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organizationId)
-          .eq('status', 'active')
-      ]);
+      var formsQuery = supabase
+        .from('signup_forms')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_template', false)
+        .order('created_at', { ascending: false });
 
-      var authResult   = results[0];
-      var formsResult  = results[1];
-      var countResult  = results[2];
-
-      if (authResult.data && authResult.data.user) {
-        setCurrentUser(authResult.data.user);
+      if (!isAdmin) {
+        formsQuery = formsQuery.neq('visibility', 'draft');
       }
 
+      var results = await Promise.all([
+        supabase.auth.getUser(),
+        formsQuery,
+        supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'active')
+      ]);
+
+      var authResult = results[0];
+      var formsResult = results[1];
+      var countResult = results[2];
+
+      if (authResult.data && authResult.data.user) setCurrentUser(authResult.data.user);
       if (formsResult.error) throw formsResult.error;
       setForms(formsResult.data || []);
       setMemberCount(countResult.count || 0);
-
     } catch (err) {
       console.error('Error loading signup forms:', err);
       setError(err.message);
@@ -86,8 +91,7 @@ function SignupFormsList() {
     if (searchTerm.trim()) {
       var search = searchTerm.toLowerCase();
       filtered = filtered.filter(function(form) {
-        return form.title.toLowerCase().includes(search) ||
-          (form.description && form.description.toLowerCase().includes(search));
+        return form.title.toLowerCase().includes(search) || (form.description && form.description.toLowerCase().includes(search));
       });
     }
 
@@ -100,11 +104,10 @@ function SignupFormsList() {
     }
 
     filtered.sort(function(a, b) {
-      if (sortBy === 'pinned') {
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        return new Date(b.created_at) - new Date(a.created_at);
-      }
+      // Pinned always floats to top, regardless of which sort criterion is active (§8)
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+
       if (sortBy === 'closing') {
         if (!a.closes_at && !b.closes_at) return 0;
         if (!a.closes_at) return 1;
@@ -125,19 +128,20 @@ function SignupFormsList() {
 
   var hasActiveFilters = searchTerm.trim() !== '' || statusFilter !== 'all' || sortBy !== 'recent';
 
-  var handleFormCreated = async function(newForm) {
+  var handleFormCreated = async function(newForm, meta) {
     loadData();
     setShowCreateModal(false);
     setTemplateData(null);
+    if (!meta || !meta.firstPublish) return;
     try {
       var notifModule = await import('../lib/notificationService');
       await notifModule.notifyOrganizationMembers({
         organizationId: organizationId,
         type: 'new_signup_form',
-        title: (newForm && newForm.title) ? newForm.title : 'New Sign-Up Form',
+        title: newForm && newForm.title ? newForm.title : 'New Sign-Up Form',
         message: 'A new sign-up form is available. Claim your spot!',
         link: '/organizations/' + organizationId + '/signup-forms',
-        excludeUserId: currentUser ? currentUser.id : null,
+        excludeUserId: currentUser ? currentUser.id : null
       });
       window.dispatchEvent(new CustomEvent('notificationCreated'));
     } catch (ne) {
@@ -156,278 +160,234 @@ function SignupFormsList() {
     setTemplateData(null);
   };
 
-  var activeForms  = forms.filter(function(f) { return !isFormClosed(f); }).length;
-  var closedForms  = forms.filter(function(f) { return isFormClosed(f); }).length;
-  var pinnedForms  = forms.filter(function(f) { return f.is_pinned; }).length;
+  var toggleSelectMode = function() {
+    setSelectMode(!selectMode);
+    setSelectedIds([]);
+  };
 
+  var toggleSelectOne = function(formId) {
+    setSelectedIds(function(prev) {
+      return prev.indexOf(formId) !== -1 ? prev.filter(function(id) { return id !== formId; }) : prev.concat([formId]);
+    });
+  };
+
+  var toggleSelectAll = function() {
+    if (selectedIds.length === filteredForms.length) setSelectedIds([]);
+    else setSelectedIds(filteredForms.map(function(f) { return f.id; }));
+  };
+
+  var handleBulkExport = async function() {
+    if (selectedIds.length === 0) return;
+    try {
+      var itemsRes = await supabase.from('signup_items').select('*').in('form_id', selectedIds).order('order_number', { ascending: true });
+      if (itemsRes.error) throw itemsRes.error;
+      var items = itemsRes.data || [];
+      var itemIds = items.map(function(i) { return i.id; });
+
+      var responses = [];
+      if (itemIds.length > 0) {
+        var responsesRes = await supabase
+          .from('signup_responses')
+          .select('*, member:members!signup_responses_member_id_fkey(user_id,first_name,last_name,email)')
+          .in('item_id', itemIds);
+        if (responsesRes.error) throw responsesRes.error;
+        responses = responsesRes.data || [];
+      }
+
+      var formTitleById = {};
+      forms.forEach(function(f) { formTitleById[f.id] = f.title; });
+
+      var rows = [['Form', 'Item', 'Member Name', 'Email', 'Quantity', 'Signed Up At']];
+      items.forEach(function(item) {
+        var itemResponses = responses.filter(function(r) { return r.item_id === item.id; });
+        var formTitle = formTitleById[item.form_id] || '';
+        if (itemResponses.length === 0) {
+          rows.push([formTitle, item.item_name, '', '', '', '']);
+        } else {
+          itemResponses.forEach(function(r) {
+            var name = r.member ? ((r.member.first_name || '') + ' ' + (r.member.last_name || '')).trim() : 'Unknown';
+            rows.push([formTitle, item.item_name, name, r.member ? (r.member.email || '') : '', r.quantity || 1, r.created_at ? new Date(r.created_at).toLocaleString() : '']);
+          });
+        }
+      });
+
+      var csv = rows.map(function(row) {
+        return row.map(function(cell) {
+          var str = String(cell === null || cell === undefined ? '' : cell);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"';
+          return str;
+        }).join(',');
+      }).join('\n');
+
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'signup_forms_export_' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      mascotSuccessToast('Export ready.', selectedIds.length + ' form' + (selectedIds.length !== 1 ? 's' : '') + ' exported.');
+      setSelectMode(false);
+      setSelectedIds([]);
+    } catch (err) {
+      mascotErrorToast('Failed to export selected forms.', err.message);
+    }
+  };
+
+  var activeForms = forms.filter(function(f) { return !isFormClosed(f); }).length;
+  var closedForms = forms.filter(function(f) { return isFormClosed(f); }).length;
+  var pinnedForms = forms.filter(function(f) { return f.is_pinned; }).length;
+
+  var chipCounts = { all: forms.length, active: activeForms, closed: closedForms };
   var signupTemplates = PLATFORM_TEMPLATES.signup_form || [];
 
-  // ── Loading skeleton ────────────────────────────────────────────────────────
+  var subtitleText = forms.length + ' form' + (forms.length !== 1 ? 's' : '') + (pinnedForms > 0 ? ' \u00b7 ' + pinnedForms + ' pinned' : '');
 
-  if (loading) {
-    return (
-      <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms" aria-busy="true">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ height: '32px', width: '220px', borderRadius: '6px', background: '#E2E8F0', marginBottom: '8px' }} className="animate-pulse" />
-              <div style={{ height: '16px', width: '160px', borderRadius: '6px', background: '#E2E8F0' }} className="animate-pulse" />
-            </div>
-            <div style={{ height: '40px', width: '130px', borderRadius: '8px', background: '#E2E8F0' }} className="animate-pulse" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-            {[1, 2, 3].map(function(n) {
-              return <div key={n} style={{ height: '80px', borderRadius: '12px', background: '#E2E8F0' }} className="animate-pulse" />;
-            })}
-          </div>
-          <div style={{ height: '64px', borderRadius: '12px', background: '#FFFFFF', border: '1px solid #E2E8F0' }} className="animate-pulse" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '20px' }}>
-            {[1, 2, 3, 4].map(function(n) {
-              return <div key={n} style={{ height: '220px', borderRadius: '12px', background: '#FFFFFF', border: '1px solid #E2E8F0' }} className="animate-pulse" />;
-            })}
-          </div>
-        </div>
-      </main>
-    );
-  }
+  var status = 'ready';
+  if (loading) status = 'loading';
+  else if (error) status = 'error';
+  else if (forms.length === 0) status = 'empty';
+  else if (filteredForms.length === 0) status = 'no-results';
 
-  // ── Main render ─────────────────────────────────────────────────────────────
+  var headerActions = isAdmin ? (
+    <>
+      <button
+        onClick={toggleSelectMode}
+        style={{ height: '44px', padding: '0 24px', background: selectMode ? '#F1F5F9' : 'transparent', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+        aria-pressed={selectMode}
+        aria-label={selectMode ? 'Cancel selecting forms' : 'Select forms to export'}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
+      >
+        {selectMode ? 'Cancel' : 'Select'}
+      </button>
+      <button
+        onClick={function() { setShowTemplatePicker(true); }}
+        style={{ height: '44px', padding: '0 24px', background: 'transparent', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+        aria-label="Browse sign-up form templates"
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
+      >
+        Templates
+      </button>
+      <button
+        onClick={function() { setShowCreateModal(true); }}
+        style={{ height: '44px', padding: '0 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+        aria-label="Create new sign-up form"
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+      >
+        Create Form
+      </button>
+    </>
+  ) : null;
+
+  var filtersContent = selectMode ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#1E40AF', fontWeight: 600, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={selectedIds.length === filteredForms.length && filteredForms.length > 0}
+          onChange={toggleSelectAll}
+          className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {selectedIds.length} selected
+      </label>
+      <button
+        onClick={handleBulkExport}
+        disabled={selectedIds.length === 0}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '36px', padding: '0 16px', background: selectedIds.length === 0 ? '#93C5FD' : '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: selectedIds.length === 0 ? 'not-allowed' : 'pointer' }}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
+      >
+        <Download size={14} aria-hidden="true" />
+        Export CSV
+      </button>
+    </div>
+  ) : (
+    <>
+      {STATUS_CHIPS.map(function(chip) {
+        return (
+          <Chip key={chip.id} selected={statusFilter === chip.id} onClick={function() { setStatusFilter(chip.id); }} activeColor="blue">
+            {chip.label} ({chipCounts[chip.id]})
+          </Chip>
+        );
+      })}
+
+      <select
+        value={sortBy}
+        onChange={function(e) { setSortBy(e.target.value); }}
+        style={{ padding: '8px 12px', background: '#FFFFFF', border: '0.5px solid #E2E8F0', borderRadius: '8px', color: '#0E1523', fontSize: '14px', cursor: 'pointer' }}
+        aria-label="Sort forms"
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="recent">Most Recent</option>
+        <option value="closing">Closing Soon</option>
+      </select>
+
+      {hasActiveFilters && (
+        <button
+          onClick={clearFilters}
+          style={{ padding: '8px 14px', background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: '8px', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+          aria-label="Clear all filters"
+          className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+        >
+          Clear
+        </button>
+      )}
+    </>
+  );
 
   return (
-    <main style={{ background: '#F8FAFC', minHeight: '100vh', padding: '32px' }} aria-label="Sign-Up Forms">
-
-      {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '30px', fontWeight: 800, color: '#0E1523', margin: 0, lineHeight: 1.2 }}>Sign-Up Forms</h1>
-          <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px' }}>
-            {forms.length + ' form' + (forms.length !== 1 ? 's' : '') + ' · ' + activeForms + ' active'}
-          </p>
-        </div>
-
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
-            <button
-              onClick={function() { setShowTemplatePicker(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-              aria-label="Browse sign-up form templates"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
-            >
-              Templates
-            </button>
-            <button
-              onClick={function() { setShowCreateModal(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-              aria-label="Create new sign-up form"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
-            >
-              <Plus size={18} aria-hidden="true" />
-              Create Form
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }} role="region" aria-label="Sign-up forms summary">
-        <div style={{ background: '#DBEAFE', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#2563EB' }}>{activeForms}</div>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Active</div>
-        </div>
-        <div style={{ background: '#F1F5F9', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#64748B' }}>{closedForms}</div>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Closed</div>
-        </div>
-        <div style={{ background: 'rgba(245,183,49,0.1)', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#B45309' }}>{pinnedForms}</div>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: '#475569', marginTop: '4px' }}>Pinned</div>
-        </div>
-      </div>
-
-      {/* Search + Filter bar */}
-      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', alignItems: 'center' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
-            <input
-              type="text"
-              placeholder="Search forms..."
-              value={searchTerm}
-              onChange={function(e) { setSearchTerm(e.target.value); }}
-              style={{ width: '100%', paddingLeft: '38px', paddingRight: '16px', paddingTop: '9px', paddingBottom: '9px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#0E1523', fontSize: '14px', boxSizing: 'border-box' }}
-              aria-label="Search sign-up forms"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+    <>
+      <ListPageLayout
+        title="Sign-Up Forms"
+        subtitle={subtitleText}
+        headerActions={headerActions}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search forms..."
+        searchLabel="Search sign-up forms"
+        filters={filtersContent}
+        status={status}
+        onRetry={loadData}
+        onClearFilters={clearFilters}
+        emptyStateConfig={{
+          heading: 'No Sign-Up Forms Yet',
+          description: 'Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.',
+          primaryActionLabel: isAdmin ? 'Create Your First Form' : undefined,
+          onPrimaryAction: isAdmin ? function() { setShowCreateModal(true); } : undefined,
+          secondaryActionLabel: isAdmin && signupTemplates.length > 0 ? 'Browse Templates' : undefined,
+          onSecondaryAction: isAdmin && signupTemplates.length > 0 ? function() { setShowTemplatePicker(true); } : undefined
+        }}
+        itemListLabel="Sign-up forms"
+      >
+        {filteredForms.map(function(form) {
+          return (
+            <SignupFormCard
+              key={form.id}
+              form={form}
+              currentUserId={currentUser ? currentUser.id : null}
+              isAdmin={isAdmin}
+              memberCount={memberCount}
+              onDelete={loadData}
+              onUpdate={loadData}
+              onDuplicate={loadData}
+              selectMode={selectMode}
+              selected={selectedIds.indexOf(form.id) !== -1}
+              onToggleSelect={toggleSelectOne}
             />
-          </div>
+          );
+        })}
+      </ListPageLayout>
 
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Filter size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
-            <select
-              value={statusFilter}
-              onChange={function(e) { setStatusFilter(e.target.value); }}
-              style={{ paddingLeft: '32px', paddingRight: '16px', paddingTop: '9px', paddingBottom: '9px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#0E1523', fontSize: '14px', cursor: 'pointer', appearance: 'none' }}
-              aria-label="Filter by status"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Forms</option>
-              <option value="active">Active</option>
-              <option value="closed">Closed</option>
-            </select>
-          </div>
-
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <ArrowUpDown size={15} style={{ position: 'absolute', left: '10px', color: '#64748B', pointerEvents: 'none' }} aria-hidden="true" />
-            <select
-              value={sortBy}
-              onChange={function(e) { setSortBy(e.target.value); }}
-              style={{ paddingLeft: '32px', paddingRight: '16px', paddingTop: '9px', paddingBottom: '9px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#0E1523', fontSize: '14px', cursor: 'pointer', appearance: 'none' }}
-              aria-label="Sort forms"
-              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="recent">Most Recent</option>
-              <option value="pinned">Pinned First</option>
-              <option value="closing">Closing Soon</option>
-            </select>
-          </div>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '9px 14px', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-              aria-label="Clear all filters"
-              className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-            >
-              <X size={14} aria-hidden="true" />
-              Clear
-            </button>
-          )}
-        </div>
-
-        <p style={{ fontSize: '13px', color: '#64748B', marginTop: '10px' }}>
-          Showing {filteredForms.length} of {forms.length} form{forms.length !== 1 ? 's' : ''}
-          {hasActiveFilters && <span style={{ color: '#3B82F6', fontWeight: 600 }}> — filters active</span>}
-        </p>
-      </div>
-
-      {/* Error state */}
-      {error && (
-        <div
-          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '14px 16px', marginBottom: '24px', color: '#EF4444', fontSize: '14px' }}
-          role="alert"
-          aria-live="assertive"
-        >
-          {error}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {filteredForms.length === 0 ? (
-        hasActiveFilters ? (
-          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '64px 24px', textAlign: 'center' }}>
-            <ClipboardList size={44} style={{ color: '#94A3B8', margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>No Forms Match Your Filters</h2>
-            <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '360px', margin: '0 auto 24px', lineHeight: '1.6' }}>
-              Try adjusting your search or filters.
-            </p>
-            <button
-              onClick={clearFilters}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-              className="hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-            >
-              <X size={16} aria-hidden="true" />
-              Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '48px 24px', textAlign: 'center' }}>
-            <img
-              src="/mascots-empty.png"
-              alt=""
-              aria-hidden="true"
-              style={{ width: '120px', height: '120px', margin: '0 auto 16px', display: 'block', objectFit: 'contain' }}
-            />
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0E1523', marginBottom: '8px' }}>No Sign-Up Forms Yet</h2>
-            <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '380px', margin: '0 auto 24px', lineHeight: '1.6' }}>
-              Create your first sign-up form to collect volunteer slots, potluck items, or time sign-ups.
-            </p>
-
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: signupTemplates.length > 0 ? '40px' : 0 }}>
-                <button
-                  onClick={function() { setShowTemplatePicker(true); }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-slate-50"
-                >
-                  Browse Templates
-                </button>
-                <button
-                  onClick={function() { setShowCreateModal(true); }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                  className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:bg-blue-600"
-                >
-                  <Plus size={18} aria-hidden="true" />
-                  Create Your First Form
-                </button>
-              </div>
-            )}
-
-            {isAdmin && signupTemplates.length > 0 && (
-              <div style={{ textAlign: 'left', maxWidth: '640px', margin: '0 auto' }}>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: '#F5B731', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center' }}>
-                  Start from a template
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {signupTemplates.slice(0, 4).map(function(tmpl) {
-                    return (
-                      <div key={tmpl._id} style={{ borderRadius: '12px', border: '1px solid #E2E8F0', background: '#F8FAFC', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#0E1523', margin: 0 }}>{tmpl.title}</p>
-                        <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.5 }}>{tmpl._desc}</p>
-                        <button
-                          onClick={function() { handleTemplateSelect(tmpl, tmpl.title); }}
-                          style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left' }}
-                          className="hover:underline focus:outline-none"
-                        >
-                          Use this template
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      ) : (
-        <div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '20px' }}
-          role="list"
-          aria-label="Sign-up forms"
-        >
-          {filteredForms.map(function(form) {
-            return (
-              <SignupFormCard
-                key={form.id}
-                form={form}
-                currentUserId={currentUser ? currentUser.id : null}
-                isAdmin={isAdmin}
-                memberCount={memberCount}
-                onDelete={loadData}
-                onUpdate={loadData}
-                onDuplicate={loadData}
-              />
-            );
-          })}
-        </div>
-      )}
-
+      {/* Rendered as siblings, not children — ListPageLayout only renders children when
+          status === 'ready', so a modal opened from the empty/no-results/error state's
+          action button would never appear if nested inside it. */}
       {showCreateModal && (
         <CreateSignupForm
           organizationId={organizationId}
           currentUserId={currentUser ? currentUser.id : null}
           templateData={templateData}
           onClose={handleCreateModalClose}
-          onFormCreated={handleFormCreated}
+          onSaved={handleFormCreated}
         />
       )}
 
@@ -439,7 +399,7 @@ function SignupFormsList() {
           onSelect={handleTemplateSelect}
         />
       )}
-    </main>
+    </>
   );
 }
 

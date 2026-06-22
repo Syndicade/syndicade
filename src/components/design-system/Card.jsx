@@ -11,8 +11,18 @@
 //
 // NOTE: this renders ONE card only. The grid (repeat(auto-fit, minmax(280px,1fr)), 3/2/1-col)
 // belongs to the parent layout (ListPageLayout.jsx, Build List #10) — not duplicated here.
+//
+// ADDED June 22, 2026 (Sign-Up Forms retrofit) — two new, fully optional, backward-compatible
+// capabilities. Every existing consumer that doesn't pass these props renders exactly as before:
+//   1. `pinned` — Pin icon next to title, per §8's "Pinned" row (Polls/Surveys/Announcements/
+//      Sign-Up Forms). Generic on purpose — any consumer can use it, not type-specific.
+//   2. `expandable` + `isExpanded` + `onToggleExpand` + `expandableContent` — lets a card reveal
+//      extra content (e.g. Sign-Up Forms' items/responses panel) without that content living in
+//      the shared component. The footer (incl. Actions) always renders regardless of expand
+//      state — same fix already applied per-module for "Actions hidden behind expand" (§8 known
+//      violation) now lives here once, for everyone.
 
-import { Clock, Calendar, MapPin } from 'lucide-react';
+import { Pin, ChevronDown, ChevronRight, Clock, Calendar, MapPin } from 'lucide-react';
 import Badge from './Badge';
 import designTokens from '../../lib/designTokens';
 
@@ -30,6 +40,11 @@ var METADATA_ICONS = {
 //   metadata: [{ type: 'clock' | 'calendar' | 'location' | 'text', text: string }]
 //     (max 2–3 rows recommended per §8; unrecognized/omitted type = text only, no icon)
 //   badges: [{ variant, label }] — rendered via Badge, shown above the footer divider
+//   pinned: bool (optional) — Pin icon next to title, sorting is the consumer's job
+//   expandable: bool (optional) — shows a chevron toggle next to title
+//   isExpanded: bool — required if expandable is true
+//   onToggleExpand: fn — required if expandable is true
+//   expandableContent: node — rendered between badges and footer, only while isExpanded
 //   footerLeft: string | node — count/status text
 //   footerRight: node — pass an <ActionsDropdown /> (admin) or a "View details" <Button /> (public/member), per §19
 //   ariaLabel: string — optional override, defaults to title
@@ -39,6 +54,11 @@ function Card(props) {
   var description = props.description;
   var metadata = props.metadata || [];
   var badges = props.badges || [];
+  var pinned = props.pinned || false;
+  var expandable = props.expandable || false;
+  var isExpanded = props.isExpanded || false;
+  var onToggleExpand = props.onToggleExpand;
+  var expandableContent = props.expandableContent;
 
   var cardStyle = {
     background: '#FFFFFF',
@@ -61,9 +81,25 @@ function Card(props) {
     overflow: 'hidden'
   };
 
-  return (
-    <article role="listitem" aria-label={props.ariaLabel || title} style={cardStyle}>
-      <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#0E1523', margin: 0 }}>{title}</h3>
+  function handleToggle() {
+    if (onToggleExpand) {
+      onToggleExpand();
+    }
+  }
+
+  function handleToggleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleToggle();
+    }
+  }
+
+  var headerContent = (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {pinned ? <Pin size={15} fill="#F5B731" style={{ color: '#B45309', flexShrink: 0 }} aria-hidden="true" /> : null}
+        <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#0E1523', margin: 0 }}>{title}</h3>
+      </div>
 
       {description ? <p style={descriptionStyle}>{description}</p> : null}
 
@@ -82,10 +118,37 @@ function Card(props) {
       ) : null}
 
       {badges.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
           {badges.map(function (badge, index) {
             return <Badge key={index} variant={badge.variant}>{badge.label}</Badge>;
           })}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <article role="listitem" aria-label={props.ariaLabel || title} style={cardStyle}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: badges.length > 0 ? '8px' : '0' }}>
+        {expandable ? (
+          <button
+            type="button"
+            onClick={handleToggle}
+            onKeyDown={handleToggleKeyDown}
+            aria-expanded={isExpanded}
+            aria-label={(isExpanded ? 'Collapse ' : 'Expand ') + title}
+            className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            style={{ background: 'transparent', border: 'none', padding: '2px 0 0 0', color: '#64748B', cursor: 'pointer', flexShrink: 0 }}
+          >
+            {isExpanded ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+          </button>
+        ) : null}
+        {headerContent}
+      </div>
+
+      {expandable && isExpanded && expandableContent ? (
+        <div style={{ marginBottom: '12px' }}>
+          {expandableContent}
         </div>
       ) : null}
 

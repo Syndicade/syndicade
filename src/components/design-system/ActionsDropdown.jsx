@@ -9,6 +9,11 @@
 // renders if the consumer passes its handler; visibility is controlled that way, never by
 // reordering. No icons anywhere in this menu, including Export and Delete (§8).
 //
+// FIXED June 22, 2026 (found via Sign-Up Forms — first real consumer of this file): trigger
+// button had no background/border and used a bare "▾" character, making it nearly invisible
+// against light backgrounds. Now has real button chrome + a lucide ChevronDown icon (matches
+// the icon allowlist's "Actions dropdown chevron" entry) + visible "Actions" label text.
+//
 // props:
 //   triggerLabel: string — aria-label for the trigger, e.g. "Actions for Spring Food Drive"
 //   onEdit, onDuplicate, onExport, onMakeTemplate, onSavePost, onRemind, onDelete: fn — item
@@ -21,6 +26,7 @@
 //   onUnpublish: fn
 
 import { useState, useRef, useLayoutEffect, Fragment } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useDropdownKeyboard } from '../../hooks/useModalKeyboard';
 import designTokens from '../../lib/designTokens';
 
@@ -105,10 +111,15 @@ function ActionsDropdown(props) {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={props.triggerLabel || 'Actions'}
-        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: '16px', color: '#64748B' }}
+        className="focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 hover:bg-slate-50"
+        style={{
+          display: 'flex', alignItems: 'center', gap: '5px',
+          background: '#FFFFFF', border: '0.5px solid #E2E8F0', borderRadius: '6px',
+          cursor: 'pointer', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569'
+        }}
       >
-        ▾
+        Actions
+        <ChevronDown size={13} aria-hidden="true" />
       </button>
 
       {isOpen ? (

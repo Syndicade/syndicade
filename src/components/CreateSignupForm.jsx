@@ -1,60 +1,79 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { mascotErrorToast } from './MascotToast';
-import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import { mascotSuccessToast, mascotErrorToast } from './MascotToast';
+import toast from 'react-hot-toast';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
+import Modal from './design-system/Modal';
+import ConfirmModal from './ConfirmModal';
+
+var BDR        = '#E2E8F0';
+var BG         = '#F8FAFC';
+var TEXT_PRI   = '#0E1523';
+var TEXT_SEC   = '#475569';
+var TEXT_MUTED = '#64748B';
+var BLUE       = '#3B82F6';
+
+var TABS = [
+  { id: 'details', label: 'Details' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'publishing', label: 'Publishing' }
+];
 
 /**
- * CreateSignupForm Component
- * Allows admins to create sign-up forms with multiple items/slots.
- * templateData (optional): pre-fills the form from a selected template.
- * editingItem (optional): when present, form operates in edit mode.
+ * CreateSignupForm — handles BOTH create and edit.
+ * Pass `editingItem` (the full form row, with its `items` array attached) to edit.
+ * onSaved(savedForm, { firstPublish }) — firstPublish is true only when this save
+ * transitions the form from draft to a published visibility for the first time.
  */
-function CreateSignupForm({ organizationId, currentUserId, onClose, onFormCreated, templateData, editingItem }) {
-  var emptyItem = { item_name: '', description: '', max_slots: 1, slot_type: 'spots' };
+function CreateSignupForm({ organizationId, currentUserId, onClose, onSaved, templateData, editingItem }) {
+  var emptyItem = { id: null, item_name: '', description: '', max_slots: 1, order_number: 1, _isNew: true, _deleted: false };
 
-  var [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    allow_multiple_signups: false,
-    show_responses: true,
-    closes_at: ''
-  });
+  var isEditing = !!(editingItem && editingItem.id);
+  var wasLive = isEditing && editingItem.visibility && editingItem.visibility !== 'draft';
 
+  var [activeTab, setActiveTab] = useState('details');
+  var [title, setTitle] = useState('');
+  var [description, setDescription] = useState('');
+  var [closesAt, setClosesAt] = useState('');
+  var [allowMultiple, setAllowMultiple] = useState(false);
+  var [showResponses, setShowResponses] = useState(true);
+  var [visibilityChoice, setVisibilityChoice] = useState('members_only');
+  var [groupIds, setGroupIds] = useState([]);
+  var [orgGroups, setOrgGroups] = useState([]);
+  var [groupsLoaded, setGroupsLoaded] = useState(false);
   var [items, setItems] = useState([Object.assign({}, emptyItem)]);
-  var [loading, setLoading] = useState(false);
-  var [error, setError] = useState(null);
+  var [errors, setErrors] = useState({});
+  var [saving, setSaving] = useState(false);
   var [templateName, setTemplateName] = useState(null);
+  var [removeConfirm, setRemoveConfirm] = useState({ open: false, index: null });
 
-  // Pre-fill from template or existing item when modal opens
+  var dragIndex = useRef(null);
+
+  // ── Prefill from editingItem or templateData ────────────────────────────────
   useEffect(function() {
-    if (editingItem && editingItem.id) {
-      setFormData({
-        title: editingItem.title || '',
-        description: editingItem.description || '',
-        allow_multiple_signups: !!editingItem.allow_multiple_signups,
-        show_responses: editingItem.show_responses !== false,
-        closes_at: editingItem.closes_at || ''
+    if (isEditing) {
+      setTitle(editingItem.title || '');
+      setDescription(editingItem.description || '');
+      setClosesAt(editingItem.closes_at ? new Date(editingItem.closes_at).toISOString().slice(0, 16) : '');
+      setAllowMultiple(!!editingItem.allow_multiple_signups);
+      setShowResponses(editingItem.show_responses !== false);
+      setVisibilityChoice(editingItem.visibility || 'members_only');
+      setGroupIds(editingItem.group_ids || []);
+      var existingItems = (editingItem.items || []).map(function(item, i) {
+        return { id: item.id, item_name: item.item_name, description: item.description || '', max_slots: item.max_slots, order_number: item.order_number || i + 1, _isNew: false, _deleted: false };
       });
-      setTemplateName(null);
+      setItems(existingItems.length > 0 ? existingItems : [Object.assign({}, emptyItem)]);
       return;
     }
 
     if (templateData) {
-      setFormData({
-        title: templateData.title || '',
-        description: templateData.description || '',
-        allow_multiple_signups: !!templateData.allow_multiple_signups,
-        show_responses: templateData.show_responses !== false,
-        closes_at: ''
-      });
+      setTitle(templateData.title || '');
+      setDescription(templateData.description || '');
+      setAllowMultiple(!!templateData.allow_multiple_signups);
+      setShowResponses(templateData.show_responses !== false);
       var tmplItems = templateData._items && templateData._items.length > 0
-        ? templateData._items.map(function(item) {
-            return {
-              item_name: item.item_name || '',
-              description: item.description || '',
-              max_slots: item.max_slots || 1,
-              slot_type: item.slot_type || 'spots'
-            };
+        ? templateData._items.map(function(item, i) {
+            return { id: null, item_name: item.item_name || '', description: item.description || '', max_slots: item.max_slots || 1, order_number: i + 1, _isNew: true, _deleted: false };
           })
         : [Object.assign({}, emptyItem)];
       setItems(tmplItems);
@@ -62,398 +81,434 @@ function CreateSignupForm({ organizationId, currentUserId, onClose, onFormCreate
     }
   }, [editingItem, templateData]);
 
-  // Add new item to the list
+  // ── Org groups (only fetched if "Specific Groups" selected) ────────────────
+  useEffect(function() {
+    if (visibilityChoice !== 'group' || groupsLoaded) return;
+    supabase
+      .from('org_groups')
+      .select('id,name')
+      .eq('organization_id', organizationId)
+      .then(function(res) {
+        if (!res.error) setOrgGroups(res.data || []);
+        setGroupsLoaded(true);
+      });
+  }, [visibilityChoice, groupsLoaded, organizationId]);
+
+  // ── Item helpers ─────────────────────────────────────────────────────────────
   var addItem = function() {
-    setItems(items.concat([Object.assign({}, emptyItem)]));
+    var maxOrder = items.reduce(function(acc, item) { return Math.max(acc, item.order_number || 0); }, 0);
+    setItems(items.concat([{ id: null, item_name: '', description: '', max_slots: 1, order_number: maxOrder + 1, _isNew: true, _deleted: false }]));
   };
 
-  // Remove item from list
-  var removeItem = function(index) {
-    if (items.length > 1) {
-      setItems(items.filter(function(_, i) { return i !== index; }));
-    }
-  };
-
-  // Update item field
   var updateItem = function(index, field, value) {
-    var newItems = items.slice();
-    newItems[index] = Object.assign({}, newItems[index], { [field]: value });
-    setItems(newItems);
+    setItems(items.map(function(item, i) {
+      if (i !== index) return item;
+      return Object.assign({}, item, { [field]: value });
+    }));
   };
 
-  // Form validation
-  var validateForm = function() {
-    if (!formData.title.trim()) {
-      setError('Please enter a form title');
-      return false;
-    }
-
-    if (items.length === 0) {
-      setError('Please add at least one item');
-      return false;
-    }
-
-    for (var i = 0; i < items.length; i++) {
-      if (!items[i].item_name.trim()) {
-        setError('Item ' + (i + 1) + ' needs a name');
-        return false;
-      }
-      if (items[i].max_slots < 1) {
-        setError('Item ' + (i + 1) + ' must have at least 1 slot');
-        return false;
-      }
-    }
-
-    return true;
+  var askRemoveItem = function(index) {
+    setRemoveConfirm({ open: true, index: index });
   };
 
-  // Handle form submission
-  var handleSubmit = async function(e) {
+  var confirmRemoveItem = function() {
+    var index = removeConfirm.index;
+    setItems(items.map(function(item, i) {
+      if (i !== index) return item;
+      return Object.assign({}, item, { _deleted: true });
+    }));
+    setRemoveConfirm({ open: false, index: null });
+  };
+
+  var handleDragStart = function(e, index) {
+    dragIndex.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  var handleDragOver = function(e, index) {
     e.preventDefault();
-    setError(null);
+    if (dragIndex.current === null || dragIndex.current === index) return;
+    var next = items.slice();
+    var dragged = next.splice(dragIndex.current, 1)[0];
+    next.splice(index, 0, dragged);
+    dragIndex.current = index;
+    setItems(next.map(function(item, i) { return Object.assign({}, item, { order_number: i + 1 }); }));
+  };
 
-    if (!validateForm()) {
+  var handleDragEnd = function() { dragIndex.current = null; };
+
+  var toggleGroup = function(groupId) {
+    setGroupIds(groupIds.indexOf(groupId) === -1 ? groupIds.concat([groupId]) : groupIds.filter(function(id) { return id !== groupId; }));
+  };
+
+  // ── Validation ───────────────────────────────────────────────────────────────
+  var visibleItems = items.filter(function(item) { return !item._deleted; });
+
+  var validate = function() {
+    var errs = {};
+    if (!title.trim()) errs.title = 'Title is required.';
+    if (visibleItems.length === 0) errs.items = 'Add at least one sign-up item.';
+    visibleItems.forEach(function(item, i) {
+      if (!item.item_name.trim()) errs['item_name_' + i] = 'Item name is required.';
+      var slots = parseInt(item.max_slots);
+      if (!slots || slots < 1) errs['item_slots_' + i] = 'Must be at least 1.';
+    });
+    return errs;
+  };
+
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  var handleSubmit = async function(action) {
+    if (saving) return;
+    var errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      toast.error('Please fix the errors before saving.');
+      setActiveTab('details');
       return;
     }
+    setErrors({});
 
-    setLoading(true);
+    var finalVisibility = visibilityChoice;
+    if (action === 'draft') finalVisibility = 'draft';
+    if (action === 'publish' && finalVisibility === 'draft') finalVisibility = 'members_only';
+
+    var firstPublish = action === 'publish';
 
     try {
-      var existing = editingItem;
+      setSaving(true);
 
       var payload = {
         organization_id: organizationId,
-        title: formData.title.trim(),
-        description: formData.description.trim() || null,
-        allow_multiple_signups: formData.allow_multiple_signups,
-        show_responses: formData.show_responses,
-        closes_at: formData.closes_at || null,
-        status: 'active'
+        title: title.trim(),
+        description: description.trim() || null,
+        closes_at: closesAt ? new Date(closesAt).toISOString() : null,
+        allow_multiple_signups: allowMultiple,
+        show_responses: showResponses,
+        visibility: finalVisibility,
+        group_ids: finalVisibility === 'group' ? groupIds : [],
+        updated_at: new Date().toISOString()
       };
 
-      if (!existing || !existing.id) {
+      if (!isEditing) {
         payload.created_by = currentUserId;
+        payload.status = 'active';
       }
 
-      var result = (existing && existing.id)
-        ? await supabase.from('signup_forms').update(payload).eq('id', existing.id).select().single()
+      var result = isEditing
+        ? await supabase.from('signup_forms').update(payload).eq('id', editingItem.id).select().single()
         : await supabase.from('signup_forms').insert(payload).select().single();
 
       if (result.error) throw result.error;
       var savedForm = result.data;
 
-      // Replace items: delete old ones on edit, then insert current set
-      if (existing && existing.id) {
-        var { error: deleteItemsError } = await supabase
-          .from('signup_items')
-          .delete()
-          .eq('form_id', savedForm.id);
-        if (deleteItemsError) throw deleteItemsError;
+      var toDelete = items.filter(function(item) { return item._deleted && !item._isNew && item.id; });
+      var toInsert = items.filter(function(item) { return item._isNew && !item._deleted; });
+      var toUpdate = items.filter(function(item) { return !item._isNew && !item._deleted && item.id; });
+
+      if (toDelete.length > 0) {
+        var deleteIds = toDelete.map(function(item) { return item.id; });
+        var delRes = await supabase.from('signup_items').delete().in('id', deleteIds);
+        if (delRes.error) throw delRes.error;
       }
 
-      var itemsToInsert = items.map(function(item, index) {
-        return {
-          form_id: savedForm.id,
-          item_name: item.item_name.trim(),
-          description: item.description.trim() || null,
-          max_slots: parseInt(item.max_slots),
-          slot_type: item.slot_type,
-          order_number: index + 1
-        };
-      });
+      if (toInsert.length > 0) {
+        var inserts = toInsert.map(function(item) {
+          return { form_id: savedForm.id, item_name: item.item_name.trim(), description: item.description.trim() || null, max_slots: parseInt(item.max_slots), current_signups: 0, order_number: item.order_number };
+        });
+        var insRes = await supabase.from('signup_items').insert(inserts);
+        if (insRes.error) throw insRes.error;
+      }
 
-      var { error: itemsError } = await supabase
-        .from('signup_items')
-        .insert(itemsToInsert);
+      for (var i = 0; i < toUpdate.length; i++) {
+        var u = toUpdate[i];
+        var updRes = await supabase
+          .from('signup_items')
+          .update({ item_name: u.item_name.trim(), description: u.description.trim() || null, max_slots: parseInt(u.max_slots), order_number: u.order_number })
+          .eq('id', u.id);
+        if (updRes.error) throw updRes.error;
+      }
 
-      if (itemsError) throw itemsError;
-
-      if (onFormCreated) onFormCreated(savedForm);
+      mascotSuccessToast(isEditing ? 'Form saved.' : 'Form created.', savedForm.title);
+      if (onSaved) onSaved(savedForm, { firstPublish: firstPublish });
       onClose();
-
     } catch (err) {
       console.error('Error saving signup form:', err);
-      setError(err.message || 'Failed to save sign-up form');
       mascotErrorToast('Failed to save sign-up form.', err.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  var modalTitle = (editingItem && editingItem.id) ? 'Edit Sign-Up Form' : 'Create Sign-Up Form';
+  var modalTitle = isEditing ? 'Edit Sign-Up Form' : 'Create Sign-Up Form';
+  // Modal footer mode: 'create-draft' (Save as Draft / Cancel / Publish) whenever the form is
+  // still a draft (whether brand new or an existing draft being edited); 'edit-live' (Cancel /
+  // Save Changes only) once it's already published — unpublishing only happens via the card's
+  // Actions menu, never inside this modal (§9).
+  var modalMode = wasLive ? 'edit-live' : 'create-draft';
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-signup-form-title"
-    >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
-          <div>
-            <h2 id="create-signup-form-title" className="text-2xl font-bold text-gray-900">
-              {modalTitle}
-            </h2>
-            {templateName && (
-              <p style={{ fontSize: '12px', color: '#3B82F6', fontWeight: 600, marginTop: '4px' }}>
-                Starting from "{templateName}" template
-              </p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="Close modal"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Error Message */}
-          {error && (
-            <div
-              className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
-              role="alert"
-            >
-              {error}
-            </div>
-          )}
-
-          {/* Form Title */}
-          <div>
-            <label htmlFor="form-title" className="block text-sm font-medium text-gray-700 mb-2">
-              Form Title *
-            </label>
-            <input
-              type="text"
-              id="form-title"
-              value={formData.title}
-              onChange={function(e) { setFormData(Object.assign({}, formData, { title: e.target.value })); }}
-              placeholder="e.g., Volunteer Sign-Up, Potluck Items, Time Slots"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label htmlFor="form-description" className="block text-sm font-medium text-gray-700 mb-2">
-              Description (Optional)
-            </label>
-            <textarea
-              id="form-description"
-              value={formData.description}
-              onChange={function(e) { setFormData(Object.assign({}, formData, { description: e.target.value })); }}
-              placeholder="Provide additional details about this sign-up..."
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Options */}
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="allow-multiple"
-                checked={formData.allow_multiple_signups}
-                onChange={function(e) { setFormData(Object.assign({}, formData, { allow_multiple_signups: e.target.checked })); }}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="allow-multiple" className="ml-2 text-sm text-gray-700">
-                Allow members to sign up for multiple items
+    <>
+      <Modal
+        title={modalTitle}
+        orgSubtitle={templateName ? 'Starting from "' + templateName + '" template' : undefined}
+        onClose={onClose}
+        tabs={TABS}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        mode={modalMode}
+        onSaveAsDraft={function() { handleSubmit('draft'); }}
+        onCancel={onClose}
+        onPublish={function() { handleSubmit('publish'); }}
+        onSaveChanges={function() { handleSubmit('save'); }}
+      >
+        {activeTab === 'details' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <label htmlFor="csf-title-input" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: TEXT_PRI, marginBottom: '6px' }}>
+                Form Title <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
               </label>
-            </div>
-
-            <div className="flex items-center">
               <input
-                type="checkbox"
-                id="show-responses"
-                checked={formData.show_responses}
-                onChange={function(e) { setFormData(Object.assign({}, formData, { show_responses: e.target.checked })); }}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                id="csf-title-input"
+                type="text"
+                value={title}
+                onChange={function(e) { setTitle(e.target.value); }}
+                placeholder="e.g. Volunteer Sign-Up, Potluck Items"
+                aria-required="true"
+                aria-describedby={errors.title ? 'csf-title-err' : undefined}
+                style={{ width: '100%', padding: '8px 12px', border: '0.5px solid ' + (errors.title ? '#EF4444' : BDR), borderRadius: '8px', fontSize: '14px', color: TEXT_PRI, boxSizing: 'border-box' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <label htmlFor="show-responses" className="ml-2 text-sm text-gray-700">
-                Show who signed up to all members
-              </label>
-            </div>
-          </div>
-
-          {/* Close Date */}
-          <div>
-            <label htmlFor="close-date" className="block text-sm font-medium text-gray-700 mb-2">
-              Close Date (Optional)
-            </label>
-            <input
-              type="datetime-local"
-              id="close-date"
-              value={formData.closes_at}
-              onChange={function(e) { setFormData(Object.assign({}, formData, { closes_at: e.target.value })); }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Form will automatically close at this date/time
-            </p>
-          </div>
-
-          {/* Items Section */}
-          <div className="border-t pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Sign-Up Items
-              </h3>
-              <button
-                type="button"
-                onClick={addItem}
-                className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                aria-label="Add new item"
-              >
-                <Plus size={16} />
-                Add Item
-              </button>
+              {errors.title && <p id="csf-title-err" role="alert" style={{ fontSize: '12px', color: '#EF4444', marginTop: '4px' }}>{errors.title}</p>}
             </div>
 
-            <div className="space-y-4">
-              {items.map(function(item, index) {
-                return (
-                  <div
-                    key={index}
-                    className="border border-gray-200 rounded-lg p-4 bg-gray-50"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-2 text-gray-400">
-                        <GripVertical size={20} />
+            <div>
+              <label htmlFor="csf-desc-input" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: TEXT_PRI, marginBottom: '6px' }}>Description</label>
+              <textarea
+                id="csf-desc-input"
+                value={description}
+                onChange={function(e) { setDescription(e.target.value); }}
+                placeholder="Optional — describe what this sign-up is for."
+                rows={3}
+                style={{ width: '100%', padding: '8px 12px', border: '0.5px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT_PRI, resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: TEXT_PRI, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Sign-Up Items <span style={{ fontWeight: 400, color: TEXT_MUTED, textTransform: 'none' }}>({visibleItems.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={addItem}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: BLUE, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  aria-label="Add sign-up item"
+                  className="hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                  Add Item
+                </button>
+              </div>
+
+              {errors.items && <p role="alert" style={{ fontSize: '12px', color: '#EF4444', marginBottom: '10px' }}>{errors.items}</p>}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} role="list" aria-label="Sign-up items">
+                {items.map(function(item, index) {
+                  if (item._deleted) return null;
+                  var visibleIndex = visibleItems.indexOf(item);
+                  return (
+                    <div
+                      key={index}
+                      role="listitem"
+                      draggable
+                      onDragStart={function(e) { handleDragStart(e, index); }}
+                      onDragOver={function(e) { handleDragOver(e, index); }}
+                      onDragEnd={handleDragEnd}
+                      style={{ background: BG, border: '0.5px solid ' + BDR, borderRadius: '10px', padding: '14px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}
+                    >
+                      <div style={{ paddingTop: '8px', color: TEXT_MUTED, cursor: 'grab', flexShrink: 0 }} aria-hidden="true">
+                        <GripVertical size={16} />
                       </div>
-
-                      <div className="flex-1 space-y-3">
-                        {/* Item Name */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div>
-                          <label htmlFor={'item-name-' + index} className="block text-sm font-medium text-gray-700 mb-1">
-                            Item Name *
+                          <label htmlFor={'csf-item-name-' + index} style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT_PRI, marginBottom: '4px' }}>
+                            Item Name <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
                           </label>
                           <input
+                            id={'csf-item-name-' + index}
                             type="text"
-                            id={'item-name-' + index}
                             value={item.item_name}
                             onChange={function(e) { updateItem(index, 'item_name', e.target.value); }}
-                            placeholder="e.g., Bring dessert, 9:00 AM slot, Setup help, Canned goods"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            required
+                            placeholder="e.g. Bring dessert, 9:00 AM slot"
+                            aria-required="true"
+                            aria-describedby={errors['item_name_' + visibleIndex] ? 'csf-item-name-err-' + index : undefined}
+                            style={{ width: '100%', padding: '7px 10px', border: '0.5px solid ' + (errors['item_name_' + visibleIndex] ? '#EF4444' : BDR), borderRadius: '6px', fontSize: '13px', color: TEXT_PRI, boxSizing: 'border-box' }}
+                            className="focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
+                          {errors['item_name_' + visibleIndex] && <p id={'csf-item-name-err-' + index} role="alert" style={{ fontSize: '11px', color: '#EF4444', marginTop: '3px' }}>{errors['item_name_' + visibleIndex]}</p>}
                         </div>
-
-                        {/* Item Description */}
-                        <div>
-                          <label htmlFor={'item-desc-' + index} className="block text-sm font-medium text-gray-700 mb-1">
-                            Description (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            id={'item-desc-' + index}
-                            value={item.description}
-                            onChange={function(e) { updateItem(index, 'description', e.target.value); }}
-                            placeholder="Additional details..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-
-                        {/* Slot Type */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Type
-                          </label>
-                          <div className="flex gap-4">
-                            <label className="flex items-center">
-                              <input
-                                type="radio"
-                                name={'slot-type-' + index}
-                                value="spots"
-                                checked={item.slot_type === 'spots'}
-                                onChange={function() { updateItem(index, 'slot_type', 'spots'); }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Spots (people/time slots)</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '8px' }}>
+                          <div>
+                            <label htmlFor={'csf-item-desc-' + index} style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT_PRI, marginBottom: '4px' }}>Description</label>
+                            <input
+                              id={'csf-item-desc-' + index}
+                              type="text"
+                              value={item.description}
+                              onChange={function(e) { updateItem(index, 'description', e.target.value); }}
+                              placeholder="Optional"
+                              style={{ width: '100%', padding: '7px 10px', border: '0.5px solid ' + BDR, borderRadius: '6px', fontSize: '13px', color: TEXT_PRI, boxSizing: 'border-box' }}
+                              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={'csf-item-slots-' + index} style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: TEXT_PRI, marginBottom: '4px' }}>
+                              Slots <span style={{ color: '#EF4444' }} aria-hidden="true">*</span>
                             </label>
-                            <label className="flex items-center">
-                              <input
-                                type="radio"
-                                name={'slot-type-' + index}
-                                value="items"
-                                checked={item.slot_type === 'items'}
-                                onChange={function() { updateItem(index, 'slot_type', 'items'); }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Items (quantities needed)</span>
-                            </label>
+                            <input
+                              id={'csf-item-slots-' + index}
+                              type="number"
+                              min="1"
+                              value={item.max_slots}
+                              onChange={function(e) { updateItem(index, 'max_slots', e.target.value); }}
+                              aria-required="true"
+                              aria-describedby={errors['item_slots_' + visibleIndex] ? 'csf-item-slots-err-' + index : undefined}
+                              style={{ width: '100%', padding: '7px 10px', border: '0.5px solid ' + (errors['item_slots_' + visibleIndex] ? '#EF4444' : BDR), borderRadius: '6px', fontSize: '13px', color: TEXT_PRI, boxSizing: 'border-box' }}
+                              className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            {errors['item_slots_' + visibleIndex] && <p id={'csf-item-slots-err-' + index} role="alert" style={{ fontSize: '11px', color: '#EF4444', marginTop: '3px' }}>{errors['item_slots_' + visibleIndex]}</p>}
                           </div>
                         </div>
-
-                        {/* Max Slots */}
-                        <div>
-                          <label htmlFor={'max-slots-' + index} className="block text-sm font-medium text-gray-700 mb-1">
-                            Number of {item.slot_type === 'spots' ? 'Spots' : 'Items'}
-                          </label>
-                          <input
-                            type="number"
-                            id={'max-slots-' + index}
-                            value={item.max_slots}
-                            onChange={function(e) { updateItem(index, 'max_slots', e.target.value); }}
-                            min="1"
-                            max="1000"
-                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                          <p className="mt-1 text-xs text-gray-500">
-                            {item.slot_type === 'spots'
-                              ? 'How many people can sign up?'
-                              : 'Total quantity needed (e.g., 50 canned goods)'}
-                          </p>
-                        </div>
                       </div>
-
-                      {/* Remove Button */}
-                      {items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={function() { removeItem(index); }}
-                          className="mt-2 text-red-600 hover:text-red-700 transition-colors"
-                          aria-label={'Remove item ' + (index + 1)}
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={function() { askRemoveItem(index); }}
+                        disabled={visibleItems.length <= 1}
+                        style={{ marginTop: '6px', width: '28px', height: '28px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: visibleItems.length <= 1 ? 'not-allowed' : 'pointer', color: '#EF4444', flexShrink: 0, opacity: visibleItems.length <= 1 ? 0.4 : 1 }}
+                        aria-label={'Remove item: ' + (item.item_name || 'untitled')}
+                        className="hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                      >
+                        <Trash2 size={13} aria-hidden="true" />
+                      </button>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-6 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Saving...' : ((editingItem && editingItem.id) ? 'Save Changes' : 'Create Sign-Up Form')}
-            </button>
+        {activeTab === 'settings' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <label htmlFor="csf-closes" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: TEXT_PRI, marginBottom: '6px' }}>Close Date</label>
+              <input
+                id="csf-closes"
+                type="datetime-local"
+                value={closesAt}
+                onChange={function(e) { setClosesAt(e.target.value); }}
+                style={{ padding: '8px 12px', border: '0.5px solid ' + BDR, borderRadius: '8px', fontSize: '14px', color: TEXT_PRI }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p style={{ fontSize: '11px', color: TEXT_MUTED, marginTop: '4px' }}>Leave blank for no expiry. The form auto-closes to new sign-ups at this time.</p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="csf-allow-multiple"
+                checked={allowMultiple}
+                onChange={function(e) { setAllowMultiple(e.target.checked); }}
+                style={{ marginTop: '2px' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <label htmlFor="csf-allow-multiple" style={{ fontSize: '14px', color: TEXT_SEC }}>Allow members to sign up for multiple items</label>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="csf-show-responses"
+                checked={showResponses}
+                onChange={function(e) { setShowResponses(e.target.checked); }}
+                style={{ marginTop: '2px' }}
+                className="focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <label htmlFor="csf-show-responses" style={{ fontSize: '14px', color: TEXT_SEC }}>Show who signed up to all members</label>
+            </div>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        {activeTab === 'publishing' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: TEXT_PRI, marginBottom: '10px' }}>Who can see this?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} role="radiogroup" aria-label="Visibility">
+                {!wasLive && (
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px', border: '0.5px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', background: visibilityChoice === 'draft' ? '#EFF6FF' : 'transparent' }}>
+                    <input type="radio" name="csf-visibility" value="draft" checked={visibilityChoice === 'draft'} onChange={function() { setVisibilityChoice('draft'); }} style={{ marginTop: '3px' }} />
+                    <span>
+                      <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: TEXT_PRI }}>Draft</span>
+                      <span style={{ display: 'block', fontSize: '12px', color: TEXT_MUTED }}>Only visible to org admins</span>
+                    </span>
+                  </label>
+                )}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px', border: '0.5px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', background: visibilityChoice === 'members_only' ? '#EFF6FF' : 'transparent' }}>
+                  <input type="radio" name="csf-visibility" value="members_only" checked={visibilityChoice === 'members_only'} onChange={function() { setVisibilityChoice('members_only'); }} style={{ marginTop: '3px' }} />
+                  <span>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: TEXT_PRI }}>All Members</span>
+                    <span style={{ display: 'block', fontSize: '12px', color: TEXT_MUTED }}>Every org member can see and sign up</span>
+                  </span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px', border: '0.5px solid ' + BDR, borderRadius: '8px', cursor: 'pointer', background: visibilityChoice === 'group' ? '#EFF6FF' : 'transparent' }}>
+                  <input type="radio" name="csf-visibility" value="group" checked={visibilityChoice === 'group'} onChange={function() { setVisibilityChoice('group'); }} style={{ marginTop: '3px' }} />
+                  <span>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: TEXT_PRI }}>Specific Groups</span>
+                    <span style={{ display: 'block', fontSize: '12px', color: TEXT_MUTED }}>Only members of selected groups</span>
+                  </span>
+                </label>
+              </div>
+
+              {visibilityChoice === 'group' && (
+                <div style={{ marginTop: '12px', paddingLeft: '4px' }}>
+                  {!groupsLoaded ? (
+                    <p style={{ fontSize: '13px', color: TEXT_MUTED }}>Loading groups...</p>
+                  ) : orgGroups.length === 0 ? (
+                    <p style={{ fontSize: '13px', color: TEXT_MUTED }}>No groups exist yet for this organization.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {orgGroups.map(function(group) {
+                        return (
+                          <label key={group.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: TEXT_SEC }}>
+                            <input type="checkbox" checked={groupIds.indexOf(group.id) !== -1} onChange={function() { toggleGroup(group.id); }} />
+                            {group.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p style={{ fontSize: '12px', color: TEXT_MUTED, lineHeight: 1.5 }}>
+              Members are notified once when you first publish. Changing between published states does not re-notify.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {removeConfirm.open && (
+        <ConfirmModal
+          title="Remove this item?"
+          message="Any existing sign-ups for this item will also be deleted. This cannot be undone."
+          confirmLabel="Remove Item"
+          variant="destructive"
+          onConfirm={confirmRemoveItem}
+          onCancel={function() { setRemoveConfirm({ open: false, index: null }); }}
+        />
+      )}
+    </>
   );
 }
 
