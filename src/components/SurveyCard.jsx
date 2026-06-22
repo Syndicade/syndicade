@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { format, formatDistanceToNow } from 'date-fns';
 import { notifyUsers } from '../lib/notificationService';
 import { useDropdownKeyboard } from '../hooks/useModalKeyboard';
-import ConfirmDeleteModal from './ConfirmDeleteModal';
+import ConfirmDeleteModal from './ConfirmModal';
 
 function Icon({ path, className }) {
   return (
