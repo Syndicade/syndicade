@@ -1,22 +1,18 @@
 // src/components/design-system/Modal.jsx
 // Syndicade Modal — Design System §9 / Build List #7
-// Shell + owns the tab bar (via TabBar). Built on useModalKeyboard (existing hook).
 // CODE RULE (§21): var only — never const/let.
 //
-// CRITICAL: must always render conditionally — {open && <Modal ... />} — never pass an
-// `isOpen` prop and keep this always mounted (same bug class fixed in ConfirmModal).
+// UPDATED July 1, 2026 (Programs retrofit follow-up) — added optional `saving` prop.
+// Fixes a gap found during the Programs retrofit: footer buttons had no way to reflect
+// an in-flight save, so a double-click (or a slow network) could fire the save handler
+// twice. Fully backward-compatible — omit `saving` and nothing changes. When `saving`
+// is true, all footer buttons (Save as Draft / Cancel / Publish / Save Changes) become
+// disabled via Button's existing `disabled` prop (opacity 0.5, aria-disabled, still
+// focusable — no new pattern introduced). The ✕ close button and Escape/backdrop
+// behavior are intentionally left alone — closing mid-save is still allowed.
 //
-// Decided June 21, 2026 — NOT specified in §9, confirmed with user:
-//   Backdrop overlay: rgba(0,0,0,0.5) — matches the neutral-black convention already used
-//   for every shadow value in the Design System, rather than a new tinted color.
-//   Backdrop click does NOT close the modal — only Escape and the close button do
-//   (prevents accidental loss of unsaved form data in Create/Edit modals).
-//
-// VERIFIED June 21, 2026 against real src/hooks/useModalKeyboard.js source:
-// signature is (isOpen, onClose, modalRef) — the caller creates the ref and passes it in;
-// the hook does not return one. It auto-captures the trigger element via document.activeElement
-// at mount and restores focus to it on cleanup, and Tab-traps focus inside modalRef. Since this
-// Modal only ever mounts while open, isOpen is passed as a constant `true`.
+// Same gap likely exists wherever Opportunities/Funding call this Modal without
+// passing `saving` — see Pending Tasks Group 2, MODAL-SAVING-PROP.
 
 import { useRef } from 'react';
 import { useModalKeyboard } from '../../hooks/useModalKeyboard';
@@ -38,11 +34,12 @@ var RESPONSIVE_STYLE = '\
 //   title: string (required)
 //   orgSubtitle: string (optional)
 //   onClose: fn (required)
-//   tabs: [{ id, label }] (optional — omit for single-section modals)
+//   tabs: [{ id, label }] (optional)
 //   activeTab, onTabChange: required if tabs is provided
 //   mode: 'create-draft' | 'edit-live' (default 'edit-live')
 //   onSaveAsDraft, onCancel, onPublish: used when mode='create-draft'
 //   onCancel, onSaveChanges: used when mode='edit-live'
+//   saving: bool (optional, default false) — disables all footer action buttons while true
 //   children: body content
 
 function Modal(props) {
@@ -53,9 +50,10 @@ function Modal(props) {
   var activeTab = props.activeTab;
   var onTabChange = props.onTabChange;
   var mode = props.mode || 'edit-live';
+  var saving = props.saving || false;
 
   var modalRef = useRef(null);
-  useModalKeyboard(true, onClose, modalRef); // Modal only ever mounts while open
+  useModalKeyboard(true, onClose, modalRef);
 
   function renderFooter() {
     var footerStyle = {
@@ -71,10 +69,10 @@ function Modal(props) {
     if (mode === 'create-draft') {
       return (
         <div style={footerStyle}>
-          <Button variant="ghost" onClick={props.onSaveAsDraft}>Save as Draft</Button>
+          <Button variant="ghost" onClick={props.onSaveAsDraft} disabled={saving}>Save as Draft</Button>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <Button variant="ghost" onClick={props.onCancel}>Cancel</Button>
-            <Button variant="primary" onClick={props.onPublish}>Publish</Button>
+            <Button variant="ghost" onClick={props.onCancel} disabled={saving}>Cancel</Button>
+            <Button variant="primary" onClick={props.onPublish} disabled={saving}>{saving ? 'Saving...' : 'Publish'}</Button>
           </div>
         </div>
       );
@@ -82,8 +80,8 @@ function Modal(props) {
 
     return (
       <div style={footerStyle}>
-        <Button variant="ghost" onClick={props.onCancel}>Cancel</Button>
-        <Button variant="primary" onClick={props.onSaveChanges}>Save Changes</Button>
+        <Button variant="ghost" onClick={props.onCancel} disabled={saving}>Cancel</Button>
+        <Button variant="primary" onClick={props.onSaveChanges} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button>
       </div>
     );
   }
