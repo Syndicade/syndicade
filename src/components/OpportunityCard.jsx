@@ -3,7 +3,6 @@
 // the Sign-Up Forms reference pattern. Opportunity-specific data shaping lives here only;
 // rendering delegates entirely to Card.jsx + ActionsDropdown.jsx.
 // CODE RULE (§21): var only — never const/let.
-
 import Card from './design-system/Card';
 import ActionsDropdown from './design-system/ActionsDropdown';
 
